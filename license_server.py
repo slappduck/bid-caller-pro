@@ -417,8 +417,9 @@ def _ai_extract(area, text):
         "RFQs, or solicitations.\n\n"
         "Respond ONLY with a JSON array. Each item has keys: \"title\", \"scope\", "
         "\"status\" (\"Open\" or \"Closed\"), \"deadline\", \"contact\", \"email\", "
-        "\"phone\", \"value\", \"url\", \"city\". \"city\" is the US city the work is "
-        "in (best guess from the text). \"value\" is a dollar amount only if stated. "
+        "\"phone\", \"value\", \"url\", \"city\". \"city\" is the US city where the work "
+        "will be performed, exactly as written in the text; if the location is not clearly "
+        "stated, use \"\" and do NOT guess. \"value\" is a dollar amount only if stated. "
         "Use \"\" for any missing field. If no real bids, return []. "
         "No markdown, no text outside the array.\n\n"
         f"WEBSITE TEXT:\n{text[:16000]}"
@@ -463,17 +464,19 @@ def extract():
 # /scan  —  LOCAL (Brave + AI) + FEDERAL (SAM), radius-filtered
 # ═══════════════════════════════════════════════════════════
 def _place_bid(grouped, bid, center, radius, db, default_city=""):
-    """Distance-filter a bid and slot it under its city. Keep if uncertain."""
+    """Keep a bid ONLY if its real city geocodes within the radius."""
     if not isinstance(bid, dict):
         return
-    city = (bid.get("city") or default_city or "").strip()
-    coords = _city_coords(city, center["state"], db) if city else None
-    if coords:
-        if _miles_between(center["lat"], center["lon"], coords[0], coords[1]) > radius:
-            return
+    city = (bid.get("city") or default_city or "").split(",")[0].strip()
+    if not city:
+        return  # no stated location -> can't verify it's local -> drop
+    coords = _city_coords(city, center["state"], db)
+    if not coords:
+        return  # city not found in this state -> can't verify -> drop
+    if _miles_between(center["lat"], center["lon"], coords[0], coords[1]) > radius:
+        return  # outside the chosen radius
     bid.pop("city", None)
-    label = city or center["city"]
-    grouped.setdefault(label, []).append(bid)
+    grouped.setdefault(city, []).append(bid)
 
 
 @app.route("/scan", methods=["POST"])
@@ -533,7 +536,7 @@ def scan():
             for b in bids:
                 if isinstance(b, dict):
                     b.setdefault("url", u)
-                    _place_bid(grouped, b, center, radius, db, default_city=center["city"])
+                    _place_bid(grouped, b, center, radius, db, default_city="")
 
     # ---- FEDERAL: SAM.gov for the state, radius-filtered ----
     if SAM_API_KEY:
