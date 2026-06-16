@@ -2,9 +2,10 @@
 license_server.py — License validation + bid scanning for Bid Caller Pro
 ═══════════════════════════════════════════════════════════════════════════
 /scan now returns LOCAL + FEDERAL leads, filtered to a mile radius:
-  • LOCAL   — Tavily (AI search API) finds city/county/school bid pages near
-              the user AND returns their content, which OpenAI turns into
-              structured bids. Works reliably from a server.
+  • LOCAL   — DuckDuckGo (with browser-like headers, no key) finds local bid
+              pages; pages are scraped and OpenAI extracts structured bids.
+              If DDG ever returns nothing and TAVILY_API_KEY is set, Tavily is
+              used as an automatic fallback.
   • FEDERAL — SAM.gov solicitations for the user's state.
   • Both are distance-filtered against the user's radius and grouped by city,
     then cached per area per day.
@@ -12,9 +13,9 @@ license_server.py — License validation + bid scanning for Bid Caller Pro
 ENV VARS (set in Render → your service → Environment):
   LICENSE_SECRET   license signing secret
   ADMIN_TOKEN      admin token for /issue and /revoke
-  TAVILY_API_KEY   REQUIRED for local search (free 1k/mo, no card: tavily.com)
   OPENAI_API_KEY   REQUIRED for local extraction
   SAM_API_KEY      REQUIRED for federal bids (free key: sam.gov)
+  TAVILY_API_KEY   OPTIONAL fallback search (free 1k/mo, no card: tavily.com)
   (BRAVE_API_KEY is no longer used — you can delete it.)
 
 START COMMAND (raise the timeout — scans do real work):
@@ -29,6 +30,7 @@ import hmac
 import hashlib
 import datetime
 import time
+import random
 import urllib.request
 import urllib.parse
 import urllib.error
@@ -341,6 +343,74 @@ def _tavily_search(query, max_results=5):
     return out
 
 
+# ── DuckDuckGo with a browser "disguise" — primary local search (no key) ──
+_DDG_UAS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 "
+    "(KHTML, like Gecko) Version/17.4 Safari/605.1.15",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+]
+
+
+def _ddg_headers(ua):
+    return {
+        "User-Agent": ua,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://duckduckgo.com/",
+        "Origin": "https://duckduckgo.com",
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "same-origin",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1",
+        "Sec-Ch-Ua": '"Chromium";v="125", "Not.A/Brand";v="24"',
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": '"Windows"',
+    }
+
+
+def _parse_ddg(html):
+    """Pull real result URLs out of a DuckDuckGo HTML results page."""
+    out, seen = [], set()
+    for m in re.finditer(r'uddg=([^&"\']+)', html):
+        u = urllib.parse.unquote(m.group(1))
+        if u.startswith("http") and u not in seen:
+            seen.add(u)
+            out.append(u)
+    if out:
+        return out
+    for m in re.finditer(r'href="(https?://[^"]+)"', html):
+        u = m.group(1)
+        if "duckduckgo.com" in u or u in seen:
+            continue
+        seen.add(u)
+        out.append(u)
+    return out
+
+
+def _ddg_search(query, count=6):
+    """Scrape DuckDuckGo with rotating, browser-like headers. Returns [{url, content}]."""
+    ua = random.choice(_DDG_UAS)
+    for endpoint in ("https://html.duckduckgo.com/html/",
+                     "https://lite.duckduckgo.com/lite/"):
+        try:
+            body = urllib.parse.urlencode({"q": query, "kl": "us-en"}).encode()
+            req = urllib.request.Request(endpoint, data=body, headers=_ddg_headers(ua))
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                html = resp.read().decode("utf-8", "ignore")
+            found = _parse_ddg(html)
+            if found:
+                return [{"url": u, "content": ""} for u in found[:count]]
+            app.logger.warning("DDG no links from %s for %r", endpoint, query)
+        except Exception as ex:
+            app.logger.warning("DDG error (%s): %s", endpoint, ex)
+    return []
+
+
 def _fetch_text(url):
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 BidCallerPro"})
@@ -532,8 +602,8 @@ def scan():
     grouped = {}
     local_raw = 0
 
-    # ---- LOCAL: Tavily finds pages + returns their content -> AI extract ----
-    if OPENAI_API_KEY and TAVILY_API_KEY:
+    # ---- LOCAL: disguised DuckDuckGo first, Tavily fallback if it's empty ----
+    if OPENAI_API_KEY:
         c, s = center["city"], center["state"]
         queries = [
             f"{c} {s} construction bid RFP invitation to bid",
@@ -542,11 +612,14 @@ def scan():
         ]
         seen, items = set(), []
         for q in queries:
-            for r in _tavily_search(q, max_results=5):
+            results = _ddg_search(q)
+            if not results and TAVILY_API_KEY:
+                results = _tavily_search(q)
+            for r in results:
                 if r["url"] not in seen:
                     seen.add(r["url"])
                     items.append(r)
-            time.sleep(0.7)  # stay under the free-tier rate limit
+            time.sleep(1.2)  # be gentle on DDG between queries
         app.logger.info("scan: %d candidate pages near %s, %s", len(items), c, s)
         for it in items[:MAX_PAGES]:
             text = it["content"] or _fetch_text(it["url"])
