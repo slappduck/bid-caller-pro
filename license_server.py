@@ -313,9 +313,9 @@ _TAG_RE = re.compile(r"<[^>]+>")
 
 
 def _tavily_search(query, max_results=5):
-    """Search via Tavily; returns [{url, content}]. Page content comes back
-    with the results, so no separate scrape is needed for most pages."""
+    """Search via Tavily; returns [{url, content}]."""
     if not TAVILY_API_KEY:
+        print("[scan] no TAVILY_API_KEY set", flush=True)
         return []
     body = json.dumps({
         "api_key": TAVILY_API_KEY,
@@ -331,11 +331,21 @@ def _tavily_search(query, max_results=5):
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             data = json.loads(resp.read().decode("utf-8"))
-    except Exception as ex:
-        app.logger.warning("Tavily error: %s", ex)
+    except urllib.error.HTTPError as e:
+        detail = ""
+        try:
+            detail = e.read().decode("utf-8")[:300]
+        except Exception:
+            pass
+        print(f"[scan] Tavily HTTP {e.code}: {detail}", flush=True)
         return []
+    except Exception as ex:
+        print(f"[scan] Tavily error: {ex}", flush=True)
+        return []
+    results = data.get("results") or []
+    print(f"[scan] Tavily: {len(results)} results for {query!r}", flush=True)
     out = []
-    for r in (data.get("results") or []):
+    for r in results:
         url = r.get("url") or ""
         if url:
             out.append({"url": url,
@@ -405,9 +415,9 @@ def _ddg_search(query, count=6):
             found = _parse_ddg(html)
             if found:
                 return [{"url": u, "content": ""} for u in found[:count]]
-            app.logger.warning("DDG no links from %s for %r", endpoint, query)
+            print(f"[scan] DDG no links from {endpoint} for {query!r}", flush=True)
         except Exception as ex:
-            app.logger.warning("DDG error (%s): %s", endpoint, ex)
+            print(f"[scan] DDG error ({endpoint}): {ex}", flush=True)
     return []
 
 
@@ -621,7 +631,7 @@ def scan():
                     seen.add(r["url"])
                     items.append(r)
             time.sleep(1.2)  # be gentle on DDG between queries
-        app.logger.info("scan: %d candidate pages near %s, %s", len(items), c, s)
+        print(f"[scan] {len(items)} candidate pages near {c}, {s}", flush=True)
         for it in items[:MAX_PAGES]:
             text = it["content"] or _fetch_text(it["url"])
             if len(text) < 200:
@@ -634,7 +644,7 @@ def scan():
                 if isinstance(b, dict):
                     b.setdefault("url", it["url"])
                     _place_bid(grouped, b, center, radius, db, default_city="")
-        app.logger.info("scan: %d raw local bids extracted", local_raw)
+        print(f"[scan] {local_raw} raw local bids extracted", flush=True)
 
     # ---- FEDERAL: SAM.gov for the state, radius-filtered ----
     if SAM_API_KEY:
@@ -645,8 +655,8 @@ def scan():
             _place_bid(grouped, bid, center, radius, db, default_city=city)
 
     total = sum(len(v) for v in grouped.values())
-    app.logger.info("scan: %s mi from %s,%s -> %d bids kept",
-                    int(radius), center["city"], center["state"], total)
+    print(f"[scan] {int(radius)} mi from {center['city']},{center['state']} "
+          f"-> {total} bids kept (local_raw={local_raw})", flush=True)
 
     # cache (today only) + persist geo cache
     cache[ckey] = {"ts": datetime.datetime.now().isoformat(), "bids": grouped, "total": total}
@@ -654,7 +664,8 @@ def scan():
     _save_db(db)
 
     return jsonify({"ok": True, "location": f"{center['city']}, {center['state']}",
-                    "bids": grouped, "total_bids": total})
+                    "bids": grouped, "total_bids": total,
+                    "debug": {"raw_local": local_raw, "kept": total}})
 
 
 if __name__ == "__main__":
