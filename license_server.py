@@ -2,9 +2,9 @@
 license_server.py — License validation + bid scanning for Bid Caller Pro
 ═══════════════════════════════════════════════════════════════════════════
 /scan now returns LOCAL + FEDERAL leads, filtered to a mile radius:
-  • LOCAL   — DuckDuckGo finds city/county/school bid pages near the user
-              (no API key needed), the pages are scraped, and OpenAI extracts
-              structured bids.
+  • LOCAL   — Tavily (AI search API) finds city/county/school bid pages near
+              the user AND returns their content, which OpenAI turns into
+              structured bids. Works reliably from a server.
   • FEDERAL — SAM.gov solicitations for the user's state.
   • Both are distance-filtered against the user's radius and grouped by city,
     then cached per area per day.
@@ -12,6 +12,7 @@ license_server.py — License validation + bid scanning for Bid Caller Pro
 ENV VARS (set in Render → your service → Environment):
   LICENSE_SECRET   license signing secret
   ADMIN_TOKEN      admin token for /issue and /revoke
+  TAVILY_API_KEY   REQUIRED for local search (free 1k/mo, no card: tavily.com)
   OPENAI_API_KEY   REQUIRED for local extraction
   SAM_API_KEY      REQUIRED for federal bids (free key: sam.gov)
   (BRAVE_API_KEY is no longer used — you can delete it.)
@@ -299,57 +300,45 @@ def _city_coords(city, state, db):
 
 
 # ═══════════════════════════════════════════════════════════
-# LOCAL SEARCH  (DuckDuckGo — no API key, no card, but fragile)
+# LOCAL SEARCH  (Tavily — AI search API, free 1k/mo, no card)
 # ═══════════════════════════════════════════════════════════
-MAX_PAGES = int(os.environ.get("SCAN_MAX_PAGES", "8"))
-_DDG_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-           "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
+TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "")
+TAVILY_URL = "https://api.tavily.com/search"
+MAX_PAGES = int(os.environ.get("SCAN_MAX_PAGES", "6"))
 
 _SCRIPT_RE = re.compile(r"<(script|style)[^>]*>.*?</\1>", re.I | re.S)
 _TAG_RE = re.compile(r"<[^>]+>")
 
 
-def _parse_ddg(html):
-    """Pull real result URLs out of a DuckDuckGo HTML results page."""
-    out, seen = [], set()
-    # html.duckduckgo.com wraps links as /l/?uddg=<encoded real url>
-    for m in re.finditer(r'uddg=([^&"\']+)', html):
-        u = urllib.parse.unquote(m.group(1))
-        if u.startswith("http") and u not in seen:
-            seen.add(u)
-            out.append(u)
-    if out:
-        return out
-    # lite.duckduckgo.com sometimes links directly
-    for m in re.finditer(r'href="(https?://[^"]+)"', html):
-        u = m.group(1)
-        if "duckduckgo.com" in u or u in seen:
-            continue
-        seen.add(u)
-        out.append(u)
+def _tavily_search(query, max_results=5):
+    """Search via Tavily; returns [{url, content}]. Page content comes back
+    with the results, so no separate scrape is needed for most pages."""
+    if not TAVILY_API_KEY:
+        return []
+    body = json.dumps({
+        "api_key": TAVILY_API_KEY,
+        "query": query,
+        "search_depth": "basic",
+        "max_results": max_results,
+        "include_raw_content": True,
+    }).encode("utf-8")
+    req = urllib.request.Request(TAVILY_URL, data=body, method="POST", headers={
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {TAVILY_API_KEY}",
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except Exception as ex:
+        app.logger.warning("Tavily error: %s", ex)
+        return []
+    out = []
+    for r in (data.get("results") or []):
+        url = r.get("url") or ""
+        if url:
+            out.append({"url": url,
+                        "content": r.get("raw_content") or r.get("content") or ""})
     return out
-
-
-def _ddg_search(query, count=6):
-    """Scrape DuckDuckGo's HTML endpoints. No key required; retries on failure."""
-    for endpoint in ("https://html.duckduckgo.com/html/",
-                     "https://lite.duckduckgo.com/lite/"):
-        try:
-            body = urllib.parse.urlencode({"q": query}).encode()
-            req = urllib.request.Request(endpoint, data=body, headers={
-                "User-Agent": _DDG_UA,
-                "Content-Type": "application/x-www-form-urlencoded",
-                "Accept": "text/html",
-            })
-            with urllib.request.urlopen(req, timeout=20) as resp:
-                html = resp.read().decode("utf-8", "ignore")
-            found = _parse_ddg(html)
-            if found:
-                return found[:count]
-            app.logger.warning("DDG no links from %s for %r", endpoint, query)
-        except Exception as ex:
-            app.logger.warning("DDG error (%s): %s", endpoint, ex)
-    return []
 
 
 def _fetch_text(url):
@@ -543,24 +532,24 @@ def scan():
     grouped = {}
     local_raw = 0
 
-    # ---- LOCAL: DuckDuckGo finds pages -> scrape -> AI extract ----
-    if OPENAI_API_KEY:
+    # ---- LOCAL: Tavily finds pages + returns their content -> AI extract ----
+    if OPENAI_API_KEY and TAVILY_API_KEY:
         c, s = center["city"], center["state"]
         queries = [
             f"{c} {s} construction bid RFP invitation to bid",
             f"{c} {s} city county procurement construction solicitation",
             f"{c} {s} public works school district construction bids",
         ]
-        seen, urls = set(), []
+        seen, items = set(), []
         for q in queries:
-            for u in _ddg_search(q, count=6):
-                if u not in seen:
-                    seen.add(u)
-                    urls.append(u)
-            time.sleep(1.5)  # respect DDG; avoid being blocked
-        app.logger.info("scan: %d candidate pages near %s, %s", len(urls), c, s)
-        for u in urls[:MAX_PAGES]:
-            text = _fetch_text(u)
+            for r in _tavily_search(q, max_results=5):
+                if r["url"] not in seen:
+                    seen.add(r["url"])
+                    items.append(r)
+            time.sleep(0.7)  # stay under the free-tier rate limit
+        app.logger.info("scan: %d candidate pages near %s, %s", len(items), c, s)
+        for it in items[:MAX_PAGES]:
+            text = it["content"] or _fetch_text(it["url"])
             if len(text) < 200:
                 continue
             bids = _ai_extract(f"{c}, {s}", text)
@@ -569,7 +558,7 @@ def scan():
             local_raw += len(bids)
             for b in bids:
                 if isinstance(b, dict):
-                    b.setdefault("url", u)
+                    b.setdefault("url", it["url"])
                     _place_bid(grouped, b, center, radius, db, default_city="")
         app.logger.info("scan: %d raw local bids extracted", local_raw)
 
