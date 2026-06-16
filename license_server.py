@@ -612,9 +612,10 @@ def scan():
         ]
         seen, items = set(), []
         for q in queries:
-            results = _ddg_search(q)
-            if not results and TAVILY_API_KEY:
-                results = _tavily_search(q)
+            # Tavily is the reliable path when a key is set; DDG is the free fallback.
+            results = _tavily_search(q) if TAVILY_API_KEY else []
+            if not results:
+                results = _ddg_search(q)
             for r in results:
                 if r["url"] not in seen:
                     seen.add(r["url"])
