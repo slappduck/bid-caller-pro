@@ -2,18 +2,19 @@
 license_server.py — License validation + bid scanning for Bid Caller Pro
 ═══════════════════════════════════════════════════════════════════════════
 /scan now returns LOCAL + FEDERAL leads, filtered to a mile radius:
-  • LOCAL   — Brave Search finds city/county/school bid pages near the user,
-              the pages are scraped, and OpenAI extracts structured bids.
+  • LOCAL   — DuckDuckGo finds city/county/school bid pages near the user
+              (no API key needed), the pages are scraped, and OpenAI extracts
+              structured bids.
   • FEDERAL — SAM.gov solicitations for the user's state.
-  • Both are distance-filtered against the user's chosen radius and grouped
-    by city, then cached per area per day.
+  • Both are distance-filtered against the user's radius and grouped by city,
+    then cached per area per day.
 
 ENV VARS (set in Render → your service → Environment):
   LICENSE_SECRET   license signing secret
   ADMIN_TOKEN      admin token for /issue and /revoke
-  BRAVE_API_KEY    REQUIRED for local search (free key: brave.com/search/api)
   OPENAI_API_KEY   REQUIRED for local extraction
   SAM_API_KEY      REQUIRED for federal bids (free key: sam.gov)
+  (BRAVE_API_KEY is no longer used — you can delete it.)
 
 START COMMAND (raise the timeout — scans do real work):
   gunicorn license_server:app --timeout 120 --workers 1
@@ -26,6 +27,7 @@ import math
 import hmac
 import hashlib
 import datetime
+import time
 import urllib.request
 import urllib.parse
 import urllib.error
@@ -297,27 +299,57 @@ def _city_coords(city, state, db):
 
 
 # ═══════════════════════════════════════════════════════════
-# LOCAL SEARCH  (Brave) + page scraping
+# LOCAL SEARCH  (DuckDuckGo — no API key, no card, but fragile)
 # ═══════════════════════════════════════════════════════════
-BRAVE_API_KEY = os.environ.get("BRAVE_API_KEY", "")
-BRAVE_URL = "https://api.search.brave.com/res/v1/web/search"
-MAX_PAGES = int(os.environ.get("SCAN_MAX_PAGES", "6"))
+MAX_PAGES = int(os.environ.get("SCAN_MAX_PAGES", "8"))
+_DDG_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+           "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
 
 _SCRIPT_RE = re.compile(r"<(script|style)[^>]*>.*?</\1>", re.I | re.S)
 _TAG_RE = re.compile(r"<[^>]+>")
 
 
-def _brave_search(query, count=6):
-    if not BRAVE_API_KEY:
-        return []
-    url = BRAVE_URL + "?" + urllib.parse.urlencode(
-        {"q": query, "count": str(count), "country": "us"})
-    data = _get_json(url, headers={
-        "Accept": "application/json",
-        "X-Subscription-Token": BRAVE_API_KEY,
-    })
-    results = ((data or {}).get("web") or {}).get("results") or []
-    return [r.get("url") for r in results if r.get("url")]
+def _parse_ddg(html):
+    """Pull real result URLs out of a DuckDuckGo HTML results page."""
+    out, seen = [], set()
+    # html.duckduckgo.com wraps links as /l/?uddg=<encoded real url>
+    for m in re.finditer(r'uddg=([^&"\']+)', html):
+        u = urllib.parse.unquote(m.group(1))
+        if u.startswith("http") and u not in seen:
+            seen.add(u)
+            out.append(u)
+    if out:
+        return out
+    # lite.duckduckgo.com sometimes links directly
+    for m in re.finditer(r'href="(https?://[^"]+)"', html):
+        u = m.group(1)
+        if "duckduckgo.com" in u or u in seen:
+            continue
+        seen.add(u)
+        out.append(u)
+    return out
+
+
+def _ddg_search(query, count=6):
+    """Scrape DuckDuckGo's HTML endpoints. No key required; retries on failure."""
+    for endpoint in ("https://html.duckduckgo.com/html/",
+                     "https://lite.duckduckgo.com/lite/"):
+        try:
+            body = urllib.parse.urlencode({"q": query}).encode()
+            req = urllib.request.Request(endpoint, data=body, headers={
+                "User-Agent": _DDG_UA,
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Accept": "text/html",
+            })
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                html = resp.read().decode("utf-8", "ignore")
+            found = _parse_ddg(html)
+            if found:
+                return found[:count]
+            app.logger.warning("DDG no links from %s for %r", endpoint, query)
+        except Exception as ex:
+            app.logger.warning("DDG error (%s): %s", endpoint, ex)
+    return []
 
 
 def _fetch_text(url):
@@ -509,34 +541,37 @@ def scan():
                         "bids": c["bids"], "total_bids": c["total"], "cached": True})
 
     grouped = {}
+    local_raw = 0
 
-    # ---- LOCAL: Brave finds pages → scrape → AI extract ----
-    if BRAVE_API_KEY and OPENAI_API_KEY:
+    # ---- LOCAL: DuckDuckGo finds pages -> scrape -> AI extract ----
+    if OPENAI_API_KEY:
         c, s = center["city"], center["state"]
         queries = [
-            f"{c} {s} construction bid OR RFP OR \"invitation to bid\"",
-            f"{c} {s} city OR county procurement construction",
-            f"{c} {s} public works OR school district construction bids",
+            f"{c} {s} construction bid RFP invitation to bid",
+            f"{c} {s} city county procurement construction solicitation",
+            f"{c} {s} public works school district construction bids",
         ]
         seen, urls = set(), []
         for q in queries:
-            for u in _brave_search(q, count=6):
+            for u in _ddg_search(q, count=6):
                 if u not in seen:
                     seen.add(u)
                     urls.append(u)
-            if len(urls) >= MAX_PAGES:
-                break
+            time.sleep(1.5)  # respect DDG; avoid being blocked
+        app.logger.info("scan: %d candidate pages near %s, %s", len(urls), c, s)
         for u in urls[:MAX_PAGES]:
             text = _fetch_text(u)
             if len(text) < 200:
                 continue
-            bids = _ai_extract(f"{center['city']}, {center['state']}", text)
+            bids = _ai_extract(f"{c}, {s}", text)
             if not bids:
                 continue
+            local_raw += len(bids)
             for b in bids:
                 if isinstance(b, dict):
                     b.setdefault("url", u)
                     _place_bid(grouped, b, center, radius, db, default_city="")
+        app.logger.info("scan: %d raw local bids extracted", local_raw)
 
     # ---- FEDERAL: SAM.gov for the state, radius-filtered ----
     if SAM_API_KEY:
@@ -547,6 +582,8 @@ def scan():
             _place_bid(grouped, bid, center, radius, db, default_city=city)
 
     total = sum(len(v) for v in grouped.values())
+    app.logger.info("scan: %s mi from %s,%s -> %d bids kept",
+                    int(radius), center["city"], center["state"], total)
 
     # cache (today only) + persist geo cache
     cache[ckey] = {"ts": datetime.datetime.now().isoformat(), "bids": grouped, "total": total}
