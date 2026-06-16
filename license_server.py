@@ -179,5 +179,109 @@ def health():
     return jsonify({"service": "Bid Caller Pro License Server", "status": "ok"})
 
 
+# ═══════════════════════════════════════════════════════════
+#  AI BID EXTRACTION (server-side, so customers need no Ollama)
+# ═══════════════════════════════════════════════════════════
+import urllib.request
+
+# Set this in Render env vars: OPENAI_API_KEY
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")  # cheap + capable
+
+def _license_is_active(key, device):
+    """Only paying/trial users may use our AI budget."""
+    key = (key or "").strip().upper()
+    db = _db()
+    if key and key not in db.get("revoked", []):
+        valid, plan, exp, reason = verify_key(key)
+        if valid:
+            return True
+    # allow active trials too
+    trials = db.get("trials", {})
+    if device in trials:
+        started = datetime.datetime.fromisoformat(trials[device]["started"])
+        if datetime.datetime.now() <= started + datetime.timedelta(days=TRIAL_DAYS):
+            return True
+    return False
+
+
+def _ai_extract(city, text):
+    """Call OpenAI to pull structured bids from scraped text. Returns a list."""
+    if not OPENAI_API_KEY:
+        return None, "no_api_key"
+
+    prompt = (
+        f"You are a construction bid intelligence agent for {city}.\n\n"
+        "Read the municipal website text and extract ANY construction, infrastructure, "
+        "roofing, paving, road, utility, demolition, or HVAC/facility maintenance bids, "
+        "RFPs, RFQs, or solicitations.\n\n"
+        "Respond ONLY with a JSON array. Each item has keys: \"title\", \"scope\", "
+        "\"status\" (\"Open\" or \"Closed\"), \"deadline\", \"contact\", \"email\", "
+        "\"phone\", \"value\", \"url\". The \"value\" is the dollar amount ONLY if stated, "
+        "else \"\". Use \"\" for any missing field. If no bids, return []. "
+        "No markdown, no text outside the array.\n\n"
+        f"WEBSITE TEXT:\n{text[:18000]}"
+    )
+
+    body = json.dumps({
+        "model": OPENAI_MODEL,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0,
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        "https://api.openai.com/v1/chat/completions",
+        data=body,
+        headers={
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        out = data["choices"][0]["message"]["content"].strip()
+        # Pull the JSON array out even if wrapped
+        if "```" in out:
+            for p in out.split("```"):
+                p = p.strip()
+                if p.startswith("json"):
+                    p = p[4:].strip()
+                if p.startswith("[") and p.endswith("]"):
+                    out = p
+                    break
+        s, e = out.find("["), out.rfind("]")
+        if s != -1 and e != -1 and e > s:
+            out = out[s:e + 1]
+        bids = json.loads(out)
+        return (bids if isinstance(bids, list) else []), "ok"
+    except Exception as ex:
+        return None, f"ai_error: {ex}"
+
+
+@app.route("/extract", methods=["POST"])
+def extract():
+    """
+    Body: {key, device_id, city, text}
+    Returns: {ok, bids:[...]} — runs the AI for licensed users only.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    key = data.get("key", "")
+    device = data.get("device_id", "")
+    city = data.get("city", "Unknown")
+    text = data.get("text", "")
+
+    if not _license_is_active(key, device):
+        return jsonify({"ok": False, "reason": "not_licensed"}), 403
+    if not text.strip():
+        return jsonify({"ok": True, "bids": []})
+
+    bids, status = _ai_extract(city, text)
+    if bids is None:
+        return jsonify({"ok": False, "reason": status}), 500
+    return jsonify({"ok": True, "bids": bids})
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
