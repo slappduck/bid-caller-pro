@@ -389,10 +389,16 @@ def scan():
         code = 502 if status.startswith("sam_http") else 500
         return jsonify({"ok": False, "reason": status}), code
 
-    # 5. Keep construction, normalize, group by city.
+    # 5. Keep construction bids whose place of performance is IN the user's
+    #    state, normalize, and group by city. (SAM's own state filter is
+    #    unreliable, so we enforce it here too.)
     grouped = {}
     for opp in opps:
         if not _is_construction(opp):
+            continue
+        pop = opp.get("placeOfPerformance") or {}
+        opp_state = ((pop.get("state") or {}).get("code") or "").upper()
+        if opp_state != state:        # drop out-of-state / unspecified
             continue
         bid, city = _normalize_opp(opp)
         grouped.setdefault(city, []).append(bid)
