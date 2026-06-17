@@ -11,11 +11,16 @@ license_server.py — License validation + bid scanning for Bid Caller Pro
     then cached per area per day.
 
 ENV VARS (set in Render → your service → Environment):
-  LICENSE_SECRET   license signing secret
-  ADMIN_TOKEN      admin token for /issue and /revoke
-  OPENAI_API_KEY   REQUIRED for local extraction
-  SAM_API_KEY      REQUIRED for federal bids (free key: sam.gov)
-  TAVILY_API_KEY   OPTIONAL fallback search (free 1k/mo, no card: tavily.com)
+  LICENSE_SECRET           license signing secret
+  ADMIN_TOKEN              admin token for /issue and /revoke
+  OPENAI_API_KEY           REQUIRED for local extraction
+  SAM_API_KEY              REQUIRED for federal bids (free key: sam.gov)
+  TAVILY_API_KEY           OPTIONAL fallback search (free 1k/mo: tavily.com)
+  UPSTASH_REDIS_REST_URL   persistent storage (free: upstash.com) -- needed so
+  UPSTASH_REDIS_REST_TOKEN   trials/keys survive restarts
+  STRIPE_WEBHOOK_SECRET    from Stripe -> Developers -> Webhooks (whsec_...)
+  RESEND_API_KEY           OPTIONAL, emails the key to buyers (resend.com)
+  FROM_EMAIL               OPTIONAL sender, e.g. "Bids <keys@yourdomain.com>"
   (BRAVE_API_KEY is no longer used — you can delete it.)
 
 START COMMAND (raise the timeout — scans do real work):
@@ -50,20 +55,82 @@ LICENSE_SECRET = os.environ.get("LICENSE_SECRET", "CHANGE_THIS_LONG_RANDOM_SECRE
 ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "CHANGE_THIS_ADMIN_TOKEN")
 TRIAL_DAYS = 7
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "license_db.json")
+# ── Persistence ──────────────────────────────────────────────────────────
+# License data (trials/keys/customers) is stored in Upstash Redis via its REST
+# API so it SURVIVES Render restarts/redeploys. If Upstash isn't configured it
+# falls back to a local file (ephemeral) so the app still runs in dev.
+UPSTASH_URL = os.environ.get("UPSTASH_REDIS_REST_URL", "").rstrip("/")
+UPSTASH_TOKEN = os.environ.get("UPSTASH_REDIS_REST_TOKEN", "")
+_LIC_KEY = "bidcaller:license_db"
+_LOCAL_LIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "license_db.json")
+_LOCAL_CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scan_cache.json")
+
+
+def _empty_lic():
+    return {"revoked": [], "trials": {}, "issued": {},
+            "customers": {}, "emails": {}, "devices": {}}
+
+
+def _upstash(*cmd):
+    """Run one Redis command via Upstash REST. Returns (result, ok)."""
+    if not (UPSTASH_URL and UPSTASH_TOKEN):
+        return None, False
+    body = json.dumps(list(cmd)).encode("utf-8")
+    req = urllib.request.Request(UPSTASH_URL, data=body, method="POST", headers={
+        "Authorization": f"Bearer {UPSTASH_TOKEN}",
+        "Content-Type": "application/json",
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return json.loads(resp.read().decode("utf-8")).get("result"), True
+    except Exception as ex:
+        print(f"[upstash] error: {ex}", flush=True)
+        return None, False
 
 
 def _db():
+    """Load persistent license data (Upstash if configured, else local file)."""
+    result, ok = _upstash("GET", _LIC_KEY)
+    if ok:
+        if result:
+            try:
+                return json.loads(result)
+            except Exception:
+                pass
+        return _empty_lic()
     try:
-        with open(DB_PATH) as f:
+        with open(_LOCAL_LIC) as f:
             return json.load(f)
     except Exception:
-        return {"revoked": [], "trials": {}, "issued": {}}
+        return _empty_lic()
 
 
 def _save_db(db):
-    with open(DB_PATH, "w") as f:
-        json.dump(db, f, indent=2)
+    _, ok = _upstash("SET", _LIC_KEY, json.dumps(db))
+    if ok:
+        return
+    try:
+        with open(_LOCAL_LIC, "w") as f:
+            json.dump(db, f, indent=2)
+    except Exception:
+        pass
+
+
+def _cache():
+    """Ephemeral scan/geo cache — fine to lose on restart, kept local."""
+    try:
+        with open(_LOCAL_CACHE) as f:
+            return json.load(f)
+    except Exception:
+        return {"scan_cache": {}, "geo_cache": {}}
+
+
+def _save_cache(c):
+    try:
+        with open(_LOCAL_CACHE, "w") as f:
+            json.dump(c, f)
+    except Exception:
+        pass
 
 
 # ── Key signing / verification ──
@@ -171,6 +238,192 @@ def revoke():
 @app.route("/", methods=["GET"])
 def health():
     return jsonify({"service": "Bid Caller Pro License Server", "status": "ok"})
+
+
+# ═══════════════════════════════════════════════════════════
+# PAYMENTS: Stripe webhook -> auto-issue keys (survives restarts)
+# ═══════════════════════════════════════════════════════════
+STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+FROM_EMAIL = os.environ.get("FROM_EMAIL", "Bid Caller Pro <onboarding@resend.dev>")
+
+
+def _stripe_verify(payload, sig_header):
+    """Verify a Stripe webhook signature without the stripe library."""
+    if not STRIPE_WEBHOOK_SECRET or not sig_header:
+        return False
+    try:
+        parts = dict(p.split("=", 1) for p in sig_header.split(",") if "=" in p)
+        signed = f"{parts.get('t')}.{payload.decode('utf-8')}".encode("utf-8")
+        expected = hmac.new(STRIPE_WEBHOOK_SECRET.encode(), signed,
+                            hashlib.sha256).hexdigest()
+        return hmac.compare_digest(expected, parts.get("v1", ""))
+    except Exception:
+        return False
+
+
+def _send_key_email(email, key):
+    """Email the license key to the buyer (only if Resend is configured)."""
+    if not (RESEND_API_KEY and email):
+        return
+    body = json.dumps({
+        "from": FROM_EMAIL,
+        "to": [email],
+        "subject": "Your Bid Caller Pro license key",
+        "text": ("Thanks for subscribing to Bid Caller Pro!\n\n"
+                 f"Your license key:\n\n    {key}\n\n"
+                 "If the app didn't unlock automatically, open it, go to the Plan "
+                 "tab, paste the key under 'Have a license key?', and tap Activate."),
+    }).encode("utf-8")
+    req = urllib.request.Request("https://api.resend.com/emails", data=body,
+        method="POST", headers={"Authorization": f"Bearer {RESEND_API_KEY}",
+                                "Content-Type": "application/json"})
+    try:
+        urllib.request.urlopen(req, timeout=15)
+        print(f"[email] sent key to {email}", flush=True)
+    except Exception as ex:
+        print(f"[email] failed: {ex}", flush=True)
+
+
+def _issue_for(db, email, device, plan):
+    """Create a key and index it by both email and device for later lookup."""
+    months = 12 if plan == "annual" else 1
+    key, exp = make_key(plan, months)
+    db.setdefault("issued", {})[key] = {
+        "plan": plan, "expires": exp[:10], "email": email, "device": device,
+        "updated": datetime.datetime.now().isoformat()[:10],
+    }
+    if email:
+        db.setdefault("emails", {})[email.lower()] = key
+    if device:
+        db.setdefault("devices", {})[device] = key
+    return key
+
+
+@app.route("/stripe/webhook", methods=["POST"])
+def stripe_webhook():
+    payload = request.get_data()
+    if not _stripe_verify(payload, request.headers.get("Stripe-Signature", "")):
+        return jsonify({"ok": False, "reason": "bad_signature"}), 400
+    try:
+        event = json.loads(payload.decode("utf-8"))
+    except Exception:
+        return jsonify({"ok": False}), 400
+
+    etype = event.get("type", "")
+    obj = (event.get("data") or {}).get("object") or {}
+    db = _db()
+
+    if etype == "checkout.session.completed":
+        email = ((obj.get("customer_details") or {}).get("email")
+                 or obj.get("customer_email") or "")
+        device = obj.get("client_reference_id") or ""
+        cust = obj.get("customer") or ""
+        amount = obj.get("amount_total") or 0
+        plan = "annual" if amount and amount >= 10000 else "monthly"
+        key = _issue_for(db, email, device, plan)
+        if cust:
+            db.setdefault("customers", {})[cust] = {
+                "email": email, "device": device, "plan": plan}
+        _save_db(db)
+        _send_key_email(email, key)
+        print(f"[stripe] issued {plan} key for {email or device}", flush=True)
+
+    elif etype == "invoice.paid":
+        cust = obj.get("customer") or ""
+        info = db.get("customers", {}).get(cust)
+        if info:
+            _issue_for(db, info.get("email", ""), info.get("device", ""),
+                       info.get("plan", "monthly"))
+            _save_db(db)
+            print(f"[stripe] renewed for {cust}", flush=True)
+
+    elif etype in ("customer.subscription.deleted", "customer.subscription.paused"):
+        cust = obj.get("customer") or ""
+        info = db.get("customers", {}).get(cust)
+        if info:
+            email = (info.get("email") or "").lower()
+            key = db.get("emails", {}).get(email)
+            if key and key not in db.setdefault("revoked", []):
+                db["revoked"].append(key)
+            _save_db(db)
+            print(f"[stripe] revoked for {cust}", flush=True)
+
+    return jsonify({"ok": True})
+
+
+@app.route("/mykey", methods=["POST"])
+def mykey():
+    """App calls this with its device id to auto-unlock after a purchase."""
+    data = request.get_json(force=True, silent=True) or {}
+    device = (data.get("device_id") or "").strip()
+    db = _db()
+    key = db.get("devices", {}).get(device)
+    if not key:
+        return jsonify({"ok": False, "reason": "no_key"})
+    valid, plan, exp, _ = verify_key(key)
+    if not valid or key in db.get("revoked", []):
+        return jsonify({"ok": False, "reason": "inactive"})
+    return jsonify({"ok": True, "key": key, "plan": plan, "expires": exp[:10]})
+
+
+@app.route("/claim", methods=["POST"])
+def claim():
+    """Restore a purchase on a new device using the buyer's email."""
+    data = request.get_json(force=True, silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+    device = (data.get("device_id") or "").strip()
+    db = _db()
+    key = db.get("emails", {}).get(email)
+    if not key:
+        return jsonify({"ok": False, "reason": "no_purchase"})
+    valid, plan, exp, _ = verify_key(key)
+    if not valid or key in db.get("revoked", []):
+        return jsonify({"ok": False, "reason": "inactive"})
+    if device:
+        db.setdefault("devices", {})[device] = key
+        _save_db(db)
+    return jsonify({"ok": True, "key": key, "plan": plan, "expires": exp[:10]})
+
+
+@app.route("/admin/list", methods=["POST"])
+def admin_list():
+    """Admin dashboard data: trials, issued keys, counts."""
+    data = request.get_json(force=True, silent=True) or {}
+    if data.get("admin_token") != ADMIN_TOKEN:
+        return jsonify({"ok": False, "reason": "unauthorized"}), 401
+    db = _db()
+    now = datetime.datetime.now()
+    revoked = set(db.get("revoked") or [])
+
+    trials = []
+    for dev, t in (db.get("trials") or {}).items():
+        try:
+            started = datetime.datetime.fromisoformat(t["started"])
+        except Exception:
+            continue
+        end = started + datetime.timedelta(days=TRIAL_DAYS)
+        active = now <= end
+        trials.append({"device": dev, "started": started.isoformat()[:10],
+                       "expires": end.isoformat()[:10], "active": active,
+                       "days_left": (end - now).days + 1 if active else 0})
+
+    issued = []
+    for key, info in (db.get("issued") or {}).items():
+        issued.append({"key": key, "email": info.get("email", ""),
+                       "plan": info.get("plan", ""), "expires": info.get("expires", ""),
+                       "device": info.get("device", ""), "revoked": key in revoked})
+
+    return jsonify({"ok": True,
+                    "trials": sorted(trials, key=lambda x: x["expires"], reverse=True),
+                    "issued": sorted(issued, key=lambda x: x["expires"], reverse=True),
+                    "counts": {
+                        "active_trials": sum(1 for t in trials if t["active"]),
+                        "total_trials": len(trials),
+                        "active_subs": sum(1 for i in issued if not i["revoked"]),
+                        "issued": len(issued),
+                        "revoked": len(revoked),
+                    }})
 
 
 # ═══════════════════════════════════════════════════════════
@@ -600,9 +853,9 @@ def scan():
     if not center:
         return jsonify({"ok": False, "reason": "location_not_found"})
 
-    db = _db()
+    cdb = _cache()
     today = datetime.datetime.now().strftime("%Y%m%d")
-    cache = db.setdefault("scan_cache", {})
+    cache = cdb.setdefault("scan_cache", {})
     ckey = f"{center['state']}|{center['city'].lower()}|{int(radius)}|{today}"
     if ckey in cache:
         c = cache[ckey]
@@ -645,7 +898,7 @@ def scan():
             for b in bids:
                 if isinstance(b, dict):
                     b.setdefault("url", it["url"])
-                    _place_bid(grouped, b, center, radius, db, default_city="")
+                    _place_bid(grouped, b, center, radius, cdb, default_city="")
         print(f"[scan] {local_raw} raw local bids extracted", flush=True)
 
     # ---- FEDERAL: SAM.gov for the state, radius-filtered ----
@@ -654,7 +907,7 @@ def scan():
             if not _is_construction(opp):
                 continue
             bid, city = _normalize_opp(opp)
-            _place_bid(grouped, bid, center, radius, db, default_city=city)
+            _place_bid(grouped, bid, center, radius, cdb, default_city=city)
 
     total = sum(len(v) for v in grouped.values())
     print(f"[scan] {int(radius)} mi from {center['city']},{center['state']} "
@@ -662,8 +915,8 @@ def scan():
 
     # cache (today only) + persist geo cache
     cache[ckey] = {"ts": datetime.datetime.now().isoformat(), "bids": grouped, "total": total}
-    db["scan_cache"] = {k: v for k, v in cache.items() if k.endswith(today)}
-    _save_db(db)
+    cdb["scan_cache"] = {k: v for k, v in cache.items() if k.endswith(today)}
+    _save_cache(cdb)
 
     return jsonify({"ok": True, "location": f"{center['city']}, {center['state']}",
                     "bids": grouped, "total_bids": total,
