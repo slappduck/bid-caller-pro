@@ -306,7 +306,7 @@ def _city_coords(city, state, db):
 # ═══════════════════════════════════════════════════════════
 TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "")
 TAVILY_URL = "https://api.tavily.com/search"
-MAX_PAGES = int(os.environ.get("SCAN_MAX_PAGES", "6"))
+MAX_PAGES = int(os.environ.get("SCAN_MAX_PAGES", "10"))
 
 _SCRIPT_RE = re.compile(r"<(script|style)[^>]*>.*?</\1>", re.I | re.S)
 _TAG_RE = re.compile(r"<[^>]+>")
@@ -616,14 +616,16 @@ def scan():
     if OPENAI_API_KEY:
         c, s = center["city"], center["state"]
         queries = [
-            f"{c} {s} construction bid RFP invitation to bid",
-            f"{c} {s} city county procurement construction solicitation",
-            f"{c} {s} public works school district construction bids",
+            f"{c} {s} current construction bids open solicitations",
+            f"{c} {s} city county purchasing bid opportunities vendor",
+            f"{c} {s} public works school district construction RFP",
+            f"{c} {s} invitation to bid construction project deadline",
+            f"{s} construction bids near {c} bonfire demandstar bidnet",
         ]
         seen, items = set(), []
         for q in queries:
             # Tavily is the reliable path when a key is set; DDG is the free fallback.
-            results = _tavily_search(q) if TAVILY_API_KEY else []
+            results = _tavily_search(q, max_results=6) if TAVILY_API_KEY else []
             if not results:
                 results = _ddg_search(q)
             for r in results:
