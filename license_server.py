@@ -614,7 +614,7 @@ def _city_coords(city, state, db):
 # ═══════════════════════════════════════════════════════════
 TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "")
 TAVILY_URL = "https://api.tavily.com/search"
-MAX_PAGES = int(os.environ.get("SCAN_MAX_PAGES", "10"))
+MAX_PAGES = int(os.environ.get("SCAN_MAX_PAGES", "16"))
 
 _SCRIPT_RE = re.compile(r"<(script|style)[^>]*>.*?</\1>", re.I | re.S)
 _TAG_RE = re.compile(r"<[^>]+>")
@@ -628,7 +628,7 @@ def _tavily_search(query, max_results=5):
     body = json.dumps({
         "api_key": TAVILY_API_KEY,
         "query": query,
-        "search_depth": "basic",
+        "search_depth": "advanced",
         "max_results": max_results,
         "include_raw_content": True,
     }).encode("utf-8")
@@ -925,23 +925,26 @@ def scan():
     if OPENAI_API_KEY:
         c, s = center["city"], center["state"]
         queries = [
-            f"{c} {s} current construction bids open solicitations",
-            f"{c} {s} city county purchasing bid opportunities vendor",
-            f"{c} {s} public works school district construction RFP",
-            f"{c} {s} invitation to bid construction project deadline",
-            f"{s} construction bids near {c} bonfire demandstar bidnet",
+            f"{c} {s} construction bids open solicitations invitation to bid",
+            f"{c} {s} city county public works purchasing bid opportunities",
+            f"{c} {s} school district university hospital construction RFP",
+            f"{s} state procurement construction bids near {c}",
+            f"{s} department of transportation construction lettings {c}",
+            f"construction bids {c} {s} BidNet Direct DemandStar",
+            f"construction bids {c} {s} Bonfire OpenGov procurement portal",
+            f"{c} {s} solicitations road paving utility facility construction",
         ]
         seen, items = set(), []
         for q in queries:
             # Tavily is the reliable path when a key is set; DDG is the free fallback.
-            results = _tavily_search(q, max_results=6) if TAVILY_API_KEY else []
+            results = _tavily_search(q, max_results=8) if TAVILY_API_KEY else []
             if not results:
                 results = _ddg_search(q)
             for r in results:
                 if r["url"] not in seen:
                     seen.add(r["url"])
                     items.append(r)
-            time.sleep(1.2)  # be gentle on DDG between queries
+            time.sleep(0.6)
         print(f"[scan] {len(items)} candidate pages near {c}, {s}", flush=True)
         for it in items[:MAX_PAGES]:
             text = it["content"] or _fetch_text(it["url"])
