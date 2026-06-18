@@ -18,6 +18,8 @@ ENV VARS (set in Render → your service → Environment):
   TAVILY_API_KEY           OPTIONAL fallback search (free 1k/mo: tavily.com)
   UPSTASH_REDIS_REST_URL   persistent storage (free: upstash.com) -- needed so
   UPSTASH_REDIS_REST_TOKEN   trials/keys survive restarts
+  SUPABASE_URL             your Supabase project URL (https://xxx.supabase.co)
+  SUPABASE_ANON_KEY        your Supabase publishable/anon key (safe, public)
   STRIPE_WEBHOOK_SECRET    from Stripe -> Developers -> Webhooks (whsec_...)
   RESEND_API_KEY           OPTIONAL, emails the key to buyers (resend.com)
   FROM_EMAIL               OPTIONAL sender, e.g. "Bids <keys@yourdomain.com>"
@@ -243,9 +245,31 @@ def health():
 # ═══════════════════════════════════════════════════════════
 # PAYMENTS: Stripe webhook -> auto-issue keys (survives restarts)
 # ═══════════════════════════════════════════════════════════
-STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
+SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 FROM_EMAIL = os.environ.get("FROM_EMAIL", "Bid Caller Pro <onboarding@resend.dev>")
+
+
+def _verify_supabase_token(token):
+    """Ask Supabase if this access token belongs to a real signed-in user.
+    Returns the user's email on success, None on failure.
+    No external packages needed — just a plain HTTPS call."""
+    if not (SUPABASE_URL and SUPABASE_ANON_KEY and token):
+        return None
+    try:
+        req = urllib.request.Request(
+            f"{SUPABASE_URL}/auth/v1/user",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "apikey": SUPABASE_ANON_KEY,
+            }
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            user = json.loads(resp.read().decode("utf-8"))
+            return (user.get("email") or "").lower() or None
+    except Exception:
+        return None
 
 
 def _stripe_verify(payload, sig_header):
@@ -429,18 +453,49 @@ def admin_list():
 # ═══════════════════════════════════════════════════════════
 # LICENSE / TRIAL GATE
 # ═══════════════════════════════════════════════════════════
-def _license_is_active(key, device):
+def _license_is_active(key, device, supabase_token=None):
+    """Return True if this request has a valid license, active trial,
+    OR a signed-in Supabase account (email-based trial counts too)."""
     key = (key or "").strip().upper()
     db = _db()
+
+    # 1. Valid license key
     if key and key not in db.get("revoked", []):
         valid, _, _, _ = verify_key(key)
         if valid:
             return True
+
+    # 2. Supabase account — check if their email has a key, or give them a trial
+    if supabase_token:
+        email = _verify_supabase_token(supabase_token)
+        if email:
+            # email has an active issued key?
+            ekey = db.get("emails", {}).get(email)
+            if ekey and ekey not in db.get("revoked", []):
+                ev, _, _, _ = verify_key(ekey)
+                if ev:
+                    return True
+            # email-based trial
+            trials = db.setdefault("trials", {})
+            trial_key = f"email:{email}"
+            if trial_key in trials:
+                started = datetime.datetime.fromisoformat(trials[trial_key]["started"])
+                if datetime.datetime.now() <= started + datetime.timedelta(days=TRIAL_DAYS):
+                    return True
+            else:
+                # First time this account scans — start their trial
+                trials[trial_key] = {"started": datetime.datetime.now().isoformat(),
+                                     "email": email}
+                _save_db(db)
+                return True
+
+    # 3. Anonymous device-based trial (legacy / no account)
     trials = db.get("trials", {})
     if device in trials:
         started = datetime.datetime.fromisoformat(trials[device]["started"])
         if datetime.datetime.now() <= started + datetime.timedelta(days=TRIAL_DAYS):
             return True
+
     return False
 
 
@@ -838,13 +893,14 @@ def scan():
     data = request.get_json(force=True, silent=True) or {}
     key = data.get("key", "")
     device = data.get("device_id", "")
+    supabase_token = data.get("supabase_token", "")
     location = (data.get("location") or "").strip()
     try:
         radius = float(data.get("radius") or 25)
     except (TypeError, ValueError):
         radius = 25.0
 
-    if not _license_is_active(key, device):
+    if not _license_is_active(key, device, supabase_token):
         return jsonify({"ok": False, "reason": "not_licensed"}), 403
     if not location:
         return jsonify({"ok": False, "reason": "no_location"})
