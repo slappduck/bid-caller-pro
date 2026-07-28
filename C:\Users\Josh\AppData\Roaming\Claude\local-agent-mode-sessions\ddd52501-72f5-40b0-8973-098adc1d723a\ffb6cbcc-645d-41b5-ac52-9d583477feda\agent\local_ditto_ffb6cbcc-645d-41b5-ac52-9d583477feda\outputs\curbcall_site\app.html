@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="theme-color" content="#0d0f18" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<title>CurbCall — Concrete Bids Near You</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+:root{
+  --bg:#0d0f18;--surface:#13162a;--card:#1c2035;--border:#2a2f4a;
+  --accent:#f59e0b;--accent-d:#d97706;--blue:#3b82f6;--green:#22c55e;--red:#ef4444;
+  --text:#f1f5f9;--text2:#94a3b8;--text3:#475569;
+  --ui:'Inter',sans-serif;--mono:'DM Mono',monospace;
+}
+html,body{height:100%;}
+body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidden;position:fixed;width:100%;-webkit-font-smoothing:antialiased;}
+#app{height:100dvh;display:flex;flex-direction:column;}
+
+/* ── Auth screen ── */
+#auth-screen{
+  position:fixed;inset:0;z-index:100;background:var(--bg);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:2rem 1.5rem;
+}
+.auth-logo{font-family:'Bebas Neue',sans-serif;font-size:2.2rem;letter-spacing:0.06em;margin-bottom:0.2rem;}
+.auth-logo span{color:var(--accent);}
+.auth-tagline{color:var(--text2);font-size:0.9rem;margin-bottom:2.2rem;text-align:center;}
+.auth-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.5rem;width:100%;max-width:360px;}
+.auth-title{font-size:1.1rem;font-weight:800;margin-bottom:0.3rem;}
+.auth-sub{color:var(--text2);font-size:0.82rem;margin-bottom:1.4rem;}
+.social-btn{
+  width:100%;display:flex;align-items:center;justify-content:center;gap:0.7rem;
+  padding:0.85rem;border-radius:10px;font-weight:700;font-size:0.95rem;
+  cursor:pointer;border:none;font-family:var(--ui);margin-bottom:0.7rem;
+  background:var(--card);color:var(--text);border:1px solid var(--border);
+  transition:border-color .15s;
+}
+.social-btn:hover{border-color:var(--accent);}
+.social-btn img{width:20px;height:20px;}
+.divider{display:flex;align-items:center;gap:0.7rem;margin:0.5rem 0 1rem;}
+.divider::before,.divider::after{content:"";flex:1;height:1px;background:var(--border);}
+.divider span{color:var(--text3);font-size:0.75rem;}
+.field-label{color:var(--accent);font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 0.4rem;}
+.input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:0.85rem 1rem;color:var(--text);font-size:1rem;font-family:var(--ui);}
+.input:focus{outline:none;border-color:var(--accent);}
+.btn-primary{width:100%;background:var(--accent);color:#000;border:none;border-radius:12px;padding:0.95rem;font-size:1rem;font-weight:800;cursor:pointer;margin-top:0.8rem;font-family:var(--ui);display:flex;align-items:center;justify-content:center;gap:0.5rem;}
+.btn-primary:disabled{opacity:0.55;}
+.btn-ghost{width:100%;background:transparent;color:var(--text2);border:1px solid var(--border);border-radius:10px;padding:0.8rem;font-size:0.9rem;font-weight:600;cursor:pointer;margin-top:0.6rem;font-family:var(--ui);}
+.auth-toggle{text-align:center;margin-top:1rem;font-size:0.82rem;color:var(--text2);}
+.auth-toggle a{color:var(--accent);cursor:pointer;font-weight:600;}
+.auth-msg{font-size:0.82rem;margin-top:0.7rem;min-height:1rem;text-align:center;}
+.auth-msg.err{color:var(--red);}
+.auth-msg.ok{color:var(--green);}
+.auth-trial-note{text-align:center;color:var(--text3);font-size:0.75rem;margin-top:1.2rem;}
+
+/* ── Main app ── */
+.topbar{background:var(--surface);padding:calc(env(safe-area-inset-top) + 0.8rem) 1rem 0.8rem;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);flex-shrink:0;}
+.brand{display:flex;align-items:center;gap:0.5rem;}
+.brand-name{font-family:'Bebas Neue',sans-serif;font-size:1.25rem;letter-spacing:0.06em;}
+.brand-name span{color:var(--accent);}
+.user-chip{font-size:0.68rem;font-weight:700;color:var(--accent);background:rgba(245,166,35,0.12);padding:0.3rem 0.6rem;border-radius:20px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;}
+
+.screens{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+.screen{display:none;padding:1rem 1rem 5.5rem;animation:fade 0.25s;}
+.screen.active{display:block;}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
+.screen-title{font-family:'Bebas Neue',sans-serif;font-size:1.8rem;letter-spacing:0.03em;margin-bottom:0.2rem;}
+.screen-sub{color:var(--text2);font-size:0.85rem;margin-bottom:1.2rem;}
+.radius-row{display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.2rem;}
+.radius-btn{flex:1;min-width:56px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:0.7rem 0.3rem;color:var(--text2);font-size:0.85rem;font-weight:600;cursor:pointer;text-align:center;}
+.radius-btn.active{background:var(--accent);color:#000;border-color:var(--accent);}
+
+.scan-status{color:var(--text2);font-size:0.85rem;text-align:center;margin-top:1.2rem;min-height:20px;}
+.progress{height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin-top:0.7rem;}
+.progress-bar{height:100%;width:0;background:var(--accent);transition:width 0.4s ease;}
+
+.feed-label{color:var(--green);font-size:0.68rem;font-weight:700;letter-spacing:0.06em;margin:1.2rem 0 0.6rem;}
+.bid{background:var(--card);border-radius:12px;padding:0;margin-bottom:0.7rem;overflow:hidden;display:flex;cursor:pointer;animation:fade 0.3s;}
+.bid-bar{width:4px;flex-shrink:0;}
+.bid-body{padding:0.9rem 1rem;flex:1;min-width:0;}
+.bid-top{display:flex;justify-content:space-between;align-items:flex-start;gap:0.5rem;margin-bottom:0.3rem;}
+.bid-title{font-weight:700;font-size:0.95rem;line-height:1.3;}
+.bid-scope{color:var(--text2);font-size:0.8rem;line-height:1.45;margin-bottom:0.5rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.bid-meta{display:flex;gap:0.4rem;flex-wrap:wrap;}
+.chip{font-size:0.66rem;padding:0.2rem 0.5rem;border-radius:5px;background:var(--surface);color:var(--text2);}
+.chip.value{color:var(--green);}
+.star{font-size:1.2rem;color:var(--text3);flex-shrink:0;padding-left:0.4rem;}
+.star.on{color:var(--accent);}
+
+.tiles{display:flex;gap:0.5rem;overflow-x:auto;padding-bottom:0.5rem;margin-bottom:0.3rem;-webkit-overflow-scrolling:touch;}
+.tile{flex-shrink:0;background:var(--card);border-radius:10px;padding:0.6rem 0.9rem;text-align:center;cursor:pointer;min-width:64px;}
+.tile.active{background:var(--accent);}
+.tile .n{font-size:1.2rem;font-weight:800;}
+.tile.active .n,.tile.active .l{color:#000;}
+.tile .l{font-size:0.65rem;color:var(--text3);}
+
+.empty{text-align:center;padding:3.5rem 1rem;}
+.empty .icon{font-size:2.6rem;opacity:0.4;}
+.empty h3{font-size:1.1rem;color:var(--text2);margin:0.7rem 0 0.3rem;}
+.empty p{color:var(--text3);font-size:0.85rem;}
+
+.plan{background:var(--card);border:1.5px solid var(--border);border-radius:14px;padding:1.2rem;margin-bottom:0.9rem;}
+.plan.featured{border-color:var(--accent);}
+.plan-name{font-size:0.75rem;color:var(--text2);text-transform:uppercase;letter-spacing:0.08em;}
+.plan-price{font-family:'Bebas Neue',sans-serif;font-size:2.4rem;line-height:1;margin:0.3rem 0;}
+.plan-price span{font-family:var(--ui);font-size:0.85rem;color:var(--text2);}
+.plan ul{list-style:none;margin:0.7rem 0 1rem;}
+.plan li{font-size:0.82rem;color:var(--text2);padding:0.25rem 0;}
+.plan li::before{content:"\2713 ";color:var(--accent);font-weight:700;}
+
+.account-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1.2rem;margin-bottom:1rem;}
+.account-email{font-weight:700;margin-bottom:0.3rem;word-break:break-all;}
+.account-status{font-size:0.82rem;color:var(--text2);}
+
+.bottom-nav{display:flex;background:var(--surface);border-top:1px solid var(--border);padding-bottom:env(safe-area-inset-bottom);flex-shrink:0;}
+.nav-btn{flex:1;background:none;border:none;padding:0.7rem 0.3rem 0.8rem;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:0.2rem;color:var(--text3);font-family:var(--ui);}
+.nav-btn .ic{font-size:1.25rem;}
+.nav-btn .lb{font-size:0.62rem;font-weight:600;}
+.nav-btn.active{color:var(--accent);}
+
+.modal-back{position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:50;display:none;animation:fade 0.2s;}
+.modal-back.open{display:block;}
+.modal{position:fixed;left:0;right:0;bottom:0;z-index:51;background:var(--surface);border-radius:18px 18px 0 0;max-height:85dvh;overflow-y:auto;transform:translateY(100%);transition:transform 0.3s;padding-bottom:env(safe-area-inset-bottom);}
+.modal.open{transform:translateY(0);}
+.modal-grip{width:40px;height:4px;background:var(--border);border-radius:2px;margin:0.7rem auto;}
+.modal-content{padding:0 1.2rem 1.5rem;}
+.modal h2{font-size:1.2rem;margin-bottom:0.5rem;}
+.detail-row{margin-top:1rem;}
+.detail-label{color:var(--text3);font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;}
+.detail-val{color:var(--text);font-size:0.95rem;margin-top:0.2rem;line-height:1.5;}
+.detail-val a{color:var(--blue);text-decoration:none;}
+.modal-actions{display:flex;gap:0.6rem;margin-top:1.5rem;}
+.modal-actions button,.modal-actions a{flex:1;padding:0.85rem;border-radius:10px;font-weight:700;font-size:0.9rem;text-align:center;border:none;cursor:pointer;font-family:var(--ui);text-decoration:none;}
+.ma-gold{background:var(--accent);color:#000;}
+.ma-ghost{background:var(--card);color:var(--text);}
+
+.toast{position:fixed;bottom:5rem;left:50%;transform:translateX(-50%) translateY(20px);background:var(--card);color:var(--text);padding:0.8rem 1.3rem;border-radius:10px;font-size:0.85rem;opacity:0;transition:all 0.3s;z-index:60;border:1px solid var(--border);pointer-events:none;max-width:90%;text-align:center;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+.spin{display:inline-block;width:16px;height:16px;border:2px solid rgba(0,0,0,0.3);border-top-color:#000;border-radius:50%;animation:spin 0.7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* ── Feed toolbar / Map ── */
+.feed-toolbar{display:flex;gap:0.5rem;margin:0 0 0.9rem;}
+.feed-toolbar .btn-ghost{margin:0;flex:none;width:auto;}
+#map-view{display:none;height:280px;border-radius:12px;overflow:hidden;margin-bottom:1rem;border:1px solid var(--border);}
+#map-view.show{display:block;}
+.map-legend{display:flex;gap:0.8rem;flex-wrap:wrap;font-size:0.72rem;color:var(--text2);margin:-0.4rem 0 0.9rem;}
+.map-legend span{display:inline-flex;align-items:center;gap:0.3rem;}
+.map-dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
+.leaflet-popup-content-wrapper{background:var(--surface);color:var(--text);}
+.leaflet-popup-tip{background:var(--surface);}
+
+/* ── Upcoming ── */
+.bid.planned .bid-bar{background:var(--blue) !important;}
+</style>
+</head>
+<body>
+<div id="app" style="display:none;">
+  <div class="topbar">
+    <div class="brand">&#x1F6A7;<span class="brand-name">Curb<span>Call</span></span></div>
+    <span class="user-chip" id="user-chip" onclick="goTo('account')">...</span>
+  </div>
+  <div class="screens">
+
+    <!-- FIND -->
+    <div class="screen active" id="screen-scan">
+      <div class="screen-title">Find Concrete Bids Near You</div>
+      <div class="screen-sub">Enter your area — we'll find sidewalk, ADA &amp; curb bids.</div>
+      <div class="field-label">Your Location</div>
+      <input class="input" id="loc-input" placeholder="ZIP code or City, State" inputmode="text" />
+      <div class="field-label" style="margin-top:1rem;">Search Radius</div>
+      <div class="radius-row" id="radius-row">
+        <div class="radius-btn" data-r="10">10 mi</div>
+        <div class="radius-btn active" data-r="25">25 mi</div>
+        <div class="radius-btn" data-r="50">50 mi</div>
+        <div class="radius-btn" data-r="75">75 mi</div>
+        <div class="radius-btn" data-r="125">125 mi</div>
+      </div>
+      <button class="btn-primary" id="scan-btn">&#x1F50D; Scan for Bids</button>
+      <div class="scan-status" id="scan-status"></div>
+      <div class="progress" id="progress-wrap" style="display:none;"><div class="progress-bar" id="progress-bar"></div></div>
+    </div>
+
+    <!-- BIDS -->
+    <div class="screen" id="screen-feed">
+      <div class="screen-title">Live Bids</div>
+      <div class="screen-sub" id="feed-sub">Bids you've found. New scans add to this list.</div>
+      <div class="feed-toolbar">
+        <button class="btn-ghost" id="clear-feed" style="display:none;">&#x1F5D1; Clear all bids</button>
+        <button class="btn-ghost" id="map-toggle" style="display:none;">&#x1F4CD; View Map</button>
+      </div>
+      <div id="map-view"></div>
+      <div class="map-legend" id="map-legend" style="display:none;">
+        <span><span class="map-dot" style="background:#f5b400;"></span>Search center</span>
+        <span><span class="map-dot" style="background:#22c55e;"></span>Open bids</span>
+        <span><span class="map-dot" style="background:#3b82f6;"></span>Scanned, none open</span>
+      </div>
+      <div id="tiles-wrap"></div>
+      <div id="feed-list"></div>
+    </div>
+
+    <!-- UPCOMING -->
+    <div class="screen" id="screen-upcoming">
+      <div class="screen-title">Upcoming Work</div>
+      <div class="screen-sub">Concrete projects spotted in council agendas, budgets &amp; plans &mdash; before they hit the bid boards.</div>
+      <div class="field-label">Your Location</div>
+      <input class="input" id="up-loc-input" placeholder="ZIP code or City, State" inputmode="text" />
+      <div class="field-label" style="margin-top:1rem;">Search Radius</div>
+      <div class="radius-row" id="up-radius-row">
+        <div class="radius-btn" data-r="10">10 mi</div>
+        <div class="radius-btn active" data-r="25">25 mi</div>
+        <div class="radius-btn" data-r="50">50 mi</div>
+        <div class="radius-btn" data-r="75">75 mi</div>
+        <div class="radius-btn" data-r="125">125 mi</div>
+      </div>
+      <button class="btn-primary" id="upcoming-btn">&#x1F4E1; Find Upcoming Projects</button>
+      <div class="scan-status" id="upcoming-status"></div>
+      <div class="progress" id="up-progress-wrap" style="display:none;"><div class="progress-bar" id="up-progress-bar"></div></div>
+      <div id="upcoming-list" style="margin-top:1rem;"></div>
+    </div>
+
+    <!-- SAVED -->
+    <div class="screen" id="screen-saved">
+      <div class="screen-title">Saved Bids</div>
+      <div class="screen-sub">Bids you've starred to follow up on.</div>
+      <div id="saved-list"></div>
+    </div>
+
+    <!-- ACCOUNT / PLAN -->
+    <div class="screen" id="screen-account">
+      <div class="screen-title">Account</div>
+      <div id="account-body"></div>
+    </div>
+
+  </div>
+
+  <div class="bottom-nav">
+    <button class="nav-btn active" data-s="scan"><span class="ic">&#x1F50D;</span><span class="lb">Find</span></button>
+    <button class="nav-btn" data-s="feed"><span class="ic">&#x1F4CB;</span><span class="lb">Bids</span></button>
+    <button class="nav-btn" data-s="upcoming"><span class="ic">&#x1F4E1;</span><span class="lb">Upcoming</span></button>
+    <button class="nav-btn" data-s="saved"><span class="ic">&#x2B50;</span><span class="lb">Saved</span></button>
+    <button class="nav-btn" data-s="account"><span class="ic">&#x1F464;</span><span class="lb">Account</span></button>
+  </div>
+</div>
+
+<!-- AUTH SCREEN -->
+<div id="auth-screen">
+  <div class="auth-logo">&#x1F6A7; Curb<span>Call</span></div>
+  <div class="auth-tagline">Sidewalk, ADA &amp; curb bids near you</div>
+
+  <div class="auth-card" id="auth-card">
+    <div class="auth-title" id="auth-title">Create your free account</div>
+    <div class="auth-sub" id="auth-sub">7-day free trial &mdash; no card required</div>
+
+    <button class="social-btn" id="google-btn">
+      <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20H24v8h11.3C33.6 33.1 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 7.9 3l5.7-5.7C34.1 6.5 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20c11 0 20-9 20-20 0-1.3-.1-2.7-.4-4z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.5 15.1 18.9 12 24 12c3 0 5.8 1.1 7.9 3l5.7-5.7C34.1 6.5 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 10-1.9 13.6-5.1l-6.3-5.2C29.4 35.5 26.8 36 24 36c-5.2 0-9.5-2.8-11.3-7l-6.6 4.9C9.8 39.7 16.4 44 24 44z"/><path fill="#1976D2" d="M43.6 20H24v8h11.3c-1 2.7-2.8 4.9-5 6.4l6.3 5.2C40.6 35.8 44 30.3 44 24c0-1.3-.1-2.7-.4-4z"/></svg>
+      Continue with Google
+    </button>
+
+    <div class="divider"><span>or use email</span></div>
+
+    <div id="email-form">
+      <div class="field-label">Email</div>
+      <input class="input" id="auth-email" type="email" inputmode="email" placeholder="you@example.com" />
+      <div id="password-wrap">
+        <div class="field-label" style="margin-top:0.8rem;">Password</div>
+        <input class="input" id="auth-password" type="password" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" />
+      </div>
+      <button class="btn-primary" id="email-btn">Create Account</button>
+      <button class="btn-ghost" id="magic-btn">&#x2709; Send magic link instead</button>
+    </div>
+
+    <div class="auth-msg" id="auth-msg"></div>
+    <div class="auth-toggle" id="auth-toggle">Already have an account? <a id="toggle-link">Sign in</a></div>
+  </div>
+  <div class="auth-trial-note">&#x1F512; Free for 7 days &nbsp;&middot;&nbsp; No credit card &nbsp;&middot;&nbsp; Cancel anytime</div>
+  <div class="auth-trial-note" style="margin-top:0.5rem;"><a href="terms.html" style="color:var(--text3);">Terms</a> &nbsp;&middot;&nbsp; <a href="privacy.html" style="color:var(--text3);">Privacy</a></div>
+</div>
+
+<div class="modal-back" id="modal-back"></div>
+<div class="modal" id="modal"><div class="modal-grip"></div><div class="modal-content" id="modal-content"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL = "https://novwdthapkorstdtloky.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_sUuQHkrN_wsJqakUMfL_VA_58koZ76C";
+const SERVER = "https://bid-caller-pro.onrender.com";
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ── storage helpers ──
+const store = {
+  get(k,d){try{return JSON.parse(localStorage.getItem(k))??d;}catch{return d;}},
+  set(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch{}}
+};
+function deviceId(){
+  let id=store.get("device_id",null);
+  if(!id){id="web-"+Math.random().toString(36).slice(2)+Date.now().toString(36);store.set("device_id",id);}
+  return id;
+}
+function licenseKey(){return store.get("license_key","");}
+
+let bidData=store.get("last_feed",{});
+let saved=store.get("saved",{});
+let cityFilter="All";
+let currentUser=null;
+
+function toast(msg){
+  const t=document.getElementById("toast");
+  t.textContent=msg;t.classList.add("show");
+  clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),2600);
+}
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+// ── Auth screen logic ──
+let authMode="signup"; // signup | signin
+
+function setAuthMode(mode){
+  authMode=mode;
+  const isSignup=mode==="signup";
+  document.getElementById("auth-title").textContent=isSignup?"Create your free account":"Welcome back";
+  document.getElementById("auth-sub").textContent=isSignup?"7-day free trial \u2014 no card required":"Sign in to your account";
+  document.getElementById("email-btn").textContent=isSignup?"Create Account":"Sign In";
+  document.getElementById("password-wrap").style.display=isSignup?"block":"block";
+  document.getElementById("magic-btn").style.display=isSignup?"block":"block";
+  document.getElementById("auth-toggle").innerHTML=isSignup
+    ?'Already have an account? <a id="toggle-link">Sign in</a>'
+    :'New here? <a id="toggle-link">Create free account</a>';
+  document.getElementById("toggle-link").onclick=()=>setAuthMode(isSignup?"signin":"signup");
+  document.getElementById("auth-msg").textContent="";
+}
+
+document.getElementById("toggle-link").onclick=()=>setAuthMode("signin");
+
+document.getElementById("google-btn").onclick=async()=>{
+  setMsg("","");
+  const{error}=await sb.auth.signInWithOAuth({
+    provider:"google",
+    options:{redirectTo:window.location.href}
+  });
+  if(error)setMsg(error.message,"err");
+};
+
+document.getElementById("email-btn").onclick=async()=>{
+  const email=document.getElementById("auth-email").value.trim();
+  const password=document.getElementById("auth-password").value;
+  if(!email){setMsg("Enter your email","err");return;}
+  if(!password||password.length<6){setMsg("Password must be at least 6 characters","err");return;}
+  setMsg("...","");
+  let res;
+  if(authMode==="signup"){
+    res=await sb.auth.signUp({email,password});
+  } else {
+    res=await sb.auth.signInWithPassword({email,password});
+  }
+  if(res.error){setMsg(res.error.message,"err");return;}
+  if(authMode==="signup"&&!res.data.session){
+    setMsg("\u2709 Check your email to confirm your account, then come back to sign in.","ok");
+    setAuthMode("signin");
+    return;
+  }
+  // session is live — onAuthStateChange will fire
+};
+
+document.getElementById("magic-btn").onclick=async()=>{
+  const email=document.getElementById("auth-email").value.trim();
+  if(!email){setMsg("Enter your email first","err");return;}
+  setMsg("Sending...","");
+  const{error}=await sb.auth.signInWithOtp({email,options:{emailRedirectTo:window.location.href}});
+  if(error){setMsg(error.message,"err");return;}
+  setMsg("\u2709 Magic link sent! Check your email.","ok");
+};
+
+function setMsg(msg,cls){
+  const el=document.getElementById("auth-msg");
+  el.textContent=msg;
+  el.className="auth-msg"+(cls?" "+cls:"");
+}
+
+// ── Session management ──
+sb.auth.onAuthStateChange((event,session)=>{
+  if(session){
+    currentUser=session.user;
+    showApp();
+  } else {
+    currentUser=null;
+    showAuth();
+  }
+});
+
+async function initAuth(){
+  const{data:{session}}=await sb.auth.getSession();
+  if(session){currentUser=session.user;showApp();}
+  else showAuth();
+}
+
+function showAuth(){
+  document.getElementById("auth-screen").style.display="flex";
+  document.getElementById("app").style.display="none";
+}
+
+function showApp(){
+  document.getElementById("auth-screen").style.display="none";
+  document.getElementById("app").style.display="flex";
+  const email=currentUser?.email||"";
+  const chip=document.getElementById("user-chip");
+  chip.textContent=email||"\u1F464 Account";
+  renderFeed();
+  autoFillZip();
+  autoUnlock();
+}
+
+// ── Nav ──
+document.querySelectorAll(".nav-btn").forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll(".nav-btn").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active");
+    const s=b.dataset.s;
+    document.querySelectorAll(".screen").forEach(x=>x.classList.remove("active"));
+    document.getElementById("screen-"+s).classList.add("active");
+    if(s==="feed")renderFeed();
+    if(s==="saved")renderSaved();
+    if(s==="account")renderAccount();
+    if(s==="upcoming")renderUpcoming();
+  };
+});
+function goTo(s){document.querySelector(`.nav-btn[data-s="${s}"]`).click();}
+
+// ── Radius (scoped per row so Find and Upcoming don't fight over one value) ──
+let radius=25;
+document.querySelectorAll("#radius-row .radius-btn").forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll("#radius-row .radius-btn").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active");radius=parseInt(b.dataset.r);
+  };
+});
+let upRadius=25;
+document.querySelectorAll("#up-radius-row .radius-btn").forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll("#up-radius-row .radius-btn").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active");upRadius=parseInt(b.dataset.r);
+  };
+});
+
+document.getElementById("clear-feed").onclick=()=>{
+  if(confirm("Clear all bids? (Saved bids are not affected.)"))
+  {bidData={};store.set("last_feed",bidData);cityFilter="All";renderFeed();}
+};
+
+// ── Auto ZIP ──
+async function autoFillZip(){
+  const input=document.getElementById("loc-input");
+  if(!input||input.value.trim())return;
+  if(!navigator.geolocation){return;}
+  navigator.geolocation.getCurrentPosition(async(pos)=>{
+    try{
+      const{latitude,longitude}=pos.coords;
+      const r=await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`);
+      const d=await r.json();
+      const state=(d.principalSubdivisionCode||"").split("-").pop();
+      const val=d.postcode||[d.city||d.locality,state].filter(Boolean).join(", ");
+      if(val){input.value=val;toast("\u{1F4CD} "+val);}
+    }catch(e){}
+  },()=>{},{timeout:10000,maximumAge:600000});
+}
+
+// ── Supabase token helper ──
+async function getSupabaseToken(){
+  const{data:{session}}=await sb.auth.getSession();
+  return session?.access_token||"";
+}
+
+// ── Auto-unlock after Stripe payment ──
+async function autoUnlock(){
+  if(licenseKey())return;
+  try{
+    const r=await fetch(SERVER+"/mykey",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({device_id:deviceId()})
+    });
+    const d=await r.json();
+    if(d.ok&&d.key){store.set("license_key",d.key);toast("Unlocked \u2014 thanks for subscribing!");}
+  }catch{}
+}
+
+// ── Scan ──
+const scanBtn=document.getElementById("scan-btn");
+scanBtn.onclick=runScan;
+
+// A bid is only "open" if the server says so AND its deadline (if any) hasn't
+// already passed — some source pages leave old bids up without ever marking
+// them closed, so we double-check the date ourselves.
+function isPastDeadline(b){
+  const d=b.deadline;
+  if(!d)return false;
+  const m=String(d).match(/\d{4}-\d{2}-\d{2}/);
+  const t=m?new Date(m[0]+"T00:00:00"):new Date(d);
+  if(isNaN(t.getTime()))return false;
+  const today=new Date();today.setHours(0,0,0,0);
+  return t<today;
+}
+function isOpen(b){
+  if((b.status||"open").toLowerCase()!=="open")return false;
+  return !isPastDeadline(b);
+}
+
+function mergeOpenBids(incoming){
+  let added=0;
+  for(const city in incoming){
+    const openOnes=(incoming[city]||[]).filter(isOpen);
+    if(!openOnes.length)continue;
+    const have=bidData[city]||[];
+    const ids=new Set(have.map(b=>bidId(city,b)));
+    openOnes.forEach(b=>{const id=bidId(city,b);if(!ids.has(id)){have.push(b);ids.add(id);added++;}});
+    bidData[city]=have;
+  }
+  store.set("last_feed",bidData);
+  return added;
+}
+
+// ── Map data from the last scan ──
+let lastScanMap=store.get("last_scan_map",null); // {center:{lat,lon,label}, cityCoords:{city:{lat,lon}}}
+let leafletMap=null;
+function saveScanMap(center,cityCoords){
+  lastScanMap={center,cityCoords};
+  store.set("last_scan_map",lastScanMap);
+  document.getElementById("map-toggle").style.display=center?"inline-flex":"none";
+}
+function renderMap(){
+  const mv=document.getElementById("map-view");
+  if(!lastScanMap||!lastScanMap.center){mv.innerHTML="";return;}
+  if(!leafletMap){
+    mv.innerHTML="";
+    leafletMap=L.map(mv,{attributionControl:false}).setView(
+      [lastScanMap.center.lat,lastScanMap.center.lon],9);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:18}).addTo(leafletMap);
+  }
+  leafletMap.eachLayer(l=>{if(l instanceof L.CircleMarker)leafletMap.removeLayer(l);});
+  const bounds=[[lastScanMap.center.lat,lastScanMap.center.lon]];
+  L.circleMarker([lastScanMap.center.lat,lastScanMap.center.lon],{
+    radius:9,color:"#f5b400",fillColor:"#f5b400",fillOpacity:0.9,weight:2,
+  }).addTo(leafletMap).bindPopup(`Search center: ${esc(lastScanMap.center.label||"")}`);
+  for(const city in(lastScanMap.cityCoords||{})){
+    const c=lastScanMap.cityCoords[city];
+    const openCount=(bidData[city]||[]).filter(isOpen).length;
+    const color=openCount>0?"#22c55e":"#3b82f6";
+    L.circleMarker([c.lat,c.lon],{radius:7,color,fillColor:color,fillOpacity:0.9,weight:2})
+      .addTo(leafletMap)
+      .bindPopup(`${esc(city)} — ${openCount>0?openCount+" open bid(s)":"scanned, none open"}`);
+    bounds.push([c.lat,c.lon]);
+  }
+  if(bounds.length>1)leafletMap.fitBounds(bounds,{padding:[30,30]});
+  setTimeout(()=>leafletMap.invalidateSize(),50);
+}
+document.getElementById("map-toggle").onclick=()=>{
+  const mv=document.getElementById("map-view");
+  const legend=document.getElementById("map-legend");
+  const showing=mv.classList.toggle("show");
+  legend.style.display=showing?"flex":"none";
+  document.getElementById("tiles-wrap").style.display=showing?"none":"";
+  document.getElementById("feed-list").style.display=showing?"none":"";
+  document.getElementById("map-toggle").textContent=showing?"\u{1F4CB} View List":"\u{1F4CD} View Map";
+  if(showing)renderMap();
+};
+if(lastScanMap&&lastScanMap.center)document.getElementById("map-toggle").style.display="inline-flex";
+
+async function runScan(){
+  const location=document.getElementById("loc-input").value.trim();
+  if(!location){toast("Enter a ZIP or city first");return;}
+  scanBtn.disabled=true;
+  scanBtn.innerHTML='<span class="spin"></span> Scanning...';
+  const status=document.getElementById("scan-status");
+  const pw=document.getElementById("progress-wrap");
+  const pb=document.getElementById("progress-bar");
+  pw.style.display="block";pb.style.width="15%";
+  status.textContent="Searching for bids in your area...";
+  let p=15;
+  const tick=setInterval(()=>{p=Math.min(90,p+3);pb.style.width=p+"%";},1500);
+  try{
+    const token=await getSupabaseToken();
+    const r=await fetch(SERVER+"/scan",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,location,radius})
+    });
+    clearInterval(tick);pb.style.width="100%";
+    if(r.status===403){status.textContent="Your trial or subscription isn't active.";toast("Check Account tab");goTo("account");return;}
+    const d=await r.json();
+    if(!d.ok){
+      const msg=d.reason==="location_not_found"?"Couldn't find that location. Try a ZIP code.":"Scan hit a snag. Try again.";
+      status.textContent=msg;toast(msg);return;
+    }
+    const total=d.total_bids||0;
+    const added=total>0?mergeOpenBids(d.bids):0;
+    if(d.center)saveScanMap(d.center,d.city_coords||{});
+    status.textContent=total>0
+      ?`Done \u2014 ${added} new open bid(s) added near ${d.location||location}.`
+      :"No open bids posted here right now. Try a wider radius.";
+    if(total>0){toast(added>0?`Added ${added} new bid(s)!`:"No new bids \u2014 already in your list.");cityFilter="All";goTo("feed");}
+  }catch(e){
+    clearInterval(tick);
+    status.textContent="Couldn't reach the bid service. Check your internet.";
+    toast("Connection problem");
+  }finally{
+    scanBtn.disabled=false;
+    scanBtn.innerHTML="&#x1F50D; Scan for Bids";
+    setTimeout(()=>{pw.style.display="none";pb.style.width="0";},800);
+  }
+}
+
+// ── Upcoming (planned work, not yet a formal bid) ──
+let upcomingData=store.get("upcoming_feed",{});
+const upcomingBtn=document.getElementById("upcoming-btn");
+upcomingBtn.onclick=runUpcoming;
+
+function upcomingId(city,b){return(city+(b.title||"")+(b.scope||"")).replace(/\s/g,"").slice(0,40);}
+
+async function runUpcoming(){
+  const location=document.getElementById("up-loc-input").value.trim();
+  if(!location){toast("Enter a ZIP or city first");return;}
+  upcomingBtn.disabled=true;
+  upcomingBtn.innerHTML='<span class="spin"></span> Searching...';
+  const status=document.getElementById("upcoming-status");
+  const pw=document.getElementById("up-progress-wrap");
+  const pb=document.getElementById("up-progress-bar");
+  pw.style.display="block";pb.style.width="15%";
+  status.textContent="Scanning agendas, budgets & plans...";
+  let p=15;
+  const tick=setInterval(()=>{p=Math.min(90,p+3);pb.style.width=p+"%";},1500);
+  try{
+    const token=await getSupabaseToken();
+    const r=await fetch(SERVER+"/upcoming",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,location,radius:upRadius})
+    });
+    clearInterval(tick);pb.style.width="100%";
+    if(r.status===403){status.textContent="Your trial or subscription isn't active.";toast("Check Account tab");goTo("account");return;}
+    const d=await r.json();
+    if(!d.ok){
+      const msg=d.reason==="location_not_found"?"Couldn't find that location. Try a ZIP code."
+        :d.reason==="ai_unavailable"?"Upcoming search isn't configured yet.":"Search hit a snag. Try again.";
+      status.textContent=msg;toast(msg);return;
+    }
+    let added=0;
+    for(const city in(d.items||{})){
+      const have=upcomingData[city]||[];
+      const ids=new Set(have.map(b=>upcomingId(city,b)));
+      (d.items[city]||[]).forEach(b=>{const id=upcomingId(city,b);if(!ids.has(id)){have.push(b);ids.add(id);added++;}});
+      upcomingData[city]=have;
+    }
+    store.set("upcoming_feed",upcomingData);
+    status.textContent=(d.total||0)>0
+      ?`Done — found ${d.total} planned project(s) near ${d.location||location}.`
+      :"Nothing planned turned up yet. Try a wider radius.";
+    if(added>0)toast(`Added ${added} planned project(s)!`);
+    renderUpcoming();
+  }catch(e){
+    clearInterval(tick);
+    status.textContent="Couldn't reach the bid service. Check your internet.";
+    toast("Connection problem");
+  }finally{
+    upcomingBtn.disabled=false;
+    upcomingBtn.innerHTML="&#x1F4E1; Find Upcoming Projects";
+    setTimeout(()=>{pw.style.display="none";pb.style.width="0";},800);
+  }
+}
+
+function upcomingCard(city,b){
+  return `<div class="bid planned">
+    <div class="bid-bar"></div>
+    <div class="bid-body">
+      <div class="bid-top"><span class="bid-title">${esc(b.title||"Untitled Project")}</span></div>
+      ${b.scope?`<div class="bid-scope">${esc(b.scope)}</div>`:""}
+      <div class="bid-meta">
+        <span class="chip">\u{1F4CD} ${esc(city)}</span>
+        ${b.timeframe?`<span class="chip">\u{1F5D3} ${esc(b.timeframe)}</span>`:""}
+        <span class="chip">PLANNED</span>
+      </div>
+      ${b.contact||b.email||b.phone?`<div class="bid-meta" style="margin-top:0.4rem;">
+        ${b.contact?`<span class="chip">${esc(b.contact)}</span>`:""}
+        ${b.email?`<a class="chip" href="mailto:${esc(b.email)}">✉ Email</a>`:""}
+        ${b.phone?`<a class="chip" href="tel:${esc(b.phone)}">☎ ${esc(b.phone)}</a>`:""}
+      </div>`:""}
+      ${b.url?`<div class="bid-meta" style="margin-top:0.4rem;"><a class="chip" href="${esc(b.url)}" target="_blank">\u{1F517} Source</a></div>`:""}
+    </div>
+  </div>`;
+}
+
+function renderUpcoming(){
+  const list=document.getElementById("upcoming-list");
+  const cities=Object.keys(upcomingData).filter(c=>(upcomingData[c]||[]).length);
+  if(!cities.length){
+    list.innerHTML=`<div class="empty"><div class="icon">&#x1F4E1;</div><h3>Nothing yet</h3><p>Search your area to spot planned work before it's a bid.</p></div>`;
+    return;
+  }
+  let rows=[];
+  cities.sort().forEach(c=>upcomingData[c].forEach(b=>rows.push([c,b])));
+  list.innerHTML=`<div class="feed-label">PLANNED PROJECTS</div>`+rows.map(([c,b])=>upcomingCard(c,b)).join("");
+}
+
+// ── Bid helpers ──
+function bidId(city,b){return(city+(b.title||"")+(b.scope||"")).replace(/\s/g,"").slice(0,40);}
+
+function renderFeed(){
+  const tiles=document.getElementById("tiles-wrap");
+  const list=document.getElementById("feed-list");
+  const clearBtn=document.getElementById("clear-feed");
+  const cities=Object.keys(bidData).filter(c=>(bidData[c]||[]).some(isOpen));
+  const total=cities.reduce((n,c)=>n+bidData[c].filter(isOpen).length,0);
+  document.getElementById("feed-sub").textContent=total
+    ?`${total} open bid(s) across ${cities.length} town(s). New scans add more.`
+    :"Bids you've found. New scans add to this list.";
+  clearBtn.style.display=total?"block":"none";
+  if(!total){
+    tiles.innerHTML="";
+    list.innerHTML=`<div class="empty"><div class="icon">&#x1F3D7;</div><h3>No bids yet</h3><p>Tap Find to scan your area.</p></div>`;
+    return;
+  }
+  if(cities.length>1){
+    let html=`<div class="tiles"><div class="tile ${cityFilter==="All"?"active":""}" data-c="All"><div class="n">${total}</div><div class="l">All</div></div>`;
+    cities.sort().forEach(c=>{const n=bidData[c].filter(isOpen).length;html+=`<div class="tile ${cityFilter===c?"active":""}" data-c="${c}"><div class="n">${n}</div><div class="l">${c}</div></div>`;});
+    html+=`</div>`;tiles.innerHTML=html;
+    tiles.querySelectorAll(".tile").forEach(t=>t.onclick=()=>{cityFilter=t.dataset.c;renderFeed();});
+  } else tiles.innerHTML="";
+  let rows=[];
+  cities.forEach(c=>{if(cityFilter==="All"||cityFilter===c)bidData[c].filter(isOpen).forEach(b=>rows.push([c,b]));});
+  list.innerHTML=`<div class="feed-label">OPEN BIDS</div>`+rows.map(([c,b])=>bidCard(c,b)).join("");
+  attachBidEvents(list);
+}
+
+function bidCard(city,b){
+  const id=bidId(city,b);const isSaved=saved[id];
+  return `<div class="bid" data-id="${id}" data-city="${city}">
+    <div class="bid-bar" style="background:var(--green)"></div>
+    <div class="bid-body">
+      <div class="bid-top">
+        <span class="bid-title">${esc(b.title||"Untitled Project")}</span>
+        <span class="star ${isSaved?"on":""}" data-star="${id}" data-city="${city}">${isSaved?"\u2605":"\u2606"}</span>
+      </div>
+      ${b.scope?`<div class="bid-scope">${esc(b.scope)}</div>`:""}
+      <div class="bid-meta">
+        <span class="chip">\u{1F4CD} ${esc(city)}</span>
+        ${b.value?`<span class="chip value">\u{1F4B2} ${esc(b.value)}</span>`:""}
+        ${b.deadline?`<span class="chip">\u{1F4C5} ${esc(b.deadline)}</span>`:""}
+        <span class="chip">OPEN</span>
+      </div>
+    </div>
+  </div>`;
+}
+
+function attachBidEvents(container){
+  container.querySelectorAll(".bid").forEach(card=>{
+    card.onclick=(e)=>{if(e.target.dataset.star)return;const b=findBid(card.dataset.id);if(b)openDetail(card.dataset.city,b);};
+  });
+  container.querySelectorAll(".star").forEach(s=>{
+    s.onclick=(e)=>{e.stopPropagation();toggleSave(s.dataset.city,s.dataset.star);};
+  });
+}
+function findBid(id){
+  for(const c in bidData){const b=bidData[c].find(x=>bidId(c,x)===id);if(b)return b;}
+  return saved[id]||null;
+}
+function toggleSave(city,id){
+  if(saved[id])delete saved[id];
+  else{const b=findBid(id);if(b)saved[id]={...b,_city:city};}
+  store.set("saved",saved);
+  renderFeed();
+  if(document.getElementById("screen-saved").classList.contains("active"))renderSaved();
+}
+function openDetail(city,b){
+  const mc=document.getElementById("modal-content");
+  function row(label,val,link){
+    if(!val)return"";
+    const v=link?`<a href="${link}">${esc(val)}</a>`:esc(val);
+    return`<div class="detail-row"><div class="detail-label">${label}</div><div class="detail-val">${v}</div></div>`;
+  }
+  mc.innerHTML=`<h2>${esc(b.title||"Untitled Project")}</h2>
+    <div class="bid-meta"><span class="chip">\u{1F4CD} ${esc(city)}</span><span class="chip">OPEN</span></div>
+    ${row("Scope of Work",b.scope)}${row("Est. Value",b.value||"Not listed")}${row("Deadline",b.deadline||"Not listed")}
+    ${row("Contact",b.contact)}${row("Email",b.email,b.email?"mailto:"+b.email:null)}
+    ${row("Phone",b.phone,b.phone?"tel:"+b.phone:null)}${row("Original Posting",b.url,b.url)}
+    <div class="modal-actions">
+      ${b.email?`<a class="ma-gold" href="mailto:${esc(b.email)}">\u2709 Email</a>`:""}
+      ${b.url?`<a class="ma-ghost" href="${esc(b.url)}" target="_blank">\u{1F517} Open</a>`:""}
+      <button class="ma-ghost" onclick="toggleSave('${city.replace(/'/g,"")}','${bidId(city,b)}');closeModal();">${saved[bidId(city,b)]?"\u2605 Saved":"\u2606 Save"}</button>
+    </div>`;
+  document.getElementById("modal-back").classList.add("open");
+  document.getElementById("modal").classList.add("open");
+}
+function closeModal(){
+  document.getElementById("modal-back").classList.remove("open");
+  document.getElementById("modal").classList.remove("open");
+}
+document.getElementById("modal-back").onclick=closeModal;
+
+function renderSaved(){
+  const list=document.getElementById("saved-list");
+  const keys=Object.keys(saved);
+  if(!keys.length){list.innerHTML=`<div class="empty"><div class="icon">&#x2B50;</div><h3>No saved bids</h3><p>Tap the &#x2606; on any bid to save it.</p></div>`;return;}
+  list.innerHTML=keys.map(id=>{const b=saved[id];return bidCard(b._city||"",b);}).join("");
+  attachBidEvents(list);
+}
+
+async function renderAccount(){
+  const body=document.getElementById("account-body");
+  const email=currentUser?.email||"";
+  const key=licenseKey();
+  let statusHtml="";
+  if(key){
+    try{
+      const r=await fetch(SERVER+"/validate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({key,device_id:deviceId()})});
+      const d=await r.json();
+      if(d.valid)statusHtml=`<div class="plan featured"><div class="plan-name">\u2705 Active subscription</div><div class="plan-price" style="font-size:1.4rem;">${esc(d.plan||"Pro")}</div><p style="color:var(--text2);font-size:0.82rem;margin-top:0.4rem;">Expires ${esc(d.expires||"")}</p></div>`;
+    }catch{}
+  }
+  if(!statusHtml){
+    // check trial via backend
+    try{
+      const token=await getSupabaseToken();
+      const r=await fetch(SERVER+"/trial",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({device_id:deviceId(),supabase_token:token})});
+      const d=await r.json();
+      if(d.active)statusHtml=`<div class="plan featured"><div class="plan-name">\u{1F381} Free Trial Active</div><div class="plan-price">${d.days_left||""}<span> days left</span></div><p style="color:var(--text2);font-size:0.82rem;">Full access. Subscribe to keep going after trial.</p></div>`;
+      else statusHtml=`<div class="plan" style="border-color:var(--red);"><div class="plan-name" style="color:var(--red);">\u26A0 Trial expired</div><p style="color:var(--text2);font-size:0.82rem;margin-top:0.5rem;">Subscribe below to keep scanning.</p></div>`;
+    }catch{}
+  }
+
+  // tag stripe links with device id
+  // ⚠️ REPLACE these two URLs with your NEW $19/mo and $149/yr Stripe Payment Links
+  const mLink=`https://buy.stripe.com/5kQcN43YEbge0YafanejK01?client_reference_id=${encodeURIComponent(deviceId())}`;
+  const aLink=`https://buy.stripe.com/8x26oG7aQesqgX87HVejK03?client_reference_id=${encodeURIComponent(deviceId())}`;
+
+  body.innerHTML=`
+    <div class="account-card">
+      <div class="account-email">&#x1F464; ${esc(email)}</div>
+      <div class="account-status">Signed in with ${currentUser?.app_metadata?.provider||"email"}</div>
+    </div>
+    ${statusHtml}
+    <div class="plan featured">
+      <div class="plan-name">Pro Monthly</div>
+      <div class="plan-price">$19<span> / month</span></div>
+      <ul><li>Unlimited nationwide bid scans</li><li>AI bid extraction</li><li>Federal + local bids</li><li>Save &amp; track leads</li><li>Cancel anytime</li></ul>
+      <a class="btn-primary" style="text-decoration:none;" href="${mLink}" target="_blank">Subscribe Monthly</a>
+    </div>
+    <div class="plan">
+      <div class="plan-name">Pro Annual &mdash; best value, save $79</div>
+      <div class="plan-price">$149<span> / year</span></div>
+      <ul><li>Everything in Monthly</li><li>About 4 months free</li><li>Priority support</li></ul>
+      <a class="btn-ghost" style="text-decoration:none;display:block;text-align:center;" href="${aLink}" target="_blank">Subscribe Annual</a>
+    </div>
+    <div class="field-label" style="margin-top:1.2rem;">Have a license key?</div>
+    <input class="input" id="key-input" placeholder="BCP-..." />
+    <button class="btn-ghost" id="activate-btn">Activate Key</button>
+    <button class="btn-ghost" style="margin-top:0.5rem;color:var(--red);border-color:var(--red);" id="signout-btn">Sign out</button>`;
+
+  document.getElementById("activate-btn").onclick=async()=>{
+    const key=document.getElementById("key-input").value.trim().toUpperCase();
+    if(!key){toast("Enter your license key");return;}
+    const r=await fetch(SERVER+"/validate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({key,device_id:deviceId()})});
+    const d=await r.json();
+    if(d.valid){store.set("license_key",key);toast("Activated!");renderAccount();}
+    else toast("That key isn't valid.");
+  };
+  document.getElementById("signout-btn").onclick=async()=>{
+    await sb.auth.signOut();toast("Signed out");
+  };
+}
+
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)autoUnlock();});
+
+initAuth();
+</script>
+</body>
+</html>
