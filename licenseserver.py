@@ -25,8 +25,10 @@ ENV VARS (set in Render → your service → Environment):
   FROM_EMAIL               OPTIONAL sender, e.g. "Bids <keys@yourdomain.com>"
   (BRAVE_API_KEY is no longer used — you can delete it.)
 
-START COMMAND (raise the timeout — scans do real work):
-  gunicorn license_server:app --timeout 120 --workers 1
+START COMMAND (raise the timeout — scans do real work, and wide-radius scans
+now search multiple towns around the area, not just the center one, so they
+take longer):
+  gunicorn license_server:app --timeout 240 --workers 1
 """
 
 import os
@@ -550,6 +552,63 @@ def _miles_between(lat1, lon1, lat2, lon2):
     return 2 * R * math.asin(math.sqrt(a))
 
 
+def _destination_point(lat, lon, bearing_deg, distance_mi):
+    """Point `distance_mi` miles from (lat,lon) along compass bearing `bearing_deg`."""
+    R = 3958.8
+    br = math.radians(bearing_deg)
+    lat1, lon1 = math.radians(lat), math.radians(lon)
+    d_r = distance_mi / R
+    lat2 = math.asin(math.sin(lat1) * math.cos(d_r) + math.cos(lat1) * math.sin(d_r) * math.cos(br))
+    lon2 = lon1 + math.atan2(
+        math.sin(br) * math.sin(d_r) * math.cos(lat1),
+        math.cos(d_r) - math.sin(lat1) * math.sin(lat2),
+    )
+    return math.degrees(lat2), math.degrees(lon2)
+
+
+def _reverse_geocode_city(lat, lon):
+    """Free, keyless reverse geocode (same provider the app uses client-side
+    for auto-fill) -- turns a lat/lon into a {city, state} so we can search
+    towns scattered across a wide radius, not just the one the user typed."""
+    url = (f"https://api.bigdatacloud.net/data/reverse-geocode-client"
+           f"?latitude={lat}&longitude={lon}&localityLanguage=en")
+    data = _get_json(url)
+    if not data:
+        return None
+    city = data.get("city") or data.get("locality") or ""
+    sub = (data.get("principalSubdivisionCode") or "").split("-")[-1].upper()
+    country = (data.get("countryCode") or "").upper()
+    if not city or sub not in STATE_ABBRS or country != "US":
+        return None
+    return city, sub
+
+
+def _nearby_anchor_towns(center, radius):
+    """Pick a handful of towns scattered around the search radius (not just
+    the center city) so a wide-radius scan actually looks in more places
+    instead of only searching near the one city the user typed. Skipped for
+    tight radii where the center-only search already covers the area well."""
+    if radius < 40:
+        return []
+    n = max(2, min(6, round(radius / 25) - 1))
+    dist = radius * 0.7
+    seen = {(center["city"].lower(), center["state"])}
+    towns = []
+    for i in range(n):
+        bearing = i * (360.0 / n)
+        lat, lon = _destination_point(center["lat"], center["lon"], bearing, dist)
+        found = _reverse_geocode_city(lat, lon)
+        if not found:
+            continue
+        city, state = found
+        key = (city.lower(), state)
+        if key in seen:
+            continue
+        seen.add(key)
+        towns.append((city, state))
+    return towns
+
+
 _DEADLINE_FORMATS = (
     "%Y-%m-%d", "%m/%d/%Y", "%m-%d-%Y", "%B %d, %Y", "%b %d, %Y",
     "%B %d %Y", "%b %d %Y", "%m/%d/%y",
@@ -904,6 +963,38 @@ def extract():
 # ═══════════════════════════════════════════════════════════
 # /scan  —  LOCAL (Brave + AI) + FEDERAL (SAM), radius-filtered
 # ═══════════════════════════════════════════════════════════
+def _run_local_queries(queries, ai_label, max_pages, grouped, center, radius, cdb,
+                        city_coords, seen_urls, default_city=""):
+    """Run one town's worth of search queries and extract bids from the top
+    pages. Each town gets its own max_pages slice so a big scan with several
+    anchor towns doesn't let the first town's results crowd out the rest."""
+    items = []
+    for q in queries:
+        results = _tavily_search(q, max_results=6) if TAVILY_API_KEY else []
+        if not results:
+            results = _ddg_search(q)
+        for r in results:
+            if r["url"] not in seen_urls:
+                seen_urls.add(r["url"])
+                items.append(r)
+        time.sleep(0.4)
+    raw = 0
+    for it in items[:max_pages]:
+        text = it["content"] or _fetch_text(it["url"])
+        if len(text) < 200:
+            continue
+        bids = _ai_extract(ai_label, text)
+        if not bids:
+            continue
+        raw += len(bids)
+        for b in bids:
+            if isinstance(b, dict):
+                b.setdefault("url", it["url"])
+                _place_bid(grouped, b, center, radius, cdb, default_city=default_city,
+                          city_coords=city_coords)
+    return raw
+
+
 def _place_bid(grouped, bid, center, radius, db, default_city="", city_coords=None):
     """Keep a bid ONLY if its real city geocodes within the radius."""
     if not isinstance(bid, dict):
@@ -962,54 +1053,53 @@ def scan():
     local_raw = 0
 
     # ---- LOCAL: disguised DuckDuckGo first, Tavily fallback if it's empty ----
+    # A wide radius is only useful if we actually search more than the one
+    # town the user typed -- otherwise a 125mi scan just returns whatever the
+    # engines happen to surface near the center point. So for radius >= 40mi
+    # we also pick a handful of towns scattered around the radius (via free
+    # reverse geocoding) and run a lighter query set against each of them.
     if OPENAI_API_KEY:
         c, s = center["city"], center["state"]
-        queries = [
+        seen_urls = set()
+        center_queries = [
             f"{c} {s} sidewalk replacement concrete construction bid invitation",
             f"{c} {s} ADA ramp curb gutter concrete bid opportunities",
             f"{c} {s} concrete flatwork sidewalk public works solicitation",
             f"{c} {s} city county sidewalk curb concrete RFP",
             f"{s} concrete sidewalk ADA curb bids near {c}",
-            f"concrete sidewalk bids {c} {s} BidNet Direct DemandStar",
-            f"concrete curb gutter bids {c} {s} Bonfire OpenGov procurement",
             f"{c} {s} school district sidewalk ADA concrete project bid",
-            f"{c} {s} sidewalk ADA curb bid site:bidnetdirect.com",
-            f"{c} {s} sidewalk ADA curb bid site:demandstar.com",
-            f"{c} {s} sidewalk ADA curb bid site:planetbids.com",
-            f"{c} {s} sidewalk ADA curb bid site:publicpurchase.com",
-            f"{c} {s} sidewalk ADA curb bid site:questcdn.com",
-            f"{c} {s} sidewalk ADA curb bid site:opengov.com",
+            f"{c} {s} sidewalk ADA curb bid site:bidnetdirect.com OR site:demandstar.com",
+            f"{c} {s} sidewalk ADA curb bid site:planetbids.com OR site:publicpurchase.com",
+            f"{c} {s} sidewalk ADA curb bid site:questcdn.com OR site:opengov.com",
             f"{c} {s} sidewalk ADA curb bid site:bonfirehub.com",
             f"{c} {s} sidewalk ADA curb bid site:civicplus.com OR site:municode.com",
+            f"{c} {s} sidewalk ADA curb bid site:bidexpress.com",
             f"{c} {s} invitation to bid concrete sidewalk 2026",
             f"{c} {s} county road department concrete curb bid notice",
+            f"{c} {s} Safe Routes to School OR ADA transition plan sidewalk bid",
+            f"{c} {s} CDBG sidewalk curb ramp bid notice to contractors",
         ]
-        seen, items = set(), []
-        for q in queries:
-            # Tavily is the reliable path when a key is set; DDG is the free fallback.
-            results = _tavily_search(q, max_results=8) if TAVILY_API_KEY else []
-            if not results:
-                results = _ddg_search(q)
-            for r in results:
-                if r["url"] not in seen:
-                    seen.add(r["url"])
-                    items.append(r)
-            time.sleep(0.6)
-        print(f"[scan] {len(items)} candidate pages near {c}, {s}", flush=True)
-        for it in items[:MAX_PAGES]:
-            text = it["content"] or _fetch_text(it["url"])
-            if len(text) < 200:
-                continue
-            bids = _ai_extract(f"{c}, {s}", text)
-            if not bids:
-                continue
-            local_raw += len(bids)
-            for b in bids:
-                if isinstance(b, dict):
-                    b.setdefault("url", it["url"])
-                    _place_bid(grouped, b, center, radius, cdb, default_city="",
-                              city_coords=city_coords)
-        print(f"[scan] {local_raw} raw local bids extracted", flush=True)
+        local_raw += _run_local_queries(center_queries, f"{c}, {s}", MAX_PAGES,
+                                         grouped, center, radius, cdb, city_coords,
+                                         seen_urls, default_city="")
+        print(f"[scan] {local_raw} raw bids from {c}, {s} (center)", flush=True)
+
+        anchors = _nearby_anchor_towns(center, radius)
+        for ac, ast in anchors:
+            anchor_queries = [
+                f"{ac} {ast} sidewalk ADA curb concrete bid invitation",
+                f"{ac} {ast} sidewalk ADA curb bid site:bidnetdirect.com OR site:demandstar.com",
+                f"{ac} {ast} sidewalk ADA curb bid site:planetbids.com OR site:publicpurchase.com",
+                f"{ac} {ast} concrete curb gutter bid Bonfire OpenGov CivicPlus procurement",
+                f"{ac} {ast} invitation to bid concrete sidewalk ADA ramp 2026",
+            ]
+            got = _run_local_queries(anchor_queries, f"{ac}, {ast}", 5,
+                                      grouped, center, radius, cdb, city_coords,
+                                      seen_urls, default_city=ac)
+            local_raw += got
+            print(f"[scan] {got} raw bids from {ac}, {ast} (anchor)", flush=True)
+        print(f"[scan] {local_raw} raw local bids extracted total "
+              f"({len(anchors)} anchor town(s) searched)", flush=True)
 
     # ---- FEDERAL: SAM.gov for the state, radius-filtered ----
     if SAM_API_KEY:
