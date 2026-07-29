@@ -40,6 +40,7 @@ import hashlib
 import datetime
 import time
 import random
+import concurrent.futures
 import urllib.request
 import urllib.parse
 import urllib.error
@@ -961,119 +962,62 @@ def extract():
 
 
 # ═══════════════════════════════════════════════════════════
-# AI-DRAFTED BID PROPOSALS
-# Turns a bid the user is looking at into a ready-to-edit cover-letter-style
-# proposal draft, personalized with the contractor's own company info (sent
-# from the client — nothing is stored server-side). Same license gate and
-# same OpenAI key as /scan and /extract, no new secrets needed.
-# ═══════════════════════════════════════════════════════════
-def _ai_draft_proposal(bid, company):
-    if not OPENAI_API_KEY:
-        return None
-    co_name = (company.get("name") or "").strip() or "[Your Company Name]"
-    co_contact = (company.get("contact") or "").strip() or "[Your Name]"
-    co_phone = (company.get("phone") or "").strip() or "[Your Phone]"
-    co_email = (company.get("email") or "").strip() or "[Your Email]"
-    co_specialty = (company.get("specialty") or "").strip() or \
-        "sidewalk, ADA ramp, and curb & gutter concrete work"
-
-    prompt = (
-        "You are an experienced construction estimator writing a bid proposal "
-        "cover letter for a small concrete contracting company responding to a "
-        "public bid or RFP. Write a professional, concise, ready-to-send "
-        "proposal letter body (no subject line, no markdown) that:\n"
-        "- Opens by referencing the specific project by name\n"
-        "- States the company's interest and relevant experience in "
-        f"{co_specialty}\n"
-        "- Briefly addresses the stated scope of work\n"
-        "- Notes willingness to meet the stated deadline (if one is given)\n"
-        "- Requests any plan documents, addenda, or walkthrough details needed "
-        "to submit a formal quote\n"
-        "- Closes with the contact information provided\n"
-        "Keep it under 300 words. Do NOT invent specific dollar amounts, "
-        "license numbers, bond amounts, or past project names — omit those "
-        "details rather than making them up.\n\n"
-        f"PROJECT TITLE: {bid.get('title', '')}\n"
-        f"SCOPE: {bid.get('scope', '')}\n"
-        f"DEADLINE: {bid.get('deadline', '')}\n"
-        f"LOCATION: {bid.get('city', '')}\n\n"
-        f"COMPANY NAME: {co_name}\n"
-        f"CONTACT PERSON: {co_contact}\n"
-        f"PHONE: {co_phone}\n"
-        f"EMAIL: {co_email}\n"
-    )
-    body = json.dumps({
-        "model": OPENAI_MODEL,
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.4,
-    }).encode("utf-8")
-    req = urllib.request.Request(
-        "https://api.openai.com/v1/chat/completions", data=body,
-        headers={"Authorization": f"Bearer {OPENAI_API_KEY}",
-                 "Content-Type": "application/json"}, method="POST")
-    try:
-        with urllib.request.urlopen(req, timeout=45) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-        return data["choices"][0]["message"]["content"].strip()
-    except Exception as ex:
-        print(f"[draft-proposal] error: {ex}", flush=True)
-        return None
-
-
-@app.route("/draft-proposal", methods=["POST"])
-def draft_proposal():
-    data = request.get_json(force=True, silent=True) or {}
-    key = data.get("key", "")
-    device = data.get("device_id", "")
-    supabase_token = data.get("supabase_token", "")
-    if not _license_is_active(key, device, supabase_token):
-        return jsonify({"ok": False, "reason": "not_licensed"}), 403
-    if not OPENAI_API_KEY:
-        return jsonify({"ok": False, "reason": "ai_unavailable"})
-
-    bid = data.get("bid") or {}
-    company = data.get("company") or {}
-    if not (bid.get("title") or "").strip():
-        return jsonify({"ok": False, "reason": "no_bid"})
-
-    draft = _ai_draft_proposal(bid, company)
-    if draft is None:
-        return jsonify({"ok": False, "reason": "ai_error"}), 500
-    return jsonify({"ok": True, "draft": draft})
-
-
-# ═══════════════════════════════════════════════════════════
 # /scan  —  LOCAL (Brave + AI) + FEDERAL (SAM), radius-filtered
 # ═══════════════════════════════════════════════════════════
+def _search_one_query(q):
+    results = _tavily_search(q, max_results=6) if TAVILY_API_KEY else []
+    if not results:
+        results = _ddg_search(q)
+    return results
+
+
+def _extract_one_page(item, ai_label):
+    """Runs in a worker thread: fetch + AI-extract a single candidate page.
+    Returns (item, bids) or None. Doesn't touch shared state -- the caller
+    merges results back in on the main thread."""
+    text = item["content"] or _fetch_text(item["url"])
+    if len(text) < 200:
+        return None
+    bids = _ai_extract(ai_label, text)
+    if not bids:
+        return None
+    return item, bids
+
+
 def _run_local_queries(queries, ai_label, max_pages, grouped, center, radius, cdb,
                         city_coords, seen_urls, default_city=""):
     """Run one town's worth of search queries and extract bids from the top
     pages. Each town gets its own max_pages slice so a big scan with several
-    anchor towns doesn't let the first town's results crowd out the rest."""
+    anchor towns doesn't let the first town's results crowd out the rest.
+    Both the search calls and the page-extraction calls run a few at a time
+    in parallel -- they're all waiting on network/API responses, not CPU, so
+    this cuts real wall-clock time a lot without adding real load, which is
+    what keeps a 100+ mile scan (several towns) from timing out."""
     items = []
-    for q in queries:
-        results = _tavily_search(q, max_results=6) if TAVILY_API_KEY else []
-        if not results:
-            results = _ddg_search(q)
-        for r in results:
-            if r["url"] not in seen_urls:
-                seen_urls.add(r["url"])
-                items.append(r)
-        time.sleep(0.4)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as ex:
+        for results in ex.map(_search_one_query, queries):
+            for r in results:
+                if r["url"] not in seen_urls:
+                    seen_urls.add(r["url"])
+                    items.append(r)
+
     raw = 0
-    for it in items[:max_pages]:
-        text = it["content"] or _fetch_text(it["url"])
-        if len(text) < 200:
-            continue
-        bids = _ai_extract(ai_label, text)
-        if not bids:
-            continue
-        raw += len(bids)
-        for b in bids:
-            if isinstance(b, dict):
-                b.setdefault("url", it["url"])
-                _place_bid(grouped, b, center, radius, cdb, default_city=default_city,
-                          city_coords=city_coords)
+    to_process = items[:max_pages]
+    if not to_process:
+        return raw
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as ex:
+        futures = [ex.submit(_extract_one_page, it, ai_label) for it in to_process]
+        for fut in concurrent.futures.as_completed(futures):
+            res = fut.result()
+            if not res:
+                continue
+            it, bids = res
+            raw += len(bids)
+            for b in bids:
+                if isinstance(b, dict):
+                    b.setdefault("url", it["url"])
+                    _place_bid(grouped, b, center, radius, cdb, default_city=default_city,
+                              city_coords=city_coords)
     return raw
 
 
