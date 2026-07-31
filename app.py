@@ -19,7 +19,6 @@ if BASE_DIR not in sys.path:
 
 import regional_printer
 import radius_scanner
-import run_ai
 import subscription
 import auth_client
 import map_view
@@ -987,60 +986,68 @@ class BidCaller:
         self._scan_log.config(state="disabled")
         self._set_prog(5)
 
-        def progress(msg):
-            self.root.after(0, lambda: self._log_scan(msg))
+        SCAN_REASONS = {
+            "unreachable": "Couldn't reach the bid service. Check your internet and try again.",
+            "not_licensed": "Your trial or subscription isn't active. Check the Subscription tab.",
+            "location_not_found": "Couldn't find that location. Try a ZIP code.",
+            "no_location": "Enter a ZIP code or city.",
+        }
 
         def process():
-            try:
-                latlon = getattr(self, "_auto_latlon", None)
-                label = location
-                if latlon and not location:
-                    lat, lon = latlon
-                else:
-                    self._scan_status.config(text="Locating your area...", fg=ACCENT)
-                    geo = radius_scanner.geocode(location)
-                    if not geo:
-                        self._log_scan("Couldn't find that location. Try a ZIP code.")
-                        self._scan_status.config(text="Location not found", fg=RED)
-                        return
-                    lat, lon, label = geo
+            done = threading.Event()
 
+            def tick():
+                pct = 15
+                while not done.wait(1.5):
+                    pct = min(90, pct + 3)
+                    self.root.after(0, lambda p=pct: self._set_prog(p))
+
+            try:
                 self._scan_status.config(text="Searching for bids in your area...", fg=ACCENT)
                 self._set_prog(15)
-                summary = radius_scanner.run_radius_scan(lat, lon, radius, progress=progress)
-                self._set_prog(55)
-                self._last_scan_summary = summary
-                self._last_scan_label = label or "Search center"
-                if summary.get("town_coords"):
-                    self.root.after(0, lambda: self._map_btn.config(state="normal"))
+                self._log_scan("Searching procurement sites and SAM.gov for bids near you...")
+                threading.Thread(target=tick, daemon=True).start()
 
-                if not summary["scanned"]:
-                    self._log_scan("No bid pages found in this area. Try a wider radius.")
-                    self._scan_status.config(text="No towns found — try a wider radius", fg=RED)
+                # Runs entirely server-side: real procurement-platform search
+                # (BidNet, DemandStar, PlanetBids, etc.) plus SAM.gov federal
+                # bids — the same /scan the web app uses.
+                resp = subscription.scan(location, radius)
+                done.set()
+                self._set_prog(100)
+
+                if not resp.get("ok"):
+                    msg = SCAN_REASONS.get(resp.get("reason"), "Scan hit a snag. Try again.")
+                    self._log_scan(msg)
+                    self._scan_status.config(text=msg, fg=RED)
                     self._set_prog(0)
                     return
 
-                self._scan_status.config(text="Reading the bids we found...", fg=BLUE)
-                self._set_prog(70)
-                results, ai_status = run_ai.run_analysis()
-                self._set_prog(95)
-                total = sum(len(v) for v in results.values())
-                if total > 0:
-                    self.bid_data = results
-                    write_feed(results)
+                results = resp.get("bids", {})
+                total = resp.get("total_bids", sum(len(v) for v in results.values()))
+                self.bid_data = results
+                write_feed(results)
+
+                center = resp.get("center") or {}
+                city_coords = resp.get("city_coords") or {}
+                self._last_scan_summary = {
+                    "center": center,
+                    "town_coords": [
+                        {"name": city, "state": "", "lat": c.get("lat"), "lon": c.get("lon"),
+                         "status": "scanned"}
+                        for city, c in city_coords.items()
+                    ],
+                }
+                self._last_scan_label = resp.get("location") or location
+                if city_coords:
+                    self.root.after(0, lambda: self._map_btn.config(state="normal"))
 
                 ts = datetime.datetime.now().strftime("%d %b %Y  %H:%M")
                 with open(os.path.join(BASE_DIR, "last_scan.txt"), "w") as f:
                     f.write(ts)
 
-                self._set_prog(100)
-                friendly = {
-                    "ok": f"Done — found {total} bid(s) in your area.",
-                    "no_bids": "Scan complete — no open bids posted here right now. Try a wider radius.",
-                    "server_down": "Couldn't reach the bid service. Check your internet and try again.",
-                    "not_licensed": "Your trial or subscription isn't active. Check the Subscription tab.",
-                    "no_data": "Couldn't read the town pages this time. Try again or widen your radius.",
-                }.get(ai_status, f"Done — found {total} bid(s).")
+                friendly = (f"Done — found {total} bid(s) in your area."
+                            if total else
+                            "Scan complete — no open bids posted here right now. Try a wider radius.")
                 self._log_scan(friendly)
                 self._scan_status.config(text=friendly, fg=GREEN if total else TEXT3)
                 # Update the feed on the main thread so it reliably redraws
@@ -1056,6 +1063,7 @@ class BidCaller:
                 self.root.after(0, show_results)
             except Exception:
                 import traceback
+                done.set()
                 debug("Scan error:\n" + traceback.format_exc())
                 self._log_scan("Something went wrong. Please try again.")
                 self._scan_status.config(text="Scan failed — try again", fg=RED)

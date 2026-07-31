@@ -97,6 +97,32 @@ def _post(path, payload):
     return None
 
 
+# Real scans take a while and the backend can be asleep (Render free tier) —
+# same generous timeout the web app uses for /scan.
+SCAN_TIMEOUT = 90
+
+
+def scan(location, radius):
+    """Runs a live bid scan via the server (same /scan endpoint the web app
+    uses — real procurement-platform search + SAM.gov federal bids, not just
+    a guessed municipal URL). Returns the parsed response dict; on a network
+    failure returns {"ok": False, "reason": "unreachable"}."""
+    if requests is None:
+        return {"ok": False, "reason": "unreachable"}
+    cache = _load_cache()
+    payload = {
+        "key": cache.get("key", ""), "device_id": _device_id(),
+        "supabase_token": auth_client.current_access_token(),
+        "location": location, "radius": radius,
+    }
+    try:
+        r = requests.post(SERVER_URL.rstrip("/") + "/scan", json=payload,
+                          timeout=SCAN_TIMEOUT)
+        return r.json()
+    except Exception:
+        return {"ok": False, "reason": "unreachable"}
+
+
 # ── Public API used by the app ────────────────────────────
 def get_status():
     """
