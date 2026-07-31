@@ -143,6 +143,21 @@ def upcoming(location, radius):
         return {"ok": False, "reason": "unreachable"}
 
 
+def my_key():
+    """Checks whether this device has a key on file yet — the Stripe webhook
+    records device_id -> key right after checkout completes (via
+    client_reference_id), so this lets the app unlock automatically instead
+    of making the customer copy-paste their key."""
+    if requests is None:
+        return {"ok": False, "reason": "unreachable"}
+    try:
+        r = requests.post(SERVER_URL.rstrip("/") + "/mykey",
+                          json={"device_id": _device_id()}, timeout=NETWORK_TIMEOUT)
+        return r.json()
+    except Exception:
+        return {"ok": False, "reason": "unreachable"}
+
+
 def draft_proposal(bid, company):
     """Asks the server's AI to draft a bid-proposal cover letter, personalized
     with the contractor's own saved company info. Nothing about the company

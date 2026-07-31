@@ -283,6 +283,7 @@ class BidCaller:
         if not subscription.get_status()["active"]:
             self._nav("subscribe")
 
+        self.root.after(1500, self._try_auto_unlock)
         self.root.after(2500, self._check_saved_searches_on_load)
 
     # ────────── SIDEBAR ──────────
@@ -370,6 +371,8 @@ class BidCaller:
             self._show_feed_badge(False)
         elif key == "upcoming":
             self._render_upcoming()
+        elif key == "subscribe":
+            self._try_auto_unlock()
 
     # ────────── MAIN AREA ──────────
     def _main_area(self):
@@ -1957,11 +1960,43 @@ class BidCaller:
             messagebox.showwarning("Trial", msg)
 
     def _checkout(self, plan):
-        url = (subscription.STRIPE_MONTHLY_URL if plan == "monthly"
+        base = (subscription.STRIPE_MONTHLY_URL if plan == "monthly"
                else subscription.STRIPE_ANNUAL_URL)
+        # client_reference_id ties the purchase to this device so the Stripe
+        # webhook can record it — that's what lets auto-unlock find the key.
+        url = f"{base}?client_reference_id={subscription._device_id()}"
         webbrowser.open(url)
         messagebox.showinfo("Checkout Opened",
-            "Complete payment in your browser.\n\nThen enter your license key below to activate.")
+            "Complete payment in your browser.\n\nWe'll unlock automatically when you "
+            "come back — or enter your license key below if you'd rather.")
+
+    def _try_auto_unlock(self):
+        """Checks if this device has a key on file yet (Stripe webhook
+        records it via client_reference_id right after checkout) — desktop
+        equivalent of the web app's autoUnlock(), so paying doesn't require
+        manually copy-pasting a license key."""
+        if subscription._load_cache().get("key"):
+            return
+
+        def work():
+            resp = subscription.my_key()
+            if resp.get("ok") and resp.get("key"):
+                def apply():
+                    cache = subscription._load_cache()
+                    cache.update({
+                        "key": resp["key"], "active": True, "trial": False,
+                        "plan": resp.get("plan", "Pro").capitalize(),
+                        "renews": resp.get("expires", "—"),
+                        "last_ok": datetime.datetime.now().isoformat(),
+                    })
+                    subscription._save_cache(cache)
+                    self._refresh_sub_lbl()
+                    if "subscribe" in self._pages:
+                        self._build_subscribe_body(self._pages["subscribe"])
+                    messagebox.showinfo("Unlocked",
+                        "Thanks for subscribing! Your account is now active.")
+                self.root.after(0, apply)
+        threading.Thread(target=work, daemon=True).start()
 
     def _activate(self):
         ok, msg = subscription.activate_key(self._key_entry.get().strip())
