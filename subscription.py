@@ -27,6 +27,8 @@ try:
 except ImportError:
     requests = None
 
+import auth_client
+
 # ── YOUR SERVER + STRIPE ──────────────────────────────────
 SERVER_URL = "https://bid-caller-pro.onrender.com"   # live license server
 STRIPE_MONTHLY_URL = "https://buy.stripe.com/5kQcN43YEbge0YafanejK01"  # $19/mo — matches web app
@@ -125,7 +127,9 @@ def get_status():
                 return {"active": False, "reason": resp.get("reason")}
 
     # 2) Try trial status online (does NOT auto-start one)
-    tresp = _post("/trial", {"device_id": _device_id()}) if cache.get("trial_started") else None
+    tresp = _post("/trial", {"device_id": _device_id(),
+                              "supabase_token": auth_client.current_access_token()}) \
+        if cache.get("trial_started") else None
     if tresp is not None and tresp.get("active"):
         cache.update({
             "active": True, "trial": True, "plan": "Free Trial",
@@ -159,8 +163,13 @@ def get_status():
 
 
 def start_trial():
-    """Asks the server to start a trial for this device."""
-    resp = _post("/trial", {"device_id": _device_id()})
+    """Asks the server to start a trial for this device. Requires a signed-in
+    account — trials are keyed by verified email so they can't be reset just
+    by deleting the local device_id file."""
+    token = auth_client.current_access_token()
+    if not token:
+        return False, "Sign in to start your free trial — this keeps it tied to your account."
+    resp = _post("/trial", {"device_id": _device_id(), "supabase_token": token})
     if resp is None:
         return False, "Couldn't reach the license server. Check your internet and try again."
     if resp.get("active"):
@@ -183,7 +192,8 @@ def trial_used():
     if cache.get("trial_started"):
         return True
     # Ask server (best-effort)
-    resp = _post("/trial", {"device_id": _device_id()})
+    resp = _post("/trial", {"device_id": _device_id(),
+                             "supabase_token": auth_client.current_access_token()})
     if resp is not None and (resp.get("reason") == "trial_expired"
                              or (resp.get("active") and not resp.get("new"))):
         return True

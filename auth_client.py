@@ -71,6 +71,11 @@ def current_email():
     return _load_session().get("email")
 
 
+def current_access_token():
+    """Returns the signed-in user's Supabase access token, or None."""
+    return _load_session().get("access_token")
+
+
 def sign_out():
     _save_session({})
 

@@ -187,22 +187,40 @@ def validate():
 
 @app.route("/trial", methods=["POST"])
 def trial():
+    """Trials are keyed by verified account email, not the client-supplied
+    device_id — a local device_id file can be deleted to get infinite fresh
+    trials, but an email requires a real (and confirmed) Supabase account.
+    device_id is still checked so trials started before this change (or by
+    someone not signed in yet) keep working until they naturally expire."""
     data = request.get_json(force=True, silent=True) or {}
     device = (data.get("device_id") or "").strip()
-    if not device:
-        return jsonify({"ok": False, "reason": "no_device"})
+    email = _verify_supabase_token(data.get("supabase_token", ""))
     db = _db()
     trials = db.setdefault("trials", {})
-    if device in trials:
-        started = datetime.datetime.fromisoformat(trials[device]["started"])
+
+    def _status(rec):
+        started = datetime.datetime.fromisoformat(rec["started"])
         end = started + datetime.timedelta(days=TRIAL_DAYS)
         if datetime.datetime.now() <= end:
             left = (end - datetime.datetime.now()).days + 1
             return jsonify({"ok": True, "active": True, "days_left": max(1, left),
                             "expires": end.isoformat()[:10]})
         return jsonify({"ok": False, "active": False, "reason": "trial_expired"})
+
+    trial_key = f"email:{email}" if email else None
+    if trial_key and trial_key in trials:
+        return _status(trials[trial_key])
+    if device and device in trials:
+        # Legacy/anonymous trial already running — honor it either way.
+        return _status(trials[device])
+
+    if not email:
+        if not device:
+            return jsonify({"ok": False, "reason": "no_device"})
+        return jsonify({"ok": False, "reason": "signin_required"})
+
     started = datetime.datetime.now()
-    trials[device] = {"started": started.isoformat()}
+    trials[trial_key] = {"started": started.isoformat(), "email": email}
     _save_db(db)
     end = started + datetime.timedelta(days=TRIAL_DAYS)
     return jsonify({"ok": True, "active": True, "days_left": TRIAL_DAYS,

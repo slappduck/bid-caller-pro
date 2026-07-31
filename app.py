@@ -1143,9 +1143,13 @@ class BidCaller:
                 tc.pack(pady=(0, 18))
                 tk.Label(tc, text="Try it free for 7 days", font=(UI, fs(15), "bold"),
                          bg=CARD, fg=ACCENT).pack()
-                tk.Label(tc, text="No charge now. Full access. Cancel anytime.",
+                signed_in = bool(auth_client.current_email())
+                sub_text = "No charge now. Full access. Cancel anytime." if signed_in \
+                    else "Free account required — no charge now. Cancel anytime."
+                tk.Label(tc, text=sub_text,
                          font=F_SMALL, bg=CARD, fg=TEXT2).pack(pady=(2, 12))
-                pill_btn(tc, "  Start Free Trial  ", self._do_trial, px=26, py=10,
+                btn_text = "  Start Free Trial  " if signed_in else "  Sign In to Start Trial  "
+                pill_btn(tc, btn_text, self._do_trial, px=26, py=10,
                          font=(UI, fs(12), "bold")).pack()
                 tk.Label(inner, text="— or subscribe now —", font=F_SMALL,
                          bg=BG, fg=TEXT3).pack(pady=10)
@@ -1191,6 +1195,12 @@ class BidCaller:
                  font=F_SMALL, bg=BG, fg=TEXT3).pack(pady=14)
 
     def _do_trial(self):
+        if not auth_client.current_email():
+            messagebox.showinfo("Sign In Required",
+                "Create a free account to start your trial — this keeps it tied "
+                "to you instead of this install, so it can't restart itself.")
+            self._show_signin()
+            return
         ok, msg = subscription.start_trial()
         if ok:
             messagebox.showinfo("Trial Started", msg + "\n\nEnjoy full access!")
