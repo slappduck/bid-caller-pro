@@ -51,7 +51,7 @@ app = Flask(__name__)
 
 # ── CORS: production Netlify site + deploy previews ──
 CORS(app, resources={r"/*": {"origins": [
-    re.compile(r"^https://([a-z0-9-]+--)?bidcaller\.netlify\.app$"),
+    re.compile(r"^https://([a-z0-9-]+--)?curbcallpro\.netlify\.app$"),
 ]}})
 
 # ── Secrets ──
