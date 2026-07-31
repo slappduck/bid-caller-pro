@@ -405,7 +405,8 @@ class BidCaller:
             ("upcoming",  "📡", "Upcoming"),
             ("search",    "🌐", "Search City"),
             ("account",   "👤", "Account"),
-            ("subscribe", "💳", "Subscription"),
+            ("subscribe", "🛒", "Upgrade"),
+            ("billing",   "💳", "Billing"),
             ("support",   "🛟", "Support"),
             ("settings",  "⚙",  "Settings"),
         ]
@@ -493,6 +494,8 @@ class BidCaller:
             self._render_account()
         elif key == "subscribe":
             self._try_auto_unlock()
+        elif key == "billing":
+            self._render_billing()
 
     # ────────── MAIN AREA ──────────
     def _main_area(self):
@@ -506,6 +509,7 @@ class BidCaller:
         self._page_search()
         self._page_account()
         self._page_subscribe()
+        self._page_billing()
         self._page_support()
         self._page_settings()
 
@@ -2858,6 +2862,54 @@ class BidCaller:
             data_sync.push_company_profile(token, self.company)
             self.root.after(0, lambda: self._load_avatar_thumbnail(url))
         threading.Thread(target=work, daemon=True).start()
+
+    # ═══════════ PAGE: BILLING ═══════════
+    def _page_billing(self):
+        pg = tk.Frame(self._container, bg=BG)
+        self._pages["billing"] = pg
+        hdr = tk.Frame(pg, bg=BG, pady=18)
+        hdr.pack(fill="x", padx=24)
+        tk.Label(hdr, text="Billing", font=F_HEAD, bg=BG, fg=TEXT).pack(side="left")
+        divider(pg, BORDER)
+        self._billing_body = tk.Frame(pg, bg=BG, padx=30, pady=24)
+        self._billing_body.pack(fill="both", expand=True)
+
+    def _render_billing(self):
+        body = self._billing_body
+        for w in body.winfo_children():
+            w.destroy()
+        s = subscription.get_status()
+
+        if s.get("active") and s.get("trial"):
+            countdown = (subscription.time_left_label(s.get("expires_at"))
+                        or f"{s.get('days_left','?')} days left")
+            tk.Label(body, text="🎁", font=(UI, fs(34)), bg=BG, fg=ACCENT).pack(anchor="w")
+            tk.Label(body, text=f"Free Trial — {countdown}", font=F_SUB, bg=BG, fg=TEXT).pack(anchor="w", pady=(4, 4))
+            tk.Label(body, text="No payment method on file yet. Subscribe any time to keep access after the trial ends.",
+                     font=F_SMALL, bg=BG, fg=TEXT3).pack(anchor="w", pady=(0, 16))
+            pill_btn(body, "View Plans", lambda: self._nav("subscribe"), px=18, py=9, font=F_SMALL).pack(anchor="w")
+        elif s.get("active"):
+            card = tk.Frame(body, bg=CARD, padx=22, pady=20)
+            card.pack(fill="x", pady=(0, 16))
+            tk.Label(card, text="✅ You're subscribed", font=F_SUB, bg=CARD, fg=GREEN).pack(anchor="w")
+            tk.Label(card, text=f"Plan: {s.get('plan','Pro')}", font=F_BODY, bg=CARD, fg=TEXT).pack(anchor="w", pady=(10, 2))
+            tk.Label(card, text=f"Renews: {s.get('renews','—')}", font=F_BODY, bg=CARD, fg=TEXT).pack(anchor="w")
+            cache = subscription._load_cache()
+            key = cache.get("key", "")
+            if key:
+                masked = key[:4] + "•" * max(0, len(key) - 8) + key[-4:] if len(key) > 8 else key
+                tk.Label(card, text=f"License key: {masked}", font=F_SMALL, bg=CARD, fg=TEXT3).pack(anchor="w", pady=(8, 0))
+
+            tk.Label(body, text="Manage your payment method and view invoices in Stripe's secure billing portal.",
+                     font=F_SMALL, bg=BG, fg=TEXT3, wraplength=420, justify="left").pack(anchor="w", pady=(0, 10))
+            pill_btn(body, "💳 Manage Billing on Stripe →",
+                     lambda: webbrowser.open(subscription.STRIPE_PORTAL_URL), px=18, py=9, font=F_SMALL).pack(anchor="w")
+            ghost_btn(body, "Cancel Subscription", self._do_cancel, font=F_SMALL).pack(anchor="w", pady=(12, 0))
+        else:
+            tk.Label(body, text="⚠ No active plan", font=F_SUB, bg=BG, fg=RED).pack(anchor="w")
+            tk.Label(body, text="Subscribe to unlock unlimited bid scanning and tracking.",
+                     font=F_SMALL, bg=BG, fg=TEXT3).pack(anchor="w", pady=(4, 16))
+            pill_btn(body, "View Plans", lambda: self._nav("subscribe"), px=18, py=9, font=F_SMALL).pack(anchor="w")
 
     # ═══════════ PAGE: SUPPORT ═══════════
     def _page_support(self):

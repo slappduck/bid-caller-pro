@@ -1650,23 +1650,26 @@ function renderAccount(){
       <button class="btn-ghost" id="support-send-btn">Send Message</button>
       <div class="account-status" id="support-status" style="margin-top:0.5rem;"></div>
     </div>
+    <div class="account-email" style="font-size:0.85rem;margin:0.4rem 0 0.5rem;">&#x1F4B3; Billing</div>
     <div class="plan" id="status-card"><div class="plan-name" style="display:flex;align-items:center;gap:0.5rem;"><span class="spin" style="border-top-color:var(--accent);border-color:rgba(245,158,11,0.25);"></span> Checking your plan...</div></div>
     <a class="btn-ghost" style="text-decoration:none;display:block;text-align:center;box-sizing:border-box;" href="${PORTAL_URL}" target="_blank">&#x1F4B3; Manage Billing on Stripe &rarr;</a>
-    <div class="plan featured">
-      <div class="plan-name">Pro Monthly</div>
-      <div class="plan-price">$19<span> / month</span></div>
-      <ul><li>Unlimited nationwide bid scans</li><li>AI bid extraction</li><li>Federal + local bids</li><li>Save &amp; track leads</li><li>Cancel anytime</li></ul>
-      <a class="btn-primary" style="text-decoration:none;" href="${mLink}" target="_blank">Subscribe Monthly</a>
+    <div id="upgrade-section">
+      <div class="plan featured">
+        <div class="plan-name">Pro Monthly</div>
+        <div class="plan-price">$19<span> / month</span></div>
+        <ul><li>Unlimited nationwide bid scans</li><li>AI bid extraction</li><li>Federal + local bids</li><li>Save &amp; track leads</li><li>Cancel anytime</li></ul>
+        <a class="btn-primary" style="text-decoration:none;" href="${mLink}" target="_blank">Subscribe Monthly</a>
+      </div>
+      <div class="plan">
+        <div class="plan-name">Pro Annual &mdash; best value, save $79</div>
+        <div class="plan-price">$149<span> / year</span></div>
+        <ul><li>Everything in Monthly</li><li>About 4 months free</li><li>Priority support</li></ul>
+        <a class="btn-ghost" style="text-decoration:none;display:block;text-align:center;" href="${aLink}" target="_blank">Subscribe Annual</a>
+      </div>
+      <div class="field-label" style="margin-top:1.2rem;">Have a license key?</div>
+      <input class="input" id="key-input" placeholder="BCP-..." />
+      <button class="btn-ghost" id="activate-btn">Activate Key</button>
     </div>
-    <div class="plan">
-      <div class="plan-name">Pro Annual &mdash; best value, save $79</div>
-      <div class="plan-price">$149<span> / year</span></div>
-      <ul><li>Everything in Monthly</li><li>About 4 months free</li><li>Priority support</li></ul>
-      <a class="btn-ghost" style="text-decoration:none;display:block;text-align:center;" href="${aLink}" target="_blank">Subscribe Annual</a>
-    </div>
-    <div class="field-label" style="margin-top:1.2rem;">Have a license key?</div>
-    <input class="input" id="key-input" placeholder="BCP-..." />
-    <button class="btn-ghost" id="activate-btn">Activate Key</button>
     <button class="btn-ghost" style="margin-top:0.5rem;color:var(--red);border-color:var(--red);" id="signout-btn">Sign out</button>`;
 
   document.getElementById("activate-btn").onclick=async()=>{
@@ -1759,18 +1762,21 @@ function tickTrialCountdown(){
 }
 async function loadAccountStatus(){
   const card=document.getElementById("status-card");
+  const upgradeSection=document.getElementById("upgrade-section");
   const key=licenseKey();
   let html="";
   let featured=false;
+  let activePaid=false;
   trialExpiresAt=null;
   if(trialCountdownTimer){clearInterval(trialCountdownTimer);trialCountdownTimer=null;}
   if(key){
     try{
       const r=await fetchWithTimeout(SERVER+"/validate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({key,device_id:deviceId()})});
       const d=await r.json();
-      if(d.valid){html=`<div class="plan-name">✅ Active subscription</div><div class="plan-price" style="font-size:1.4rem;">${esc(d.plan||"Pro")}</div><p style="color:var(--text2);font-size:0.82rem;margin-top:0.4rem;">Expires ${esc(d.expires||"")}</p>`;featured=true;}
+      if(d.valid){html=`<div class="plan-name">✅ Active subscription</div><div class="plan-price" style="font-size:1.4rem;">${esc(d.plan||"Pro")}</div><p style="color:var(--text2);font-size:0.82rem;margin-top:0.4rem;">Expires ${esc(d.expires||"")}</p>`;featured=true;activePaid=true;}
     }catch{}
   }
+  if(upgradeSection)upgradeSection.style.display=activePaid?"none":"";
   if(!html){
     try{
       const token=await getSupabaseToken();
