@@ -1634,11 +1634,38 @@ function renderAccount(){
   loadAccountStatus();
 }
 
+// Turns an expires_at ISO timestamp into a live 'Xd Yh left' / 'Yh Zm left'
+// countdown instead of a static day count that only ticks over once every
+// 24 hours — mirrors subscription.py's time_left_label() on desktop.
+function timeLeftLabel(expiresAt){
+  if(!expiresAt)return null;
+  const end=new Date(expiresAt);
+  if(isNaN(end.getTime()))return null;
+  const ms=end-new Date();
+  if(ms<=0)return"Expired";
+  const totalMin=Math.floor(ms/60000);
+  const days=Math.floor(totalMin/1440);
+  const hours=Math.floor((totalMin%1440)/60);
+  const minutes=totalMin%60;
+  if(days>0)return`${days}d ${hours}h left`;
+  if(hours>0)return`${hours}h ${minutes}m left`;
+  return`${minutes}m left`;
+}
+let trialExpiresAt=null;
+let trialCountdownTimer=null;
+function tickTrialCountdown(){
+  const el=document.getElementById("trial-countdown");
+  if(!el||!trialExpiresAt){clearInterval(trialCountdownTimer);trialCountdownTimer=null;return;}
+  const label=timeLeftLabel(trialExpiresAt);
+  if(label)el.textContent=label;
+}
 async function loadAccountStatus(){
   const card=document.getElementById("status-card");
   const key=licenseKey();
   let html="";
   let featured=false;
+  trialExpiresAt=null;
+  if(trialCountdownTimer){clearInterval(trialCountdownTimer);trialCountdownTimer=null;}
   if(key){
     try{
       const r=await fetchWithTimeout(SERVER+"/validate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({key,device_id:deviceId()})});
@@ -1651,7 +1678,11 @@ async function loadAccountStatus(){
       const token=await getSupabaseToken();
       const r=await fetchWithTimeout(SERVER+"/trial",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({device_id:deviceId(),supabase_token:token})});
       const d=await r.json();
-      if(d.active){html=`<div class="plan-name">\u{1F381} Free Trial Active</div><div class="plan-price">${d.days_left||""}<span> days left</span></div><p style="color:var(--text2);font-size:0.82rem;">Full access. Subscribe to keep going after trial.</p>`;featured=true;}
+      if(d.active){
+        trialExpiresAt=d.expires_at||null;
+        const countdown=timeLeftLabel(trialExpiresAt)||`${d.days_left||""} days left`;
+        html=`<div class="plan-name">\u{1F381} Free Trial Active</div><div class="plan-price"><span id="trial-countdown">${esc(countdown)}</span></div><p style="color:var(--text2);font-size:0.82rem;">Full access. Subscribe to keep going after trial.</p>`;featured=true;
+      }
       else html=`<div class="plan-name" style="color:var(--red);">⚠ Trial expired</div><p style="color:var(--text2);font-size:0.82rem;margin-top:0.5rem;">Subscribe below to keep scanning.</p>`;
     }catch{
       html=`<div class="plan-name" style="color:var(--text2);">⚠ Couldn't reach the server</div><p style="color:var(--text3);font-size:0.82rem;margin-top:0.5rem;">Your plan status will show once the connection's back. Try again in a bit.</p>`;
@@ -1660,6 +1691,7 @@ async function loadAccountStatus(){
   card.innerHTML=html;
   card.className="plan"+(featured?" featured":"");
   if(html.indexOf("Trial expired")>-1)card.style.borderColor="var(--red)";
+  if(trialExpiresAt)trialCountdownTimer=setInterval(tickTrialCountdown,60000);
 }
 // fetch with a hard timeout so a sleepy/slow backend never leaves the UI hanging
 function fetchWithTimeout(url,opts,ms=12000){

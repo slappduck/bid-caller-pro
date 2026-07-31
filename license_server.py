@@ -203,8 +203,12 @@ def trial():
         end = started + datetime.timedelta(days=TRIAL_DAYS)
         if datetime.datetime.now() <= end:
             left = (end - datetime.datetime.now()).days + 1
+            # expires_at is a precise timestamp (unlike the legacy
+            # date-only "expires") so clients can show a live days/hours
+            # countdown instead of a static day count that only ticks over
+            # once every 24 hours.
             return jsonify({"ok": True, "active": True, "days_left": max(1, left),
-                            "expires": end.isoformat()[:10]})
+                            "expires": end.isoformat()[:10], "expires_at": end.isoformat()})
         return jsonify({"ok": False, "active": False, "reason": "trial_expired"})
 
     trial_key = f"email:{email}" if email else None
@@ -224,7 +228,7 @@ def trial():
     _save_db(db)
     end = started + datetime.timedelta(days=TRIAL_DAYS)
     return jsonify({"ok": True, "active": True, "days_left": TRIAL_DAYS,
-                    "expires": end.isoformat()[:10], "new": True})
+                    "expires": end.isoformat()[:10], "expires_at": end.isoformat(), "new": True})
 
 
 @app.route("/issue", methods=["POST"])

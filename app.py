@@ -379,6 +379,7 @@ class BidCaller:
         self.root.after(1500, self._try_auto_unlock)
         self.root.after(2000, self._sync_pull_after_signin)
         self.root.after(2500, self._check_saved_searches_on_load)
+        self.root.after(60000, self._tick_trial_countdown)
 
     # ────────── SIDEBAR ──────────
     def _sidebar(self):
@@ -440,11 +441,31 @@ class BidCaller:
     def _refresh_sub_lbl(self):
         s = subscription.get_status()
         if s.get("active") and s.get("trial"):
-            self.sub_lbl.config(text=f"🎁 Free Trial\n{s.get('days_left','?')} days left", fg=ACCENT)
+            label = (subscription.time_left_label(s.get("expires_at"))
+                     or f"{s.get('days_left','?')} days left")
+            self.sub_lbl.config(text=f"🎁 Free Trial\n{label}", fg=ACCENT)
         elif s.get("active"):
             self.sub_lbl.config(text=f"✅ {s.get('plan','Pro')}\nRenews {s.get('renews','—')}", fg=GREEN)
         else:
             self.sub_lbl.config(text="⚠ No active plan", fg=RED)
+
+    def _tick_trial_countdown(self):
+        """Re-renders the trial countdown from the already-cached expiry
+        timestamp every minute — no extra network calls just to keep a
+        clock ticking, the server is still only re-checked on the normal
+        schedule (startup, nav, etc)."""
+        cache = subscription._load_cache()
+        if cache.get("trial") and cache.get("expires_at"):
+            label = subscription.time_left_label(cache["expires_at"])
+            if label:
+                if hasattr(self, "sub_lbl"):
+                    self.sub_lbl.config(text=f"🎁 Free Trial\n{label}", fg=ACCENT)
+                if getattr(self, "_current", None) == "subscribe" and hasattr(self, "_trial_countdown_lbl"):
+                    try:
+                        self._trial_countdown_lbl.config(text=label)
+                    except tk.TclError:
+                        pass
+        self.root.after(60000, self._tick_trial_countdown)
 
     def _nav(self, key):
         self._current = key
@@ -2121,9 +2142,16 @@ class BidCaller:
         self._account_row(inner)
 
         if s.get("active") and s.get("trial"):
+            countdown = (subscription.time_left_label(s.get("expires_at"))
+                        or f"{s.get('days_left','?')} days left")
             tk.Label(inner, text="🎁", font=(UI, fs(40)), bg=BG, fg=ACCENT).pack()
-            tk.Label(inner, text=f"Free Trial — {s.get('days_left','?')} days left",
-                     font=(UI, fs(22), "bold"), bg=BG, fg=TEXT).pack(pady=6)
+            row = tk.Frame(inner, bg=BG)
+            row.pack(pady=6)
+            tk.Label(row, text="Free Trial — ", font=(UI, fs(22), "bold"),
+                     bg=BG, fg=TEXT).pack(side="left")
+            self._trial_countdown_lbl = tk.Label(row, text=countdown, font=(UI, fs(22), "bold"),
+                                                  bg=BG, fg=ACCENT)
+            self._trial_countdown_lbl.pack(side="left")
             tk.Label(inner, text="Subscribe any time to keep access after the trial ends.",
                      font=F_BODY, bg=BG, fg=TEXT2).pack(pady=(0, 22))
             self._plan_cards(inner)

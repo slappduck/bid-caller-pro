@@ -49,6 +49,30 @@ CACHE_FILE  = os.path.join(_BASE, "license_cache.json")
 DEVICE_FILE = os.path.join(_BASE, "device_id.txt")
 
 
+def time_left_label(expires_at):
+    """Turns an expires_at ISO timestamp into a friendly live countdown
+    string ('3d 4h left', '2h 15m left', '40m left') instead of a static
+    day count that only ticks over once every 24 hours."""
+    if not expires_at:
+        return None
+    try:
+        end = datetime.datetime.fromisoformat(expires_at)
+    except ValueError:
+        return None
+    delta = end - datetime.datetime.now()
+    total_seconds = delta.total_seconds()
+    if total_seconds <= 0:
+        return "Expired"
+    days = delta.days
+    hours = delta.seconds // 3600
+    minutes = (delta.seconds % 3600) // 60
+    if days > 0:
+        return f"{days}d {hours}h left"
+    if hours > 0:
+        return f"{hours}h {minutes}m left"
+    return f"{minutes}m left"
+
+
 def _device_id():
     """Stable per-install id, created once and reused."""
     if os.path.exists(DEVICE_FILE):
@@ -216,11 +240,13 @@ def get_status():
             "active": True, "trial": True, "plan": "Free Trial",
             "renews": tresp.get("expires", "—"),
             "days_left": tresp.get("days_left", "?"),
+            "expires_at": tresp.get("expires_at", ""),
             "last_ok": datetime.datetime.now().isoformat(),
         })
         _save_cache(cache)
         return {"active": True, "trial": True, "plan": "Free Trial",
-                "renews": cache["renews"], "days_left": cache["days_left"]}
+                "renews": cache["renews"], "days_left": cache["days_left"],
+                "expires_at": cache.get("expires_at", "")}
     if tresp is not None and not tresp.get("active") and cache.get("trial_started"):
         cache["active"] = False
         _save_cache(cache)
@@ -234,7 +260,8 @@ def get_status():
                 out = {"active": True, "plan": cache.get("plan", "Pro"),
                        "renews": cache.get("renews", "—")}
                 if cache.get("trial"):
-                    out.update({"trial": True, "days_left": cache.get("days_left", "?")})
+                    out.update({"trial": True, "days_left": cache.get("days_left", "?"),
+                               "expires_at": cache.get("expires_at", "")})
                 out["offline"] = True
                 return out
         except Exception:
@@ -259,6 +286,7 @@ def start_trial():
             "trial_started": True, "active": True, "trial": True,
             "plan": "Free Trial", "renews": resp.get("expires", "—"),
             "days_left": resp.get("days_left", "?"),
+            "expires_at": resp.get("expires_at", ""),
             "last_ok": datetime.datetime.now().isoformat(),
         })
         _save_cache(cache)
