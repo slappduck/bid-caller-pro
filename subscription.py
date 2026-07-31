@@ -123,6 +123,26 @@ def scan(location, radius):
         return {"ok": False, "reason": "unreachable"}
 
 
+def upcoming(location, radius):
+    """Finds planned/pre-bid concrete work (council agendas, budgets, CIPs)
+    via the server's /upcoming endpoint — same license gate and timeout
+    budget as scan()."""
+    if requests is None:
+        return {"ok": False, "reason": "unreachable"}
+    cache = _load_cache()
+    payload = {
+        "key": cache.get("key", ""), "device_id": _device_id(),
+        "supabase_token": auth_client.current_access_token(),
+        "location": location, "radius": radius,
+    }
+    try:
+        r = requests.post(SERVER_URL.rstrip("/") + "/upcoming", json=payload,
+                          timeout=SCAN_TIMEOUT)
+        return r.json()
+    except Exception:
+        return {"ok": False, "reason": "unreachable"}
+
+
 # ── Public API used by the app ────────────────────────────
 def get_status():
     """

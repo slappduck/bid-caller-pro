@@ -119,6 +119,27 @@ def bid_id(city, bid):
     raw = (str(city) + bid.get("title", "") + bid.get("scope", "")).encode("utf-8")
     return hashlib.md5(raw).hexdigest()[:12]
 
+# Persist planned/pre-bid work found by the Upcoming tab across restarts
+UPCOMING_PATH = os.path.join(BASE_DIR, "upcoming_feed.json")
+
+def load_upcoming():
+    try:
+        with open(UPCOMING_PATH) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def write_upcoming(d):
+    try:
+        with open(UPCOMING_PATH, "w") as f:
+            json.dump(d, f, indent=2)
+    except Exception:
+        pass
+
+def upcoming_id(city, item):
+    raw = (str(city) + item.get("title", "") + item.get("scope", "")).encode("utf-8")
+    return hashlib.md5(raw).hexdigest()[:12]
+
 # ═══════════════════════════════════════════════
 #  WIDGET HELPERS
 # ═══════════════════════════════════════════════
@@ -183,6 +204,7 @@ class BidCaller:
 
         self.bid_data = load_feed()
         self.saved = load_saved()
+        self.upcoming_data = load_upcoming()
         self.scan_running = False
         self.search_results = []
         self._current = "feed"
@@ -218,6 +240,7 @@ class BidCaller:
             ("feed",      "📋", "Live Bids"),
             ("saved",     "⭐", "Saved"),
             ("scan",      "🔍", "Find Bids"),
+            ("upcoming",  "📡", "Upcoming"),
             ("search",    "🌐", "Search City"),
             ("subscribe", "💳", "Subscription"),
             ("settings",  "⚙",  "Settings"),
@@ -265,6 +288,8 @@ class BidCaller:
             self._render_saved()
         elif key == "feed":
             self._render_feed()
+        elif key == "upcoming":
+            self._render_upcoming()
 
     # ────────── MAIN AREA ──────────
     def _main_area(self):
@@ -274,6 +299,7 @@ class BidCaller:
         self._page_feed()
         self._page_saved()
         self._page_scan()
+        self._page_upcoming()
         self._page_search()
         self._page_subscribe()
         self._page_settings()
@@ -1096,6 +1122,202 @@ class BidCaller:
             self._city_filter_box["values"] = cities
             if self._city_var.get() not in cities:
                 self._city_var.set("All")
+
+    # ═══════════ PAGE: UPCOMING (planned, pre-bid work) ═══════════
+    def _page_upcoming(self):
+        pg = tk.Frame(self._container, bg=BG)
+        self._pages["upcoming"] = pg
+
+        hdr = tk.Frame(pg, bg=BG, pady=18)
+        hdr.pack(fill="x", padx=24)
+        tk.Label(hdr, text="Upcoming Work", font=F_HEAD, bg=BG, fg=TEXT).pack(side="left")
+        divider(pg, BORDER)
+
+        body = tk.Frame(pg, bg=BG)
+        body.pack(fill="both", expand=True, padx=24, pady=18)
+
+        tk.Label(body, text="Concrete projects spotted in council agendas, budgets & "
+                 "plans — before they hit the bid boards.", font=F_SMALL,
+                 bg=BG, fg=TEXT3, wraplength=820, justify="left").pack(anchor="w", pady=(0, 12))
+
+        form = tk.Frame(body, bg=SURFACE, padx=24, pady=18)
+        form.pack(fill="x", pady=(0, 12))
+
+        tk.Label(form, text="Your Location", font=(UI, fs(11), "bold"),
+                 bg=SURFACE, fg=ACCENT).pack(anchor="w", pady=(0, 4))
+        self._up_loc_entry = tk.Entry(form, font=F_BODY, bg=CARD, fg=TEXT,
+                                      insertbackground=TEXT, relief="flat", bd=0,
+                                      highlightthickness=1, highlightbackground=BORDER,
+                                      highlightcolor=ACCENT)
+        self._up_loc_entry.pack(fill="x", ipady=8, pady=(0, 10))
+        self._up_loc_entry.bind("<Return>", lambda e: self._run_upcoming())
+
+        tk.Label(form, text="Search Radius", font=(UI, fs(11), "bold"),
+                 bg=SURFACE, fg=ACCENT).pack(anchor="w", pady=(4, 4))
+        self._up_radius_var = tk.StringVar(value="25 miles")
+        ttk.Combobox(form, textvariable=self._up_radius_var, state="readonly",
+                     values=["10 miles", "25 miles", "50 miles", "75 miles", "125 miles"],
+                     font=F_BODY, width=16).pack(anchor="w")
+
+        divider(form, BORDER, pad=0)
+
+        self._upcoming_btn = pill_btn(form, "  📡  Find Upcoming Projects  ",
+                                      self._run_upcoming, px=26, py=12,
+                                      font=(UI, fs(12), "bold"))
+        self._upcoming_btn.pack(anchor="w", pady=(16, 0))
+
+        self._upcoming_status = tk.Label(body, text="", font=F_BODY, bg=BG, fg=TEXT3)
+        self._upcoming_status.pack(pady=(20, 6))
+        self._up_prog_frame = tk.Frame(body, bg=BORDER, height=4, width=480)
+        self._up_prog_frame.pack(pady=(0, 6))
+        self._up_prog_bar = tk.Frame(self._up_prog_frame, bg=ACCENT, height=4, width=0)
+        self._up_prog_bar.place(x=0, y=0)
+
+        self._upcoming_list_frame = scrollable(body, bg=BG)
+        self._render_upcoming()
+
+    def _set_up_prog(self, pct):
+        self._up_prog_bar.config(width=int(480 * pct / 100))
+
+    def _run_upcoming(self):
+        if not self._scan_guard():
+            return
+        location = self._up_loc_entry.get().strip()
+        if not location:
+            messagebox.showwarning("Location needed", "Enter a ZIP code or city.")
+            return
+        radius = int(self._up_radius_var.get().split()[0])
+
+        self.scan_running = True
+        self._upcoming_btn.config(state="disabled", text="  Searching...  ")
+        self._set_up_prog(15)
+
+        REASONS = {
+            "unreachable": "Couldn't reach the bid service. Check your internet.",
+            "not_licensed": "Your trial or subscription isn't active. Check the Subscription tab.",
+            "location_not_found": "Couldn't find that location. Try a ZIP code.",
+            "no_location": "Enter a ZIP code or city.",
+            "ai_unavailable": "Upcoming search isn't configured yet.",
+        }
+
+        def process():
+            done = threading.Event()
+
+            def tick():
+                pct = 15
+                while not done.wait(1.5):
+                    pct = min(90, pct + 3)
+                    self.root.after(0, lambda p=pct: self._set_up_prog(p))
+
+            try:
+                self._upcoming_status.config(text="Scanning agendas, budgets & plans...", fg=ACCENT)
+                threading.Thread(target=tick, daemon=True).start()
+
+                resp = subscription.upcoming(location, radius)
+                done.set()
+                self._set_up_prog(100)
+
+                if not resp.get("ok"):
+                    msg = REASONS.get(resp.get("reason"), "Search hit a snag. Try again.")
+                    self._upcoming_status.config(text=msg, fg=RED)
+                    self._set_up_prog(0)
+                    return
+
+                added = 0
+                for city, items in (resp.get("items") or {}).items():
+                    have = self.upcoming_data.setdefault(city, [])
+                    ids = {upcoming_id(city, b) for b in have}
+                    for item in items:
+                        iid = upcoming_id(city, item)
+                        if iid not in ids:
+                            have.append(item)
+                            ids.add(iid)
+                            added += 1
+                write_upcoming(self.upcoming_data)
+
+                total = resp.get("total", 0)
+                friendly = (f"Done — found {total} planned project(s) near "
+                            f"{resp.get('location') or location}."
+                            if total else
+                            "Nothing planned turned up yet. Try a wider radius.")
+                self._upcoming_status.config(text=friendly, fg=GREEN if total else TEXT3)
+                self.root.after(0, self._render_upcoming)
+            except Exception:
+                import traceback
+                done.set()
+                debug("Upcoming search error:\n" + traceback.format_exc())
+                self._upcoming_status.config(text="Search failed — try again", fg=RED)
+                self._set_up_prog(0)
+            finally:
+                self.scan_running = False
+                self._upcoming_btn.config(state="normal", text="  📡  Find Upcoming Projects  ")
+
+        threading.Thread(target=process, daemon=True).start()
+
+    def _upcoming_card(self, parent, item, city=""):
+        outer = tk.Frame(parent, bg=CARD)
+        outer.pack(fill="x", padx=20, pady=5)
+        tk.Frame(outer, bg=BLUE, width=4).pack(side="left", fill="y")
+        body = tk.Frame(outer, bg=CARD, padx=18, pady=14)
+        body.pack(side="left", fill="both", expand=True)
+
+        r1 = tk.Frame(body, bg=CARD)
+        r1.pack(fill="x")
+        tk.Label(r1, text=item.get("title", "Untitled Project"), font=F_SUB,
+                 bg=CARD, fg=TEXT, anchor="w").pack(side="left")
+        tk.Label(r1, text="  PLANNED  ", font=F_SMALL, bg="#0c2a4a",
+                 fg=BLUE).pack(side="right")
+        if city:
+            tk.Label(r1, text=f"  {city}  ", font=F_SMALL, bg=BORDER,
+                     fg=TEXT2).pack(side="right", padx=(4, 0))
+
+        scope = (item.get("scope") or "").strip()
+        if scope:
+            tk.Label(body, text=scope, font=F_BODY, bg=CARD, fg=TEXT2,
+                     anchor="w", wraplength=820, justify="left").pack(fill="x", pady=(5, 8))
+
+        meta = tk.Frame(body, bg=CARD)
+        meta.pack(fill="x")
+
+        def chip(text, color=TEXT3, cmd=None):
+            lbl = tk.Label(meta, text=text, font=F_SMALL, bg=SURFACE, fg=color,
+                           padx=10, pady=4, cursor="hand2" if cmd else "arrow")
+            lbl.pack(side="left", padx=(0, 6))
+            if cmd:
+                lbl.bind("<Button-1>", lambda e: cmd())
+
+        if item.get("timeframe"):
+            chip(f"🗓  {item['timeframe']}", ACCENT)
+        if item.get("contact"):
+            chip(f"👤  {item['contact']}", TEXT2)
+        if item.get("email"):
+            chip("✉  Email", GREEN, lambda: webbrowser.open(f"mailto:{item['email']}"))
+        if item.get("phone"):
+            chip(f"☎  {item['phone']}", TEXT2)
+        if item.get("url"):
+            chip("🔗  Source", ACCENT, lambda: webbrowser.open(item["url"]))
+
+    def _render_upcoming(self):
+        if not hasattr(self, "_upcoming_list_frame"):
+            return
+        for w in self._upcoming_list_frame.winfo_children():
+            w.destroy()
+        cities = sorted(c for c, items in self.upcoming_data.items() if items)
+        if not cities:
+            tk.Label(self._upcoming_list_frame, text="📡", font=(UI, fs(30)),
+                     bg=BG, fg=TEXT3).pack(pady=(40, 6))
+            tk.Label(self._upcoming_list_frame, text="Nothing yet", font=F_SUB,
+                     bg=BG, fg=TEXT).pack()
+            tk.Label(self._upcoming_list_frame,
+                     text="Search your area to spot planned work before it's a bid.",
+                     font=F_SMALL, bg=BG, fg=TEXT3).pack(pady=(4, 40))
+            return
+        tk.Label(self._upcoming_list_frame, text="PLANNED PROJECTS", font=(UI, fs(9), "bold"),
+                 bg=BG, fg=ACCENT).pack(anchor="w", padx=20, pady=(4, 6))
+        for city in cities:
+            for item in self.upcoming_data[city]:
+                self._upcoming_card(self._upcoming_list_frame, item, city)
+        tk.Frame(self._upcoming_list_frame, bg=BG, height=30).pack()
 
     def _export_csv(self):
         """Save all current bids to a CSV file the contractor can open in Excel."""
