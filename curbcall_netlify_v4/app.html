@@ -624,6 +624,12 @@ function showApp(){
   const chip=document.getElementById("user-chip");
   chip.textContent=email||"\u1F464 Account";
   renderFeed();
+  // The map only ever got created inside detectLocation()'s geolocation
+  // success callback — if a user denies the location prompt (extremely
+  // common), findMap never gets initialized and there's nothing to click,
+  // ever. Always show a default view first so the map (and its click
+  // handler) exists regardless of whether geolocation succeeds.
+  updateFindMap(39.5,-98.35,"Click the map to set your location");
   autoFillZip();
   autoUnlock();
   checkSavedSearches();
