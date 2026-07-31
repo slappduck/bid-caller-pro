@@ -1677,12 +1677,23 @@ class BidCaller:
         self.saved_searches.append({"location": location, "radius": radius})
         write_saved_searches(self.saved_searches)
         self._render_saved_searches()
+        token = auth_client.current_access_token()
+        if token:
+            threading.Thread(target=lambda: data_sync.push_saved_search(token, location, radius),
+                             daemon=True).start()
 
     def _remove_saved_search(self, idx):
         if 0 <= idx < len(self.saved_searches):
+            removed = self.saved_searches[idx]
             del self.saved_searches[idx]
             write_saved_searches(self.saved_searches)
             self._render_saved_searches()
+            token = auth_client.current_access_token()
+            if token:
+                threading.Thread(
+                    target=lambda: data_sync.delete_saved_search(
+                        token, removed["location"], removed["radius"]),
+                    daemon=True).start()
 
     def _scan_saved_search(self, location, radius):
         self._loc_entry.delete(0, tk.END)
@@ -2455,6 +2466,26 @@ class BidCaller:
                         daemon=True).start()
             self.root.after(0, apply)
         threading.Thread(target=work_company, daemon=True).start()
+
+        def work_searches():
+            cloud = data_sync.pull_saved_searches(token)
+            if cloud is None:
+                return
+
+            def apply():
+                def sig(s):
+                    return (s["location"].strip().lower(), s["radius"])
+                cloud_sigs = {sig(s) for s in cloud}
+                local_only = [s for s in self.saved_searches if sig(s) not in cloud_sigs]
+                self.saved_searches = cloud + local_only
+                write_saved_searches(self.saved_searches)
+                self._render_saved_searches()
+                if local_only:
+                    threading.Thread(
+                        target=lambda: data_sync.push_all_saved_searches(token, local_only),
+                        daemon=True).start()
+            self.root.after(0, apply)
+        threading.Thread(target=work_searches, daemon=True).start()
 
     def _do_verify_magic_link(self, email):
         code = self._ml_code.get().strip()

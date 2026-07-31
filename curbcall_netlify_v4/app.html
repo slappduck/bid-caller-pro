@@ -629,6 +629,7 @@ function showApp(){
   checkSavedSearches();
   syncPullSavedBids();
   syncPullCompanyProfile();
+  syncPullSavedSearches();
 }
 
 // ── Nav ──
@@ -671,6 +672,26 @@ document.getElementById("clear-feed").onclick=()=>{
 
 // ── Saved searches (auto-alerts) ──
 let savedSearches=store.get("saved_searches",[]);
+async function pushSavedSearch(location,radiusVal){
+  if(!currentUser)return;
+  try{await sb.from("saved_searches").insert({location,radius:radiusVal});}catch(e){}
+}
+async function deleteSavedSearchCloud(location,radiusVal){
+  if(!currentUser)return;
+  try{await sb.from("saved_searches").delete().eq("location",location).eq("radius",radiusVal);}catch(e){}
+}
+async function syncPullSavedSearches(){
+  if(!currentUser)return;
+  const{data,error}=await sb.from("saved_searches").select("*");
+  if(error||!data)return;
+  const sig=s=>`${s.location.trim().toLowerCase()}|${s.radius}`;
+  const cloudSigs=new Set(data.map(sig));
+  const localOnly=savedSearches.filter(s=>!cloudSigs.has(sig(s)));
+  savedSearches=data.map(r=>({location:r.location,radius:r.radius})).concat(localOnly);
+  store.set("saved_searches",savedSearches);
+  renderSavedSearches();
+  for(const s of localOnly)await pushSavedSearch(s.location,s.radius);
+}
 document.getElementById("save-search-btn").onclick=()=>{
   const location=document.getElementById("loc-input").value.trim();
   if(!location){toast("Enter a ZIP or city first");return;}
@@ -678,6 +699,7 @@ document.getElementById("save-search-btn").onclick=()=>{
   if(exists){toast("Already saved");return;}
   savedSearches.push({location,radius});
   store.set("saved_searches",savedSearches);
+  pushSavedSearch(location,radius);
   toast("Saved — we'll check this every time you open the app");
   renderSavedSearches();
 };
@@ -694,7 +716,9 @@ function renderSavedSearches(){
     btn.onclick=()=>{
       const i=parseInt(btn.dataset.i,10);
       if(btn.dataset.act==="del"){
+        const removed=savedSearches[i];
         savedSearches.splice(i,1);store.set("saved_searches",savedSearches);renderSavedSearches();
+        deleteSavedSearchCloud(removed.location,removed.radius);
       }else{
         const s=savedSearches[i];
         document.getElementById("loc-input").value=s.location;radius=s.radius;
