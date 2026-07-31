@@ -31,6 +31,71 @@ try:
 except ImportError:
     tkintermapview = None
 
+
+def _patch_tkintermapview_tile_retry():
+    """tkintermapview's request_image() has no timeout on its tile fetch and
+    treats ANY network hiccup (dropped connection, slow response) the same
+    as a real "no tile here" — permanently caching a gray placeholder that's
+    never retried. A burst of zoom/pan, or just an ordinary network blip,
+    leaves the map partially blank forever. This patches in a timeout plus a
+    few retries before giving up, and only *caches* a genuine missing-tile
+    response — a transient failure can still be retried if that tile
+    position comes back into view later."""
+    if tkintermapview is None:
+        return
+    import io as _io
+    from tkintermapview.map_widget import TkinterMapView
+
+    def request_image(self, zoom, x, y, db_cursor=None):
+        if db_cursor is not None:
+            try:
+                db_cursor.execute(
+                    "SELECT t.tile_image FROM tiles t WHERE t.zoom=? AND t.x=? AND t.y=? AND t.server=?;",
+                    (zoom, x, y, self.tile_server))
+                result = db_cursor.fetchone()
+                if result is not None:
+                    image = PIL.Image.open(_io.BytesIO(result[0]))
+                    image_tk = PIL.ImageTk.PhotoImage(image)
+                    self.tile_image_cache[f"{zoom}{x}{y}"] = image_tk
+                    return image_tk
+                elif self.use_database_only:
+                    return self.empty_tile_image
+            except Exception:
+                if self.use_database_only:
+                    return self.empty_tile_image
+
+        url = self.tile_server.replace("{x}", str(x)).replace("{y}", str(y)).replace("{z}", str(zoom))
+        for _attempt in range(3):
+            try:
+                resp = requests.get(url, stream=True, timeout=8,
+                                    headers={"User-Agent": "TkinterMapView"})
+                image = PIL.Image.open(resp.raw)
+                if not self.running:
+                    return self.empty_tile_image
+                image_tk = PIL.ImageTk.PhotoImage(image)
+                self.tile_image_cache[f"{zoom}{x}{y}"] = image_tk
+                return image_tk
+            except PIL.UnidentifiedImageError:
+                # server responded but there's no tile here (e.g. ocean) —
+                # a real, stable "nothing to show", safe to cache.
+                self.tile_image_cache[f"{zoom}{x}{y}"] = self.empty_tile_image
+                return self.empty_tile_image
+            except Exception:
+                continue  # transient network issue — retry
+        # Exhausted retries: return blank WITHOUT caching, so a later redraw
+        # over this tile position gets a fresh attempt instead of being
+        # stuck gray for the rest of the session.
+        return self.empty_tile_image
+
+    TkinterMapView.request_image = request_image
+
+
+if tkintermapview is not None:
+    import requests
+    import PIL.Image
+    import PIL.ImageTk
+    _patch_tkintermapview_tile_retry()
+
 # ═══════════════════════════════════════════════
 #  SETTINGS (text size, first-run flag)
 # ═══════════════════════════════════════════════
@@ -1261,6 +1326,14 @@ class BidCaller:
         self._loc_radius_poly = None
         self._loc_town_markers = []
         self._loc_map.add_left_click_map_command(self._on_map_click)
+        # tkintermapview only re-fetches tiles that are newly scrolled into
+        # view — a tile that's already on screen but failed to load (see
+        # _patch_tkintermapview_tile_retry) never gets nudged to retry on
+        # its own. Re-trigger a cache-check-and-refetch pass a few times
+        # after any zoom/pan so stuck tiles get another chance without the
+        # user having to do anything.
+        self._loc_map.canvas.bind("<MouseWheel>", lambda e: self._schedule_tile_retry(), add="+")
+        self._loc_map.canvas.bind("<ButtonRelease-1>", lambda e: self._schedule_tile_retry(), add="+")
         tk.Label(wrap, text="Click anywhere on the map — or click a nearby city — to set your search center.",
                  font=F_SMALL, bg=SURFACE, fg=TEXT3, pady=6).pack()
 
@@ -1283,6 +1356,27 @@ class BidCaller:
         self._loc_marker = self._loc_map.set_marker(lat, lon, text=label or "You are here")
         self._draw_radius_circle(lat, lon)
         self._refresh_town_markers(lat, lon)
+        self._schedule_tile_retry()
+
+    def _schedule_tile_retry(self, attempts=3):
+        """Debounced: each new zoom/pan bumps a generation counter, so only
+        the retry chain from the LATEST interaction actually runs — avoids
+        piling up timers while the user is actively scrolling."""
+        if not getattr(self, "_loc_map", None):
+            return
+        self._tile_retry_gen = getattr(self, "_tile_retry_gen", 0) + 1
+        gen = self._tile_retry_gen
+
+        def go(n):
+            if gen != self._tile_retry_gen or not getattr(self, "_loc_map", None):
+                return
+            try:
+                self._loc_map.draw_zoom()
+            except Exception:
+                pass
+            if n > 1:
+                self.root.after(1500, lambda: go(n - 1))
+        self.root.after(1200, lambda: go(attempts))
 
     def _radius_miles(self):
         try:
