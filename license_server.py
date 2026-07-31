@@ -1215,7 +1215,10 @@ def scan():
             f"{c} {s} county road department concrete curb bid notice",
             f"{c} {s} Safe Routes to School OR ADA transition plan sidewalk bid",
             f"{c} {s} CDBG sidewalk curb ramp bid notice to contractors",
+            f"{c} {s} sidewalk ADA curb bid site:bidsearch.com",
         ]
+        if center["state"] == "MO":
+            center_queries.append(f"{c} {s} sidewalk ADA curb bid site:missouribuys.mo.gov")
         local_raw += _run_local_queries(center_queries, f"{c}, {s}", MAX_PAGES,
                                          grouped, center, radius, cdb, city_coords,
                                          seen_urls, default_city="")
@@ -1229,7 +1232,10 @@ def scan():
                 f"{ac} {ast} sidewalk ADA curb bid site:planetbids.com OR site:publicpurchase.com",
                 f"{ac} {ast} concrete curb gutter bid Bonfire OpenGov CivicPlus procurement",
                 f"{ac} {ast} invitation to bid concrete sidewalk ADA ramp 2026",
+                f"{ac} {ast} sidewalk ADA curb bid site:bidsearch.com",
             ]
+            if ast == "MO":
+                anchor_queries.append(f"{ac} {ast} sidewalk ADA curb bid site:missouribuys.mo.gov")
             got = _run_local_queries(anchor_queries, f"{ac}, {ast}", 5,
                                       grouped, center, radius, cdb, city_coords,
                                       seen_urls, default_city=ac)
