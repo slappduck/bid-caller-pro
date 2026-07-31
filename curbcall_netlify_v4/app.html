@@ -693,6 +693,23 @@ async function checkSavedSearches(){
 // Also doubles as a location picker: click anywhere (or a nearby city
 // marker) to set the search center, with a live circle showing the radius
 // that'll actually be searched.
+// Leaflet doesn't retry a tile that fails to load (dropped connection, a
+// slow response) — it just leaves it blank. Cache-bust and retry a few
+// times with backoff so a transient network hiccup doesn't leave a
+// permanent gap in the map.
+function addTileRetry(layer){
+  const retries=new WeakMap();
+  layer.on("tileerror",(e)=>{
+    const tile=e.tile,n=(retries.get(tile)||0)+1;
+    if(n>3||!tile)return;
+    retries.set(tile,n);
+    setTimeout(()=>{
+      const base=tile.src.split("?")[0];
+      tile.src=base+"?retry="+n+"-"+Date.now();
+    },800*n);
+  });
+}
+
 let findMap=null,findMarker=null,findRadiusCircle=null,findCenter=null,findTownMarkers=[];
 function updateFindMap(lat,lon,label){
   const mv=document.getElementById("find-map-view");
@@ -700,9 +717,10 @@ function updateFindMap(lat,lon,label){
   findCenter={lat,lon};
   if(!findMap){
     findMap=L.map(mv,{attributionControl:false}).setView([lat,lon],11);
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{
+    const findTiles=L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{
       maxZoom:20,subdomains:"abcd"
     }).addTo(findMap);
+    addTileRetry(findTiles);
     findMap.on("click",e=>pickFindLocation(e.latlng.lat,e.latlng.lng,null));
   } else {
     findMap.setView([lat,lon],11);
@@ -905,9 +923,10 @@ function renderMap(){
     mv.innerHTML="";
     leafletMap=L.map(mv,{attributionControl:false}).setView(
       [lastScanMap.center.lat,lastScanMap.center.lon],9);
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{
+    const resultTiles=L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{
       maxZoom:20,subdomains:"abcd"
     }).addTo(leafletMap);
+    addTileRetry(resultTiles);
   }
   leafletMap.eachLayer(l=>{if(l instanceof L.CircleMarker)leafletMap.removeLayer(l);});
   const bounds=[[lastScanMap.center.lat,lastScanMap.center.lon]];
