@@ -1,0 +1,1603 @@
+import os
+import sys
+import json
+import hashlib
+import threading
+import webbrowser
+import datetime
+import tkinter as tk
+from tkinter import ttk, messagebox
+
+if getattr(sys, 'frozen', False):
+    BASE_DIR = os.path.dirname(sys.executable)
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
+
+import regional_printer
+import radius_scanner
+import run_ai
+import subscription
+import auth_client
+import map_view
+from applog import debug
+
+try:
+    import tkintermapview
+except ImportError:
+    tkintermapview = None
+
+# ═══════════════════════════════════════════════
+#  SETTINGS (text size, first-run flag)
+# ═══════════════════════════════════════════════
+SETTINGS_PATH = os.path.join(BASE_DIR, "settings.json")
+
+def load_settings():
+    try:
+        with open(SETTINGS_PATH) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def save_settings(d):
+    try:
+        with open(SETTINGS_PATH, "w") as f:
+            json.dump(d, f, indent=2)
+    except Exception:
+        pass
+
+SETTINGS = load_settings()
+SCALE = float(SETTINGS.get("scale", 1.0))
+
+def fs(n):
+    return max(7, int(round(n * SCALE)))
+
+# ═══════════════════════════════════════════════
+#  DESIGN TOKENS
+# ═══════════════════════════════════════════════
+BG       = "#0d0f18"
+SURFACE  = "#13162a"
+CARD     = "#1c2035"
+BORDER   = "#2a2f4a"
+ACCENT   = "#f59e0b"
+ACCENT_D = "#d97706"
+BLUE     = "#3b82f6"
+GREEN    = "#22c55e"
+RED      = "#ef4444"
+TEXT     = "#f1f5f9"
+TEXT2    = "#94a3b8"
+TEXT3    = "#475569"
+
+UI       = "Segoe UI"
+F_HEAD   = (UI, fs(18), "bold")
+F_SUB    = (UI, fs(13), "bold")
+F_BODY   = (UI, fs(11))
+F_SMALL  = (UI, fs(9))
+F_BIG    = (UI, fs(28), "bold")
+F_NAV    = (UI, fs(12), "bold")
+F_MONO   = ("Consolas", fs(10))
+
+# ═══════════════════════════════════════════════
+#  SAVED-BIDS PERSISTENCE
+# ═══════════════════════════════════════════════
+SAVED_PATH = os.path.join(BASE_DIR, "saved_bids.json")
+
+def load_saved():
+    try:
+        with open(SAVED_PATH) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def write_saved(d):
+    try:
+        with open(SAVED_PATH, "w") as f:
+            json.dump(d, f, indent=2)
+    except Exception:
+        pass
+
+# Persist the last scan's bids so they stay in Live Bids across restarts
+FEED_PATH = os.path.join(BASE_DIR, "last_feed.json")
+
+def load_feed():
+    try:
+        with open(FEED_PATH) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def write_feed(d):
+    try:
+        with open(FEED_PATH, "w") as f:
+            json.dump(d, f, indent=2)
+    except Exception:
+        pass
+
+def bid_id(city, bid):
+    raw = (str(city) + bid.get("title", "") + bid.get("scope", "")).encode("utf-8")
+    return hashlib.md5(raw).hexdigest()[:12]
+
+# ═══════════════════════════════════════════════
+#  WIDGET HELPERS
+# ═══════════════════════════════════════════════
+def pill_btn(parent, text, cmd, bg=ACCENT, fg="#000", font=None, px=22, py=9):
+    return tk.Button(parent, text=text, command=cmd, bg=bg, fg=fg,
+                     font=font or (UI, fs(11), "bold"), relief="flat", bd=0,
+                     cursor="hand2", padx=px, pady=py,
+                     activebackground=ACCENT_D, activeforeground="#000")
+
+def ghost_btn(parent, text, cmd, fg=TEXT2, font=None):
+    return tk.Button(parent, text=text, command=cmd, bg=CARD, fg=fg,
+                     font=font or F_SMALL, relief="flat", bd=0, cursor="hand2",
+                     padx=14, pady=6, activebackground=BORDER, activeforeground=TEXT)
+
+def divider(parent, color=BORDER, pad=0):
+    tk.Frame(parent, bg=color, height=1).pack(fill="x", padx=pad)
+
+def scrollable(parent, bg=BG):
+    outer = tk.Frame(parent, bg=bg)
+    outer.pack(fill="both", expand=True)
+    canvas = tk.Canvas(outer, bg=bg, highlightthickness=0, bd=0)
+    sb = ttk.Scrollbar(outer, orient="vertical", command=canvas.yview, style="Vertical.TScrollbar")
+    inner = tk.Frame(canvas, bg=bg)
+    inner.bind("<Configure>",
+               lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+    canvas.create_window((0, 0), window=inner, anchor="nw")
+    canvas.configure(yscrollcommand=sb.set)
+    sb.pack(side="right", fill="y")
+    canvas.pack(side="left", fill="both", expand=True)
+    canvas.bind_all("<MouseWheel>",
+                    lambda e: canvas.yview_scroll(int(-1 * (e.delta / 120)), "units"))
+    return inner
+
+STATUS_COLORS = {
+    "open":   ("#052e16", GREEN),
+    "closed": ("#1c1917", TEXT3),
+    "pending":("#1c1a07", ACCENT),
+}
+
+# ═══════════════════════════════════════════════
+#  MAIN APP
+# ═══════════════════════════════════════════════
+class BidCaller:
+    TRADES = ["All trades", "Roofing", "Concrete / Paving", "Roads / Sitework",
+              "Building / Facility", "HVAC", "Demolition", "General"]
+    TRADE_KEYWORDS = {
+        "Roofing":            ["roof", "shingle", "membrane", "gutter"],
+        "Concrete / Paving":  ["concrete", "asphalt", "paving", "sidewalk", "curb", "pavement"],
+        "Roads / Sitework":   ["road", "street", "grading", "excavation", "drainage", "storm", "sewer", "water main"],
+        "Building / Facility": ["building", "facility", "renovation", "remodel", "construction", "addition", "repair"],
+        "HVAC":               ["hvac", "heating", "cooling", "air condition", "ventilation", "furnace", "boiler", "chiller", "rooftop unit", "rtu"],
+        "Demolition":         ["demolition", "demo", "removal", "clearing"],
+        "General":            [],
+    }
+
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Bid Caller Pro")
+        self.root.geometry("1180x780")
+        self.root.configure(bg=BG)
+        self.root.minsize(1000, 660)
+
+        self.bid_data = load_feed()
+        self.saved = load_saved()
+        self.scan_running = False
+        self.search_results = []
+        self._current = "feed"
+        self._auth_mode = "signin"
+        self._map_auto_tried = False
+
+        self._sidebar()
+        self._main_area()
+        self._nav("feed")
+
+        if not SETTINGS.get("seen_welcome"):
+            self.root.after(300, self._show_welcome)
+
+        if not subscription.get_status()["active"]:
+            self._nav("subscribe")
+
+    # ────────── SIDEBAR ──────────
+    def _sidebar(self):
+        sb = tk.Frame(self.root, bg=SURFACE, width=215)
+        sb.pack(side="left", fill="y")
+        sb.pack_propagate(False)
+
+        logo = tk.Frame(sb, bg=SURFACE, pady=20)
+        logo.pack(fill="x")
+        tk.Label(logo, text="🔨", font=(UI, fs(22)), bg=SURFACE, fg=ACCENT).pack()
+        tk.Label(logo, text="BID CALLER", font=(UI, fs(13), "bold"), bg=SURFACE, fg=TEXT).pack()
+        tk.Label(logo, text="PRO", font=(UI, fs(9), "bold"), bg=SURFACE, fg=ACCENT).pack()
+
+        divider(sb, BORDER, 20)
+
+        self._nav_btns = {}
+        items = [
+            ("feed",      "📋", "Live Bids"),
+            ("saved",     "⭐", "Saved"),
+            ("scan",      "🔍", "Find Bids"),
+            ("search",    "🌐", "Search City"),
+            ("subscribe", "💳", "Subscription"),
+            ("settings",  "⚙",  "Settings"),
+        ]
+        for key, icon, label in items:
+            f = tk.Frame(sb, bg=SURFACE, cursor="hand2")
+            f.pack(fill="x")
+            il = tk.Label(f, text=icon, font=(UI, fs(13)), bg=SURFACE, fg=TEXT2,
+                          padx=18, pady=12, anchor="w")
+            il.pack(side="left")
+            tl = tk.Label(f, text=label, font=F_NAV, bg=SURFACE, fg=TEXT2, anchor="w")
+            tl.pack(side="left")
+            for w in (f, il, tl):
+                w.bind("<Button-1>", lambda e, k=key: self._nav(k))
+            self._nav_btns[key] = (f, il, tl)
+
+        bottom = tk.Frame(sb, bg=SURFACE)
+        bottom.pack(side="bottom", fill="x", pady=18, padx=14)
+        divider(bottom, BORDER)
+        self.sub_lbl = tk.Label(bottom, text="", font=F_SMALL, bg=SURFACE,
+                                fg=TEXT3, wraplength=175, justify="left")
+        self.sub_lbl.pack(anchor="w", pady=(10, 0))
+        self._refresh_sub_lbl()
+
+    def _refresh_sub_lbl(self):
+        s = subscription.get_status()
+        if s.get("active") and s.get("trial"):
+            self.sub_lbl.config(text=f"🎁 Free Trial\n{s.get('days_left','?')} days left", fg=ACCENT)
+        elif s.get("active"):
+            self.sub_lbl.config(text=f"✅ {s.get('plan','Pro')}\nRenews {s.get('renews','—')}", fg=GREEN)
+        else:
+            self.sub_lbl.config(text="⚠ No active plan", fg=RED)
+
+    def _nav(self, key):
+        self._current = key
+        for k, (f, il, tl) in self._nav_btns.items():
+            on = (k == key)
+            f.config(bg=CARD if on else SURFACE)
+            il.config(bg=CARD if on else SURFACE, fg=ACCENT if on else TEXT2)
+            tl.config(bg=CARD if on else SURFACE, fg=TEXT if on else TEXT2)
+        for pg in self._pages.values():
+            pg.pack_forget()
+        self._pages[key].pack(fill="both", expand=True)
+        if key == "saved":
+            self._render_saved()
+        elif key == "feed":
+            self._render_feed()
+
+    # ────────── MAIN AREA ──────────
+    def _main_area(self):
+        self._container = tk.Frame(self.root, bg=BG)
+        self._container.pack(side="left", fill="both", expand=True)
+        self._pages = {}
+        self._page_feed()
+        self._page_saved()
+        self._page_scan()
+        self._page_search()
+        self._page_subscribe()
+        self._page_settings()
+
+    # ═══════════ BID CARD ═══════════
+    def _bid_card(self, parent, bid, city=""):
+        bid = dict(bid)
+        bid["_city"] = city
+        bid["_id"] = bid_id(city, bid)
+        is_saved = bid["_id"] in self.saved
+        note = self.saved.get(bid["_id"], {}).get("note", "") if is_saved else ""
+
+        status_key = bid.get("status", "open").lower()
+        pill_bg, pill_fg = STATUS_COLORS.get(status_key, ("#1c1917", TEXT3))
+        bar = GREEN if status_key == "open" else (ACCENT if status_key == "pending" else TEXT3)
+
+        outer = tk.Frame(parent, bg=CARD)
+        outer.pack(fill="x", padx=20, pady=5)
+        tk.Frame(outer, bg=bar, width=4).pack(side="left", fill="y")
+        body = tk.Frame(outer, bg=CARD, padx=18, pady=14)
+        body.pack(side="left", fill="both", expand=True)
+
+        r1 = tk.Frame(body, bg=CARD)
+        r1.pack(fill="x")
+        title_lbl = tk.Label(r1, text=bid.get("title", "Untitled Project"), font=F_SUB,
+                             bg=CARD, fg=TEXT, anchor="w", cursor="hand2")
+        title_lbl.pack(side="left")
+        title_lbl.bind("<Button-1>", lambda e, c=city, b=dict(bid): self._show_bid_detail(c, b))
+
+        star = tk.Label(r1, text="★" if is_saved else "☆", font=(UI, fs(15)), bg=CARD,
+                        fg=ACCENT if is_saved else TEXT3, cursor="hand2")
+        star.pack(side="right", padx=(8, 0))
+        star.bind("<Button-1>", lambda e, c=city, b=dict(bid): self._toggle_save(c, b))
+
+        if city:
+            tk.Label(r1, text=f"  {city}  ", font=F_SMALL, bg=BORDER,
+                     fg=TEXT2).pack(side="right", padx=(4, 0))
+        tk.Label(r1, text=f"  {bid.get('status','Open').upper()}  ", font=F_SMALL,
+                 bg=pill_bg, fg=pill_fg).pack(side="right")
+
+        scope = bid.get("scope", "").strip()
+        if scope:
+            tk.Label(body, text=scope, font=F_BODY, bg=CARD, fg=TEXT2,
+                     anchor="w", wraplength=820, justify="left").pack(fill="x", pady=(5, 8))
+
+        meta = tk.Frame(body, bg=CARD)
+        meta.pack(fill="x")
+
+        def chip(text, color=TEXT3):
+            tk.Label(meta, text=text, font=F_SMALL, bg=SURFACE, fg=color,
+                     padx=10, pady=4).pack(side="left", padx=(0, 6))
+
+        if bid.get("deadline"):
+            chip(f"📅  {bid['deadline']}", ACCENT)
+        if bid.get("value"):
+            chip(f"💲  {bid['value']}", GREEN)
+        if bid.get("contact"):
+            chip(f"👤  {bid['contact']}", TEXT2)
+
+        # "Details" opens the full popup
+        det = tk.Label(meta, text="🔎  Details →", font=(UI, fs(9), "bold"),
+                       bg=SURFACE, fg=ACCENT, padx=10, pady=4, cursor="hand2")
+        det.pack(side="left", padx=(0, 6))
+        det.bind("<Button-1>", lambda e, c=city, b=dict(bid): self._show_bid_detail(c, b))
+
+        note_btn = tk.Label(meta, text="📝  Note" if not note else "📝  Edit note",
+                            font=F_SMALL, bg=SURFACE, fg=TEXT2,
+                            padx=10, pady=4, cursor="hand2")
+        note_btn.pack(side="right")
+        note_btn.bind("<Button-1>", lambda e, c=city, b=dict(bid): self._edit_note(c, b))
+
+        # Make the whole title clickable too
+        # (re-bind happens after title creation above via _title_lbl if present)
+
+        if note:
+            nf = tk.Frame(body, bg="#0f1320")
+            nf.pack(fill="x", pady=(8, 0))
+            tk.Label(nf, text=f"  📌  {note}", font=F_SMALL, bg="#0f1320",
+                     fg=TEXT2, anchor="w", wraplength=800, justify="left",
+                     padx=8, pady=6).pack(fill="x")
+
+    def _show_bid_detail(self, city, bid):
+        """Full-detail popup for a single bid."""
+        bid = dict(bid)
+        key = bid_id(city, bid)
+        saved = key in self.saved
+        note = self.saved.get(key, {}).get("note", "") if saved else ""
+
+        win = tk.Toplevel(self.root)
+        _apply_icon(win)
+        win.title(bid.get("title", "Bid Details"))
+        win.configure(bg=SURFACE)
+        win.geometry("560x620")
+        win.transient(self.root)
+        win.grab_set()
+
+        # Header
+        head = tk.Frame(win, bg=CARD, padx=22, pady=18)
+        head.pack(fill="x")
+        status_key = bid.get("status", "open").lower()
+        pill_bg, pill_fg = STATUS_COLORS.get(status_key, ("#1c1917", TEXT3))
+        toprow = tk.Frame(head, bg=CARD)
+        toprow.pack(fill="x")
+        tk.Label(toprow, text=f"  {bid.get('status','Open').upper()}  ", font=F_SMALL,
+                 bg=pill_bg, fg=pill_fg).pack(side="left")
+        if city:
+            tk.Label(toprow, text=f"  📍 {city}  ", font=F_SMALL, bg=BORDER,
+                     fg=TEXT2).pack(side="left", padx=6)
+        tk.Label(head, text=bid.get("title", "Untitled Project"), font=(UI, fs(16), "bold"),
+                 bg=CARD, fg=TEXT, anchor="w", wraplength=500, justify="left").pack(
+                 anchor="w", pady=(10, 0))
+
+        # Scrollable detail body
+        wrap = tk.Frame(win, bg=SURFACE)
+        wrap.pack(fill="both", expand=True)
+        canvas = tk.Canvas(wrap, bg=SURFACE, highlightthickness=0)
+        sb = ttk.Scrollbar(wrap, orient="vertical", command=canvas.yview, style="Vertical.TScrollbar")
+        inner = tk.Frame(canvas, bg=SURFACE)
+        inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=inner, anchor="nw", width=540)
+        canvas.configure(yscrollcommand=sb.set)
+        sb.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+
+        def field(label, value, link=None, link_type=None):
+            if not value:
+                return
+            row = tk.Frame(inner, bg=SURFACE)
+            row.pack(fill="x", padx=22, pady=(12, 0))
+            tk.Label(row, text=label.upper(), font=(UI, fs(8), "bold"),
+                     bg=SURFACE, fg=TEXT3, anchor="w").pack(anchor="w")
+            if link:
+                lbl = tk.Label(row, text=value, font=F_BODY, bg=SURFACE, fg=BLUE,
+                               anchor="w", wraplength=480, justify="left", cursor="hand2")
+                lbl.pack(anchor="w")
+                if link_type == "email":
+                    lbl.bind("<Button-1>", lambda e: webbrowser.open(f"mailto:{value}"))
+                elif link_type == "phone":
+                    lbl.bind("<Button-1>", lambda e: webbrowser.open(f"tel:{value}"))
+                else:
+                    lbl.bind("<Button-1>", lambda e: webbrowser.open(value))
+            else:
+                tk.Label(row, text=value, font=F_BODY, bg=SURFACE, fg=TEXT,
+                         anchor="w", wraplength=480, justify="left").pack(anchor="w")
+
+        field("Scope of Work", bid.get("scope"))
+        field("Est. Value (if listed)", bid.get("value") or "Not listed")
+        field("Deadline", bid.get("deadline") or "Not listed")
+        field("Contact", bid.get("contact"))
+        field("Email", bid.get("email"), link=True, link_type="email")
+        field("Phone", bid.get("phone"), link=True, link_type="phone")
+        field("Original Posting", bid.get("url"), link=True, link_type="url")
+        if note:
+            field("Your Note", note)
+
+        # Action buttons
+        actions = tk.Frame(win, bg=SURFACE, pady=14)
+        actions.pack(fill="x", padx=22)
+        divider(actions, BORDER)
+        btnrow = tk.Frame(actions, bg=SURFACE)
+        btnrow.pack(fill="x", pady=(12, 0))
+
+        if bid.get("email"):
+            pill_btn(btnrow, "✉  Email Contact",
+                     lambda: webbrowser.open(f"mailto:{bid['email']}"),
+                     px=16, py=8, font=F_SMALL).pack(side="left", padx=(0, 8))
+        if bid.get("url"):
+            pill_btn(btnrow, "🔗  Open Posting",
+                     lambda: webbrowser.open(bid["url"]),
+                     bg=CARD, fg=TEXT, px=16, py=8, font=F_SMALL).pack(side="left", padx=(0, 8))
+
+        save_txt = "★  Saved" if saved else "☆  Save Lead"
+        def do_save():
+            self._toggle_save(city, bid)
+            win.destroy()
+        pill_btn(btnrow, save_txt, do_save, bg=CARD,
+                 fg=ACCENT if saved else TEXT, px=16, py=8, font=F_SMALL).pack(side="right")
+
+    def _toggle_save(self, city, bid):
+        bid = dict(bid)
+        key = bid_id(city, bid)
+        if key in self.saved:
+            del self.saved[key]
+        else:
+            rec = dict(bid)
+            rec["_city"] = city
+            rec["note"] = ""
+            rec["saved_at"] = datetime.datetime.now().strftime("%d %b %Y")
+            self.saved[key] = rec
+        write_saved(self.saved)
+        self._refresh_all()
+
+    def _edit_note(self, city, bid):
+        bid = dict(bid)
+        key = bid_id(city, bid)
+
+        win = tk.Toplevel(self.root)
+        _apply_icon(win)
+        win.title("Note")
+        win.configure(bg=SURFACE)
+        win.geometry("440x300")
+        win.transient(self.root)
+        win.grab_set()
+
+        tk.Label(win, text=bid.get("title", "Bid"), font=F_SUB, bg=SURFACE,
+                 fg=ACCENT, wraplength=400).pack(padx=20, pady=(18, 4), anchor="w")
+        tk.Label(win, text="Add a note — e.g. 'Called Tuesday, awaiting quote'",
+                 font=F_SMALL, bg=SURFACE, fg=TEXT3).pack(padx=20, anchor="w")
+
+        box = tk.Text(win, font=F_BODY, bg=CARD, fg=TEXT, relief="flat", bd=0,
+                      height=7, wrap="word", insertbackground=TEXT)
+        box.pack(fill="both", expand=True, padx=20, pady=12)
+        if self.saved.get(key, {}).get("note"):
+            box.insert("1.0", self.saved[key]["note"])
+
+        def do_save():
+            text = box.get("1.0", tk.END).strip()
+            if key not in self.saved:
+                rec = dict(bid)
+                rec["_city"] = city
+                rec["note"] = text
+                rec["saved_at"] = datetime.datetime.now().strftime("%d %b %Y")
+                self.saved[key] = rec
+            else:
+                self.saved[key]["note"] = text
+            write_saved(self.saved)
+            win.destroy()
+            self._refresh_all()
+
+        row = tk.Frame(win, bg=SURFACE)
+        row.pack(fill="x", padx=20, pady=(0, 16))
+        pill_btn(row, "Save note", do_save, px=18, py=8).pack(side="right")
+        ghost_btn(row, "Cancel", win.destroy).pack(side="right", padx=(0, 8))
+
+    def _refresh_all(self):
+        if self._current == "feed":
+            self._render_feed()
+        if self._current == "saved":
+            self._render_saved()
+        if self._current == "search":
+            self._rerender_search()
+
+    # ═══════════ PAGE: LIVE FEED ═══════════
+    def _page_feed(self):
+        pg = tk.Frame(self._container, bg=BG)
+        self._pages["feed"] = pg
+
+        hdr = tk.Frame(pg, bg=BG, pady=18)
+        hdr.pack(fill="x", padx=24)
+        tk.Label(hdr, text="Live Bid Feed", font=F_HEAD, bg=BG, fg=TEXT).pack(side="left")
+        ghost_btn(hdr, "↺  Refresh", self._render_feed).pack(side="right")
+        ghost_btn(hdr, "⬇  Export CSV", self._export_csv).pack(side="right", padx=(0, 8))
+
+        fbar = tk.Frame(pg, bg=SURFACE, pady=10)
+        fbar.pack(fill="x")
+        inner = tk.Frame(fbar, bg=SURFACE)
+        inner.pack(padx=24)
+
+        tk.Label(inner, text="🔎", font=F_BODY, bg=SURFACE, fg=TEXT3).pack(side="left", padx=(0, 6))
+        self._kw_var = tk.StringVar()
+        kw = tk.Entry(inner, textvariable=self._kw_var, font=F_BODY, bg=CARD, fg=TEXT,
+                      relief="flat", bd=0, insertbackground=TEXT, width=26,
+                      highlightthickness=1, highlightbackground=BORDER, highlightcolor=ACCENT)
+        kw.pack(side="left", ipady=6, padx=(0, 12))
+        kw.bind("<KeyRelease>", lambda e: self._render_feed())
+
+        self._city_var = tk.StringVar(value="All")
+        self._city_filter_box = ttk.Combobox(inner, textvariable=self._city_var, state="readonly",
+                                              values=["All"], font=F_BODY, width=14)
+        self._city_filter_box.pack(side="left", padx=(0, 10))
+        self._city_filter_box.bind("<<ComboboxSelected>>", lambda e: self._render_feed())
+
+        self._trade_var = tk.StringVar(value="All trades")
+        cb2 = ttk.Combobox(inner, textvariable=self._trade_var, state="readonly",
+                           values=self.TRADES, font=F_BODY, width=18)
+        cb2.pack(side="left")
+        cb2.bind("<<ComboboxSelected>>", lambda e: self._render_feed())
+
+        self._stats_strip = tk.Frame(pg, bg=SURFACE, pady=10)
+        self._stats_strip.pack(fill="x")
+        divider(pg, BORDER)
+
+        self._feed_frame = scrollable(pg)
+
+    def _matches_filters(self, bid):
+        kw = self._kw_var.get().strip().lower() if hasattr(self, "_kw_var") else ""
+        if kw:
+            blob = (bid.get("title", "") + " " + bid.get("scope", "")).lower()
+            if kw not in blob:
+                return False
+        trade = self._trade_var.get() if hasattr(self, "_trade_var") else "All trades"
+        if trade != "All trades":
+            kws = self.TRADE_KEYWORDS.get(trade, [])
+            if kws:
+                blob = (bid.get("title", "") + " " + bid.get("scope", "")).lower()
+                if not any(k in blob for k in kws):
+                    return False
+        return True
+
+    def _build_stats(self):
+        for w in self._stats_strip.winfo_children():
+            w.destroy()
+        total = sum(len(v) for v in self.bid_data.values())
+        open_c = sum(1 for v in self.bid_data.values() for b in v
+                     if b.get("status", "").lower() == "open")
+        cities = len([c for c, v in self.bid_data.items() if v])
+
+        def stat(label, val, color):
+            f = tk.Frame(self._stats_strip, bg=SURFACE, padx=26)
+            f.pack(side="left")
+            tk.Label(f, text=str(val), font=F_BIG, bg=SURFACE, fg=color).pack()
+            tk.Label(f, text=label, font=F_SMALL, bg=SURFACE, fg=TEXT3).pack()
+            tk.Frame(self._stats_strip, bg=BORDER, width=1).pack(side="left", fill="y", pady=8)
+
+        stat("Total Bids", total or "—", TEXT)
+        stat("Open Now", open_c or "—", GREEN)
+        stat("Towns", cities or "—", BLUE)
+        stat("Saved", len(self.saved) or "—", ACCENT)
+
+        f = tk.Frame(self._stats_strip, bg=SURFACE, padx=26)
+        f.pack(side="left")
+        tk.Label(f, text=self._last_scan(), font=(UI, fs(11), "bold"),
+                 bg=SURFACE, fg=TEXT3).pack()
+        tk.Label(f, text="Last Scan", font=F_SMALL, bg=SURFACE, fg=TEXT3).pack()
+
+    def _render_feed(self):
+        self._build_stats()
+        for w in self._feed_frame.winfo_children():
+            w.destroy()
+
+        sel = self._city_var.get() if hasattr(self, "_city_var") else "All"
+        rows = []
+        for city, bids in self.bid_data.items():
+            if sel == "All" or sel.lower() == city.lower():
+                for b in bids:
+                    if self._matches_filters(b):
+                        rows.append((city, b))
+
+        if not rows:
+            self._empty_state(self._feed_frame,
+                              "No bids match" if self.bid_data else "No bids loaded yet",
+                              "Try clearing filters." if self.bid_data
+                              else "Go to Find Bids to pull live bids near you.",
+                              show_scan_btn=not self.bid_data)
+            return
+
+        # ── City tiles row (click to filter) ──
+        if len(self.bid_data) > 1:
+            tk.Label(self._feed_frame, text="  CITIES", font=(UI, fs(9), "bold"),
+                     bg=BG, fg=TEXT3).pack(anchor="w", padx=20, pady=(12, 2))
+            tiles = tk.Frame(self._feed_frame, bg=BG)
+            tiles.pack(fill="x", padx=16, pady=(0, 6))
+
+            def make_tile(parent, label, count, active, on_click):
+                t = tk.Frame(parent, bg=ACCENT if active else CARD,
+                             padx=16, pady=10, cursor="hand2")
+                t.pack(side="left", padx=4, pady=4)
+                fgc = "#000" if active else TEXT
+                cnt = tk.Label(t, text=str(count), font=(UI, fs(16), "bold"),
+                               bg=ACCENT if active else CARD, fg=fgc)
+                cnt.pack()
+                nm = tk.Label(t, text=label, font=F_SMALL,
+                              bg=ACCENT if active else CARD,
+                              fg="#000" if active else TEXT3)
+                nm.pack()
+                for w in (t, cnt, nm):
+                    w.bind("<Button-1>", lambda e: on_click())
+
+            total_all = sum(len(v) for v in self.bid_data.values())
+            make_tile(tiles, "All", total_all, sel == "All",
+                      lambda: (self._city_var.set("All"), self._render_feed()))
+            for c in sorted(self.bid_data.keys()):
+                cnt = len(self.bid_data[c])
+                if cnt == 0:
+                    continue
+                make_tile(tiles, c, cnt, sel.lower() == c.lower(),
+                          lambda cc=c: (self._city_var.set(cc), self._render_feed()))
+
+            divider(self._feed_frame, BORDER, pad=20)
+
+        open_rows = [(c, b) for c, b in rows if b.get("status", "").lower() == "open"]
+        other_rows = [(c, b) for c, b in rows if b.get("status", "").lower() != "open"]
+
+        if open_rows:
+            tk.Label(self._feed_frame, text="  OPEN BIDS", font=(UI, fs(9), "bold"),
+                     bg=BG, fg=GREEN).pack(anchor="w", padx=20, pady=(14, 4))
+            for c, b in open_rows:
+                self._bid_card(self._feed_frame, b, c)
+        if other_rows:
+            tk.Label(self._feed_frame, text="  OTHER BIDS", font=(UI, fs(9), "bold"),
+                     bg=BG, fg=TEXT3).pack(anchor="w", padx=20, pady=(18, 4))
+            for c, b in other_rows:
+                self._bid_card(self._feed_frame, b, c)
+        tk.Frame(self._feed_frame, bg=BG, height=30).pack()
+
+    def _empty_state(self, parent, title, subtitle, show_scan_btn=False):
+        e = tk.Frame(parent, bg=BG, pady=70)
+        e.pack(fill="x")
+        tk.Label(e, text="🏗", font=(UI, fs(36)), bg=BG, fg=BORDER).pack()
+        tk.Label(e, text=title, font=(UI, fs(16), "bold"), bg=BG, fg=TEXT2).pack(pady=6)
+        tk.Label(e, text=subtitle, font=F_BODY, bg=BG, fg=TEXT3).pack()
+        if show_scan_btn:
+            pill_btn(e, "Find Bids →", lambda: self._nav("scan"), py=10, px=24).pack(pady=16)
+
+    def _last_scan(self):
+        p = os.path.join(BASE_DIR, "last_scan.txt")
+        if os.path.exists(p):
+            with open(p) as f:
+                return f.read().strip()
+        return "Never"
+
+    # ═══════════ PAGE: SAVED ═══════════
+    def _page_saved(self):
+        pg = tk.Frame(self._container, bg=BG)
+        self._pages["saved"] = pg
+        hdr = tk.Frame(pg, bg=BG, pady=18)
+        hdr.pack(fill="x", padx=24)
+        tk.Label(hdr, text="Saved Bids", font=F_HEAD, bg=BG, fg=TEXT).pack(side="left")
+        divider(pg, BORDER)
+        self._saved_frame = scrollable(pg)
+
+    def _render_saved(self):
+        for w in self._saved_frame.winfo_children():
+            w.destroy()
+        if not self.saved:
+            e = tk.Frame(self._saved_frame, bg=BG, pady=70)
+            e.pack(fill="x")
+            tk.Label(e, text="⭐", font=(UI, fs(36)), bg=BG, fg=BORDER).pack()
+            tk.Label(e, text="No saved bids yet", font=(UI, fs(16), "bold"),
+                     bg=BG, fg=TEXT2).pack(pady=6)
+            tk.Label(e, text="Tap the ☆ on any bid to save it here for later.",
+                     font=F_BODY, bg=BG, fg=TEXT3).pack()
+            return
+        tk.Label(self._saved_frame, text=f"  {len(self.saved)} saved bid(s)",
+                 font=(UI, fs(9), "bold"), bg=BG, fg=ACCENT).pack(
+                 anchor="w", padx=20, pady=(14, 4))
+        for key, rec in list(self.saved.items()):
+            self._bid_card(self._saved_frame, rec, rec.get("_city", ""))
+        tk.Frame(self._saved_frame, bg=BG, height=30).pack()
+
+    # ═══════════ PAGE: FIND BIDS (location-based) ═══════════
+    def _page_scan(self):
+        pg = tk.Frame(self._container, bg=BG)
+        self._pages["scan"] = pg
+
+        hdr = tk.Frame(pg, bg=BG, pady=18)
+        hdr.pack(fill="x", padx=24)
+        tk.Label(hdr, text="Find Bids Near You", font=F_HEAD, bg=BG, fg=TEXT).pack(side="left")
+        divider(pg, BORDER)
+
+        body = tk.Frame(pg, bg=BG)
+        body.pack(fill="both", expand=True, padx=24, pady=18)
+
+        self._build_loc_map(body)
+
+        form = tk.Frame(body, bg=SURFACE, padx=24, pady=18)
+        form.pack(fill="x", pady=(0, 12))
+
+        tk.Label(form, text="Your Location", font=(UI, fs(11), "bold"),
+                 bg=SURFACE, fg=ACCENT).pack(anchor="w", pady=(0, 4))
+
+        loc_row = tk.Frame(form, bg=SURFACE)
+        loc_row.pack(fill="x", pady=(0, 10))
+        self._loc_entry = tk.Entry(loc_row, font=F_BODY, bg=CARD, fg=TEXT,
+                                   insertbackground=TEXT, relief="flat", bd=0,
+                                   highlightthickness=1, highlightbackground=BORDER,
+                                   highlightcolor=ACCENT)
+        self._loc_entry.pack(side="left", fill="x", expand=True, ipady=8, padx=(0, 8))
+        self._loc_entry.bind("<Return>", self._preview_typed_location)
+        ghost_btn(loc_row, "  Auto-Detect  ", self._auto_locate, font=F_SMALL).pack(side="left")
+        tk.Label(form, text="Enter a ZIP code or 'City, State'",
+                 font=F_SMALL, bg=SURFACE, fg=TEXT3).pack(anchor="w")
+
+        tk.Label(form, text="Search Radius", font=(UI, fs(11), "bold"),
+                 bg=SURFACE, fg=ACCENT).pack(anchor="w", pady=(14, 4))
+        rad_row = tk.Frame(form, bg=SURFACE)
+        rad_row.pack(fill="x")
+        self._radius_var = tk.StringVar(value="25 miles")
+        ttk.Combobox(rad_row, textvariable=self._radius_var, state="readonly",
+                     values=["10 miles", "25 miles", "50 miles", "75 miles", "100 miles"],
+                     font=F_BODY, width=16).pack(side="left")
+
+        divider(form, BORDER, pad=0)
+
+        btn_row = tk.Frame(form, bg=SURFACE)
+        btn_row.pack(anchor="w", pady=(16, 0))
+        self._scan_btn = pill_btn(btn_row, "  🔍  Scan for Bids  ",
+                                  self._run_scan, px=26, py=12,
+                                  font=(UI, fs(12), "bold"))
+        self._scan_btn.pack(side="left")
+        self._map_btn = ghost_btn(btn_row, "  📍  View Map  ",
+                                  self._open_scan_map, font=F_SMALL)
+        self._map_btn.pack(side="left", padx=(10, 0))
+        self._map_btn.config(state="disabled")
+
+        self._scan_status = tk.Label(body, text="", font=F_BODY, bg=BG, fg=TEXT3)
+        self._scan_status.pack(pady=(20, 6))
+        self._prog_frame = tk.Frame(body, bg=BORDER, height=4, width=480)
+        self._prog_frame.pack(pady=(0, 6))
+        self._prog_bar = tk.Frame(self._prog_frame, bg=ACCENT, height=4, width=0)
+        self._prog_bar.place(x=0, y=0)
+        self._scan_log = tk.Text(body, font=F_MONO, bg=SURFACE, fg=TEXT2, relief="flat",
+                                 bd=0, height=11, state="disabled", wrap="word")
+        self._scan_log.pack(fill="both", expand=True, pady=12)
+
+        self.root.after(600, self._maybe_auto_locate_on_load)
+
+    def _build_loc_map(self, parent):
+        """Embedded 'you are here' map at the top of the Find tab (no browser tab)."""
+        wrap = tk.Frame(parent, bg=SURFACE, highlightbackground=BORDER, highlightthickness=1)
+        wrap.pack(fill="x", pady=(0, 12))
+
+        if tkintermapview is None:
+            tk.Label(wrap, text="📍  Live map needs one more install: pip install tkintermapview pillow",
+                     font=F_SMALL, bg=SURFACE, fg=TEXT3, pady=14).pack()
+            self._loc_map = None
+            self._loc_marker = None
+            return
+
+        self._loc_map = tkintermapview.TkinterMapView(wrap, width=600, height=220, corner_radius=0)
+        self._loc_map.pack(fill="x")
+        self._loc_map.set_position(39.5, -98.35)   # center of the US until we know better
+        self._loc_map.set_zoom(4)
+        self._loc_marker = None
+
+    def _update_loc_map(self, lat, lon, label=""):
+        if not getattr(self, "_loc_map", None):
+            return
+        self._loc_map.set_position(lat, lon)
+        self._loc_map.set_zoom(11)
+        if self._loc_marker:
+            self._loc_marker.delete()
+        self._loc_marker = self._loc_map.set_marker(lat, lon, text=label or "You are here")
+
+    def _maybe_auto_locate_on_load(self):
+        if self._map_auto_tried:
+            return
+        self._map_auto_tried = True
+        self._auto_locate()
+
+    def _preview_typed_location(self, event=None):
+        location = self._loc_entry.get().strip()
+        if not location:
+            return
+        self._scan_status.config(text="Locating...", fg=ACCENT)
+
+        def work():
+            geo = radius_scanner.geocode(location)
+            if geo:
+                lat, lon, label = geo
+                self._auto_latlon = (lat, lon)
+                self.root.after(0, lambda: (
+                    self._scan_status.config(text=f"Location set: {label}", fg=GREEN),
+                    self._update_loc_map(lat, lon, label)))
+            else:
+                self.root.after(0, lambda: self._scan_status.config(
+                    text="Couldn't find that location. Try a ZIP code.", fg=RED))
+        threading.Thread(target=work, daemon=True).start()
+
+    def _log_scan(self, msg):
+        self._scan_log.config(state="normal")
+        self._scan_log.insert(tk.END, msg + "\n")
+        self._scan_log.see(tk.END)
+        self._scan_log.config(state="disabled")
+
+    def _scan_guard(self):
+        if not subscription.get_status()["active"]:
+            messagebox.showwarning("Subscription Required",
+                                   "Start your free trial or subscribe to scan.")
+            self._nav("subscribe")
+            return False
+        if self.scan_running:
+            return False
+        return True
+
+    def _auto_locate(self):
+        self._scan_status.config(text="Detecting your location...", fg=ACCENT)
+        def work():
+            loc = radius_scanner.auto_locate()
+            if loc:
+                lat, lon, label = loc
+                self._auto_latlon = (lat, lon)
+                self.root.after(0, lambda: (
+                    self._loc_entry.delete(0, tk.END),
+                    self._loc_entry.insert(0, label.strip(", ")),
+                    self._scan_status.config(text=f"Location set: {label}", fg=GREEN),
+                    self._update_loc_map(lat, lon, label)))
+            else:
+                self.root.after(0, lambda: self._scan_status.config(
+                    text="Couldn't auto-detect. Type a ZIP or city instead.", fg=RED))
+        threading.Thread(target=work, daemon=True).start()
+
+    def _run_scan(self):
+        if not self._scan_guard():
+            return
+        location = self._loc_entry.get().strip()
+        if not location:
+            messagebox.showwarning("Location needed",
+                                   "Enter a ZIP code or city, or tap Auto-Detect.")
+            return
+        radius = int(self._radius_var.get().split()[0])
+
+        self.scan_running = True
+        self._scan_btn.config(state="disabled", text="  Scanning...  ")
+        self._scan_log.config(state="normal")
+        self._scan_log.delete("1.0", tk.END)
+        self._scan_log.config(state="disabled")
+        self._set_prog(5)
+
+        def progress(msg):
+            self.root.after(0, lambda: self._log_scan(msg))
+
+        def process():
+            try:
+                latlon = getattr(self, "_auto_latlon", None)
+                label = location
+                if latlon and not location:
+                    lat, lon = latlon
+                else:
+                    self._scan_status.config(text="Locating your area...", fg=ACCENT)
+                    geo = radius_scanner.geocode(location)
+                    if not geo:
+                        self._log_scan("Couldn't find that location. Try a ZIP code.")
+                        self._scan_status.config(text="Location not found", fg=RED)
+                        return
+                    lat, lon, label = geo
+
+                self._scan_status.config(text="Searching for bids in your area...", fg=ACCENT)
+                self._set_prog(15)
+                summary = radius_scanner.run_radius_scan(lat, lon, radius, progress=progress)
+                self._set_prog(55)
+                self._last_scan_summary = summary
+                self._last_scan_label = label or "Search center"
+                if summary.get("town_coords"):
+                    self.root.after(0, lambda: self._map_btn.config(state="normal"))
+
+                if not summary["scanned"]:
+                    self._log_scan("No bid pages found in this area. Try a wider radius.")
+                    self._scan_status.config(text="No towns found — try a wider radius", fg=RED)
+                    self._set_prog(0)
+                    return
+
+                self._scan_status.config(text="Reading the bids we found...", fg=BLUE)
+                self._set_prog(70)
+                results, ai_status = run_ai.run_analysis()
+                self._set_prog(95)
+                total = sum(len(v) for v in results.values())
+                if total > 0:
+                    self.bid_data = results
+                    write_feed(results)
+
+                ts = datetime.datetime.now().strftime("%d %b %Y  %H:%M")
+                with open(os.path.join(BASE_DIR, "last_scan.txt"), "w") as f:
+                    f.write(ts)
+
+                self._set_prog(100)
+                friendly = {
+                    "ok": f"Done — found {total} bid(s) in your area.",
+                    "no_bids": "Scan complete — no open bids posted here right now. Try a wider radius.",
+                    "server_down": "Couldn't reach the bid service. Check your internet and try again.",
+                    "not_licensed": "Your trial or subscription isn't active. Check the Subscription tab.",
+                    "no_data": "Couldn't read the town pages this time. Try again or widen your radius.",
+                }.get(ai_status, f"Done — found {total} bid(s).")
+                self._log_scan(friendly)
+                self._scan_status.config(text=friendly, fg=GREEN if total else TEXT3)
+                # Update the feed on the main thread so it reliably redraws
+                def show_results():
+                    self._refresh_feed_cities()
+                    if hasattr(self, "_kw_var"):
+                        self._kw_var.set("")
+                    if hasattr(self, "_city_var"):
+                        self._city_var.set("All")
+                    if hasattr(self, "_trade_var"):
+                        self._trade_var.set("All trades")
+                    self._render_feed()
+                self.root.after(0, show_results)
+            except Exception:
+                import traceback
+                debug("Scan error:\n" + traceback.format_exc())
+                self._log_scan("Something went wrong. Please try again.")
+                self._scan_status.config(text="Scan failed — try again", fg=RED)
+                self._set_prog(0)
+            finally:
+                self.scan_running = False
+                self._scan_btn.config(state="normal", text="  🔍  Scan for Bids  ")
+
+        threading.Thread(target=process, daemon=True).start()
+
+    def _set_prog(self, pct):
+        self._prog_bar.config(width=int(480 * pct / 100))
+
+    def _open_scan_map(self):
+        summary = getattr(self, "_last_scan_summary", None)
+        if not summary or not summary.get("town_coords"):
+            messagebox.showinfo("No Scan Yet", "Run a scan first, then view it on the map.")
+            return
+        center = summary.get("center", {})
+        bid_counts = {city: len(bids) for city, bids in self.bid_data.items()}
+        path = map_view.build_map_html(
+            center.get("lat"), center.get("lon"),
+            getattr(self, "_last_scan_label", "Search center"),
+            summary["town_coords"], bid_counts=bid_counts, out_dir=BASE_DIR)
+        webbrowser.open("file://" + os.path.abspath(path))
+
+    def _refresh_feed_cities(self):
+        if hasattr(self, "_city_filter_box"):
+            cities = ["All"] + sorted(self.bid_data.keys())
+            self._city_filter_box["values"] = cities
+            if self._city_var.get() not in cities:
+                self._city_var.set("All")
+
+    def _export_csv(self):
+        """Save all current bids to a CSV file the contractor can open in Excel."""
+        if not self.bid_data:
+            messagebox.showinfo("Nothing to Export", "Run a scan first to find some bids.")
+            return
+        import csv
+        from tkinter import filedialog
+        default = f"bid_caller_leads_{datetime.datetime.now().strftime('%Y%m%d')}.csv"
+        path = filedialog.asksaveasfilename(
+            defaultextension=".csv", initialfile=default,
+            filetypes=[("CSV files", "*.csv")], title="Save bids as CSV")
+        if not path:
+            return
+        try:
+            with open(path, "w", newline="", encoding="utf-8") as f:
+                w = csv.writer(f)
+                w.writerow(["City", "Title", "Status", "Scope", "Est. Value",
+                            "Deadline", "Contact", "Email", "Phone", "Link"])
+                for city, bids in self.bid_data.items():
+                    for b in bids:
+                        w.writerow([city, b.get("title", ""), b.get("status", ""),
+                                    b.get("scope", ""), b.get("value", ""),
+                                    b.get("deadline", ""), b.get("contact", ""),
+                                    b.get("email", ""), b.get("phone", ""), b.get("url", "")])
+            messagebox.showinfo("Exported", f"Saved your bids to:\n{path}")
+        except Exception as e:
+            debug(f"CSV export failed: {e}")
+            messagebox.showerror("Export Failed", "Couldn't save the file. Try a different location.")
+
+    # ═══════════ PAGE: SEARCH CITY ═══════════
+    def _page_search(self):
+        pg = tk.Frame(self._container, bg=BG)
+        self._pages["search"] = pg
+        hdr = tk.Frame(pg, bg=BG, pady=18)
+        hdr.pack(fill="x", padx=24)
+        tk.Label(hdr, text="Search Any Town Hall", font=F_HEAD, bg=BG, fg=TEXT).pack(side="left")
+        divider(pg, BORDER)
+
+        form = tk.Frame(pg, bg=SURFACE, padx=30, pady=22)
+        form.pack(fill="x", padx=24, pady=18)
+
+        def field(label, default=""):
+            tk.Label(form, text=label, font=(UI, fs(10), "bold"), bg=SURFACE,
+                     fg=TEXT2, anchor="w").pack(fill="x", pady=(0, 4))
+            e = tk.Entry(form, font=F_BODY, bg=CARD, fg=TEXT, relief="flat", bd=0,
+                         insertbackground=TEXT, highlightthickness=1,
+                         highlightbackground=BORDER, highlightcolor=ACCENT)
+            e.pack(fill="x", ipady=9, pady=(0, 14))
+            if default:
+                e.insert(0, default)
+            return e
+
+        self._s_city = field("City or Town Name")
+        self._s_url = field("Bids Page URL  (e.g. https://cityname.gov/bids.aspx)", "https://")
+        tk.Label(form, text="💡  Tip: search  '[city name] bids aspx'  in Google to find the URL",
+                 font=F_SMALL, bg=SURFACE, fg=TEXT3).pack(anchor="w", pady=(0, 14))
+        self._s_status = tk.Label(form, text="", font=F_SMALL, bg=SURFACE, fg=TEXT3)
+        self._s_status.pack(anchor="w", pady=(0, 6))
+        self._s_btn = pill_btn(form, "  🔍  Search This City  ", self._run_search, px=26, py=10)
+        self._s_btn.pack(anchor="w")
+
+        divider(pg, BORDER, pad=24)
+        self._search_frame = scrollable(pg)
+        tk.Label(self._search_frame, text="Results will appear here after a search.",
+                 font=F_BODY, bg=BG, fg=TEXT3).pack(pady=40)
+
+    def _run_search(self):
+        if not self._scan_guard():
+            return
+        city = self._s_city.get().strip()
+        url = self._s_url.get().strip()
+        if not city or url in ("", "https://", "http://"):
+            messagebox.showwarning("Missing Info", "Please enter a city name and a valid URL.")
+            return
+        self._s_btn.config(state="disabled", text="  Searching...  ")
+        self._s_status.config(text=f"Scanning {city}...", fg=ACCENT)
+        for w in self._search_frame.winfo_children():
+            w.destroy()
+        tk.Label(self._search_frame, text=f"Scanning {city} — this can take 10–30 seconds...",
+                 font=F_BODY, bg=BG, fg=TEXT3).pack(pady=40)
+
+        def process():
+            try:
+                bids = regional_printer.search_custom_city(city, url)
+                self.search_results = [(city, b) for b in bids]
+                self.root.after(0, self._rerender_search)
+                self._s_status.config(
+                    text=f"Found {len(bids)} bid(s) in {city}" if bids else f"No bids found in {city}",
+                    fg=GREEN if bids else TEXT3)
+            except Exception:
+                import traceback
+                debug("Search error:\n" + traceback.format_exc())
+                self._s_status.config(text="Search failed — check URL and try again", fg=RED)
+                self.search_results = []
+                self.root.after(0, self._rerender_search)
+            finally:
+                self._s_btn.config(state="normal", text="  🔍  Search This City  ")
+
+        threading.Thread(target=process, daemon=True).start()
+
+    def _rerender_search(self):
+        for w in self._search_frame.winfo_children():
+            w.destroy()
+        if not self.search_results:
+            tk.Label(self._search_frame, text="No bids to show. Try a different URL.",
+                     font=F_BODY, bg=BG, fg=TEXT3).pack(pady=50)
+            return
+        city = self.search_results[0][0]
+        tk.Label(self._search_frame, text=f"  📍  {city} — {len(self.search_results)} bid(s)",
+                 font=(UI, fs(9), "bold"), bg=BG, fg=GREEN).pack(anchor="w", padx=20, pady=(14, 6))
+        for c, b in self.search_results:
+            self._bid_card(self._search_frame, b, c)
+        tk.Frame(self._search_frame, bg=BG, height=30).pack()
+
+    # ═══════════ PAGE: SUBSCRIPTION ═══════════
+    def _page_subscribe(self):
+        pg = tk.Frame(self._container, bg=BG)
+        self._pages["subscribe"] = pg
+        self._build_subscribe_body(pg)
+
+    def _build_subscribe_body(self, pg):
+        for w in pg.winfo_children():
+            w.destroy()
+        inner = tk.Frame(pg, bg=BG)
+        inner.place(relx=0.5, rely=0.46, anchor="center")
+        s = subscription.get_status()
+
+        self._account_row(inner)
+
+        if s.get("active") and s.get("trial"):
+            tk.Label(inner, text="🎁", font=(UI, fs(40)), bg=BG, fg=ACCENT).pack()
+            tk.Label(inner, text=f"Free Trial — {s.get('days_left','?')} days left",
+                     font=(UI, fs(22), "bold"), bg=BG, fg=TEXT).pack(pady=6)
+            tk.Label(inner, text="Subscribe any time to keep access after the trial ends.",
+                     font=F_BODY, bg=BG, fg=TEXT2).pack(pady=(0, 22))
+            self._plan_cards(inner)
+        elif s.get("active"):
+            tk.Label(inner, text="✅", font=(UI, fs(40)), bg=BG, fg=GREEN).pack()
+            tk.Label(inner, text="You're all set", font=(UI, fs(22), "bold"),
+                     bg=BG, fg=TEXT).pack(pady=6)
+            tk.Label(inner, text=f"Plan: {s.get('plan','Pro')}   •   Renews: {s.get('renews','—')}",
+                     font=F_BODY, bg=BG, fg=TEXT2).pack(pady=4)
+            ghost_btn(inner, "Manage Billing on Stripe →",
+                      lambda: webbrowser.open(subscription.STRIPE_PORTAL_URL), font=F_BODY).pack(pady=16)
+            pill_btn(inner, "Cancel Subscription", self._do_cancel, bg=RED, fg=TEXT,
+                     px=20, py=8, font=F_BODY).pack()
+        else:
+            tk.Label(inner, text="Start Finding Bids Today",
+                     font=(UI, fs(22), "bold"), bg=BG, fg=TEXT).pack(pady=(0, 6))
+            tk.Label(inner, text="Live bid cards  •  Save & track leads  •  Nationwide  •  Custom search",
+                     font=F_BODY, bg=BG, fg=TEXT2).pack(pady=(0, 20))
+
+            if not subscription.trial_used():
+                tc = tk.Frame(inner, bg=CARD, padx=30, pady=20,
+                              highlightbackground=ACCENT, highlightthickness=2)
+                tc.pack(pady=(0, 18))
+                tk.Label(tc, text="Try it free for 7 days", font=(UI, fs(15), "bold"),
+                         bg=CARD, fg=ACCENT).pack()
+                tk.Label(tc, text="No charge now. Full access. Cancel anytime.",
+                         font=F_SMALL, bg=CARD, fg=TEXT2).pack(pady=(2, 12))
+                pill_btn(tc, "  Start Free Trial  ", self._do_trial, px=26, py=10,
+                         font=(UI, fs(12), "bold")).pack()
+                tk.Label(inner, text="— or subscribe now —", font=F_SMALL,
+                         bg=BG, fg=TEXT3).pack(pady=10)
+
+            self._plan_cards(inner)
+
+            divider(inner, BORDER)
+            tk.Label(inner, text="Already have a license key?", font=F_BODY,
+                     bg=BG, fg=TEXT2).pack(pady=(16, 6))
+            kr = tk.Frame(inner, bg=BG)
+            kr.pack()
+            self._key_entry = tk.Entry(kr, font=F_BODY, bg=CARD, fg=TEXT, insertbackground=TEXT,
+                                       relief="flat", bd=0, width=30, highlightthickness=1,
+                                       highlightbackground=BORDER, highlightcolor=ACCENT)
+            self._key_entry.pack(side="left", ipady=8, padx=(0, 8))
+            pill_btn(kr, "Activate", self._activate, px=18, py=8, font=F_BODY).pack(side="left")
+            self._key_msg = tk.Label(inner, text="", font=F_SMALL, bg=BG, fg=TEXT3)
+            self._key_msg.pack(pady=6)
+
+    def _plan_cards(self, parent):
+        plans = tk.Frame(parent, bg=BG)
+        plans.pack()
+
+        def card(name, price, period, highlight=False, key="monthly"):
+            border = ACCENT if highlight else BORDER
+            c = tk.Frame(plans, bg=CARD, padx=32, pady=24,
+                         highlightbackground=border, highlightthickness=2)
+            c.pack(side="left", padx=12)
+            if highlight:
+                tk.Label(c, text="BEST VALUE", font=(UI, fs(8), "bold"),
+                         bg=ACCENT, fg="#000", padx=8, pady=2).pack()
+            tk.Label(c, text=name, font=(UI, fs(14), "bold"), bg=CARD,
+                     fg=ACCENT if highlight else TEXT).pack(pady=(8, 4))
+            tk.Label(c, text=price, font=(UI, fs(30), "bold"), bg=CARD, fg=TEXT).pack()
+            tk.Label(c, text=period, font=F_SMALL, bg=CARD, fg=TEXT3).pack(pady=(2, 14))
+            pill_btn(c, "Subscribe", lambda k=key: self._checkout(k),
+                     bg=ACCENT if highlight else CARD, fg="#000" if highlight else TEXT2,
+                     px=20, py=8, font=F_BODY).pack()
+
+        card("Monthly", "$19", "per month", key="monthly")
+        card("Annual", "$149", "per year — save $79", highlight=True, key="annual")
+        tk.Label(parent, text="Secure payment via Stripe  •  Cancel anytime",
+                 font=F_SMALL, bg=BG, fg=TEXT3).pack(pady=14)
+
+    def _do_trial(self):
+        ok, msg = subscription.start_trial()
+        if ok:
+            messagebox.showinfo("Trial Started", msg + "\n\nEnjoy full access!")
+            self._refresh_sub_lbl()
+            self._build_subscribe_body(self._pages["subscribe"])
+            self._nav("scan")
+        else:
+            messagebox.showwarning("Trial", msg)
+
+    def _checkout(self, plan):
+        url = (subscription.STRIPE_MONTHLY_URL if plan == "monthly"
+               else subscription.STRIPE_ANNUAL_URL)
+        webbrowser.open(url)
+        messagebox.showinfo("Checkout Opened",
+            "Complete payment in your browser.\n\nThen enter your license key below to activate.")
+
+    def _activate(self):
+        ok, msg = subscription.activate_key(self._key_entry.get().strip())
+        if ok:
+            self._key_msg.config(text="✅ " + msg, fg=GREEN)
+            self._refresh_sub_lbl()
+            self._build_subscribe_body(self._pages["subscribe"])
+            self._nav("scan")
+        else:
+            self._key_msg.config(text="❌ " + msg, fg=RED)
+
+    def _do_cancel(self):
+        if messagebox.askyesno("Cancel", "Remove your local license?"):
+            subscription.cancel()
+            self._refresh_sub_lbl()
+            self._build_subscribe_body(self._pages["subscribe"])
+
+    # ═══════════ ACCOUNT / SIGN IN / FORGOT PASSWORD ═══════════
+    def _account_row(self, parent):
+        row = tk.Frame(parent, bg=BG)
+        row.pack(pady=(0, 14))
+        email = auth_client.current_email()
+        if email:
+            tk.Label(row, text=f"👤  Signed in as {email}", font=F_SMALL,
+                     bg=BG, fg=TEXT2).pack(side="left", padx=(0, 10))
+            ghost_btn(row, "Sign Out", self._do_sign_out, font=F_SMALL).pack(side="left")
+        else:
+            tk.Label(row, text="👤  Not signed in", font=F_SMALL,
+                     bg=BG, fg=TEXT3).pack(side="left", padx=(0, 10))
+            ghost_btn(row, "Sign In / Create Account", self._show_signin,
+                      font=F_SMALL).pack(side="left")
+
+    def _do_sign_out(self):
+        auth_client.sign_out()
+        self._build_subscribe_body(self._pages["subscribe"])
+
+    def _show_signin(self):
+        self._auth_mode = "signin"
+        self._build_signin_body(self._pages["subscribe"])
+
+    def _switch_auth_mode(self, mode):
+        self._auth_mode = mode
+        self._build_signin_body(self._pages["subscribe"])
+
+    def _auth_card(self, pg):
+        """Shared frame for the account screens; returns the card to fill in."""
+        for w in pg.winfo_children():
+            w.destroy()
+        inner = tk.Frame(pg, bg=BG)
+        inner.place(relx=0.5, rely=0.46, anchor="center")
+        card = tk.Frame(inner, bg=CARD, padx=36, pady=28,
+                        highlightbackground=BORDER, highlightthickness=1)
+        card.pack()
+        return inner, card
+
+    def _labeled_entry(self, card, label, show=None, width=32):
+        tk.Label(card, text=label, font=F_SMALL, bg=CARD, fg=TEXT2,
+                 anchor="w").pack(fill="x")
+        e = tk.Entry(card, font=F_BODY, bg=BG, fg=TEXT, insertbackground=TEXT,
+                     relief="flat", bd=0, width=width, show=show,
+                     highlightthickness=1, highlightbackground=BORDER,
+                     highlightcolor=ACCENT)
+        e.pack(ipady=8, pady=(2, 14))
+        return e
+
+    def _build_signin_body(self, pg):
+        inner, card = self._auth_card(pg)
+        is_signup = (self._auth_mode == "signup")
+
+        tk.Label(card, text="Create Account" if is_signup else "Sign In",
+                 font=(UI, fs(18), "bold"), bg=CARD, fg=TEXT).pack(pady=(0, 4))
+        tk.Label(card, text=("Link your license to an account" if is_signup
+                             else "Welcome back"),
+                 font=F_SMALL, bg=CARD, fg=TEXT2).pack(pady=(0, 18))
+
+        self._auth_email = self._labeled_entry(card, "Email")
+        self._auth_password = self._labeled_entry(card, "Password", show="•")
+        self._auth_password.bind("<Return>", lambda e: self._do_signup() if is_signup
+                                  else self._do_signin())
+
+        self._auth_msg = tk.Label(card, text="", font=F_SMALL, bg=CARD, fg=TEXT3,
+                                  wraplength=280, justify="left")
+        self._auth_msg.pack(pady=(0, 10))
+
+        pill_btn(card, "Create Account" if is_signup else "Sign In",
+                 self._do_signup if is_signup else self._do_signin,
+                 py=10, font=(UI, fs(12), "bold")).pack()
+
+        toggle_row = tk.Frame(card, bg=CARD)
+        toggle_row.pack(pady=(14, 0))
+        if is_signup:
+            tk.Label(toggle_row, text="Already have an account?", font=F_SMALL,
+                     bg=CARD, fg=TEXT3).pack(side="left", padx=(0, 6))
+            ghost_btn(toggle_row, "Sign In", lambda: self._switch_auth_mode("signin"),
+                      font=F_SMALL).pack(side="left")
+        else:
+            tk.Label(toggle_row, text="New here?", font=F_SMALL,
+                     bg=CARD, fg=TEXT3).pack(side="left", padx=(0, 6))
+            ghost_btn(toggle_row, "Create Account", lambda: self._switch_auth_mode("signup"),
+                      font=F_SMALL).pack(side="left")
+
+        if not is_signup:
+            ghost_btn(card, "Forgot password?", self._show_forgot_email,
+                      font=F_SMALL).pack(pady=(10, 0))
+
+        ghost_btn(inner, "← Back", lambda: self._build_subscribe_body(self._pages["subscribe"]),
+                  font=F_SMALL).pack(pady=(16, 0))
+
+    def _do_signup(self):
+        email = self._auth_email.get().strip()
+        pw = self._auth_password.get()
+        self._auth_msg.config(text="Creating account...", fg=TEXT2)
+        self.root.update_idletasks()
+        ok, msg = auth_client.sign_up(email, pw)
+        if ok:
+            self._auth_msg.config(text="✅ " + msg, fg=GREEN)
+            self.root.after(900, lambda: self._build_subscribe_body(self._pages["subscribe"]))
+        else:
+            self._auth_msg.config(text="❌ " + msg, fg=RED)
+
+    def _do_signin(self):
+        email = self._auth_email.get().strip()
+        pw = self._auth_password.get()
+        self._auth_msg.config(text="Signing in...", fg=TEXT2)
+        self.root.update_idletasks()
+        ok, msg = auth_client.sign_in(email, pw)
+        if ok:
+            self._auth_msg.config(text="✅ " + msg, fg=GREEN)
+            self.root.after(700, lambda: self._build_subscribe_body(self._pages["subscribe"]))
+        else:
+            self._auth_msg.config(text="❌ " + msg, fg=RED)
+
+    def _show_forgot_email(self):
+        self._build_forgot_email_body(self._pages["subscribe"])
+
+    def _build_forgot_email_body(self, pg):
+        inner, card = self._auth_card(pg)
+        tk.Label(card, text="Reset Password", font=(UI, fs(18), "bold"),
+                 bg=CARD, fg=TEXT).pack(pady=(0, 4))
+        tk.Label(card, text="Enter your email and we'll send you a reset code.",
+                 font=F_SMALL, bg=CARD, fg=TEXT2, wraplength=280,
+                 justify="left").pack(pady=(0, 18))
+
+        self._reset_email = self._labeled_entry(card, "Email")
+        prefill = ""
+        try:
+            prefill = self._auth_email.get().strip()
+        except Exception:
+            pass
+        prefill = prefill or auth_client.current_email() or ""
+        if prefill:
+            self._reset_email.insert(0, prefill)
+
+        self._reset_msg = tk.Label(card, text="", font=F_SMALL, bg=CARD, fg=TEXT3,
+                                   wraplength=280, justify="left")
+        self._reset_msg.pack(pady=(0, 10))
+
+        pill_btn(card, "Send Reset Code", self._do_request_reset,
+                 py=10, font=(UI, fs(12), "bold")).pack()
+
+        ghost_btn(inner, "← Back to Sign In", lambda: self._switch_auth_mode("signin"),
+                  font=F_SMALL).pack(pady=(16, 0))
+
+    def _do_request_reset(self):
+        email = self._reset_email.get().strip()
+        self._reset_msg.config(text="Sending...", fg=TEXT2)
+        self.root.update_idletasks()
+        ok, msg = auth_client.request_password_reset(email)
+        if ok:
+            self._reset_msg.config(text="✅ " + msg, fg=GREEN)
+            self.root.after(500, lambda: self._build_forgot_code_body(self._pages["subscribe"], email))
+        else:
+            self._reset_msg.config(text="❌ " + msg, fg=RED)
+
+    def _build_forgot_code_body(self, pg, email):
+        inner, card = self._auth_card(pg)
+        tk.Label(card, text="Enter Reset Code", font=(UI, fs(18), "bold"),
+                 bg=CARD, fg=TEXT).pack(pady=(0, 4))
+        tk.Label(card, text=f"We sent a code to {email}. Enter it below with your new password.",
+                 font=F_SMALL, bg=CARD, fg=TEXT2, wraplength=280,
+                 justify="left").pack(pady=(0, 18))
+
+        self._reset_code = self._labeled_entry(card, "Reset code (from email)")
+        self._reset_new_pw = self._labeled_entry(card, "New password", show="•")
+        self._reset_new_pw2 = self._labeled_entry(card, "Confirm new password", show="•")
+        self._reset_new_pw2.bind("<Return>", lambda e: self._do_reset_password(email))
+
+        self._reset_code_msg = tk.Label(card, text="", font=F_SMALL, bg=CARD, fg=TEXT3,
+                                        wraplength=280, justify="left")
+        self._reset_code_msg.pack(pady=(0, 10))
+
+        pill_btn(card, "Reset Password", lambda: self._do_reset_password(email),
+                 py=10, font=(UI, fs(12), "bold")).pack()
+
+        row = tk.Frame(card, bg=CARD)
+        row.pack(pady=(14, 0))
+        ghost_btn(row, "Resend code", lambda: self._do_request_reset_for(email),
+                  font=F_SMALL).pack(side="left", padx=(0, 6))
+        ghost_btn(row, "Use a different email", self._show_forgot_email,
+                  font=F_SMALL).pack(side="left")
+
+        ghost_btn(inner, "← Back to Sign In", lambda: self._switch_auth_mode("signin"),
+                  font=F_SMALL).pack(pady=(16, 0))
+
+    def _do_request_reset_for(self, email):
+        ok, msg = auth_client.request_password_reset(email)
+        if hasattr(self, "_reset_code_msg") and self._reset_code_msg.winfo_exists():
+            self._reset_code_msg.config(text=("✅ " if ok else "❌ ") + msg,
+                                        fg=GREEN if ok else RED)
+
+    def _do_reset_password(self, email):
+        code = self._reset_code.get().strip()
+        pw1 = self._reset_new_pw.get()
+        pw2 = self._reset_new_pw2.get()
+        if pw1 != pw2:
+            self._reset_code_msg.config(text="❌ Passwords don't match.", fg=RED)
+            return
+        self._reset_code_msg.config(text="Resetting...", fg=TEXT2)
+        self.root.update_idletasks()
+        ok, msg = auth_client.reset_password_with_code(email, code, pw1)
+        if ok:
+            self._reset_code_msg.config(text="✅ " + msg, fg=GREEN)
+            self.root.after(1000, lambda: self._build_subscribe_body(self._pages["subscribe"]))
+        else:
+            self._reset_code_msg.config(text="❌ " + msg, fg=RED)
+
+    # ═══════════ PAGE: SETTINGS ═══════════
+    def _page_settings(self):
+        pg = tk.Frame(self._container, bg=BG)
+        self._pages["settings"] = pg
+        hdr = tk.Frame(pg, bg=BG, pady=18)
+        hdr.pack(fill="x", padx=24)
+        tk.Label(hdr, text="Settings", font=F_HEAD, bg=BG, fg=TEXT).pack(side="left")
+        divider(pg, BORDER)
+
+        body = tk.Frame(pg, bg=BG)
+        body.pack(fill="both", expand=True, padx=30, pady=24)
+
+        tk.Label(body, text="Text Size", font=F_SUB, bg=BG, fg=ACCENT).pack(anchor="w")
+        tk.Label(body, text="Bigger text is easier to read on a job site or for tired eyes.",
+                 font=F_SMALL, bg=BG, fg=TEXT3).pack(anchor="w", pady=(0, 10))
+
+        size_row = tk.Frame(body, bg=BG)
+        size_row.pack(anchor="w", pady=(0, 6))
+        for label, val in [("Small", 0.9), ("Normal", 1.0), ("Large", 1.15), ("Extra Large", 1.3)]:
+            active = abs(SCALE - val) < 0.001
+            tk.Button(size_row, text=label, font=F_BODY,
+                      bg=ACCENT if active else CARD, fg="#000" if active else TEXT,
+                      relief="flat", bd=0, cursor="hand2", padx=18, pady=10,
+                      activebackground=ACCENT_D,
+                      command=lambda v=val: self._set_scale(v)).pack(side="left", padx=(0, 8))
+
+        tk.Label(body, text="Changing text size restarts the app.",
+                 font=F_SMALL, bg=BG, fg=TEXT3).pack(anchor="w", pady=(6, 24))
+        divider(body, BORDER)
+
+        tk.Label(body, text="Your Data", font=F_SUB, bg=BG, fg=ACCENT).pack(anchor="w", pady=(20, 4))
+        tk.Label(body, text=f"Saved bids: {len(self.saved)}   •   Stored on this computer only.",
+                 font=F_SMALL, bg=BG, fg=TEXT3).pack(anchor="w", pady=(0, 10))
+        ghost_btn(body, "Clear all saved bids", self._clear_saved, font=F_BODY).pack(anchor="w")
+
+        divider(body, BORDER)
+        tk.Label(body, text="About", font=F_SUB, bg=BG, fg=ACCENT).pack(anchor="w", pady=(20, 4))
+        tk.Label(body, text="Bid Caller Pro — construction bid intelligence.",
+                 font=F_SMALL, bg=BG, fg=TEXT3).pack(anchor="w")
+
+    def _set_scale(self, val):
+        SETTINGS["scale"] = val
+        save_settings(SETTINGS)
+        if messagebox.askyesno("Restart", "Text size saved. Restart now to apply?"):
+            try:
+                self.root.destroy()
+                os.execl(sys.executable, sys.executable, *sys.argv)
+            except Exception:
+                messagebox.showinfo("Restart", "Please close and reopen the app to apply.")
+
+    def _clear_saved(self):
+        if messagebox.askyesno("Clear Saved", "Remove ALL saved bids and notes?"):
+            self.saved = {}
+            write_saved(self.saved)
+            messagebox.showinfo("Done", "All saved bids cleared.")
+            self._nav("settings")
+
+    # ═══════════ WELCOME ═══════════
+    def _show_welcome(self):
+        win = tk.Toplevel(self.root)
+        _apply_icon(win)
+        win.title("Welcome")
+        win.configure(bg=SURFACE)
+        win.geometry("520x420")
+        win.transient(self.root)
+        win.grab_set()
+
+        tk.Label(win, text="🔨", font=(UI, fs(34)), bg=SURFACE, fg=ACCENT).pack(pady=(24, 4))
+        tk.Label(win, text="Welcome to Bid Caller Pro", font=(UI, fs(18), "bold"),
+                 bg=SURFACE, fg=TEXT).pack()
+        tk.Label(win, text="Find construction bids near you in three simple steps:",
+                 font=F_BODY, bg=SURFACE, fg=TEXT2).pack(pady=(6, 18))
+
+        for icon, title, desc in [
+            ("🔍", "Find Bids", "Enter your ZIP or auto-detect, pick a radius, and scan."),
+            ("📋", "Browse the Feed", "Open bids show first. Tap links to contact directly."),
+            ("⭐", "Save what matters", "Star bids and add notes to track your leads."),
+        ]:
+            row = tk.Frame(win, bg=SURFACE)
+            row.pack(fill="x", padx=36, pady=6)
+            tk.Label(row, text=icon, font=(UI, fs(18)), bg=SURFACE, fg=ACCENT,
+                     width=3).pack(side="left")
+            col = tk.Frame(row, bg=SURFACE)
+            col.pack(side="left", fill="x")
+            tk.Label(col, text=title, font=(UI, fs(12), "bold"), bg=SURFACE,
+                     fg=TEXT, anchor="w").pack(anchor="w")
+            tk.Label(col, text=desc, font=F_SMALL, bg=SURFACE, fg=TEXT3,
+                     anchor="w", wraplength=380, justify="left").pack(anchor="w")
+
+        def done():
+            SETTINGS["seen_welcome"] = True
+            save_settings(SETTINGS)
+            win.destroy()
+
+        pill_btn(win, "  Get Started  ", done, px=28, py=10,
+                 font=(UI, fs(12), "bold")).pack(pady=20)
+
+
+# ═══════════════════════════════════════════════
+#  LAUNCH
+# ═══════════════════════════════════════════════
+def _set_windows_app_id():
+    if sys.platform.startswith("win"):
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("bidcaller.pro.app.1")
+        except Exception:
+            pass
+
+def _apply_icon(window):
+    icon_path = os.path.join(BASE_DIR, "icon.ico")
+    if os.path.exists(icon_path):
+        try:
+            window.iconbitmap(default=icon_path)
+        except Exception:
+            try:
+                window.iconbitmap(icon_path)
+            except Exception:
+                pass
+
+def _dark_title_bar(window):
+    """Make the Windows title bar dark instead of solid white (Win10 2004+ / Win11)."""
+    if not sys.platform.startswith("win"):
+        return
+    try:
+        import ctypes
+        from ctypes import wintypes
+        window.update_idletasks()
+        hwnd = ctypes.windll.user32.GetParent(window.winfo_id())
+        # DWMWA_USE_IMMERSIVE_DARK_MODE = 20 (or 19 on older builds)
+        value = ctypes.c_int(1)
+        for attr in (20, 19):
+            try:
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                    hwnd, attr, ctypes.byref(value), ctypes.sizeof(value))
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+_set_windows_app_id()
+root = tk.Tk()
+_apply_icon(root)
+
+style = ttk.Style()
+style.theme_use("clam")
+# Dark, slim scrollbar that matches the app
+style.configure("Vertical.TScrollbar",
+                background=BORDER, troughcolor=BG, bordercolor=BG,
+                arrowcolor=BG, relief="flat", borderwidth=0,
+                width=10)
+style.map("Vertical.TScrollbar",
+          background=[("active", ACCENT), ("!active", BORDER)],
+          arrowcolor=[("disabled", BG)])
+style.layout("Vertical.TScrollbar",
+             [("Vertical.Scrollbar.trough",
+               {"children": [("Vertical.Scrollbar.thumb",
+                              {"expand": "1", "sticky": "nswe"})],
+                "sticky": "ns"})])  # hide the up/down arrow buttons for a clean look
+style.configure("TScrollbar", background=BORDER, troughcolor=BG,
+                bordercolor=BG, arrowcolor=BG, relief="flat", borderwidth=0)
+style.configure("TCombobox", fieldbackground=CARD, background=CARD, foreground=TEXT,
+                selectbackground=CARD, selectforeground=TEXT, arrowcolor=TEXT2)
+style.map("TCombobox", fieldbackground=[("readonly", CARD)])
+
+_dark_title_bar(root)
+
+app = BidCaller(root)
+root.mainloop()

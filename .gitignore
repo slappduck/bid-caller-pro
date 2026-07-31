@@ -1,0 +1,25 @@
+# Build artifacts
+build/
+dist/
+__pycache__/
+*.pyc
+*.zip
+
+# Local runtime state / cache (device- and license-specific, not source)
+device_id.txt
+license_cache.json
+license_db.json
+last_scan.txt
+last_feed.json
+saved_bids.json
+lead_gen_rotation_state.json
+bidcaller_debug.log
+*.log
+
+# Business/lead data (not source code)
+leads_master.csv
+all_regional_intel.txt
+
+# Secrets
+.env
+*_SECRETS.txt
