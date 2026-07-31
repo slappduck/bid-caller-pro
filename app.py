@@ -2406,16 +2406,18 @@ class BidCaller:
                   font=F_SMALL).pack(pady=(16, 0))
 
     def _sync_pull_after_signin(self):
-        """After any successful sign-in, pull cloud saved bids and merge
-        them with whatever's local — cloud wins for bids already synced,
-        anything saved locally while signed out gets kept and pushed up so
-        it isn't lost. No-op (fails soft) if the cloud can't be reached or
-        the sync tables don't exist yet."""
+        """After any successful sign-in, pull cloud saved bids + company
+        profile and merge with whatever's local. For saved bids: cloud wins
+        for bids already synced, anything saved locally while signed out
+        gets kept and pushed up so it isn't lost. For the company profile
+        (a single row): cloud wins if it has one, otherwise the local one
+        (if any) gets pushed up to seed the cloud. Every step fails soft if
+        the cloud can't be reached or the sync tables don't exist yet."""
         token = auth_client.current_access_token()
         if not token:
             return
 
-        def work():
+        def work_bids():
             cloud = data_sync.pull_saved_bids(token)
             if cloud is None:
                 return
@@ -2432,7 +2434,27 @@ class BidCaller:
                         target=lambda: data_sync.push_all_saved_bids(token, local_only),
                         daemon=True).start()
             self.root.after(0, apply)
-        threading.Thread(target=work, daemon=True).start()
+        threading.Thread(target=work_bids, daemon=True).start()
+
+        def work_company():
+            cloud = data_sync.pull_company_profile(token)
+            if cloud is None:
+                return
+
+            def apply():
+                if cloud.get("name"):
+                    self.company = cloud
+                    write_company_profile(self.company)
+                    if hasattr(self, "_co_entries"):
+                        for k, e in self._co_entries.items():
+                            e.delete(0, tk.END)
+                            e.insert(0, self.company.get(k, ""))
+                elif self.company.get("name"):
+                    threading.Thread(
+                        target=lambda: data_sync.push_company_profile(token, self.company),
+                        daemon=True).start()
+            self.root.after(0, apply)
+        threading.Thread(target=work_company, daemon=True).start()
 
     def _do_verify_magic_link(self, email):
         code = self._ml_code.get().strip()
@@ -2669,6 +2691,10 @@ class BidCaller:
         self.company = {k: e.get().strip() for k, e in self._co_entries.items()}
         write_company_profile(self.company)
         self._co_saved_lbl.config(text="✅ Saved")
+        token = auth_client.current_access_token()
+        if token:
+            threading.Thread(target=lambda: data_sync.push_company_profile(token, self.company),
+                             daemon=True).start()
 
     def _clear_saved(self):
         token = auth_client.current_access_token()

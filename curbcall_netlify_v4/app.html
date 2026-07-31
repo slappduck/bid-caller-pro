@@ -451,6 +451,27 @@ async function syncPullSavedBids(){
   if(document.getElementById("screen-saved").classList.contains("active"))renderSaved();
 }
 
+async function pushCompanyProfile(){
+  if(!currentUser)return;
+  const row={name:companyProfile.name||"",contact:companyProfile.contact||"",
+             phone:companyProfile.phone||"",email:companyProfile.email||"",
+             specialty:companyProfile.specialty||""};
+  try{await sb.from("company_profiles").upsert(row,{onConflict:"user_id"});}catch(e){}
+}
+async function syncPullCompanyProfile(){
+  if(!currentUser)return;
+  const{data,error}=await sb.from("company_profiles").select("*").maybeSingle();
+  if(error)return;
+  if(data&&data.name){
+    companyProfile={name:data.name||"",contact:data.contact||"",phone:data.phone||"",
+                     email:data.email||"",specialty:data.specialty||""};
+    store.set("company_profile",companyProfile);
+    if(document.getElementById("screen-account").classList.contains("active"))renderAccount();
+  }else if(companyProfile.name){
+    pushCompanyProfile();
+  }
+}
+
 window.setPipelineStatus=function(id,status){
   if(status)pipeline[id]=status;else delete pipeline[id];
   store.set("pipeline",pipeline);
@@ -607,6 +628,7 @@ function showApp(){
   autoUnlock();
   checkSavedSearches();
   syncPullSavedBids();
+  syncPullCompanyProfile();
 }
 
 // ── Nav ──
@@ -1575,6 +1597,7 @@ function renderAccount(){
     f.addEventListener("blur",()=>{
       companyProfile[f.dataset.k]=f.value.trim();
       store.set("company_profile",companyProfile);
+      pushCompanyProfile();
     });
   });
 
