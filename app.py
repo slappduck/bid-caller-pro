@@ -1249,6 +1249,12 @@ class BidCaller:
 
         self._loc_map = tkintermapview.TkinterMapView(wrap, width=600, height=220, corner_radius=0)
         self._loc_map.pack(fill="x")
+        # tkintermapview defaults to a.tile.openstreetmap.org with a generic,
+        # library-wide User-Agent — OSM's volunteer-run tile servers tend to
+        # throttle that shared identifier. Carto's free basemap CDN is built
+        # for embedding and loads noticeably faster (dark tiles to match the UI).
+        self._loc_map.set_tile_server(
+            "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png", max_zoom=20)
         self._loc_map.set_position(39.5, -98.35)   # center of the US until we know better
         self._loc_map.set_zoom(4)
         self._loc_marker = None
