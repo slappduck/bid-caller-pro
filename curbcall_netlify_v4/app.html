@@ -225,6 +225,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
       <div class="map-card show" id="find-map-card">
         <div class="map-card-head"><span class="t">&#x1F4CD; You Are Here</span></div>
         <div id="find-map-view"></div>
+        <div class="map-legend"><span>Click the map — or a nearby city — to set your search location</span></div>
       </div>
       <div class="field-label">Your Location</div>
       <input class="input" id="loc-input" placeholder="ZIP code or City, State" inputmode="text" />
@@ -567,6 +568,7 @@ document.querySelectorAll("#radius-row .radius-btn").forEach(b=>{
   b.onclick=()=>{
     document.querySelectorAll("#radius-row .radius-btn").forEach(x=>x.classList.remove("active"));
     b.classList.add("active");radius=parseInt(b.dataset.r);
+    drawFindRadiusCircle();
   };
 });
 let upRadius=25;
@@ -688,20 +690,83 @@ async function checkSavedSearches(){
 }
 
 // ── "You are here" preview map on the Find tab ──
-let findMap=null,findMarker=null;
+// Also doubles as a location picker: click anywhere (or a nearby city
+// marker) to set the search center, with a live circle showing the radius
+// that'll actually be searched.
+let findMap=null,findMarker=null,findRadiusCircle=null,findCenter=null,findTownMarkers=[];
 function updateFindMap(lat,lon,label){
   const mv=document.getElementById("find-map-view");
   if(!mv)return;
+  findCenter={lat,lon};
   if(!findMap){
     findMap=L.map(mv,{attributionControl:false}).setView([lat,lon],11);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:18}).addTo(findMap);
+    findMap.on("click",e=>pickFindLocation(e.latlng.lat,e.latlng.lng,null));
   } else {
     findMap.setView([lat,lon],11);
   }
   if(findMarker)findMap.removeLayer(findMarker);
   findMarker=L.circleMarker([lat,lon],{radius:9,color:"#f5b400",fillColor:"#f5b400",fillOpacity:0.9,weight:2})
     .addTo(findMap).bindPopup(esc(label||"You are here"));
+  drawFindRadiusCircle();
   setTimeout(()=>findMap.invalidateSize(),50);
+}
+function drawFindRadiusCircle(){
+  if(!findMap||!findCenter)return;
+  if(findRadiusCircle)findMap.removeLayer(findRadiusCircle);
+  findRadiusCircle=L.circle([findCenter.lat,findCenter.lon],{
+    radius:radius*1609.34,color:"#f59e0b",weight:2,fillOpacity:0.05,
+  }).addTo(findMap);
+}
+function clearFindTownMarkers(){
+  findTownMarkers.forEach(m=>findMap.removeLayer(m));
+  findTownMarkers=[];
+}
+async function refreshFindTownMarkers(lat,lon){
+  if(!findMap)return;
+  const radiusM=Math.round(radius*1609.34);
+  const q=`[out:json][timeout:20];(node["place"~"city|town"](around:${radiusM},${lat},${lon}););out body 30;`;
+  try{
+    const r=await fetchWithTimeout("https://overpass-api.de/api/interpreter",{
+      method:"POST",headers:{"Content-Type":"text/plain"},body:q,
+    },15000);
+    const d=await r.json();
+    clearFindTownMarkers();
+    const seen=new Set();
+    for(const el of(d.elements||[])){
+      const name=el.tags?.name;
+      if(!name||seen.has(name.toLowerCase())||el.lat==null||el.lon==null)continue;
+      seen.add(name.toLowerCase());
+      const state=el.tags?.["addr:state"]||"";
+      const label=state?`${name}, ${state}`:name;
+      const m=L.circleMarker([el.lat,el.lon],{radius:6,color:"#3b82f6",fillColor:"#3b82f6",fillOpacity:0.85,weight:2})
+        .addTo(findMap).bindPopup(esc(label));
+      m.on("click",()=>pickFindLocation(el.lat,el.lon,label));
+      findTownMarkers.push(m);
+      if(findTownMarkers.length>=15)break;
+    }
+  }catch(e){/* best-effort — clicking blank map still works without town markers */}
+}
+async function pickFindLocation(lat,lon,label){
+  const input=document.getElementById("loc-input");
+  if(label){
+    if(input)input.value=label;
+    updateFindMap(lat,lon,label);
+    refreshFindTownMarkers(lat,lon);
+    return;
+  }
+  updateFindMap(lat,lon,"Locating...");
+  try{
+    const r=await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`);
+    const d=await r.json();
+    const state=(d.principalSubdivisionCode||"").split("-").pop();
+    const val=d.postcode||[d.city||d.locality,state].filter(Boolean).join(", ")||`${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+    if(input)input.value=val;
+    updateFindMap(lat,lon,val);
+  }catch(e){
+    if(input)input.value=`${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+  }
+  refreshFindTownMarkers(lat,lon);
 }
 
 // ── Auto ZIP + live map pin ──
@@ -720,6 +785,7 @@ async function detectLocation(fillInput){
       const val=d.postcode||[d.city||d.locality,state].filter(Boolean).join(", ");
       if(val){
         updateFindMap(latitude,longitude,val);
+        refreshFindTownMarkers(latitude,longitude);
         const input=document.getElementById("loc-input");
         if(input&&(fillInput||!input.value.trim()))input.value=val;
         if(fillInput)toast("\u{1F4CD} "+val);
