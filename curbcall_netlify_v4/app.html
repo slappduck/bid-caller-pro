@@ -69,7 +69,10 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .brand{display:flex;align-items:center;gap:0.5rem;}
 .brand-name{font-family:'Bebas Neue',sans-serif;font-size:1.25rem;letter-spacing:0.06em;}
 .brand-name span{color:var(--accent);}
-.user-chip{font-size:0.68rem;font-weight:700;color:var(--accent);background:rgba(245,166,35,0.12);padding:0.3rem 0.6rem;border-radius:20px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;}
+.user-chip{font-size:0.68rem;font-weight:700;color:var(--accent);background:rgba(245,166,35,0.12);padding:0.3rem 0.6rem;border-radius:20px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;gap:0.35rem;}
+.user-chip img{width:18px;height:18px;border-radius:50%;object-fit:cover;flex-shrink:0;}
+.avatar-lg{width:56px;height:56px;border-radius:50%;object-fit:cover;flex-shrink:0;}
+.avatar-placeholder{width:56px;height:56px;border-radius:50%;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:1.4rem;flex-shrink:0;}
 
 .screens{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;}
 .screen{display:none;padding:1rem 1rem 5.5rem;animation:fade 0.25s;}
@@ -617,12 +620,16 @@ function showAuth(){
   document.getElementById("app").style.display="none";
 }
 
+function updateUserChip(){
+  const email=currentUser?.email||"";
+  const chip=document.getElementById("user-chip");
+  const avatar=companyProfile.avatar_url;
+  chip.innerHTML=(avatar?`<img src="${esc(avatar)}" alt="">`:"")+esc(email||"\u{1F464} Account");
+}
 function showApp(){
   document.getElementById("auth-screen").style.display="none";
   document.getElementById("app").style.display="flex";
-  const email=currentUser?.email||"";
-  const chip=document.getElementById("user-chip");
-  chip.textContent=email||"\u1F464 Account";
+  updateUserChip();
   renderFeed();
   // The map only ever got created inside detectLocation()'s geolocation
   // success callback — if a user denies the location prompt (extremely
@@ -1594,9 +1601,15 @@ function renderAccount(){
   const aLink=`https://buy.stripe.com/8x26oG7aQesqgX87HVejK03?client_reference_id=${encodeURIComponent(deviceId())}`;
 
   body.innerHTML=`
-    <div class="account-card">
-      <div class="account-email">&#x1F464; ${esc(email)}</div>
-      <div class="account-status">Signed in with ${currentUser?.app_metadata?.provider||"email"}${created?` &middot; Member since ${esc(created)}`:""}</div>
+    <div class="account-card" style="display:flex;align-items:center;gap:0.9rem;">
+      ${companyProfile.avatar_url?`<img class="avatar-lg" src="${esc(companyProfile.avatar_url)}" alt="">`
+        :`<div class="avatar-placeholder">&#x1F464;</div>`}
+      <div style="flex:1;min-width:0;">
+        <div class="account-email">${esc(email)}</div>
+        <div class="account-status">Signed in with ${currentUser?.app_metadata?.provider||"email"}${created?` &middot; Member since ${esc(created)}`:""}</div>
+        <label class="btn-ghost" for="avatar-input" style="display:inline-block;margin-top:0.5rem;padding:0.4rem 0.8rem;font-size:0.78rem;cursor:pointer;">Change Photo</label>
+        <input type="file" id="avatar-input" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none;" />
+      </div>
     </div>
     <div class="account-card">
       <div class="account-email" style="font-size:0.85rem;margin-bottom:0.6rem;">&#x1F4CA; Your Stats</div>
@@ -1668,6 +1681,25 @@ function renderAccount(){
     syncPullSavedBids();syncPullCompanyProfile();syncPullSavedSearches();
     renderAccount();
   };
+  document.getElementById("avatar-input").addEventListener("change",async(e)=>{
+    const file=e.target.files[0];
+    if(!file)return;
+    if(!currentUser){toast("Sign in first");return;}
+    toast("Uploading photo...");
+    const ext=(file.name.split(".").pop()||"png").toLowerCase();
+    const path=`${currentUser.id}/avatar.${ext}`;
+    try{
+      const{error}=await sb.storage.from("avatars").upload(path,file,{upsert:true,contentType:file.type});
+      if(error){toast("Couldn't upload photo — "+error.message);return;}
+      const{data}=sb.storage.from("avatars").getPublicUrl(path);
+      companyProfile.avatar_url=data.publicUrl+"?t="+Date.now();
+      store.set("company_profile",companyProfile);
+      pushCompanyProfile();
+      updateUserChip();
+      renderAccount();
+      toast("Photo updated!");
+    }catch(err){toast("Couldn't upload photo — check your connection.");}
+  });
   document.querySelectorAll(".co-field").forEach(f=>{
     f.addEventListener("blur",()=>{
       companyProfile[f.dataset.k]=f.value.trim();

@@ -53,3 +53,25 @@ alter table saved_searches enable row level security;
 drop policy if exists "Users manage their own saved searches" on saved_searches;
 create policy "Users manage their own saved searches" on saved_searches
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- Profile picture support: a column to hold the public URL, and a public
+-- Storage bucket to hold the actual image files. Safe to re-run this whole
+-- script any time — every statement below is idempotent.
+alter table company_profiles add column if not exists avatar_url text default '';
+
+insert into storage.buckets (id, name, public)
+values ('avatars', 'avatars', true)
+on conflict (id) do nothing;
+
+-- Anyone can view avatar images — they're meant to be public profile pictures.
+drop policy if exists "Public read access for avatars" on storage.objects;
+create policy "Public read access for avatars" on storage.objects
+  for select using (bucket_id = 'avatars');
+
+-- A user can only upload/replace/delete their OWN avatar — enforced by
+-- requiring the file path's first folder segment to be their own user id
+-- (the app uploads to "{user_id}/avatar.<ext>").
+drop policy if exists "Users manage their own avatar" on storage.objects;
+create policy "Users manage their own avatar" on storage.objects
+  for all using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text)
+  with check (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);

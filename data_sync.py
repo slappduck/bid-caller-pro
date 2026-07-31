@@ -14,6 +14,7 @@ Row Level Security means the anon key + a user's own access token is all
 that's needed here. No service-role key involved.
 """
 
+import time
 import auth_client
 
 try:
@@ -161,7 +162,39 @@ def push_company_profile(token, profile):
         "email": profile.get("email", ""),
         "specialty": profile.get("specialty", ""),
     }
+    if "avatar_url" in profile:
+        row["avatar_url"] = profile["avatar_url"]
     return _upsert("company_profiles", token, [row], on_conflict="user_id")
+
+
+_AVATAR_CONTENT_TYPES = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
+                         "gif": "image/gif", "webp": "image/webp"}
+
+
+def upload_avatar(token, user_id, file_path):
+    """Uploads a local image file as this user's avatar to the public
+    'avatars' Storage bucket (path scoped to their own user id, enforced by
+    a storage RLS policy) and returns the public URL, or None on failure."""
+    if requests is None or not token or not user_id:
+        return None
+    ext = (file_path.rsplit(".", 1)[-1] if "." in file_path else "png").lower()
+    content_type = _AVATAR_CONTENT_TYPES.get(ext, "application/octet-stream")
+    object_path = f"{user_id}/avatar.{ext}"
+    try:
+        with open(file_path, "rb") as f:
+            data = f.read()
+        r = requests.post(
+            f"{REST_URL.rsplit('/rest/', 1)[0]}/storage/v1/object/avatars/{object_path}",
+            headers={"apikey": auth_client.SUPABASE_ANON_KEY,
+                    "Authorization": f"Bearer {token}", "Content-Type": content_type,
+                    "x-upsert": "true"},
+            data=data, timeout=30)
+        if r.status_code not in (200, 201):
+            return None
+        base = REST_URL.rsplit("/rest/", 1)[0]
+        return f"{base}/storage/v1/object/public/avatars/{object_path}?t={int(time.time())}"
+    except Exception:
+        return None
 
 
 # ── Saved searches (auto-alert searches) ────────────────────

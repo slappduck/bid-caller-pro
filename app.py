@@ -1,5 +1,6 @@
 import os
 import sys
+import io
 import json
 import math
 import re
@@ -2713,20 +2714,29 @@ class BidCaller:
                      px=20, py=10, font=(UI, fs(12), "bold")).pack()
             return
 
-        # ── Identity row ──
+        # ── Identity row (avatar + email/meta + sign out) ──
         idrow = tk.Frame(body, bg=CARD, padx=18, pady=14)
         idrow.pack(fill="x")
+        self._avatar_lbl = tk.Label(idrow, text="👤", font=(UI, fs(22)), bg=CARD, fg=TEXT3,
+                                    width=2, height=1)
+        self._avatar_lbl.pack(side="left", padx=(0, 12))
+        self._avatar_photo_ref = None  # keep a reference so Tk doesn't garbage-collect it
         left = tk.Frame(idrow, bg=CARD)
         left.pack(side="left", fill="x", expand=True)
-        tk.Label(left, text=f"👤  {email}", font=(UI, fs(13), "bold"),
+        tk.Label(left, text=email, font=(UI, fs(13), "bold"),
                  bg=CARD, fg=TEXT).pack(anchor="w")
         self._account_meta_lbl = tk.Label(left, text="Loading account details...",
                                           font=F_SMALL, bg=CARD, fg=TEXT3)
         self._account_meta_lbl.pack(anchor="w", pady=(2, 0))
-        ghost_btn(idrow, "Sign Out", self._do_sign_out, font=F_SMALL).pack(side="right")
+        ghost_btn(left, "Change Photo", self._upload_avatar, font=F_SMALL).pack(anchor="w", pady=(4, 0))
+        ghost_btn(idrow, "Sign Out", self._do_sign_out, font=F_SMALL).pack(side="right", anchor="n")
+
+        if self.company.get("avatar_url"):
+            self._load_avatar_thumbnail(self.company["avatar_url"])
 
         def fetch_info():
             info = auth_client.get_user_info()
+            self._user_id = info.get("id")
 
             def apply():
                 if not hasattr(self, "_account_meta_lbl"):
@@ -2797,6 +2807,55 @@ class BidCaller:
         links.pack(fill="x")
         ghost_btn(links, "💳  Manage Subscription →", lambda: self._nav("subscribe"),
                  font=F_SMALL).pack(side="left")
+
+    def _load_avatar_thumbnail(self, url, size=44):
+        """Downloads + resizes the avatar image for display in the identity
+        row. Best-effort — silently leaves the placeholder icon on failure
+        (offline, bad URL, PIL/requests unavailable)."""
+        def work():
+            try:
+                resp = requests.get(url, timeout=10)
+                img = PIL.Image.open(io.BytesIO(resp.content)).convert("RGB")
+                img = img.resize((size, size), PIL.Image.LANCZOS)
+                photo = PIL.ImageTk.PhotoImage(img)
+            except Exception:
+                return
+
+            def apply():
+                if not hasattr(self, "_avatar_lbl"):
+                    return
+                self._avatar_photo_ref = photo  # prevent garbage collection
+                self._avatar_lbl.config(image=photo, text="", width=size, height=size)
+            self.root.after(0, apply)
+        threading.Thread(target=work, daemon=True).start()
+
+    def _upload_avatar(self):
+        token = auth_client.current_access_token()
+        if not token:
+            messagebox.showwarning("Profile Photo", "Sign in first to add a profile photo.")
+            return
+        user_id = getattr(self, "_user_id", None)
+        if not user_id:
+            messagebox.showinfo("Profile Photo", "Still loading your account — try again in a second.")
+            return
+        from tkinter import filedialog
+        path = filedialog.askopenfilename(
+            title="Choose a profile photo",
+            filetypes=[("Images", "*.png *.jpg *.jpeg *.gif *.webp")])
+        if not path:
+            return
+
+        def work():
+            url = data_sync.upload_avatar(token, user_id, path)
+            if not url:
+                self.root.after(0, lambda: messagebox.showerror(
+                    "Profile Photo", "Couldn't upload the photo. Check your internet and try again."))
+                return
+            self.company["avatar_url"] = url
+            write_company_profile(self.company)
+            data_sync.push_company_profile(token, self.company)
+            self.root.after(0, lambda: self._load_avatar_thumbnail(url))
+        threading.Thread(target=work, daemon=True).start()
 
     # ═══════════ PAGE: SETTINGS ═══════════
     def _page_settings(self):
