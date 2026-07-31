@@ -2084,6 +2084,34 @@ class BidCaller:
                  font=F_SMALL, bg=BG, fg=TEXT3).pack(anchor="w", pady=(6, 24))
         divider(body, BORDER)
 
+        tk.Label(body, text="Company Info", font=F_SUB, bg=BG, fg=ACCENT).pack(anchor="w", pady=(20, 4))
+        tk.Label(body, text="Used to personalize AI-drafted bid proposals. Nothing here is "
+                 "shared beyond that.", font=F_SMALL, bg=BG, fg=TEXT3,
+                 wraplength=500, justify="left").pack(anchor="w", pady=(0, 10))
+
+        co_fields = [("name", "Company Name", "Acme Concrete LLC"),
+                     ("contact", "Contact Person", "Jane Doe"),
+                     ("phone", "Phone", "(555) 555-5555"),
+                     ("email", "Email", "you@company.com"),
+                     ("specialty", "Specialty (optional)", "sidewalk, ADA ramp & curb concrete work")]
+        self._co_entries = {}
+        for key, label, placeholder in co_fields:
+            tk.Label(body, text=label, font=F_SMALL, bg=BG, fg=TEXT2).pack(anchor="w", pady=(6, 2))
+            e = tk.Entry(body, font=F_BODY, bg=CARD, fg=TEXT, insertbackground=TEXT,
+                        relief="flat", bd=0, width=44, highlightthickness=1,
+                        highlightbackground=BORDER, highlightcolor=ACCENT)
+            e.pack(anchor="w", ipady=6)
+            e.insert(0, self.company.get(key, ""))
+            self._co_entries[key] = e
+
+        pill_btn(body, "Save Company Info", self._save_company_profile, px=18, py=9,
+                 font=F_SMALL).pack(anchor="w", pady=(14, 0))
+        self._co_saved_lbl = tk.Label(body, text="", font=F_SMALL, bg=BG, fg=GREEN)
+        self._co_saved_lbl.pack(anchor="w", pady=(6, 0))
+
+        divider(body, BORDER, pad=0)
+        tk.Frame(body, bg=BG, height=20).pack()
+
         tk.Label(body, text="Your Data", font=F_SUB, bg=BG, fg=ACCENT).pack(anchor="w", pady=(20, 4))
         tk.Label(body, text=f"Saved bids: {len(self.saved)}   •   Stored on this computer only.",
                  font=F_SMALL, bg=BG, fg=TEXT3).pack(anchor="w", pady=(0, 10))
@@ -2103,6 +2131,11 @@ class BidCaller:
                 os.execl(sys.executable, sys.executable, *sys.argv)
             except Exception:
                 messagebox.showinfo("Restart", "Please close and reopen the app to apply.")
+
+    def _save_company_profile(self):
+        self.company = {k: e.get().strip() for k, e in self._co_entries.items()}
+        write_company_profile(self.company)
+        self._co_saved_lbl.config(text="✅ Saved")
 
     def _clear_saved(self):
         if messagebox.askyesno("Clear Saved", "Remove ALL saved bids and notes?"):
@@ -2194,32 +2227,33 @@ def _dark_title_bar(window):
     except Exception:
         pass
 
-_set_windows_app_id()
-root = tk.Tk()
-_apply_icon(root)
+if __name__ == "__main__":
+    _set_windows_app_id()
+    root = tk.Tk()
+    _apply_icon(root)
 
-style = ttk.Style()
-style.theme_use("clam")
-# Dark, slim scrollbar that matches the app
-style.configure("Vertical.TScrollbar",
-                background=BORDER, troughcolor=BG, bordercolor=BG,
-                arrowcolor=BG, relief="flat", borderwidth=0,
-                width=10)
-style.map("Vertical.TScrollbar",
-          background=[("active", ACCENT), ("!active", BORDER)],
-          arrowcolor=[("disabled", BG)])
-style.layout("Vertical.TScrollbar",
-             [("Vertical.Scrollbar.trough",
-               {"children": [("Vertical.Scrollbar.thumb",
-                              {"expand": "1", "sticky": "nswe"})],
-                "sticky": "ns"})])  # hide the up/down arrow buttons for a clean look
-style.configure("TScrollbar", background=BORDER, troughcolor=BG,
-                bordercolor=BG, arrowcolor=BG, relief="flat", borderwidth=0)
-style.configure("TCombobox", fieldbackground=CARD, background=CARD, foreground=TEXT,
-                selectbackground=CARD, selectforeground=TEXT, arrowcolor=TEXT2)
-style.map("TCombobox", fieldbackground=[("readonly", CARD)])
+    style = ttk.Style()
+    style.theme_use("clam")
+    # Dark, slim scrollbar that matches the app
+    style.configure("Vertical.TScrollbar",
+                    background=BORDER, troughcolor=BG, bordercolor=BG,
+                    arrowcolor=BG, relief="flat", borderwidth=0,
+                    width=10)
+    style.map("Vertical.TScrollbar",
+              background=[("active", ACCENT), ("!active", BORDER)],
+              arrowcolor=[("disabled", BG)])
+    style.layout("Vertical.TScrollbar",
+                 [("Vertical.Scrollbar.trough",
+                   {"children": [("Vertical.Scrollbar.thumb",
+                                  {"expand": "1", "sticky": "nswe"})],
+                    "sticky": "ns"})])  # hide the up/down arrow buttons for a clean look
+    style.configure("TScrollbar", background=BORDER, troughcolor=BG,
+                    bordercolor=BG, arrowcolor=BG, relief="flat", borderwidth=0)
+    style.configure("TCombobox", fieldbackground=CARD, background=CARD, foreground=TEXT,
+                    selectbackground=CARD, selectforeground=TEXT, arrowcolor=TEXT2)
+    style.map("TCombobox", fieldbackground=[("readonly", CARD)])
 
-_dark_title_bar(root)
+    _dark_title_bar(root)
 
-app = BidCaller(root)
-root.mainloop()
+    app = BidCaller(root)
+    root.mainloop()
