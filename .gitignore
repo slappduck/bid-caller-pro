@@ -12,6 +12,7 @@ license_db.json
 last_scan.txt
 last_feed.json
 saved_bids.json
+company_profile.json
 lead_gen_rotation_state.json
 bidcaller_debug.log
 *.log

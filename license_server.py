@@ -273,6 +273,7 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
 SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 FROM_EMAIL = os.environ.get("FROM_EMAIL", "Bid Caller Pro <onboarding@resend.dev>")
+SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL", "Yumiwave1@gmail.com")
 
 
 def _verify_supabase_token(token):
@@ -413,6 +414,38 @@ def mykey():
     if not valid or key in db.get("revoked", []):
         return jsonify({"ok": False, "reason": "inactive"})
     return jsonify({"ok": True, "key": key, "plan": plan, "expires": exp[:10]})
+
+
+@app.route("/support", methods=["POST"])
+def support():
+    """Emails a customer's in-app support message to SUPPORT_EMAIL via
+    Resend — reuses the same email setup as license-key delivery, no new
+    service or secret needed."""
+    data = request.get_json(force=True, silent=True) or {}
+    email = (data.get("email") or "").strip()
+    message = (data.get("message") or "").strip()
+    if not message:
+        return jsonify({"ok": False, "reason": "no_message"})
+    if not RESEND_API_KEY:
+        return jsonify({"ok": False, "reason": "email_unavailable"})
+    payload = {
+        "from": FROM_EMAIL,
+        "to": [SUPPORT_EMAIL],
+        "subject": f"Bid Caller Pro support request{f' from {email}' if email else ''}",
+        "text": message,
+    }
+    if email:
+        payload["reply_to"] = email
+    req = urllib.request.Request(
+        "https://api.resend.com/emails", data=json.dumps(payload).encode("utf-8"),
+        method="POST", headers={"Authorization": f"Bearer {RESEND_API_KEY}",
+                                "Content-Type": "application/json"})
+    try:
+        urllib.request.urlopen(req, timeout=15)
+        return jsonify({"ok": True})
+    except Exception as ex:
+        print(f"[support] email failed: {ex}", flush=True)
+        return jsonify({"ok": False, "reason": "send_failed"}), 500
 
 
 @app.route("/claim", methods=["POST"])

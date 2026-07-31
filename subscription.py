@@ -34,6 +34,7 @@ SERVER_URL = "https://bid-caller-pro.onrender.com"   # live license server
 STRIPE_MONTHLY_URL = "https://buy.stripe.com/5kQcN43YEbge0YafanejK01"  # $19/mo — matches web app
 STRIPE_ANNUAL_URL  = "https://buy.stripe.com/8x26oG7aQesqgX87HVejK03"  # $149/yr — matches web app
 STRIPE_PORTAL_URL  = "https://billing.stripe.com/p/login/3cIcN4an28420Yad2fejK00"
+SUPPORT_EMAIL      = "Yumiwave1@gmail.com"
 
 # How long the app keeps working if it can't reach the server
 OFFLINE_GRACE_DAYS = 5
@@ -180,6 +181,27 @@ def my_key():
         return r.json()
     except Exception:
         return {"ok": False, "reason": "unreachable"}
+
+
+def send_support_message(email, message):
+    """Sends a support message via the server's /support endpoint (emailed
+    to the support inbox via Resend). Returns (ok, message)."""
+    if requests is None:
+        return False, "The 'requests' library isn't installed."
+    try:
+        r = requests.post(SERVER_URL.rstrip("/") + "/support",
+                          json={"email": email, "message": message},
+                          timeout=NETWORK_TIMEOUT)
+        data = r.json()
+    except Exception:
+        return False, "Couldn't reach the server. Check your internet and try again."
+    if data.get("ok"):
+        return True, "Message sent — we'll get back to you soon."
+    reasons = {
+        "no_message": "Enter a message first.",
+        "email_unavailable": "Support messages aren't configured yet — email us directly instead.",
+    }
+    return False, reasons.get(data.get("reason"), "Couldn't send your message. Try again.")
 
 
 def draft_proposal(bid, company):

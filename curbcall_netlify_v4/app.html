@@ -376,6 +376,7 @@ const SUPABASE_URL = "https://novwdthapkorstdtloky.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_sUuQHkrN_wsJqakUMfL_VA_58koZ76C";
 const SERVER = "https://bid-caller-pro.onrender.com";
 const PORTAL_URL = "https://billing.stripe.com/p/login/3cIcN4an28420Yad2fejK00";
+const SUPPORT_EMAIL = "Yumiwave1@gmail.com";
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -1642,6 +1643,13 @@ function renderAccount(){
       <div class="field-label">Specialty (optional)</div>
       <input class="input co-field" id="co-specialty" data-k="specialty" placeholder="sidewalk, ADA ramp &amp; curb concrete work" value="${esc(companyProfile.specialty||"")}" />
     </div>
+    <div class="account-card">
+      <div class="account-email" style="font-size:0.85rem;">&#x1F6DF; Support</div>
+      <div class="account-status" style="margin-bottom:0.7rem;">Send us a message and we'll get back to you, or email <a href="mailto:${SUPPORT_EMAIL}" style="color:var(--amber);">${SUPPORT_EMAIL}</a> directly.</div>
+      <textarea class="input" id="support-msg" rows="4" placeholder="What's going on?" style="resize:vertical;margin-bottom:0.6rem;"></textarea>
+      <button class="btn-ghost" id="support-send-btn">Send Message</button>
+      <div class="account-status" id="support-status" style="margin-top:0.5rem;"></div>
+    </div>
     <div class="plan" id="status-card"><div class="plan-name" style="display:flex;align-items:center;gap:0.5rem;"><span class="spin" style="border-top-color:var(--accent);border-color:rgba(245,158,11,0.25);"></span> Checking your plan...</div></div>
     <a class="btn-ghost" style="text-decoration:none;display:block;text-align:center;box-sizing:border-box;" href="${PORTAL_URL}" target="_blank">&#x1F4B3; Manage Billing on Stripe &rarr;</a>
     <div class="plan featured">
@@ -1675,6 +1683,19 @@ function renderAccount(){
     await sb.auth.signOut();toast("Signed out");
   };
   document.getElementById("notif-card").onclick=toggleNotifPermission;
+  document.getElementById("support-send-btn").onclick=async()=>{
+    const msgBox=document.getElementById("support-msg");
+    const msg=msgBox.value.trim();
+    const statusEl=document.getElementById("support-status");
+    if(!msg){toast("Enter a message first");return;}
+    statusEl.style.color="";statusEl.textContent="Sending...";
+    try{
+      const r=await fetchWithTimeout(SERVER+"/support",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,message:msg})});
+      const d=await r.json();
+      if(d.ok){statusEl.style.color="var(--green)";statusEl.textContent="Message sent — we'll get back to you soon.";msgBox.value="";}
+      else{statusEl.style.color="var(--red)";statusEl.textContent=d.reason==="email_unavailable"?"Support messages aren't configured yet — email us directly instead.":"Couldn't send your message. Try again.";}
+    }catch(e){statusEl.style.color="var(--red)";statusEl.textContent="Couldn't reach the server. Check your internet and try again.";}
+  };
   document.getElementById("sync-now-link").onclick=(e)=>{
     e.preventDefault();
     lastSyncAt=new Date();

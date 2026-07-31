@@ -406,6 +406,7 @@ class BidCaller:
             ("search",    "🌐", "Search City"),
             ("account",   "👤", "Account"),
             ("subscribe", "💳", "Subscription"),
+            ("support",   "🛟", "Support"),
             ("settings",  "⚙",  "Settings"),
         ]
         for key, icon, label in items:
@@ -505,6 +506,7 @@ class BidCaller:
         self._page_search()
         self._page_account()
         self._page_subscribe()
+        self._page_support()
         self._page_settings()
 
     # ═══════════ BID CARD ═══════════
@@ -2855,6 +2857,68 @@ class BidCaller:
             write_company_profile(self.company)
             data_sync.push_company_profile(token, self.company)
             self.root.after(0, lambda: self._load_avatar_thumbnail(url))
+        threading.Thread(target=work, daemon=True).start()
+
+    # ═══════════ PAGE: SUPPORT ═══════════
+    def _page_support(self):
+        pg = tk.Frame(self._container, bg=BG)
+        self._pages["support"] = pg
+        hdr = tk.Frame(pg, bg=BG, pady=18)
+        hdr.pack(fill="x", padx=24)
+        tk.Label(hdr, text="Support", font=F_HEAD, bg=BG, fg=TEXT).pack(side="left")
+        divider(pg, BORDER)
+
+        body = tk.Frame(pg, bg=BG, padx=30, pady=24)
+        body.pack(fill="both", expand=True)
+
+        tk.Label(body, text="Need a hand?", font=F_SUB, bg=BG, fg=ACCENT).pack(anchor="w")
+        tk.Label(body, text="Send us a message and we'll get back to you, or email us directly.",
+                 font=F_SMALL, bg=BG, fg=TEXT3).pack(anchor="w", pady=(0, 14))
+
+        email_row = tk.Frame(body, bg=CARD, padx=16, pady=12)
+        email_row.pack(fill="x", pady=(0, 20))
+        tk.Label(email_row, text=f"✉  {subscription.SUPPORT_EMAIL}",
+                 font=F_BODY, bg=CARD, fg=TEXT, cursor="hand2").pack(side="left")
+        ghost_btn(email_row, "Open Email", self._email_support, font=F_SMALL).pack(side="right")
+
+        tk.Label(body, text="Your Email (so we can reply)", font=F_SMALL, bg=BG, fg=TEXT2).pack(anchor="w", pady=(0, 4))
+        self._support_email_entry = tk.Entry(body, font=F_BODY, bg=CARD, fg=TEXT, insertbackground=TEXT,
+                                             relief="flat", bd=0, width=44, highlightthickness=1,
+                                             highlightbackground=BORDER, highlightcolor=ACCENT)
+        self._support_email_entry.pack(anchor="w", ipady=6, pady=(0, 12))
+        self._support_email_entry.insert(0, auth_client.current_email() or "")
+
+        tk.Label(body, text="Message", font=F_SMALL, bg=BG, fg=TEXT2).pack(anchor="w", pady=(0, 4))
+        self._support_msg_box = tk.Text(body, font=F_BODY, bg=CARD, fg=TEXT, relief="flat", bd=0,
+                                        height=8, wrap="word", insertbackground=TEXT)
+        self._support_msg_box.pack(fill="x", pady=(0, 12))
+
+        pill_btn(body, "Send Message", self._send_support_message, px=18, py=9,
+                 font=F_SMALL).pack(anchor="w")
+        self._support_status_lbl = tk.Label(body, text="", font=F_SMALL, bg=BG, fg=TEXT3)
+        self._support_status_lbl.pack(anchor="w", pady=(8, 0))
+
+    def _email_support(self):
+        addr = getattr(subscription, "SUPPORT_EMAIL", "")
+        if addr:
+            webbrowser.open(f"mailto:{addr}")
+
+    def _send_support_message(self):
+        message = self._support_msg_box.get("1.0", tk.END).strip()
+        if not message:
+            messagebox.showwarning("Support", "Enter a message first.")
+            return
+        email = self._support_email_entry.get().strip()
+        self._support_status_lbl.config(text="Sending...", fg=TEXT2)
+
+        def work():
+            ok, msg = subscription.send_support_message(email, message)
+
+            def apply():
+                self._support_status_lbl.config(text=msg, fg=GREEN if ok else RED)
+                if ok:
+                    self._support_msg_box.delete("1.0", tk.END)
+            self.root.after(0, apply)
         threading.Thread(target=work, daemon=True).start()
 
     # ═══════════ PAGE: SETTINGS ═══════════
