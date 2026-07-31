@@ -141,6 +141,24 @@ def upcoming_id(city, item):
     raw = (str(city) + item.get("title", "") + item.get("scope", "")).encode("utf-8")
     return hashlib.md5(raw).hexdigest()[:12]
 
+# Company info used to personalize AI-drafted proposals — nothing here is
+# sent anywhere except as part of a /draft-proposal request.
+COMPANY_PATH = os.path.join(BASE_DIR, "company_profile.json")
+
+def load_company_profile():
+    try:
+        with open(COMPANY_PATH) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def write_company_profile(d):
+    try:
+        with open(COMPANY_PATH, "w") as f:
+            json.dump(d, f, indent=2)
+    except Exception:
+        pass
+
 PIPELINE_LABELS = [("submitted", "Submitted"), ("won", "Won"),
                    ("lost", "Lost"), ("passed", "Passed")]
 
@@ -229,6 +247,7 @@ class BidCaller:
         self.bid_data = load_feed()
         self.saved = load_saved()
         self.upcoming_data = load_upcoming()
+        self.company = load_company_profile()
         self.scan_running = False
         self.search_results = []
         self._current = "feed"
@@ -518,6 +537,9 @@ class BidCaller:
             pill_btn(btnrow, "🔗  Open Posting",
                      lambda: webbrowser.open(bid["url"]),
                      bg=CARD, fg=TEXT, px=16, py=8, font=F_SMALL).pack(side="left", padx=(0, 8))
+        pill_btn(btnrow, "✍  Draft Proposal",
+                 lambda: self._draft_proposal(city, bid),
+                 bg=CARD, fg=TEXT, px=16, py=8, font=F_SMALL).pack(side="left", padx=(0, 8))
 
         save_txt = "★  Saved" if saved else "☆  Save Lead"
         def do_save():
@@ -525,6 +547,79 @@ class BidCaller:
             win.destroy()
         pill_btn(btnrow, save_txt, do_save, bg=CARD,
                  fg=ACCENT if saved else TEXT, px=16, py=8, font=F_SMALL).pack(side="right")
+
+    def _draft_proposal(self, city, bid):
+        if not bid.get("title", "").strip():
+            messagebox.showwarning("Draft Proposal", "This bid is missing a title.")
+            return
+
+        prog = tk.Toplevel(self.root)
+        _apply_icon(prog)
+        prog.title("Drafting Proposal...")
+        prog.configure(bg=SURFACE)
+        prog.geometry("340x120")
+        prog.transient(self.root)
+        prog.grab_set()
+        tk.Label(prog, text="✍  Drafting your proposal...", font=F_SUB,
+                 bg=SURFACE, fg=TEXT).pack(pady=(24, 6))
+        tk.Label(prog, text="Asking the AI for a ready-to-edit cover letter.",
+                 font=F_SMALL, bg=SURFACE, fg=TEXT3).pack()
+
+        def work():
+            payload_bid = {"title": bid.get("title", ""), "scope": bid.get("scope", ""),
+                           "deadline": bid.get("deadline", ""), "city": city}
+            resp = subscription.draft_proposal(payload_bid, self.company)
+
+            def finish():
+                prog.destroy()
+                if not resp.get("ok"):
+                    reasons = {
+                        "unreachable": "Couldn't reach the server. Check your internet and try again.",
+                        "not_licensed": "Your trial or subscription isn't active.",
+                        "ai_unavailable": "Proposal drafting isn't configured yet.",
+                        "no_bid": "Missing bid details.",
+                        "ai_error": "Couldn't draft a proposal. Try again.",
+                    }
+                    messagebox.showwarning("Draft Proposal",
+                        reasons.get(resp.get("reason"), "Couldn't draft a proposal. Try again."))
+                    return
+                self._show_proposal(bid, resp.get("draft", ""))
+            self.root.after(0, finish)
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _show_proposal(self, bid, draft):
+        win = tk.Toplevel(self.root)
+        _apply_icon(win)
+        win.title("Proposal Draft")
+        win.configure(bg=SURFACE)
+        win.geometry("560x560")
+        win.transient(self.root)
+        win.grab_set()
+
+        tk.Label(win, text="✍️  Proposal Draft", font=(UI, fs(16), "bold"),
+                 bg=SURFACE, fg=TEXT).pack(anchor="w", padx=20, pady=(18, 2))
+        tk.Label(win, text=f"{bid.get('title','')} — AI-generated starting point. Review before sending.",
+                 font=F_SMALL, bg=SURFACE, fg=TEXT3, wraplength=520, justify="left").pack(
+                 anchor="w", padx=20, pady=(0, 10))
+
+        box = tk.Text(win, font=F_BODY, bg=CARD, fg=TEXT, relief="flat", bd=0,
+                      wrap="word", insertbackground=TEXT, padx=12, pady=10)
+        box.pack(fill="both", expand=True, padx=20)
+        box.insert("1.0", draft)
+
+        actions = tk.Frame(win, bg=SURFACE, pady=14)
+        actions.pack(fill="x", padx=20)
+
+        def do_copy():
+            self.root.clipboard_clear()
+            self.root.clipboard_append(box.get("1.0", tk.END).strip())
+            copy_btn.config(text="✅  Copied")
+
+        copy_btn = pill_btn(actions, "📋  Copy", do_copy, px=18, py=9, font=F_SMALL)
+        copy_btn.pack(side="left")
+        pill_btn(actions, "Close", win.destroy, bg=CARD, fg=TEXT,
+                 px=18, py=9, font=F_SMALL).pack(side="right")
 
     def _toggle_save(self, city, bid):
         bid = dict(bid)

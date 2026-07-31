@@ -143,6 +143,26 @@ def upcoming(location, radius):
         return {"ok": False, "reason": "unreachable"}
 
 
+def draft_proposal(bid, company):
+    """Asks the server's AI to draft a bid-proposal cover letter, personalized
+    with the contractor's own saved company info. Nothing about the company
+    is stored server-side — it's only sent on this one request."""
+    if requests is None:
+        return {"ok": False, "reason": "unreachable"}
+    cache = _load_cache()
+    payload = {
+        "key": cache.get("key", ""), "device_id": _device_id(),
+        "supabase_token": auth_client.current_access_token(),
+        "bid": bid, "company": company,
+    }
+    try:
+        r = requests.post(SERVER_URL.rstrip("/") + "/draft-proposal", json=payload,
+                          timeout=45)
+        return r.json()
+    except Exception:
+        return {"ok": False, "reason": "unreachable"}
+
+
 # ── Public API used by the app ────────────────────────────
 def get_status():
     """
