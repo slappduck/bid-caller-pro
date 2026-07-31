@@ -633,6 +633,7 @@ function showApp(){
   autoFillZip();
   autoUnlock();
   checkSavedSearches();
+  lastSyncAt=new Date();
   syncPullSavedBids();
   syncPullCompanyProfile();
   syncPullSavedSearches();
@@ -1557,9 +1558,34 @@ document.getElementById("export-saved-btn").onclick=()=>{
   exportCSV(keys.map(id=>[saved[id]._city||"",saved[id]]),"curbcall_saved");
 };
 
+// Win rate + $ won + $ tracked across all saved bids — mirrors desktop's
+// _pipeline_stats(), used for the Account tab's stats summary.
+function pipelineStatsSummary(){
+  const ids=Object.keys(saved);
+  let won=0,lost=0,wonValue=0,trackedValue=0;
+  ids.forEach(id=>{
+    const st=pipeline[id];
+    if(st==="won")won++;
+    if(st==="lost")lost++;
+    const v=parseValue(saved[id]&&saved[id].value);
+    if(v>=0){
+      trackedValue+=v;
+      if(st==="won")wonValue+=v;
+    }
+  });
+  const decided=won+lost;
+  const winRate=decided?Math.round(won/decided*100)+"%":"—";
+  return{count:ids.length,winRate,wonValue,trackedValue};
+}
+let lastSyncAt=null;
 function renderAccount(){
   const body=document.getElementById("account-body");
   const email=currentUser?.email||"";
+  const created=(currentUser?.created_at||"").slice(0,10);
+  const stats=pipelineStatsSummary();
+  const syncText=lastSyncAt
+    ?`Last synced ${lastSyncAt.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}`
+    :"Not synced yet this session";
 
   // tag stripe links with device id — these are the live $19/mo and $149/yr
   // Payment Links (match the ones on index.html); update both files together
@@ -1570,7 +1596,20 @@ function renderAccount(){
   body.innerHTML=`
     <div class="account-card">
       <div class="account-email">&#x1F464; ${esc(email)}</div>
-      <div class="account-status">Signed in with ${currentUser?.app_metadata?.provider||"email"}</div>
+      <div class="account-status">Signed in with ${currentUser?.app_metadata?.provider||"email"}${created?` &middot; Member since ${esc(created)}`:""}</div>
+    </div>
+    <div class="account-card">
+      <div class="account-email" style="font-size:0.85rem;margin-bottom:0.6rem;">&#x1F4CA; Your Stats</div>
+      <div class="stats-grid">
+        <div class="stat-box"><div class="n">${stats.count}</div><div class="l">Saved Bids</div></div>
+        <div class="stat-box"><div class="n">${stats.winRate}</div><div class="l">Win Rate</div></div>
+        <div class="stat-box"><div class="n">${formatMoney(stats.wonValue)}</div><div class="l">Won</div></div>
+        <div class="stat-box"><div class="n">${formatMoney(stats.trackedValue)}</div><div class="l">Tracked</div></div>
+      </div>
+      <div class="account-status" style="margin-top:0.7rem;display:flex;align-items:center;justify-content:space-between;">
+        <span>&#x1F504; ${esc(syncText)}</span>
+        <a href="#" id="sync-now-link" style="color:var(--amber);">Sync now</a>
+      </div>
     </div>
     <div class="account-card" id="notif-card" style="cursor:pointer;">
       <div class="account-email" style="font-size:0.85rem;">&#x1F514; Bid Alerts</div>
@@ -1623,6 +1662,12 @@ function renderAccount(){
     await sb.auth.signOut();toast("Signed out");
   };
   document.getElementById("notif-card").onclick=toggleNotifPermission;
+  document.getElementById("sync-now-link").onclick=(e)=>{
+    e.preventDefault();
+    lastSyncAt=new Date();
+    syncPullSavedBids();syncPullCompanyProfile();syncPullSavedSearches();
+    renderAccount();
+  };
   document.querySelectorAll(".co-field").forEach(f=>{
     f.addEventListener("blur",()=>{
       companyProfile[f.dataset.k]=f.value.trim();

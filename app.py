@@ -403,6 +403,7 @@ class BidCaller:
             ("scan",      "🔍", "Find Bids"),
             ("upcoming",  "📡", "Upcoming"),
             ("search",    "🌐", "Search City"),
+            ("account",   "👤", "Account"),
             ("subscribe", "💳", "Subscription"),
             ("settings",  "⚙",  "Settings"),
         ]
@@ -486,6 +487,8 @@ class BidCaller:
             self._show_feed_badge(False)
         elif key == "upcoming":
             self._render_upcoming()
+        elif key == "account":
+            self._render_account()
         elif key == "subscribe":
             self._try_auto_unlock()
 
@@ -499,6 +502,7 @@ class BidCaller:
         self._page_scan()
         self._page_upcoming()
         self._page_search()
+        self._page_account()
         self._page_subscribe()
         self._page_settings()
 
@@ -1150,6 +1154,26 @@ class BidCaller:
         self._saved_tiles_frame.pack(fill="x", padx=20, pady=(10, 4))
         self._saved_frame = scrollable(pg)
 
+    def _pipeline_stats(self):
+        """Win rate + $ won + $ tracked across all saved bids — used by the
+        Saved tab's scoreboard and the Account tab's stats summary."""
+        counts = {"All": len(self.saved), "none": 0, "submitted": 0, "won": 0, "lost": 0, "passed": 0}
+        won_value, tracked_value = 0.0, 0.0
+        for rec in self.saved.values():
+            st = rec.get("pipeline", "")
+            if st:
+                counts[st] = counts.get(st, 0) + 1
+            else:
+                counts["none"] += 1
+            v = parse_value(rec.get("value"))
+            if v >= 0:
+                tracked_value += v
+                if st == "won":
+                    won_value += v
+        decided = counts["won"] + counts["lost"]
+        win_rate = f"{round(counts['won'] / decided * 100)}%" if decided else "—"
+        return counts, win_rate, won_value, tracked_value
+
     def _render_saved(self):
         for w in self._saved_stats_frame.winfo_children():
             w.destroy()
@@ -1171,22 +1195,7 @@ class BidCaller:
         self._saved_export_btn.pack(side="right")
 
         # ── Pipeline scoreboard: win rate + $ won + $ tracked ──
-        counts = {"All": len(self.saved), "none": 0, "submitted": 0, "won": 0, "lost": 0, "passed": 0}
-        won_value, tracked_value = 0.0, 0.0
-        for rec in self.saved.values():
-            st = rec.get("pipeline", "")
-            if st:
-                counts[st] = counts.get(st, 0) + 1
-            else:
-                counts["none"] += 1
-            v = parse_value(rec.get("value"))
-            if v >= 0:
-                tracked_value += v
-                if st == "won":
-                    won_value += v
-
-        decided = counts["won"] + counts["lost"]
-        win_rate = f"{round(counts['won'] / decided * 100)}%" if decided else "—"
+        counts, win_rate, won_value, tracked_value = self._pipeline_stats()
         for n, label in [(win_rate, "Win Rate"),
                           (str(counts["won"]), f"Won ({format_money(won_value)})"),
                           (format_money(tracked_value), "Tracked Value")]:
@@ -2317,6 +2326,9 @@ class BidCaller:
     def _do_sign_out(self):
         auth_client.sign_out()
         self._build_subscribe_body(self._pages["subscribe"])
+        if hasattr(self, "_account_frame"):
+            self._render_account()
+        self._refresh_sub_lbl()
 
     def _show_signin(self):
         self._auth_mode = "signin"
@@ -2455,6 +2467,9 @@ class BidCaller:
         token = auth_client.current_access_token()
         if not token:
             return
+        self._last_sync_at = datetime.datetime.now()
+        if hasattr(self, "_account_frame") and self._current == "account":
+            self._render_account()
 
         def work_bids():
             cloud = data_sync.pull_saved_bids(token)
@@ -2668,6 +2683,121 @@ class BidCaller:
         else:
             self._reset_code_msg.config(text="❌ " + msg, fg=RED)
 
+    # ═══════════ PAGE: ACCOUNT ═══════════
+    def _page_account(self):
+        pg = tk.Frame(self._container, bg=BG)
+        self._pages["account"] = pg
+        hdr = tk.Frame(pg, bg=BG, pady=18)
+        hdr.pack(fill="x", padx=24)
+        tk.Label(hdr, text="Account", font=F_HEAD, bg=BG, fg=TEXT).pack(side="left")
+        divider(pg, BORDER)
+        self._account_frame = scrollable(pg)
+        self._last_sync_at = None
+
+    def _render_account(self):
+        for w in self._account_frame.winfo_children():
+            w.destroy()
+        body = tk.Frame(self._account_frame, bg=BG, padx=30, pady=24)
+        body.pack(fill="both", expand=True)
+
+        email = auth_client.current_email()
+        if not email:
+            tk.Label(body, text="👤", font=(UI, fs(36)), bg=BG, fg=BORDER).pack(pady=(30, 6))
+            tk.Label(body, text="Not signed in", font=(UI, fs(16), "bold"),
+                     bg=BG, fg=TEXT2).pack()
+            tk.Label(body, text="Sign in to sync your saved bids, company profile, and "
+                     "searches across every device.", font=F_BODY, bg=BG, fg=TEXT3,
+                     wraplength=420, justify="center").pack(pady=(6, 16))
+            pill_btn(body, "Sign In / Create Account",
+                     lambda: (self._nav("subscribe"), self._show_signin()),
+                     px=20, py=10, font=(UI, fs(12), "bold")).pack()
+            return
+
+        # ── Identity row ──
+        idrow = tk.Frame(body, bg=CARD, padx=18, pady=14)
+        idrow.pack(fill="x")
+        left = tk.Frame(idrow, bg=CARD)
+        left.pack(side="left", fill="x", expand=True)
+        tk.Label(left, text=f"👤  {email}", font=(UI, fs(13), "bold"),
+                 bg=CARD, fg=TEXT).pack(anchor="w")
+        self._account_meta_lbl = tk.Label(left, text="Loading account details...",
+                                          font=F_SMALL, bg=CARD, fg=TEXT3)
+        self._account_meta_lbl.pack(anchor="w", pady=(2, 0))
+        ghost_btn(idrow, "Sign Out", self._do_sign_out, font=F_SMALL).pack(side="right")
+
+        def fetch_info():
+            info = auth_client.get_user_info()
+
+            def apply():
+                if not hasattr(self, "_account_meta_lbl"):
+                    return
+                provider = ((info.get("app_metadata") or {}).get("provider") or "email").title()
+                created = (info.get("created_at") or "")[:10]
+                meta = f"Signed in with {provider}"
+                if created:
+                    meta += f"   •   Member since {created}"
+                self._account_meta_lbl.config(text=meta)
+            self.root.after(0, apply)
+        threading.Thread(target=fetch_info, daemon=True).start()
+
+        # ── Stats ──
+        tk.Label(body, text="Your Stats", font=F_SUB, bg=BG, fg=ACCENT).pack(anchor="w", pady=(20, 8))
+        counts, win_rate, won_value, tracked_value = self._pipeline_stats()
+        stats_row = tk.Frame(body, bg=BG)
+        stats_row.pack(fill="x")
+        for n, label in [(str(counts["All"]), "Saved Bids"), (win_rate, "Win Rate"),
+                          (format_money(won_value), "Won"), (format_money(tracked_value), "Tracked Value")]:
+            box = tk.Frame(stats_row, bg=CARD, padx=14, pady=10)
+            box.pack(side="left", fill="x", expand=True, padx=(0, 8))
+            tk.Label(box, text=n, font=(UI, fs(16), "bold"), bg=CARD, fg=TEXT).pack()
+            tk.Label(box, text=label, font=F_SMALL, bg=CARD, fg=TEXT3).pack()
+
+        # ── Sync status ──
+        sync_row = tk.Frame(body, bg=BG)
+        sync_row.pack(fill="x", pady=(10, 0))
+        sync_text = (f"🔄  Last synced {self._last_sync_at.strftime('%-I:%M %p')}"
+                    if self._last_sync_at else "🔄  Not synced yet this session")
+        tk.Label(sync_row, text=sync_text, font=F_SMALL, bg=BG, fg=TEXT3).pack(side="left")
+        ghost_btn(sync_row, "Sync Now", self._sync_pull_after_signin, font=F_SMALL).pack(side="left", padx=(10, 0))
+
+        divider(body, BORDER, pad=0)
+        tk.Frame(body, bg=BG, height=20).pack()
+
+        # ── Company Profile ──
+        tk.Label(body, text="Company Profile", font=F_SUB, bg=BG, fg=ACCENT).pack(anchor="w", pady=(0, 4))
+        tk.Label(body, text="Used to personalize AI-drafted bid proposals. Nothing here is "
+                 "shared beyond that.", font=F_SMALL, bg=BG, fg=TEXT3,
+                 wraplength=500, justify="left").pack(anchor="w", pady=(0, 10))
+
+        co_fields = [("name", "Company Name", "Acme Concrete LLC"),
+                     ("contact", "Contact Person", "Jane Doe"),
+                     ("phone", "Phone", "(555) 555-5555"),
+                     ("email", "Email", "you@company.com"),
+                     ("specialty", "Specialty (optional)", "sidewalk, ADA ramp & curb concrete work")]
+        self._co_entries = {}
+        for key, label, placeholder in co_fields:
+            tk.Label(body, text=label, font=F_SMALL, bg=BG, fg=TEXT2).pack(anchor="w", pady=(6, 2))
+            e = tk.Entry(body, font=F_BODY, bg=CARD, fg=TEXT, insertbackground=TEXT,
+                        relief="flat", bd=0, width=44, highlightthickness=1,
+                        highlightbackground=BORDER, highlightcolor=ACCENT)
+            e.pack(anchor="w", ipady=6)
+            e.insert(0, self.company.get(key, ""))
+            self._co_entries[key] = e
+
+        pill_btn(body, "Save Company Info", self._save_company_profile, px=18, py=9,
+                 font=F_SMALL).pack(anchor="w", pady=(14, 0))
+        self._co_saved_lbl = tk.Label(body, text="", font=F_SMALL, bg=BG, fg=GREEN)
+        self._co_saved_lbl.pack(anchor="w", pady=(6, 0))
+
+        divider(body, BORDER, pad=0)
+        tk.Frame(body, bg=BG, height=20).pack()
+
+        # ── Quick links ──
+        links = tk.Frame(body, bg=BG)
+        links.pack(fill="x")
+        ghost_btn(links, "💳  Manage Subscription →", lambda: self._nav("subscribe"),
+                 font=F_SMALL).pack(side="left")
+
     # ═══════════ PAGE: SETTINGS ═══════════
     def _page_settings(self):
         pg = tk.Frame(self._container, bg=BG)
@@ -2697,34 +2827,6 @@ class BidCaller:
         tk.Label(body, text="Changing text size restarts the app.",
                  font=F_SMALL, bg=BG, fg=TEXT3).pack(anchor="w", pady=(6, 24))
         divider(body, BORDER)
-
-        tk.Label(body, text="Company Info", font=F_SUB, bg=BG, fg=ACCENT).pack(anchor="w", pady=(20, 4))
-        tk.Label(body, text="Used to personalize AI-drafted bid proposals. Nothing here is "
-                 "shared beyond that.", font=F_SMALL, bg=BG, fg=TEXT3,
-                 wraplength=500, justify="left").pack(anchor="w", pady=(0, 10))
-
-        co_fields = [("name", "Company Name", "Acme Concrete LLC"),
-                     ("contact", "Contact Person", "Jane Doe"),
-                     ("phone", "Phone", "(555) 555-5555"),
-                     ("email", "Email", "you@company.com"),
-                     ("specialty", "Specialty (optional)", "sidewalk, ADA ramp & curb concrete work")]
-        self._co_entries = {}
-        for key, label, placeholder in co_fields:
-            tk.Label(body, text=label, font=F_SMALL, bg=BG, fg=TEXT2).pack(anchor="w", pady=(6, 2))
-            e = tk.Entry(body, font=F_BODY, bg=CARD, fg=TEXT, insertbackground=TEXT,
-                        relief="flat", bd=0, width=44, highlightthickness=1,
-                        highlightbackground=BORDER, highlightcolor=ACCENT)
-            e.pack(anchor="w", ipady=6)
-            e.insert(0, self.company.get(key, ""))
-            self._co_entries[key] = e
-
-        pill_btn(body, "Save Company Info", self._save_company_profile, px=18, py=9,
-                 font=F_SMALL).pack(anchor="w", pady=(14, 0))
-        self._co_saved_lbl = tk.Label(body, text="", font=F_SMALL, bg=BG, fg=GREEN)
-        self._co_saved_lbl.pack(anchor="w", pady=(6, 0))
-
-        divider(body, BORDER, pad=0)
-        tk.Frame(body, bg=BG, height=20).pack()
 
         tk.Label(body, text="Your Data", font=F_SUB, bg=BG, fg=ACCENT).pack(anchor="w", pady=(20, 4))
         tk.Label(body, text=f"Saved bids: {len(self.saved)}   •   Stored on this computer only.",

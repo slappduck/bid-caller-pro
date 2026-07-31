@@ -99,6 +99,24 @@ def sign_out():
     _save_session({})
 
 
+def get_user_info():
+    """Fetches account details (created_at, id, etc.) for the signed-in
+    user, for display on the Account/Profile screen. Returns {} if signed
+    out or the server can't be reached — never raises."""
+    token = current_access_token()
+    if not token or requests is None:
+        return {}
+    try:
+        r = requests.get(f"{SUPABASE_URL}/auth/v1/user", headers={
+            "apikey": SUPABASE_ANON_KEY, "Authorization": f"Bearer {token}",
+        }, timeout=NETWORK_TIMEOUT)
+        if r.status_code == 200:
+            return r.json()
+    except Exception:
+        pass
+    return {}
+
+
 # ── Low-level request helper ───────────────────────────────
 def _auth_post(path, payload, access_token=None, params=None):
     if requests is None:
