@@ -397,9 +397,71 @@ let cityFilter="All";
 let pipelineFilter="All";
 let currentUser=null;
 
+// ── Cloud sync (Supabase) for saved bids — mirrors desktop's data_sync.py.
+// Saved/pipeline/notes are three separate localStorage keys here (unlike
+// desktop's single unified record), so these helpers combine them into one
+// row on push and split them back out on pull. Every call fails soft —
+// signed out, offline, or the sync tables not created yet just means the
+// local copy keeps being the source of truth.
+function findBidWithCity(id){
+  for(const c in bidData){const b=bidData[c].find(x=>bidId(c,x)===id);if(b)return[c,b];}
+  if(saved[id])return[saved[id]._city||"",saved[id]];
+  return[null,null];
+}
+function bidRowForSync(id,city){
+  const b=saved[id];
+  if(!b)return null;
+  return{
+    bid_id:id,city:city||b._city||"",
+    title:b.title||"",scope:b.scope||"",value:b.value||"",
+    deadline:b.deadline||"",contact:b.contact||"",email:b.email||"",
+    phone:b.phone||"",url:b.url||"",status:b.status||"",
+    pipeline:pipeline[id]||"",note:notes[id]||"",
+    saved_at:b.saved_at||new Date().toISOString().slice(0,10),
+  };
+}
+async function pushSavedBid(id,city){
+  if(!currentUser)return;
+  const row=bidRowForSync(id,city);
+  if(!row)return;
+  try{await sb.from("saved_bids").upsert(row,{onConflict:"user_id,bid_id"});}catch(e){}
+}
+async function deleteSavedBidCloud(id){
+  if(!currentUser)return;
+  try{await sb.from("saved_bids").delete().eq("bid_id",id);}catch(e){}
+}
+async function syncPullSavedBids(){
+  if(!currentUser)return;
+  const{data,error}=await sb.from("saved_bids").select("*");
+  if(error||!data)return; // couldn't reach the cloud — leave local data alone
+  const cloudIds=new Set(data.map(r=>r.bid_id));
+  const localOnlyIds=Object.keys(saved).filter(id=>!cloudIds.has(id));
+  data.forEach(row=>{
+    saved[row.bid_id]={
+      title:row.title,scope:row.scope,value:row.value,deadline:row.deadline,
+      contact:row.contact,email:row.email,phone:row.phone,url:row.url,
+      status:row.status,_city:row.city,saved_at:row.saved_at,
+    };
+    if(row.pipeline)pipeline[row.bid_id]=row.pipeline;else delete pipeline[row.bid_id];
+    if(row.note)notes[row.bid_id]=row.note;else delete notes[row.bid_id];
+  });
+  store.set("saved",saved);store.set("pipeline",pipeline);store.set("notes",notes);
+  for(const id of localOnlyIds)await pushSavedBid(id,saved[id]._city);
+  if(document.getElementById("screen-feed").classList.contains("active"))renderFeed();
+  if(document.getElementById("screen-saved").classList.contains("active"))renderSaved();
+}
+
 window.setPipelineStatus=function(id,status){
   if(status)pipeline[id]=status;else delete pipeline[id];
   store.set("pipeline",pipeline);
+  // Setting a status on a bid that isn't starred yet saves it too —
+  // tracking a bid's status is itself a reason to keep it (same rule as
+  // the desktop app, so the two stay consistent when synced).
+  if(status&&!saved[id]){
+    const[c,b]=findBidWithCity(id);
+    if(b){saved[id]={...b,_city:c||""};store.set("saved",saved);}
+  }
+  if(saved[id])pushSavedBid(id,saved[id]._city);
 };
 window.refreshAfterPipeline=function(cityEnc,idEnc){
   const city=decodeURIComponent(cityEnc),id=decodeURIComponent(idEnc);
@@ -544,6 +606,7 @@ function showApp(){
   autoFillZip();
   autoUnlock();
   checkSavedSearches();
+  syncPullSavedBids();
 }
 
 // ── Nav ──
@@ -1236,8 +1299,8 @@ function findBid(id){
   return saved[id]||null;
 }
 function toggleSave(city,id){
-  if(saved[id])delete saved[id];
-  else{const b=findBid(id);if(b)saved[id]={...b,_city:city};}
+  if(saved[id]){delete saved[id];deleteSavedBidCloud(id);}
+  else{const b=findBid(id);if(b){saved[id]={...b,_city:city};pushSavedBid(id,city);}}
   store.set("saved",saved);
   renderFeed();
   if(document.getElementById("screen-saved").classList.contains("active"))renderSaved();
@@ -1280,8 +1343,17 @@ function openDetail(city,b){
   document.getElementById("modal").classList.add("open");
   document.getElementById("bid-notes").addEventListener("blur",()=>{
     const val=document.getElementById("bid-notes").value;
-    if(val.trim())notes[id]=val;else delete notes[id];
+    if(val.trim()){
+      notes[id]=val;
+      if(!saved[id]){
+        const[c,b]=findBidWithCity(id);
+        if(b){saved[id]={...b,_city:c||""};store.set("saved",saved);}
+      }
+    }else{
+      delete notes[id];
+    }
     store.set("notes",notes);
+    if(saved[id])pushSavedBid(id,saved[id]._city);
   });
 }
 window.shareBid=async function(cityEnc,idEnc){
