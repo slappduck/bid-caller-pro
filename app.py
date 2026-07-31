@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import math
+import re
 import hashlib
 import threading
 import webbrowser
@@ -139,6 +140,29 @@ def write_upcoming(d):
 def upcoming_id(city, item):
     raw = (str(city) + item.get("title", "") + item.get("scope", "")).encode("utf-8")
     return hashlib.md5(raw).hexdigest()[:12]
+
+PIPELINE_LABELS = [("submitted", "Submitted"), ("won", "Won"),
+                   ("lost", "Lost"), ("passed", "Passed")]
+
+def parse_value(v):
+    """'$1.2M' -> 1200000.0, '$85k' -> 85000.0, '' -> -1 (unparseable)."""
+    s = str(v or "").lower()
+    m = re.search(r"[\d.]+", s.replace(",", ""))
+    if not m:
+        return -1.0
+    n = float(m.group())
+    if "m" in s:
+        n *= 1_000_000
+    elif "k" in s:
+        n *= 1_000
+    return n
+
+def format_money(n):
+    if n >= 1_000_000:
+        return f"${n/1_000_000:.{0 if n % 1_000_000 == 0 else 1}f}M"
+    if n >= 1_000:
+        return f"${n/1_000:.{0 if n % 1_000 == 0 else 1}f}k"
+    return f"${round(n)}"
 
 # ═══════════════════════════════════════════════
 #  WIDGET HELPERS
@@ -358,6 +382,10 @@ class BidCaller:
             chip(f"💲  {bid['value']}", GREEN)
         if bid.get("contact"):
             chip(f"👤  {bid['contact']}", TEXT2)
+        pipeline = self.saved.get(bid["_id"], {}).get("pipeline", "") if is_saved else ""
+        if pipeline:
+            pcolor = {"won": GREEN, "lost": RED}.get(pipeline, ACCENT)
+            chip(pipeline.upper(), pcolor)
 
         # "Details" opens the full popup
         det = tk.Label(meta, text="🔎  Details →", font=(UI, fs(9), "bold"),
@@ -455,6 +483,26 @@ class BidCaller:
         if note:
             field("Your Note", note)
 
+        pipeline = self.saved.get(key, {}).get("pipeline", "")
+        prow = tk.Frame(inner, bg=SURFACE)
+        prow.pack(fill="x", padx=22, pady=(14, 0))
+        tk.Label(prow, text="BID STATUS", font=(UI, fs(8), "bold"),
+                 bg=SURFACE, fg=TEXT3, anchor="w").pack(anchor="w", pady=(0, 4))
+        pbtns = tk.Frame(prow, bg=SURFACE)
+        pbtns.pack(anchor="w")
+
+        def pick_status(status):
+            self._set_pipeline_status(city, bid, status)
+            win.destroy()
+            self._show_bid_detail(city, bid)
+
+        for skey, slabel in PIPELINE_LABELS:
+            active = (pipeline == skey)
+            bg_c = {"won": GREEN, "lost": RED}.get(skey, ACCENT) if active else CARD
+            fg_c = "#000" if active else TEXT2
+            pill_btn(pbtns, slabel, lambda s=skey: pick_status(s), bg=bg_c, fg=fg_c,
+                     px=12, py=6, font=F_SMALL).pack(side="left", padx=(0, 6))
+
         # Action buttons
         actions = tk.Frame(win, bg=SURFACE, pady=14)
         actions.pack(fill="x", padx=22)
@@ -489,6 +537,24 @@ class BidCaller:
             rec["note"] = ""
             rec["saved_at"] = datetime.datetime.now().strftime("%d %b %Y")
             self.saved[key] = rec
+        write_saved(self.saved)
+        self._refresh_all()
+
+    def _set_pipeline_status(self, city, bid, status):
+        """Sets/clears a Submitted/Won/Lost/Passed status. Setting a status
+        on a bid that isn't saved yet saves it too — tracking a bid's status
+        is itself a reason to keep it."""
+        bid = dict(bid)
+        key = bid_id(city, bid)
+        current = self.saved.get(key, {}).get("pipeline", "")
+        new_status = "" if current == status else status
+        if key not in self.saved:
+            rec = dict(bid)
+            rec["_city"] = city
+            rec["note"] = ""
+            rec["saved_at"] = datetime.datetime.now().strftime("%d %b %Y")
+            self.saved[key] = rec
+        self.saved[key]["pipeline"] = new_status
         write_saved(self.saved)
         self._refresh_all()
 
@@ -715,16 +781,28 @@ class BidCaller:
     def _page_saved(self):
         pg = tk.Frame(self._container, bg=BG)
         self._pages["saved"] = pg
+        self._saved_pipeline_filter = "All"
         hdr = tk.Frame(pg, bg=BG, pady=18)
         hdr.pack(fill="x", padx=24)
         tk.Label(hdr, text="Saved Bids", font=F_HEAD, bg=BG, fg=TEXT).pack(side="left")
+        self._saved_export_btn = ghost_btn(hdr, "  ⬇  Export  ", self._export_saved_csv, font=F_SMALL)
         divider(pg, BORDER)
+        self._saved_stats_frame = tk.Frame(pg, bg=BG)
+        self._saved_stats_frame.pack(fill="x", padx=20, pady=(14, 0))
+        self._saved_tiles_frame = tk.Frame(pg, bg=BG)
+        self._saved_tiles_frame.pack(fill="x", padx=20, pady=(10, 4))
         self._saved_frame = scrollable(pg)
 
     def _render_saved(self):
+        for w in self._saved_stats_frame.winfo_children():
+            w.destroy()
+        for w in self._saved_tiles_frame.winfo_children():
+            w.destroy()
         for w in self._saved_frame.winfo_children():
             w.destroy()
+
         if not self.saved:
+            self._saved_export_btn.pack_forget()
             e = tk.Frame(self._saved_frame, bg=BG, pady=70)
             e.pack(fill="x")
             tk.Label(e, text="⭐", font=(UI, fs(36)), bg=BG, fg=BORDER).pack()
@@ -733,12 +811,108 @@ class BidCaller:
             tk.Label(e, text="Tap the ☆ on any bid to save it here for later.",
                      font=F_BODY, bg=BG, fg=TEXT3).pack()
             return
-        tk.Label(self._saved_frame, text=f"  {len(self.saved)} saved bid(s)",
+        self._saved_export_btn.pack(side="right")
+
+        # ── Pipeline scoreboard: win rate + $ won + $ tracked ──
+        counts = {"All": len(self.saved), "none": 0, "submitted": 0, "won": 0, "lost": 0, "passed": 0}
+        won_value, tracked_value = 0.0, 0.0
+        for rec in self.saved.values():
+            st = rec.get("pipeline", "")
+            if st:
+                counts[st] = counts.get(st, 0) + 1
+            else:
+                counts["none"] += 1
+            v = parse_value(rec.get("value"))
+            if v >= 0:
+                tracked_value += v
+                if st == "won":
+                    won_value += v
+
+        decided = counts["won"] + counts["lost"]
+        win_rate = f"{round(counts['won'] / decided * 100)}%" if decided else "—"
+        for n, label in [(win_rate, "Win Rate"),
+                          (str(counts["won"]), f"Won ({format_money(won_value)})"),
+                          (format_money(tracked_value), "Tracked Value")]:
+            box = tk.Frame(self._saved_stats_frame, bg=CARD, padx=14, pady=10)
+            box.pack(side="left", fill="x", expand=True, padx=(0, 8))
+            tk.Label(box, text=n, font=(UI, fs(16), "bold"), bg=CARD, fg=TEXT).pack()
+            tk.Label(box, text=label, font=F_SMALL, bg=CARD, fg=TEXT3).pack()
+
+        # ── Filter tiles ──
+        cats = [("All", "All"), ("none", "Untracked")] + PIPELINE_LABELS
+        for key, label in cats:
+            if key != "All" and not counts.get(key):
+                continue
+            active = (self._saved_pipeline_filter == key)
+            tile = tk.Frame(self._saved_tiles_frame, bg=CARD if active else SURFACE,
+                            highlightbackground=ACCENT if active else BORDER,
+                            highlightthickness=1, padx=12, pady=8, cursor="hand2")
+            tile.pack(side="left", padx=(0, 8))
+            n_lbl = tk.Label(tile, text=str(counts.get(key, 0)), font=(UI, fs(13), "bold"),
+                             bg=tile["bg"], fg=TEXT)
+            n_lbl.pack()
+            l_lbl = tk.Label(tile, text=label, font=F_SMALL, bg=tile["bg"], fg=TEXT2)
+            l_lbl.pack()
+            def pick(k=key):
+                self._saved_pipeline_filter = k
+                self._render_saved()
+            for w in (tile, n_lbl, l_lbl):
+                w.bind("<Button-1>", lambda e, k=key: pick(k))
+
+        # ── Filtered list ──
+        f = self._saved_pipeline_filter
+        if f == "All":
+            filtered = list(self.saved.items())
+        elif f == "none":
+            filtered = [(k, r) for k, r in self.saved.items() if not r.get("pipeline")]
+        else:
+            filtered = [(k, r) for k, r in self.saved.items() if r.get("pipeline") == f]
+
+        if not filtered:
+            tk.Label(self._saved_frame, text="Nothing here with this status.",
+                     font=F_BODY, bg=BG, fg=TEXT3).pack(pady=40)
+            return
+        tk.Label(self._saved_frame, text=f"  {len(filtered)} saved bid(s)",
                  font=(UI, fs(9), "bold"), bg=BG, fg=ACCENT).pack(
                  anchor="w", padx=20, pady=(14, 4))
-        for key, rec in list(self.saved.items()):
+        for key, rec in filtered:
             self._bid_card(self._saved_frame, rec, rec.get("_city", ""))
         tk.Frame(self._saved_frame, bg=BG, height=30).pack()
+
+    def _export_saved_csv(self):
+        """Exports the currently filtered saved bids, including pipeline status."""
+        f = getattr(self, "_saved_pipeline_filter", "All")
+        if f == "All":
+            rows = list(self.saved.items())
+        elif f == "none":
+            rows = [(k, r) for k, r in self.saved.items() if not r.get("pipeline")]
+        else:
+            rows = [(k, r) for k, r in self.saved.items() if r.get("pipeline") == f]
+        if not rows:
+            messagebox.showinfo("Nothing to Export", "No saved bids match this filter.")
+            return
+        import csv
+        from tkinter import filedialog
+        default = f"bid_caller_saved_{datetime.datetime.now().strftime('%Y%m%d')}.csv"
+        path = filedialog.asksaveasfilename(
+            defaultextension=".csv", initialfile=default,
+            filetypes=[("CSV files", "*.csv")], title="Save bids as CSV")
+        if not path:
+            return
+        try:
+            with open(path, "w", newline="", encoding="utf-8") as f_out:
+                w = csv.writer(f_out)
+                w.writerow(["City", "Title", "Scope", "Est. Value", "Deadline",
+                            "Contact", "Email", "Phone", "Source URL", "Pipeline Status"])
+                for _, rec in rows:
+                    w.writerow([rec.get("_city", ""), rec.get("title", ""), rec.get("scope", ""),
+                                rec.get("value", ""), rec.get("deadline", ""), rec.get("contact", ""),
+                                rec.get("email", ""), rec.get("phone", ""), rec.get("url", ""),
+                                rec.get("pipeline", "")])
+            messagebox.showinfo("Exported", f"Saved your bids to:\n{path}")
+        except Exception as e:
+            debug(f"Saved CSV export failed: {e}")
+            messagebox.showerror("Export Failed", "Couldn't save the file. Try a different location.")
 
     # ═══════════ PAGE: FIND BIDS (location-based) ═══════════
     def _page_scan(self):
@@ -835,8 +1009,17 @@ class BidCaller:
     def _update_loc_map(self, lat, lon, label=""):
         if not getattr(self, "_loc_map", None):
             return
+        # Only force the zoom level on the very first location set. Forcing
+        # it on every call — including from background callbacks that can
+        # land late (auto-locate on startup, a town-marker refresh finishing
+        # after the user has since zoomed out to look around) — snaps the
+        # view back to a zoom level whose tiles aren't cached yet, which
+        # shows as the map briefly rendering, then going blank while it
+        # re-fetches.
+        first_time = self._loc_marker is None
         self._loc_map.set_position(lat, lon)
-        self._loc_map.set_zoom(11)
+        if first_time:
+            self._loc_map.set_zoom(11)
         if self._loc_marker:
             self._loc_marker.delete()
         self._loc_marker = self._loc_map.set_marker(lat, lon, text=label or "You are here")
