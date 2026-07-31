@@ -5,7 +5,7 @@
 -- client needs; no service-role key required for normal app operation.
 
 create table if not exists saved_bids (
-  user_id uuid references auth.users(id) on delete cascade,
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   bid_id text not null,
   city text default '',
   title text default '',
@@ -29,7 +29,7 @@ create policy "Users manage their own saved bids" on saved_bids
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 create table if not exists company_profiles (
-  user_id uuid primary key references auth.users(id) on delete cascade,
+  user_id uuid primary key default auth.uid() references auth.users(id) on delete cascade,
   name text default '',
   contact text default '',
   phone text default '',
@@ -44,7 +44,7 @@ create policy "Users manage their own company profile" on company_profiles
 
 create table if not exists saved_searches (
   id bigint generated always as identity primary key,
-  user_id uuid references auth.users(id) on delete cascade,
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   location text not null,
   radius integer not null,
   created_at timestamptz default now()

@@ -23,6 +23,7 @@ import regional_printer
 import radius_scanner
 import subscription
 import auth_client
+import data_sync
 import map_view
 from applog import debug
 
@@ -376,6 +377,7 @@ class BidCaller:
             self._nav("subscribe")
 
         self.root.after(1500, self._try_auto_unlock)
+        self.root.after(2000, self._sync_pull_after_signin)
         self.root.after(2500, self._check_saved_searches_on_load)
 
     # ────────── SIDEBAR ──────────
@@ -821,18 +823,39 @@ class BidCaller:
             debug(f"Add to calendar failed: {e}")
             messagebox.showerror("Add to Calendar", "Couldn't create the calendar event.")
 
+    def _sync_saved_bid(self, key):
+        """Best-effort push of one saved bid to the cloud — no-op if signed
+        out, and any network failure is silently ignored since the local
+        JSON file is always the fallback source of truth."""
+        token = auth_client.current_access_token()
+        rec = self.saved.get(key)
+        if not token or rec is None:
+            return
+        threading.Thread(target=lambda: data_sync.push_saved_bid(token, key, rec),
+                         daemon=True).start()
+
+    def _sync_delete_saved_bid(self, key):
+        token = auth_client.current_access_token()
+        if not token:
+            return
+        threading.Thread(target=lambda: data_sync.delete_saved_bid(token, key),
+                         daemon=True).start()
+
     def _toggle_save(self, city, bid):
         bid = dict(bid)
         key = bid_id(city, bid)
         if key in self.saved:
             del self.saved[key]
+            write_saved(self.saved)
+            self._sync_delete_saved_bid(key)
         else:
             rec = dict(bid)
             rec["_city"] = city
             rec["note"] = ""
             rec["saved_at"] = datetime.datetime.now().strftime("%d %b %Y")
             self.saved[key] = rec
-        write_saved(self.saved)
+            write_saved(self.saved)
+            self._sync_saved_bid(key)
         self._refresh_all()
 
     def _set_pipeline_status(self, city, bid, status):
@@ -851,6 +874,7 @@ class BidCaller:
             self.saved[key] = rec
         self.saved[key]["pipeline"] = new_status
         write_saved(self.saved)
+        self._sync_saved_bid(key)
         self._refresh_all()
 
     def _edit_note(self, city, bid):
@@ -887,6 +911,7 @@ class BidCaller:
             else:
                 self.saved[key]["note"] = text
             write_saved(self.saved)
+            self._sync_saved_bid(key)
             win.destroy()
             self._refresh_all()
 
@@ -2380,6 +2405,35 @@ class BidCaller:
         ghost_btn(inner, "← Back to Sign In", lambda: self._switch_auth_mode("signin"),
                   font=F_SMALL).pack(pady=(16, 0))
 
+    def _sync_pull_after_signin(self):
+        """After any successful sign-in, pull cloud saved bids and merge
+        them with whatever's local — cloud wins for bids already synced,
+        anything saved locally while signed out gets kept and pushed up so
+        it isn't lost. No-op (fails soft) if the cloud can't be reached or
+        the sync tables don't exist yet."""
+        token = auth_client.current_access_token()
+        if not token:
+            return
+
+        def work():
+            cloud = data_sync.pull_saved_bids(token)
+            if cloud is None:
+                return
+
+            def apply():
+                local_only = {k: v for k, v in self.saved.items() if k not in cloud}
+                merged = dict(cloud)
+                merged.update(local_only)
+                self.saved = merged
+                write_saved(self.saved)
+                self._refresh_all()
+                if local_only:
+                    threading.Thread(
+                        target=lambda: data_sync.push_all_saved_bids(token, local_only),
+                        daemon=True).start()
+            self.root.after(0, apply)
+        threading.Thread(target=work, daemon=True).start()
+
     def _do_verify_magic_link(self, email):
         code = self._ml_code.get().strip()
         self._ml_code_msg.config(text="Verifying...", fg=TEXT2)
@@ -2387,6 +2441,7 @@ class BidCaller:
         ok, msg = auth_client.sign_in_with_code(email, code)
         if ok:
             self._ml_code_msg.config(text="✅ " + msg, fg=GREEN)
+            self._sync_pull_after_signin()
             self.root.after(700, lambda: self._build_subscribe_body(self._pages["subscribe"]))
         else:
             self._ml_code_msg.config(text="❌ " + msg, fg=RED)
@@ -2399,6 +2454,7 @@ class BidCaller:
         ok, msg = auth_client.sign_up(email, pw)
         if ok:
             self._auth_msg.config(text="✅ " + msg, fg=GREEN)
+            self._sync_pull_after_signin()
             self.root.after(900, lambda: self._build_subscribe_body(self._pages["subscribe"]))
         else:
             self._auth_msg.config(text="❌ " + msg, fg=RED)
@@ -2411,6 +2467,7 @@ class BidCaller:
         ok, msg = auth_client.sign_in(email, pw)
         if ok:
             self._auth_msg.config(text="✅ " + msg, fg=GREEN)
+            self._sync_pull_after_signin()
             self.root.after(700, lambda: self._build_subscribe_body(self._pages["subscribe"]))
         else:
             self._auth_msg.config(text="❌ " + msg, fg=RED)
@@ -2428,6 +2485,7 @@ class BidCaller:
             def apply():
                 if ok:
                     self._auth_msg.config(text="✅ " + msg, fg=GREEN)
+                    self._sync_pull_after_signin()
                     self.root.after(700, lambda: self._build_subscribe_body(self._pages["subscribe"]))
                 else:
                     self._auth_msg.config(text="❌ " + msg, fg=RED)
@@ -2613,9 +2671,16 @@ class BidCaller:
         self._co_saved_lbl.config(text="✅ Saved")
 
     def _clear_saved(self):
-        if messagebox.askyesno("Clear Saved", "Remove ALL saved bids and notes?"):
+        token = auth_client.current_access_token()
+        prompt = ("Remove ALL saved bids and notes? This clears them on every "
+                  "signed-in device too." if token else
+                  "Remove ALL saved bids and notes?")
+        if messagebox.askyesno("Clear Saved", prompt):
             self.saved = {}
             write_saved(self.saved)
+            if token:
+                threading.Thread(target=lambda: data_sync.clear_all_saved_bids(token),
+                                 daemon=True).start()
             messagebox.showinfo("Done", "All saved bids cleared.")
             self._nav("settings")
 
