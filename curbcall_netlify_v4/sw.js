@@ -1,4 +1,4 @@
-// CurbCall service worker — caches just the app shell so "Add to Home
+// CurbCall Pro service worker — caches just the app shell so "Add to Home
 // Screen" behaves like a real installed app and a flaky connection doesn't
 // leave you on a blank white screen. It deliberately does NOT cache API
 // calls (Render backend, Supabase, map tiles) — those always go to the

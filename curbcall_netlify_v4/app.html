@@ -6,8 +6,8 @@
 <meta name="theme-color" content="#0d0f18" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="apple-mobile-web-app-title" content="CurbCall" />
-<title>CurbCall — Concrete Bids Near You</title>
+<meta name="apple-mobile-web-app-title" content="CurbCall Pro" />
+<title>CurbCall Pro — Concrete Bids Near You</title>
 <link rel="manifest" href="manifest.webmanifest" />
 <link rel="icon" href="icon-192.png" />
 <link rel="apple-touch-icon" href="icon-192.png" />
@@ -757,7 +757,7 @@ function showFeedBadge(show){
 // something this static site can do by itself.
 function notifPermissionLabel(){
   if(!("Notification"in window))return"Not supported in this browser";
-  if(Notification.permission==="granted")return"✅ Enabled — you'll be notified when a saved search finds new bids (while CurbCall is open)";
+  if(Notification.permission==="granted")return"✅ Enabled — you'll be notified when a saved search finds new bids (while CurbCall Pro is open)";
   if(Notification.permission==="denied")return"\u{1F515} Blocked — turn back on in your browser's site settings";
   return"Tap to enable — get notified when a saved search finds new bids";
 }
@@ -770,7 +770,7 @@ async function toggleNotifPermission(){
   if(el)el.textContent=notifPermissionLabel();
   if(perm==="granted"){
     toast("\u{1F514} Bid alerts enabled!");
-    fireNotification("CurbCall","You'll be notified here when a saved search finds new bids.");
+    fireNotification("CurbCall Pro","You'll be notified here when a saved search finds new bids.");
   }
 }
 async function fireNotification(title,body){
@@ -808,7 +808,7 @@ async function checkSavedSearches(){
   if(newTotal>0){
     toast(`\u{1F4E1} ${newTotal} new bid(s) from your saved searches!`);
     showFeedBadge(true);
-    fireNotification("CurbCall — New Bids",`${newTotal} new bid(s) from your saved searches.`);
+    fireNotification("CurbCall Pro — New Bids",`${newTotal} new bid(s) from your saved searches.`);
     if(document.getElementById("screen-feed").classList.contains("active"))renderFeed();
   }
 }
@@ -1440,7 +1440,7 @@ window.addToCalendar=function(cityEnc,idEnc){
   if(!dt){toast("Couldn't read a calendar date from this deadline");return;}
   const stamp=new Date().toISOString().replace(/[-:]/g,"").split(".")[0]+"Z";
   const lines=[
-    "BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//CurbCall//Bid Deadlines//EN",
+    "BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//CurbCall Pro//Bid Deadlines//EN",
     "BEGIN:VEVENT",
     `UID:${id}@curbcall.app`,
     `DTSTAMP:${stamp}`,
