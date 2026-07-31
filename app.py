@@ -5,6 +5,7 @@ import math
 import re
 import hashlib
 import threading
+import subprocess
 import webbrowser
 import datetime
 import tkinter as tk
@@ -159,6 +160,23 @@ def write_company_profile(d):
     except Exception:
         pass
 
+# Saved searches for auto-alerts — re-scanned silently on app open
+SAVED_SEARCHES_PATH = os.path.join(BASE_DIR, "saved_searches.json")
+
+def load_saved_searches():
+    try:
+        with open(SAVED_SEARCHES_PATH) as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+def write_saved_searches(d):
+    try:
+        with open(SAVED_SEARCHES_PATH, "w") as f:
+            json.dump(d, f, indent=2)
+    except Exception:
+        pass
+
 PIPELINE_LABELS = [("submitted", "Submitted"), ("won", "Won"),
                    ("lost", "Lost"), ("passed", "Passed")]
 
@@ -248,6 +266,7 @@ class BidCaller:
         self.saved = load_saved()
         self.upcoming_data = load_upcoming()
         self.company = load_company_profile()
+        self.saved_searches = load_saved_searches()
         self.scan_running = False
         self.search_results = []
         self._current = "feed"
@@ -264,6 +283,8 @@ class BidCaller:
         if not subscription.get_status()["active"]:
             self._nav("subscribe")
 
+        self.root.after(2500, self._check_saved_searches_on_load)
+
     # ────────── SIDEBAR ──────────
     def _sidebar(self):
         sb = tk.Frame(self.root, bg=SURFACE, width=215)
@@ -279,6 +300,7 @@ class BidCaller:
         divider(sb, BORDER, 20)
 
         self._nav_btns = {}
+        self._nav_badges = {}
         items = [
             ("feed",      "📋", "Live Bids"),
             ("saved",     "⭐", "Saved"),
@@ -296,6 +318,9 @@ class BidCaller:
             il.pack(side="left")
             tl = tk.Label(f, text=label, font=F_NAV, bg=SURFACE, fg=TEXT2, anchor="w")
             tl.pack(side="left")
+            if key == "feed":
+                bd = tk.Label(f, text="●", font=(UI, fs(8)), bg=SURFACE, fg=RED)
+                self._nav_badges[key] = bd
             for w in (f, il, tl):
                 w.bind("<Button-1>", lambda e, k=key: self._nav(k))
             self._nav_btns[key] = (f, il, tl)
@@ -307,6 +332,15 @@ class BidCaller:
                                 fg=TEXT3, wraplength=175, justify="left")
         self.sub_lbl.pack(anchor="w", pady=(10, 0))
         self._refresh_sub_lbl()
+
+    def _show_feed_badge(self, show):
+        bd = self._nav_badges.get("feed")
+        if not bd:
+            return
+        if show:
+            bd.pack(side="left", padx=(2, 0))
+        else:
+            bd.pack_forget()
 
     def _refresh_sub_lbl(self):
         s = subscription.get_status()
@@ -324,6 +358,8 @@ class BidCaller:
             f.config(bg=CARD if on else SURFACE)
             il.config(bg=CARD if on else SURFACE, fg=ACCENT if on else TEXT2)
             tl.config(bg=CARD if on else SURFACE, fg=TEXT if on else TEXT2)
+            if k in self._nav_badges:
+                self._nav_badges[k].config(bg=CARD if on else SURFACE)
         for pg in self._pages.values():
             pg.pack_forget()
         self._pages[key].pack(fill="both", expand=True)
@@ -331,6 +367,7 @@ class BidCaller:
             self._render_saved()
         elif key == "feed":
             self._render_feed()
+            self._show_feed_badge(False)
         elif key == "upcoming":
             self._render_upcoming()
 
@@ -1065,6 +1102,12 @@ class BidCaller:
                                   self._open_scan_map, font=F_SMALL)
         self._map_btn.pack(side="left", padx=(10, 0))
         self._map_btn.config(state="disabled")
+        ghost_btn(btn_row, "  📌  Save Search  ", self._save_current_search,
+                 font=F_SMALL).pack(side="left", padx=(10, 0))
+
+        self._saved_search_frame = tk.Frame(body, bg=BG)
+        self._saved_search_frame.pack(fill="x")
+        self._render_saved_searches()
 
         self._scan_status = tk.Label(body, text="", font=F_BODY, bg=BG, fg=TEXT3)
         self._scan_status.pack(pady=(20, 6))
@@ -1380,6 +1423,97 @@ class BidCaller:
 
     def _set_prog(self, pct):
         self._prog_bar.config(width=int(480 * pct / 100))
+
+    # ═══════════ SAVED SEARCHES (auto-alerts) ═══════════
+    def _save_current_search(self):
+        location = self._loc_entry.get().strip()
+        if not location:
+            messagebox.showwarning("Save Search", "Enter a ZIP or city first.")
+            return
+        radius = int(self._radius_var.get().split()[0])
+        for s in self.saved_searches:
+            if s["location"].strip().lower() == location.lower() and s["radius"] == radius:
+                messagebox.showinfo("Save Search", "Already saved.")
+                return
+        self.saved_searches.append({"location": location, "radius": radius})
+        write_saved_searches(self.saved_searches)
+        self._render_saved_searches()
+
+    def _remove_saved_search(self, idx):
+        if 0 <= idx < len(self.saved_searches):
+            del self.saved_searches[idx]
+            write_saved_searches(self.saved_searches)
+            self._render_saved_searches()
+
+    def _scan_saved_search(self, location, radius):
+        self._loc_entry.delete(0, tk.END)
+        self._loc_entry.insert(0, location)
+        self._radius_var.set(f"{radius} miles")
+        self._run_scan()
+
+    def _render_saved_searches(self):
+        if not hasattr(self, "_saved_search_frame"):
+            return
+        for w in self._saved_search_frame.winfo_children():
+            w.destroy()
+        if not self.saved_searches:
+            return
+        tk.Label(self._saved_search_frame, text="AUTO-ALERT SEARCHES", font=(UI, fs(9), "bold"),
+                 bg=BG, fg=ACCENT).pack(anchor="w", pady=(12, 6))
+        for i, s in enumerate(self.saved_searches):
+            row = tk.Frame(self._saved_search_frame, bg=SURFACE, padx=14, pady=8)
+            row.pack(fill="x", pady=(0, 6))
+            tk.Label(row, text=f"{s['location']}  •  {s['radius']} mi radius",
+                     font=F_BODY, bg=SURFACE, fg=TEXT).pack(side="left")
+            ghost_btn(row, "✕", lambda i=i: self._remove_saved_search(i),
+                      font=F_SMALL).pack(side="right")
+            ghost_btn(row, "Scan", lambda s=s: self._scan_saved_search(s["location"], s["radius"]),
+                      font=F_SMALL).pack(side="right", padx=(0, 6))
+
+    def _merge_bids(self, new_bids):
+        """Adds only new bids into self.bid_data (keyed by bid_id), keeping
+        whatever's already there — used by the saved-search auto-check so a
+        silent background refresh doesn't wipe the current feed."""
+        added = 0
+        for city, bids in new_bids.items():
+            existing = self.bid_data.setdefault(city, [])
+            existing_ids = {bid_id(city, b) for b in existing}
+            for b in bids:
+                bid_key = bid_id(city, b)
+                if bid_key not in existing_ids:
+                    existing.append(b)
+                    existing_ids.add(bid_key)
+                    added += 1
+        return added
+
+    def _check_saved_searches_on_load(self):
+        """Silently re-scans every saved search once on app open — the
+        closest thing to a real alert without a paid always-on backend."""
+        if not self.saved_searches:
+            return
+
+        def work():
+            results = []
+            for s in self.saved_searches:
+                resp = subscription.scan(s["location"], s["radius"])
+                if resp.get("ok") and resp.get("bids"):
+                    results.append(resp["bids"])
+            if not results:
+                return
+
+            def apply():
+                total_added = sum(self._merge_bids(r) for r in results)
+                if total_added > 0:
+                    write_feed(self.bid_data)
+                    self._show_feed_badge(True)
+                    self._refresh_feed_cities()
+                    if self._current == "feed":
+                        self._render_feed()
+                    _windows_toast("Bid Caller Pro",
+                                   f"{total_added} new bid(s) from your saved searches!")
+            self.root.after(0, apply)
+
+        threading.Thread(target=work, daemon=True).start()
 
     def _open_scan_map(self):
         summary = getattr(self, "_last_scan_summary", None)
@@ -2224,6 +2358,36 @@ def _dark_title_bar(window):
                     hwnd, attr, ctypes.byref(value), ctypes.sizeof(value))
             except Exception:
                 pass
+    except Exception:
+        pass
+
+def _windows_toast(title, message):
+    """Best-effort native Windows notification for new bids from saved
+    searches — desktop equivalent of the web app's browser Notification API.
+    Fails silently (non-Windows, PowerShell blocked, etc.) since this is a
+    nice-to-have, not something scans should ever depend on."""
+    if not sys.platform.startswith("win"):
+        return
+    safe_title = title.replace('"', "'").replace("`", "'")
+    safe_msg = message.replace('"', "'").replace("`", "'")
+    ps = (
+        "[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, "
+        "ContentType=WindowsRuntime] | Out-Null; "
+        "[Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, "
+        "ContentType=WindowsRuntime] | Out-Null; "
+        "$t = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent("
+        "[Windows.UI.Notifications.ToastTemplateType]::ToastText02); "
+        "$n = $t.GetElementsByTagName('text'); "
+        f"$n.Item(0).AppendChild($t.CreateTextNode(\"{safe_title}\")) | Out-Null; "
+        f"$n.Item(1).AppendChild($t.CreateTextNode(\"{safe_msg}\")) | Out-Null; "
+        "$toast = [Windows.UI.Notifications.ToastNotification]::new($t); "
+        "[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier"
+        "('Bid Caller Pro').Show($toast)"
+    )
+    try:
+        subprocess.Popen(["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps],
+                         creationflags=subprocess.CREATE_NO_WINDOW,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except Exception:
         pass
 
