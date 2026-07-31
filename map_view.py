@@ -100,9 +100,10 @@ def build_map_html(center_lat, center_lon, center_label, towns,
 <script>
   const markers = {markers_json};
   const map = L.map('map').setView([{center_lat}, {center_lon}], 9);
-  L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
-    attribution: '&copy; OpenStreetMap contributors',
-    maxZoom: 18,
+  L.tileLayer('https://{{s}}.basemaps.cartocdn.com/dark_all/{{z}}/{{x}}/{{y}}{{r}}.png', {{
+    attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+    maxZoom: 20,
+    subdomains: 'abcd',
   }}).addTo(map);
 
   const bounds = [];

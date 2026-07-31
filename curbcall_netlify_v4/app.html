@@ -700,7 +700,9 @@ function updateFindMap(lat,lon,label){
   findCenter={lat,lon};
   if(!findMap){
     findMap=L.map(mv,{attributionControl:false}).setView([lat,lon],11);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:18}).addTo(findMap);
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{
+      maxZoom:20,subdomains:"abcd"
+    }).addTo(findMap);
     findMap.on("click",e=>pickFindLocation(e.latlng.lat,e.latlng.lng,null));
   } else {
     findMap.setView([lat,lon],11);
@@ -903,7 +905,9 @@ function renderMap(){
     mv.innerHTML="";
     leafletMap=L.map(mv,{attributionControl:false}).setView(
       [lastScanMap.center.lat,lastScanMap.center.lon],9);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:18}).addTo(leafletMap);
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{
+      maxZoom:20,subdomains:"abcd"
+    }).addTo(leafletMap);
   }
   leafletMap.eachLayer(l=>{if(l instanceof L.CircleMarker)leafletMap.removeLayer(l);});
   const bounds=[[lastScanMap.center.lat,lastScanMap.center.lon]];
