@@ -121,6 +121,33 @@ def bid_id(city, bid):
     raw = (str(city) + bid.get("title", "") + bid.get("scope", "")).encode("utf-8")
     return hashlib.md5(raw).hexdigest()[:12]
 
+_DEADLINE_FORMATS = (
+    "%Y-%m-%d", "%m/%d/%Y", "%m-%d-%Y", "%B %d, %Y", "%b %d, %Y",
+    "%B %d %Y", "%b %d %Y", "%m/%d/%y",
+)
+
+def _parse_deadline_date(text):
+    """Best-effort parse of a free-text deadline into a date. None if unparseable."""
+    if not text:
+        return None
+    t = str(text).strip()
+    m = re.search(r"\d{4}-\d{2}-\d{2}", t)
+    if m:
+        t = m.group(0)
+    for fmt in _DEADLINE_FORMATS:
+        try:
+            return datetime.datetime.strptime(t, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+def days_until(bid):
+    """Days from today until the bid's deadline, or None if unparseable."""
+    d = _parse_deadline_date(bid.get("deadline"))
+    if d is None:
+        return None
+    return (d - datetime.datetime.now().date()).days
+
 # Persist planned/pre-bid work found by the Upcoming tab across restarts
 UPCOMING_PATH = os.path.join(BASE_DIR, "upcoming_feed.json")
 
@@ -397,7 +424,13 @@ class BidCaller:
 
         status_key = bid.get("status", "open").lower()
         pill_bg, pill_fg = STATUS_COLORS.get(status_key, ("#1c1917", TEXT3))
-        bar = GREEN if status_key == "open" else (ACCENT if status_key == "pending" else TEXT3)
+        dleft = days_until(bid)
+        if status_key == "open" and dleft is not None and dleft <= 2:
+            bar = RED
+        elif status_key == "open" and dleft is not None and dleft <= 7:
+            bar = ACCENT
+        else:
+            bar = GREEN if status_key == "open" else (ACCENT if status_key == "pending" else TEXT3)
 
         outer = tk.Frame(parent, bg=CARD)
         outer.pack(fill="x", padx=20, pady=5)
@@ -436,7 +469,11 @@ class BidCaller:
                      padx=10, pady=4).pack(side="left", padx=(0, 6))
 
         if bid.get("deadline"):
-            chip(f"📅  {bid['deadline']}", ACCENT)
+            suffix = ""
+            if dleft is not None and dleft >= 0:
+                suffix = "  •  today" if dleft == 0 else f"  •  {dleft}d left"
+            dl_color = RED if (dleft is not None and dleft <= 2) else ACCENT
+            chip(f"📅  {bid['deadline']}{suffix}", dl_color)
         if bid.get("value"):
             chip(f"💲  {bid['value']}", GREEN)
         if bid.get("contact"):
@@ -580,6 +617,13 @@ class BidCaller:
         pill_btn(btnrow, "✍  Draft Proposal",
                  lambda: self._draft_proposal(city, bid),
                  bg=CARD, fg=TEXT, px=16, py=8, font=F_SMALL).pack(side="left", padx=(0, 8))
+        pill_btn(btnrow, "📤  Share",
+                 lambda: self._share_bid(city, bid),
+                 bg=CARD, fg=TEXT, px=16, py=8, font=F_SMALL).pack(side="left", padx=(0, 8))
+        if bid.get("deadline"):
+            pill_btn(btnrow, "📅  Add to Calendar",
+                     lambda: self._add_to_calendar(bid),
+                     bg=CARD, fg=TEXT, px=16, py=8, font=F_SMALL).pack(side="left", padx=(0, 8))
 
         save_txt = "★  Saved" if saved else "☆  Save Lead"
         def do_save():
@@ -660,6 +704,57 @@ class BidCaller:
         copy_btn.pack(side="left")
         pill_btn(actions, "Close", win.destroy, bg=CARD, fg=TEXT,
                  px=18, py=9, font=F_SMALL).pack(side="right")
+
+    def _share_bid(self, city, bid):
+        """Desktop has no native share sheet, so this copies a formatted
+        summary to the clipboard — the same fallback the web app uses when
+        the browser Share API isn't available."""
+        parts = [bid.get("title", "Bid")]
+        meta = [p for p in (city, bid.get("value"),
+                            f"Due {bid['deadline']}" if bid.get("deadline") else None) if p]
+        if meta:
+            parts.append(" • ".join(meta))
+        if bid.get("url"):
+            parts.append(bid["url"])
+        self.root.clipboard_clear()
+        self.root.clipboard_append("\n".join(parts))
+        messagebox.showinfo("Share", "Copied a summary of this bid to your clipboard.")
+
+    def _add_to_calendar(self, bid):
+        """Builds a minimal .ics for the bid's deadline and hands it to the
+        system's default calendar app — same idea as the web app's
+        downloadable .ics, just via the OS instead of a browser download."""
+        dl = _parse_deadline_date(bid.get("deadline"))
+        if not dl:
+            messagebox.showwarning("Add to Calendar", "Couldn't read a calendar date from this deadline.")
+            return
+        uid = bid_id(bid.get("_city", ""), bid)
+        stamp = datetime.datetime.now().strftime("%Y%m%dT%H%M%SZ")
+        def esc(s):
+            return str(s or "").replace(",", "\\,").replace(";", "\\;")
+        summary = esc("Bid due: " + (bid.get("title") or "Untitled Project"))
+        desc_parts = [bid.get("_city", ""), bid.get("scope", ""), bid.get("value", "")]
+        description = esc(" - ".join(p for p in desc_parts if p))
+        lines = [
+            "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Bid Caller Pro//Bid Deadlines//EN",
+            "BEGIN:VEVENT",
+            f"UID:{uid}@bidcallerpro.app",
+            f"DTSTAMP:{stamp}",
+            f"DTSTART;VALUE=DATE:{dl.strftime('%Y%m%d')}",
+            f"SUMMARY:{summary}",
+            f"DESCRIPTION:{description}",
+            f"LOCATION:{esc(bid.get('_city', ''))}",
+            "END:VEVENT", "END:VCALENDAR",
+        ]
+        safe_name = re.sub(r"[^a-z0-9]+", "_", (bid.get("title") or "bid").lower())[:40]
+        path = os.path.join(BASE_DIR, f"{safe_name}_deadline.ics")
+        try:
+            with open(path, "w", newline="\r\n", encoding="utf-8") as f:
+                f.write("\r\n".join(lines))
+            os.startfile(path)
+        except Exception as e:
+            debug(f"Add to calendar failed: {e}")
+            messagebox.showerror("Add to Calendar", "Couldn't create the calendar event.")
 
     def _toggle_save(self, city, bid):
         bid = dict(bid)
@@ -753,6 +848,7 @@ class BidCaller:
         tk.Label(hdr, text="Live Bid Feed", font=F_HEAD, bg=BG, fg=TEXT).pack(side="left")
         ghost_btn(hdr, "↺  Refresh", self._render_feed).pack(side="right")
         ghost_btn(hdr, "⬇  Export CSV", self._export_csv).pack(side="right", padx=(0, 8))
+        ghost_btn(hdr, "🗑  Clear Bids", self._clear_feed).pack(side="right", padx=(0, 8))
 
         fbar = tk.Frame(pg, bg=SURFACE, pady=10)
         fbar.pack(fill="x")
@@ -776,8 +872,14 @@ class BidCaller:
         self._trade_var = tk.StringVar(value="All trades")
         cb2 = ttk.Combobox(inner, textvariable=self._trade_var, state="readonly",
                            values=self.TRADES, font=F_BODY, width=18)
-        cb2.pack(side="left")
+        cb2.pack(side="left", padx=(0, 10))
         cb2.bind("<<ComboboxSelected>>", lambda e: self._render_feed())
+
+        self._sort_var = tk.StringVar(value="Newest")
+        cb3 = ttk.Combobox(inner, textvariable=self._sort_var, state="readonly",
+                           values=["Newest", "Deadline", "Est. Value"], font=F_BODY, width=12)
+        cb3.pack(side="left")
+        cb3.bind("<<ComboboxSelected>>", lambda e: self._render_feed())
 
         self._stats_strip = tk.Frame(pg, bg=SURFACE, pady=10)
         self._stats_strip.pack(fill="x")
@@ -838,6 +940,15 @@ class BidCaller:
                 for b in bids:
                     if self._matches_filters(b):
                         rows.append((city, b))
+
+        sort_by = self._sort_var.get() if hasattr(self, "_sort_var") else "Newest"
+        if sort_by == "Deadline":
+            def _deadline_key(cb):
+                d = days_until(cb[1])
+                return d if d is not None else 9999
+            rows.sort(key=_deadline_key)
+        elif sort_by == "Est. Value":
+            rows.sort(key=lambda cb: -parse_value(cb[1].get("value")))
 
         if not rows:
             self._empty_state(self._feed_frame,
@@ -1088,7 +1199,7 @@ class BidCaller:
         rad_row.pack(fill="x")
         self._radius_var = tk.StringVar(value="25 miles")
         self._radius_combo = ttk.Combobox(rad_row, textvariable=self._radius_var, state="readonly",
-                     values=["10 miles", "25 miles", "50 miles", "75 miles", "100 miles"],
+                     values=["10 miles", "25 miles", "50 miles", "75 miles", "125 miles"],
                      font=F_BODY, width=16)
         self._radius_combo.pack(side="left")
         self._radius_combo.bind("<<ComboboxSelected>>", self._on_radius_change)
@@ -1537,6 +1648,16 @@ class BidCaller:
             self._city_filter_box["values"] = cities
             if self._city_var.get() not in cities:
                 self._city_var.set("All")
+
+    def _clear_feed(self):
+        if not self.bid_data:
+            return
+        if messagebox.askyesno("Clear Bids", "Clear all bids from the live feed? "
+                               "(Saved bids are not affected.)"):
+            self.bid_data = {}
+            write_feed(self.bid_data)
+            self._refresh_feed_cities()
+            self._render_feed()
 
     # ═══════════ PAGE: UPCOMING (planned, pre-bid work) ═══════════
     def _page_upcoming(self):
@@ -2101,9 +2222,69 @@ class BidCaller:
         if not is_signup:
             ghost_btn(card, "Forgot password?", self._show_forgot_email,
                       font=F_SMALL).pack(pady=(10, 0))
+            ghost_btn(card, "✉  Send magic link instead", self._show_magic_link,
+                      font=F_SMALL).pack(pady=(6, 0))
 
         ghost_btn(inner, "← Back", lambda: self._build_subscribe_body(self._pages["subscribe"]),
                   font=F_SMALL).pack(pady=(16, 0))
+
+    def _show_magic_link(self):
+        self._build_magiclink_body(self._pages["subscribe"])
+
+    def _build_magiclink_body(self, pg):
+        inner, card = self._auth_card(pg)
+        tk.Label(card, text="Sign In with a Code", font=(UI, fs(18), "bold"),
+                 bg=CARD, fg=TEXT).pack(pady=(0, 4))
+        tk.Label(card, text="We'll email you a one-time code — no password needed.",
+                 font=F_SMALL, bg=CARD, fg=TEXT2, wraplength=280, justify="left").pack(pady=(0, 18))
+
+        self._ml_email = self._labeled_entry(card, "Email")
+        self._ml_msg = tk.Label(card, text="", font=F_SMALL, bg=CARD, fg=TEXT3,
+                                wraplength=280, justify="left")
+        self._ml_msg.pack(pady=(0, 10))
+        pill_btn(card, "Send Code", self._do_request_magic_link, py=10,
+                 font=(UI, fs(12), "bold")).pack()
+
+        ghost_btn(inner, "← Back to Sign In", lambda: self._switch_auth_mode("signin"),
+                  font=F_SMALL).pack(pady=(16, 0))
+
+    def _do_request_magic_link(self):
+        email = self._ml_email.get().strip()
+        self._ml_msg.config(text="Sending code...", fg=TEXT2)
+        self.root.update_idletasks()
+        ok, msg = auth_client.request_magic_link(email)
+        self._ml_msg.config(text=("✅ " if ok else "❌ ") + msg, fg=GREEN if ok else RED)
+        if ok:
+            self._build_magiclink_code_body(self._pages["subscribe"], email)
+
+    def _build_magiclink_code_body(self, pg, email):
+        inner, card = self._auth_card(pg)
+        tk.Label(card, text="Enter Your Code", font=(UI, fs(18), "bold"),
+                 bg=CARD, fg=TEXT).pack(pady=(0, 4))
+        tk.Label(card, text=f"Check {email} for a one-time code.",
+                 font=F_SMALL, bg=CARD, fg=TEXT2, wraplength=280, justify="left").pack(pady=(0, 18))
+
+        self._ml_code = self._labeled_entry(card, "Code")
+        self._ml_code.bind("<Return>", lambda e: self._do_verify_magic_link(email))
+        self._ml_code_msg = tk.Label(card, text="", font=F_SMALL, bg=CARD, fg=TEXT3,
+                                     wraplength=280, justify="left")
+        self._ml_code_msg.pack(pady=(0, 10))
+        pill_btn(card, "Sign In", lambda: self._do_verify_magic_link(email), py=10,
+                 font=(UI, fs(12), "bold")).pack()
+
+        ghost_btn(inner, "← Back to Sign In", lambda: self._switch_auth_mode("signin"),
+                  font=F_SMALL).pack(pady=(16, 0))
+
+    def _do_verify_magic_link(self, email):
+        code = self._ml_code.get().strip()
+        self._ml_code_msg.config(text="Verifying...", fg=TEXT2)
+        self.root.update_idletasks()
+        ok, msg = auth_client.sign_in_with_code(email, code)
+        if ok:
+            self._ml_code_msg.config(text="✅ " + msg, fg=GREEN)
+            self.root.after(700, lambda: self._build_subscribe_body(self._pages["subscribe"]))
+        else:
+            self._ml_code_msg.config(text="❌ " + msg, fg=RED)
 
     def _do_signup(self):
         email = self._auth_email.get().strip()

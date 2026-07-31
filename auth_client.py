@@ -197,6 +197,42 @@ def sign_in(email, password):
     return True, f"Signed in as {email}."
 
 
+def request_magic_link(email):
+    """Emails a passwordless sign-in code. Returns (ok, message)."""
+    email = (email or "").strip().lower()
+    if not email or "@" not in email:
+        return False, "Enter a valid email address."
+
+    data, err = _auth_post("/auth/v1/otp", {"email": email, "create_user": True})
+    if err:
+        return False, err
+    return True, f"A sign-in code was just emailed to {email}."
+
+
+def sign_in_with_code(email, code):
+    """Verifies a magic-link code and signs the user in. Returns (ok, message)."""
+    email = (email or "").strip().lower()
+    code = (code or "").strip()
+    if not code:
+        return False, "Enter the code from your email."
+
+    data, err = _auth_post("/auth/v1/verify", {
+        "type": "magiclink", "email": email, "token": code,
+    })
+    if err:
+        return False, err
+    access_token = (data or {}).get("access_token")
+    if not access_token:
+        return False, "That code didn't work. Request a new one and try again."
+
+    _save_session({
+        "email": email,
+        "access_token": access_token,
+        "refresh_token": (data or {}).get("refresh_token", ""),
+    })
+    return True, f"Signed in as {email}."
+
+
 def request_password_reset(email):
     """Sends a password-reset code to the given email. Returns (ok, message)."""
     email = (email or "").strip().lower()
