@@ -24,11 +24,30 @@ IMPORTANT ONE-TIME SETUP IN SUPABASE:
         Your reset code is: {{ .Token }}
   Without this, request_password_reset() still sends an email, but it
   won't contain a code the user can enter — only the link.
+
+GOOGLE SIGN-IN — ONE-TIME SETUP IN SUPABASE:
+  sign_in_with_google() will fail with a provider error until Google is
+  enabled on this Supabase project:
+    Dashboard → Authentication → Providers → Google → enable it, and fill
+    in a Google Cloud OAuth Client ID + Secret (Google Cloud Console →
+    APIs & Services → Credentials → OAuth client ID → Web application).
+  No redirect URI needs to be added on the Google Cloud side beyond what
+  Supabase's own docs ask for — the desktop app never talks to Google
+  directly, it goes through Supabase's own /auth/v1/authorize endpoint,
+  which redirects to a one-shot local HTTP server on 127.0.0.1 instead of
+  a fixed web URL.
 """
 
 import os
 import sys
 import json
+import secrets
+import hashlib
+import base64
+import threading
+import webbrowser
+import http.server
+from urllib.parse import urlparse, parse_qs, urlencode
 
 try:
     import requests
@@ -195,6 +214,88 @@ def sign_in(email, password):
         "refresh_token": data.get("refresh_token", ""),
     })
     return True, f"Signed in as {email}."
+
+
+# ── Google sign-in (PKCE via a local loopback redirect) ────
+# A desktop app can't receive a normal OAuth redirect the way a website
+# can, so this opens the system browser to Supabase's Google auth URL with
+# redirect_to pointed at a one-shot local HTTP server on 127.0.0.1. Using
+# PKCE (instead of the implicit flow the web app uses) means Supabase sends
+# the auth code back as a plain "?code=" query param — which a plain HTTP
+# server can read directly — instead of a URL fragment, which only
+# JavaScript in a real browser page can see.
+class _OAuthCallbackHandler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        params = parse_qs(urlparse(self.path).query)
+        self.server.oauth_code = params.get("code", [None])[0]
+        self.server.oauth_error = params.get("error_description", [None])[0]
+        ok = bool(self.server.oauth_code)
+        msg = ("Signed in! You can close this tab and return to Bid Caller Pro."
+               if ok else "Sign-in failed or was cancelled. You can close this tab.")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html")
+        self.end_headers()
+        self.wfile.write(
+            f"<html><body style='font-family:sans-serif;text-align:center;padding:60px;'>"
+            f"<h2>{msg}</h2></body></html>".encode())
+
+    def log_message(self, format, *args):
+        pass  # don't spam stdout with per-request access logs
+
+
+def sign_in_with_google(timeout=120):
+    """Opens the system browser for Google sign-in via Supabase. Blocks
+    until the browser redirect lands (or times out), so call this from a
+    background thread — not the UI thread. Returns (ok, message)."""
+    verifier = base64.urlsafe_b64encode(secrets.token_bytes(40)).rstrip(b"=").decode()
+    challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), _OAuthCallbackHandler)
+    server.timeout = timeout
+    server.oauth_code = None
+    server.oauth_error = None
+    port = server.server_address[1]
+
+    thread = threading.Thread(target=server.handle_request, daemon=True)
+    thread.start()
+
+    auth_url = f"{SUPABASE_URL}/auth/v1/authorize?" + urlencode({
+        "provider": "google",
+        "redirect_to": f"http://127.0.0.1:{port}",
+        "code_challenge": challenge,
+        "code_challenge_method": "s256",
+    })
+    webbrowser.open(auth_url)
+
+    thread.join(timeout=timeout + 5)
+    try:
+        server.server_close()
+    except Exception:
+        pass
+
+    if server.oauth_error:
+        return False, server.oauth_error
+    if not server.oauth_code:
+        return False, "Sign-in timed out or was cancelled."
+
+    data, err = _auth_post("/auth/v1/token", {
+        "auth_code": server.oauth_code,
+        "code_verifier": verifier,
+    }, params={"grant_type": "pkce"})
+    if err:
+        return False, err
+    access_token = (data or {}).get("access_token")
+    if not access_token:
+        return False, "Sign-in failed. Try again."
+
+    email = ((data or {}).get("user") or {}).get("email", "")
+    _save_session({
+        "email": email,
+        "access_token": access_token,
+        "refresh_token": data.get("refresh_token", ""),
+    })
+    return True, f"Signed in as {email}." if email else "Signed in!"
 
 
 def request_magic_link(email):

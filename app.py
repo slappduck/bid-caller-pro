@@ -2293,6 +2293,11 @@ class BidCaller:
                              else "Welcome back"),
                  font=F_SMALL, bg=CARD, fg=TEXT2).pack(pady=(0, 18))
 
+        pill_btn(card, "  G  Continue with Google", self._do_google_signin,
+                 bg=CARD, fg=TEXT, px=16, py=10, font=F_BODY).pack(fill="x", pady=(0, 4))
+        divider(card, BORDER)
+        tk.Frame(card, bg=CARD, height=10).pack()
+
         self._auth_email = self._labeled_entry(card, "Email")
         self._auth_password = self._labeled_entry(card, "Password", show="•")
         self._auth_password.bind("<Return>", lambda e: self._do_signup() if is_signup
@@ -2409,6 +2414,26 @@ class BidCaller:
             self.root.after(700, lambda: self._build_subscribe_body(self._pages["subscribe"]))
         else:
             self._auth_msg.config(text="❌ " + msg, fg=RED)
+
+    def _do_google_signin(self):
+        # Blocks on the browser round-trip (up to 2 minutes), so this has
+        # to run off the UI thread or the whole app would freeze while
+        # waiting for the user to finish signing in.
+        self._auth_msg.config(text="Opening your browser for Google sign-in...", fg=TEXT2)
+        self.root.update_idletasks()
+
+        def work():
+            ok, msg = auth_client.sign_in_with_google()
+
+            def apply():
+                if ok:
+                    self._auth_msg.config(text="✅ " + msg, fg=GREEN)
+                    self.root.after(700, lambda: self._build_subscribe_body(self._pages["subscribe"]))
+                else:
+                    self._auth_msg.config(text="❌ " + msg, fg=RED)
+            self.root.after(0, apply)
+
+        threading.Thread(target=work, daemon=True).start()
 
     def _show_forgot_email(self):
         self._build_forgot_email_body(self._pages["subscribe"])
