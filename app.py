@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import math
 import hashlib
 import threading
 import webbrowser
@@ -752,9 +753,11 @@ class BidCaller:
         rad_row = tk.Frame(form, bg=SURFACE)
         rad_row.pack(fill="x")
         self._radius_var = tk.StringVar(value="25 miles")
-        ttk.Combobox(rad_row, textvariable=self._radius_var, state="readonly",
+        self._radius_combo = ttk.Combobox(rad_row, textvariable=self._radius_var, state="readonly",
                      values=["10 miles", "25 miles", "50 miles", "75 miles", "100 miles"],
-                     font=F_BODY, width=16).pack(side="left")
+                     font=F_BODY, width=16)
+        self._radius_combo.pack(side="left")
+        self._radius_combo.bind("<<ComboboxSelected>>", self._on_radius_change)
 
         divider(form, BORDER, pad=0)
 
@@ -798,6 +801,11 @@ class BidCaller:
         self._loc_map.set_position(39.5, -98.35)   # center of the US until we know better
         self._loc_map.set_zoom(4)
         self._loc_marker = None
+        self._loc_radius_poly = None
+        self._loc_town_markers = []
+        self._loc_map.add_left_click_map_command(self._on_map_click)
+        tk.Label(wrap, text="Click anywhere on the map — or click a nearby city — to set your search center.",
+                 font=F_SMALL, bg=SURFACE, fg=TEXT3, pady=6).pack()
 
     def _update_loc_map(self, lat, lon, label=""):
         if not getattr(self, "_loc_map", None):
@@ -807,6 +815,102 @@ class BidCaller:
         if self._loc_marker:
             self._loc_marker.delete()
         self._loc_marker = self._loc_map.set_marker(lat, lon, text=label or "You are here")
+        self._draw_radius_circle(lat, lon)
+        self._refresh_town_markers(lat, lon)
+
+    def _radius_miles(self):
+        try:
+            return int(self._radius_var.get().split()[0])
+        except Exception:
+            return 25
+
+    def _draw_radius_circle(self, lat, lon):
+        if not getattr(self, "_loc_map", None):
+            return
+        if self._loc_radius_poly:
+            self._loc_radius_poly.delete()
+            self._loc_radius_poly = None
+        radius_miles = self._radius_miles()
+        EARTH_MI = 3958.8
+        ang_r = radius_miles / EARTH_MI
+        points = []
+        for i in range(37):
+            theta = math.radians(i * 10)
+            dlat = ang_r * math.cos(theta)
+            dlon = ang_r * math.sin(theta) / math.cos(math.radians(lat))
+            points.append((lat + math.degrees(dlat), lon + math.degrees(dlon)))
+        self._loc_radius_poly = self._loc_map.set_polygon(
+            points, outline_color=ACCENT, fill_color=None, border_width=2)
+
+    def _on_radius_change(self, event=None):
+        latlon = getattr(self, "_auto_latlon", None)
+        if latlon:
+            self._draw_radius_circle(*latlon)
+
+    def _clear_town_markers(self):
+        for m in getattr(self, "_loc_town_markers", []):
+            m.delete()
+        self._loc_town_markers = []
+
+    def _refresh_town_markers(self, lat, lon):
+        """Plots nearby towns as clickable markers so the user can pick one
+        instead of an arbitrary point. Runs the lookup off the UI thread."""
+        radius_miles = self._radius_miles()
+
+        def work():
+            towns = radius_scanner.find_nearby_towns(lat, lon, radius_miles, max_towns=15)
+            self.root.after(0, lambda: self._place_town_markers(towns))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _place_town_markers(self, towns):
+        if not getattr(self, "_loc_map", None):
+            return
+        self._clear_town_markers()
+        for t in towns:
+            if t.get("lat") is None or t.get("lon") is None:
+                continue
+            m = self._loc_map.set_marker(
+                t["lat"], t["lon"], text=t["name"],
+                marker_color_circle=BLUE, marker_color_outside="#1d4ed8",
+                command=self._on_town_marker_click,
+                data={"name": t["name"], "state": t.get("state", "")})
+            self._loc_town_markers.append(m)
+
+    def _on_town_marker_click(self, marker):
+        lat, lon = marker.position
+        name = (marker.data or {}).get("name", marker.text or "")
+        state = (marker.data or {}).get("state", "")
+        label = f"{name}, {state}".strip(", ") if state else name
+        self._set_picked_location(lat, lon, label)
+
+    def _on_map_click(self, coords):
+        lat, lon = coords
+        self._set_picked_location(lat, lon, None)
+
+        def work():
+            label = radius_scanner.reverse_geocode(lat, lon)
+            if label:
+                self.root.after(0, lambda: self._set_picked_location(
+                    lat, lon, label, refresh_towns=False))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _set_picked_location(self, lat, lon, label, refresh_towns=True):
+        self._auto_latlon = (lat, lon)
+        display = label or f"{lat:.4f}, {lon:.4f}"
+        self._loc_entry.delete(0, tk.END)
+        self._loc_entry.insert(0, display)
+        self._scan_status.config(text=f"Location set: {display}", fg=GREEN)
+        if refresh_towns:
+            self._update_loc_map(lat, lon, display)
+        else:
+            # Just update the label on an already-drawn marker/circle — no
+            # need to re-center or re-query nearby towns for the same point.
+            self._loc_map.set_position(lat, lon)
+            if self._loc_marker:
+                self._loc_marker.delete()
+            self._loc_marker = self._loc_map.set_marker(lat, lon, text=display)
 
     def _maybe_auto_locate_on_load(self):
         if self._map_auto_tried:

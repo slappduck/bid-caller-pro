@@ -23,3 +23,6 @@ all_regional_intel.txt
 # Secrets
 .env
 *_SECRETS.txt
+
+# Local tooling config (machine-specific)
+.claude/settings.local.json

@@ -42,6 +42,25 @@ def auto_locate():
     return None
 
 
+def reverse_geocode(lat, lon):
+    """Turn (lat, lon) into a short 'City, State' label. Returns None on failure."""
+    try:
+        r = requests.get("https://nominatim.openstreetmap.org/reverse",
+                         params={"lat": lat, "lon": lon, "format": "json", "zoom": 10},
+                         headers=UA, timeout=10)
+        if r.status_code == 200 and r.json():
+            addr = r.json().get("address", {})
+            city = (addr.get("city") or addr.get("town") or addr.get("village")
+                    or addr.get("hamlet") or addr.get("county") or "")
+            state = addr.get("ISO3166-2-lvl4", "").split("-")[-1] or addr.get("state", "")
+            if city and state:
+                return f"{city}, {state}"
+            return city or state or None
+    except Exception:
+        pass
+    return None
+
+
 def geocode(location_text):
     """Turn a typed ZIP/city into (lat, lon, label). Returns None on failure."""
     try:
