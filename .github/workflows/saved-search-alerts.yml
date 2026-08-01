@@ -27,11 +27,14 @@ jobs:
     steps:
       - name: Trigger saved-search alert run
         run: |
-          curl -sS -X POST "${BIDCALLER_SERVER_URL}/run-saved-search-alerts" \
+          resp=$(curl -sS -X POST "${BIDCALLER_SERVER_URL}/run-saved-search-alerts" \
             -H "Content-Type: application/json" \
             -H "X-Cron-Secret: ${CRON_SECRET}" \
             --max-time 280 \
-            --fail
+            -w "\nHTTP_STATUS:%{http_code}")
+          echo "$resp"
+          status=$(echo "$resp" | grep -o 'HTTP_STATUS:[0-9]*' | cut -d: -f2)
+          if [ "$status" -ge 400 ]; then exit 1; fi
         env:
           BIDCALLER_SERVER_URL: ${{ secrets.BIDCALLER_SERVER_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
