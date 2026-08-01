@@ -717,11 +717,25 @@ STATE_NAME_TO_ABBR = {
 STATE_ABBRS = set(STATE_NAME_TO_ABBR.values())
 
 
+_COORD_RE = re.compile(r"^(-?\d{1,3}(?:\.\d+)?),\s*(-?\d{1,3}(?:\.\d+)?)$")
+
+
 def _resolve_center(location):
-    """Return {lat, lon, city, state} for a ZIP or 'City, ST' / 'City, State'."""
+    """Return {lat, lon, city, state} for a ZIP, 'City, ST' / 'City, State',
+    or a raw 'lat, lon' pair (the map-click auto-fill falls back to this
+    format when reverse geocoding hasn't resolved a city name yet, or when
+    it fails outright — resolving it here instead of failing outright means
+    a map click always produces a usable location)."""
     loc = (location or "").strip()
     if not loc:
         return None
+    mc = _COORD_RE.match(loc)
+    if mc:
+        lat, lon = float(mc.group(1)), float(mc.group(2))
+        if -90 <= lat <= 90 and -180 <= lon <= 180:
+            got = _reverse_geocode_city(lat, lon)
+            city, state = got if got else ("", "")
+            return {"lat": lat, "lon": lon, "city": city, "state": state}
     m = re.search(r"\b(\d{5})\b", loc)
     if m:
         g = _geo_from_zip(m.group(1))
