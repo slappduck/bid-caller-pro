@@ -74,6 +74,7 @@ from flask_cors import CORS
 from werkzeug.exceptions import HTTPException
 
 import bid_portals
+import residential_permits
 
 app = Flask(__name__)
 
@@ -1813,6 +1814,81 @@ def scan():
     if outcome is None:
         return jsonify({"ok": False, "reason": "location_not_found"})
     return jsonify({"ok": True, **outcome})
+
+
+# ═══════════════════════════════════════════════════════════
+# /residential-leads — new driveway/sidewalk permits from city open-data
+# (see residential_permits.py). No AI involved at all: this is clean
+# structured data straight from each city's own permit system, not text an
+# LLM has to interpret -- more reliable than the bid-scan path, not less.
+# Coverage is narrow and hand-verified city by city (see that module's
+# docstring for why some candidate cities were rejected), so the response
+# always says whether the area is covered yet rather than a bare empty list
+# that could just look like a bug.
+# ═══════════════════════════════════════════════════════════
+def _lead_within_radius(lead, center, radius, cdb):
+    """True if we can confirm the lead is within radius; also true (kept,
+    not dropped) when we genuinely can't determine distance at all -- an
+    address with no coordinates and no zip isn't grounds to hide a real
+    lead, just to not be able to sort it by distance."""
+    lat, lon = lead.get("lat"), lead.get("lon")
+    if lat is None or lon is None:
+        z = (lead.get("zip") or "").strip()
+        if not z:
+            return True
+        zc = cdb.setdefault("zip_geo_cache", {})
+        if z not in zc:
+            g = _geo_from_zip(z)
+            zc[z] = [g["lat"], g["lon"]] if g else None
+        coords = zc[z]
+        if not coords:
+            return True
+        lat, lon = coords
+    return _miles_between(center["lat"], center["lon"], lat, lon) <= radius
+
+
+@app.route("/residential-leads", methods=["POST"])
+def residential_leads():
+    data = request.get_json(force=True, silent=True) or {}
+    key = data.get("key", "")
+    device = data.get("device_id", "")
+    supabase_token = data.get("supabase_token", "")
+    location = (data.get("location") or "").strip()
+    try:
+        radius = float(data.get("radius") or 25)
+    except (TypeError, ValueError):
+        radius = 25.0
+
+    if not _license_is_active(key, device, supabase_token):
+        return jsonify({"ok": False, "reason": "not_licensed"}), 403
+    if not location:
+        return jsonify({"ok": False, "reason": "no_location"})
+
+    center = _resolve_center(location)
+    if not center:
+        return jsonify({"ok": False, "reason": "location_not_found"})
+
+    covered = residential_permits.has_source(center["city"], center["state"])
+
+    cdb = _cache()
+    today = datetime.datetime.now().strftime("%Y%m%d")
+    cache = cdb.setdefault("leads_cache", {})
+    ckey = f"{center['state']}|{center['city'].lower()}|{int(radius)}|{today}"
+    if ckey in cache:
+        c = cache[ckey]
+        return jsonify({"ok": True, "location": f"{center['city']}, {center['state']}",
+                        "leads": c["leads"], "total": len(c["leads"]),
+                        "covered": covered, "cached": True})
+
+    leads = residential_permits.fetch_leads(center["city"], center["state"]) if covered else []
+    kept = [l for l in leads if _lead_within_radius(l, center, radius, cdb)]
+
+    cache[ckey] = {"ts": datetime.datetime.now().isoformat(), "leads": kept}
+    cdb["leads_cache"] = {k: v for k, v in cache.items() if k.endswith(today)}
+    _save_cache(cdb)
+
+    return jsonify({"ok": True, "location": f"{center['city']}, {center['state']}",
+                    "leads": kept, "total": len(kept), "covered": covered})
 
 
 # ═══════════════════════════════════════════════════════════
