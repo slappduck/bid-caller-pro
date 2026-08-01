@@ -1293,13 +1293,22 @@ SAM_SEARCH_URL = os.environ.get(
     "SAM_SEARCH_URL", "https://api.sam.gov/prod/opportunities/v2/search")
 SCAN_WINDOW_DAYS = int(os.environ.get("SCAN_WINDOW_DAYS", "60"))
 
-CONSTRUCTION_NAICS_PREFIXES = ("236", "237", "238")
+# Deliberately narrow to the product's actual niche. An earlier version OR'd
+# this keyword check with "NAICS starts with 236/237/238" -- but that top-level
+# bucket covers every construction trade there is (electricians, HVAC, roofers,
+# painters...), so on a state with a lot of federal opportunity volume it let
+# in a flood of bids with nothing to do with concrete. Title-keyword match
+# only, against niche terms -- lower recall, but recall on the wrong bids
+# isn't useful to a contractor scanning for sidewalk/curb/concrete work.
 CONSTRUCTION_KEYWORDS = (
-    "construction", "roof", "paving", "pavement", "road", "highway", "bridge",
-    "demolition", "hvac", "plumbing", "electrical", "concrete", "grading",
-    "sidewalk", "sewer", "water main", "waterline", "renovation", "remodel",
-    "build", "facility", "repair", "install",
+    "sidewalk", "ada ramp", "curb ramp", "curb and gutter", "curb & gutter",
+    "concrete", "flatwork", "pedestrian ramp",
 )
+
+
+def _is_construction(opp):
+    title = (opp.get("title") or "").lower()
+    return any(k in title for k in CONSTRUCTION_KEYWORDS)
 
 
 def _sam_fetch(state):
@@ -1317,16 +1326,6 @@ def _sam_fetch(state):
     data = _get_json(SAM_SEARCH_URL + "?" + urllib.parse.urlencode(params),
                      headers={"Accept": "application/json"}, timeout=60)
     return (data or {}).get("opportunitiesData") or []
-
-
-def _is_construction(opp):
-    naics = opp.get("naicsCode") or ""
-    if isinstance(naics, list):
-        naics = naics[0] if naics else ""
-    if str(naics)[:3] in CONSTRUCTION_NAICS_PREFIXES:
-        return True
-    title = (opp.get("title") or "").lower()
-    return any(k in title for k in CONSTRUCTION_KEYWORDS)
 
 
 def _normalize_opp(opp):
@@ -1364,10 +1363,19 @@ def _ai_extract(area, text):
     if not OPENAI_API_KEY:
         return None
     prompt = (
-        f"You extract construction bid leads for contractors near {area}.\n\n"
-        "From the website text below, extract ANY construction, infrastructure, "
-        "roofing, paving, road, utility, demolition, HVAC, or facility bids, RFPs, "
-        "RFQs, or solicitations.\n\n"
+        f"You extract SIDEWALK, ADA RAMP, CURB & GUTTER, and CONCRETE FLATWORK/"
+        f"PAVING bid leads for a niche concrete contractor near {area}.\n\n"
+        "From the website text below (which may be a full bid listing page "
+        "covering many unrelated trades), extract ONLY bids, RFPs, RFQs, or "
+        "solicitations where sidewalk construction/repair/replacement, ADA curb "
+        "ramps, curb-and-gutter work, or concrete flatwork/paving is clearly "
+        "part of the stated scope. A bid with mixed scope items still counts if "
+        "concrete/sidewalk/curb work is explicitly one of them.\n\n"
+        "Do NOT extract bids that are only about roofing, HVAC, plumbing, "
+        "electrical, general building construction, demolition, painting, "
+        "landscaping, or other unrelated trades -- even if they appear on the "
+        "same page as real matches, and even though they're all technically "
+        "\"construction.\" When in doubt, leave it out.\n\n"
         "Respond ONLY with a JSON array. Each item has keys: \"title\", \"scope\", "
         "\"status\" (\"Open\" or \"Closed\"), \"deadline\", \"contact\", \"email\", "
         "\"phone\", \"value\", \"url\", \"city\". \"city\" is the US city where the work "
