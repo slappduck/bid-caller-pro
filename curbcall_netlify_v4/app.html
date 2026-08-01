@@ -711,6 +711,17 @@ document.querySelectorAll(".nav-btn").forEach(b=>{
     if(s==="account")renderAccount();
     if(s==="upcoming")renderUpcoming();
     if(s==="leads")renderLeads();
+    // The map's own invalidateSize() call (in show()) only ever runs once,
+    // at creation time -- for any tab that isn't the default visible one,
+    // that happens while the tab is still hidden (display:none), so
+    // Leaflet measures a zero-size container and the map renders half-
+    // blank until something re-triggers a size recalculation. Re-running
+    // it here, now that the tab has actually just become visible, is what
+    // was previously only happening by accident when a user clicked the
+    // map (which incidentally re-ran show() -> invalidateSize()).
+    if(s==="scan"&&findMap)setTimeout(()=>findMap.invalidateSize(),50);
+    if(s==="upcoming")setTimeout(()=>upPicker.invalidateSize(),50);
+    if(s==="leads")setTimeout(()=>leadsPicker.invalidateSize(),50);
   };
 });
 function goTo(s){document.querySelector(`.nav-btn[data-s="${s}"]`).click();}
@@ -1020,7 +1031,7 @@ function createLocationPicker(containerId,inputId){
       if(input)input.value=`${lat.toFixed(4)}, ${lon.toFixed(4)}`;
     }
   }
-  return {show};
+  return {show, invalidateSize:()=>{if(st.map)st.map.invalidateSize();}};
 }
 const upPicker=createLocationPicker("up-map-view","up-loc-input");
 const leadsPicker=createLocationPicker("leads-map-view","leads-loc-input");
@@ -1903,6 +1914,7 @@ function pipelineStatsSummary(){
   return{count:ids.length,winRate,wonValue,trackedValue};
 }
 let lastSyncAt=null;
+let companyEditMode=false;
 function renderAccount(){
   const body=document.getElementById("account-body");
   const email=currentUser?.email||"";
@@ -1947,8 +1959,12 @@ function renderAccount(){
       <div class="account-status" id="notif-status">${esc(notifPermissionLabel())}</div>
     </div>
     <div class="account-card">
-      <div class="account-email" style="font-size:0.85rem;">&#x1F4BC; Company Info</div>
+      <div class="account-email" style="font-size:0.85rem;display:flex;justify-content:space-between;align-items:center;">
+        <span>&#x1F4BC; Company Info</span>
+        ${companyEditMode?"":`<button class="btn-ghost" id="co-edit-btn" style="padding:0.35rem 0.8rem;font-size:0.78rem;">&#x270F; Edit</button>`}
+      </div>
       <div class="account-status" style="margin-bottom:0.7rem;">Used to personalize AI-drafted bid proposals. Nothing here is shared beyond that.</div>
+      ${companyEditMode?`
       <div class="field-label">Company Name</div>
       <input class="input co-field" id="co-name" data-k="name" placeholder="Acme Concrete LLC" value="${esc(companyProfile.name||"")}" style="margin-bottom:0.6rem;" />
       <div class="field-label">Contact Person</div>
@@ -1958,7 +1974,18 @@ function renderAccount(){
       <div class="field-label">Email</div>
       <input class="input co-field" id="co-email" data-k="email" placeholder="you@company.com" value="${esc(companyProfile.email||email||"")}" style="margin-bottom:0.6rem;" />
       <div class="field-label">Specialty (optional)</div>
-      <input class="input co-field" id="co-specialty" data-k="specialty" placeholder="sidewalk, ADA ramp &amp; curb concrete work" value="${esc(companyProfile.specialty||"")}" />
+      <input class="input co-field" id="co-specialty" data-k="specialty" placeholder="sidewalk, ADA ramp &amp; curb concrete work" value="${esc(companyProfile.specialty||"")}" style="margin-bottom:0.8rem;" />
+      <div style="display:flex;gap:0.6rem;">
+        <button class="btn-primary" id="co-confirm-btn" style="margin-top:0;">&#x2713; Confirm</button>
+        <button class="btn-ghost" id="co-cancel-btn">Cancel</button>
+      </div>
+      `:`
+      <div class="detail-row"><div class="detail-label">Company Name</div><div class="detail-val">${esc(companyProfile.name||"Not set")}</div></div>
+      <div class="detail-row"><div class="detail-label">Contact Person</div><div class="detail-val">${esc(companyProfile.contact||"Not set")}</div></div>
+      <div class="detail-row"><div class="detail-label">Phone</div><div class="detail-val">${esc(companyProfile.phone||"Not set")}</div></div>
+      <div class="detail-row"><div class="detail-label">Email</div><div class="detail-val">${esc(companyProfile.email||email||"Not set")}</div></div>
+      <div class="detail-row"><div class="detail-label">Specialty</div><div class="detail-val">${esc(companyProfile.specialty||"Not set")}</div></div>
+      `}
     </div>
     <div class="account-card">
       <div class="account-email" style="font-size:0.85rem;">&#x1F6DF; Support</div>
@@ -2041,13 +2068,22 @@ function renderAccount(){
       toast("Photo updated!");
     }catch(err){toast("Couldn't upload photo — check your connection.");}
   });
-  document.querySelectorAll(".co-field").forEach(f=>{
-    f.addEventListener("blur",()=>{
-      companyProfile[f.dataset.k]=f.value.trim();
-      store.set("company_profile",companyProfile);
-      pushCompanyProfile();
-    });
-  });
+  // Company Info now needs an explicit Edit -> Confirm action instead of
+  // silently auto-saving on blur -- so a value never changes just because
+  // a field lost focus while the user was still deciding what to type.
+  const coEditBtn=document.getElementById("co-edit-btn");
+  if(coEditBtn)coEditBtn.onclick=()=>{companyEditMode=true;renderAccount();};
+  const coConfirmBtn=document.getElementById("co-confirm-btn");
+  if(coConfirmBtn)coConfirmBtn.onclick=()=>{
+    document.querySelectorAll(".co-field").forEach(f=>{companyProfile[f.dataset.k]=f.value.trim();});
+    store.set("company_profile",companyProfile);
+    pushCompanyProfile();
+    companyEditMode=false;
+    renderAccount();
+    toast("Company info saved");
+  };
+  const coCancelBtn=document.getElementById("co-cancel-btn");
+  if(coCancelBtn)coCancelBtn.onclick=()=>{companyEditMode=false;renderAccount();};
 
   loadAccountStatus();
 }
