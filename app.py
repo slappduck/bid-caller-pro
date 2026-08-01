@@ -1465,6 +1465,81 @@ class BidCaller:
                 self.root.after(1500, lambda: go(n - 1))
         self.root.after(1200, lambda: go(attempts))
 
+    def _build_simple_map(self, parent, entry_widget, status_setter=None):
+        """A lighter 'click to set location' map for tabs that don't need
+        Find's radius-circle/nearby-town-marker machinery (Upcoming, Leads)
+        -- just click, reverse-geocode, and fill the given entry widget.
+        Keeps the map standard across every search tab instead of only Find
+        having one, without dragging in logic those tabs don't use."""
+        wrap = tk.Frame(parent, bg=SURFACE, highlightbackground=BORDER, highlightthickness=1)
+        wrap.pack(fill="x", pady=(0, 12))
+
+        if tkintermapview is None:
+            tk.Label(wrap, text="📍  Live map needs one more install: pip install tkintermapview pillow",
+                     font=F_SMALL, bg=SURFACE, fg=TEXT3, pady=14).pack()
+            return None
+
+        m = tkintermapview.TkinterMapView(wrap, width=600, height=220, corner_radius=0)
+        m.pack(fill="x")
+        m.set_tile_server("https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png", max_zoom=20)
+        m.set_position(39.5, -98.35)
+        m.set_zoom(4)
+        state = {"marker": None, "retry_gen": 0}
+
+        def schedule_retry(attempts=3):
+            state["retry_gen"] += 1
+            gen = state["retry_gen"]
+            def go(n):
+                if gen != state["retry_gen"]:
+                    return
+                try:
+                    m.draw_zoom()
+                except Exception:
+                    pass
+                if n > 1:
+                    self.root.after(1500, lambda: go(n - 1))
+            self.root.after(1200, lambda: go(attempts))
+
+        m.canvas.bind("<MouseWheel>", lambda e: schedule_retry(), add="+")
+        m.canvas.bind("<ButtonRelease-1>", lambda e: schedule_retry(), add="+")
+
+        def set_marker(lat, lon, label):
+            first_time = state["marker"] is None
+            m.set_position(lat, lon)
+            if first_time:
+                m.set_zoom(11)
+            if state["marker"]:
+                state["marker"].delete()
+            state["marker"] = m.set_marker(lat, lon, text=label or "Selected location")
+            schedule_retry()
+
+        def on_click(coords):
+            lat, lon = coords
+            fallback = f"{lat:.4f}, {lon:.4f}"
+            entry_widget.delete(0, tk.END)
+            entry_widget.insert(0, fallback)
+            set_marker(lat, lon, None)
+            if status_setter:
+                status_setter(f"Location set: {fallback}", ACCENT)
+
+            def work():
+                label = radius_scanner.reverse_geocode(lat, lon)
+                if not label:
+                    return
+                def apply():
+                    entry_widget.delete(0, tk.END)
+                    entry_widget.insert(0, label)
+                    set_marker(lat, lon, label)
+                    if status_setter:
+                        status_setter(f"Location set: {label}", GREEN)
+                self.root.after(0, apply)
+            threading.Thread(target=work, daemon=True).start()
+
+        m.add_left_click_map_command(on_click)
+        tk.Label(wrap, text="Click anywhere on the map to set your search location.",
+                 font=F_SMALL, bg=SURFACE, fg=TEXT3, pady=6).pack()
+        return m
+
     def _radius_miles(self):
         try:
             return int(self._radius_var.get().split()[0])
@@ -1875,16 +1950,22 @@ class BidCaller:
                  bg=BG, fg=TEXT3, wraplength=820, justify="left").pack(anchor="w", pady=(0, 12))
 
         form = tk.Frame(body, bg=SURFACE, padx=24, pady=18)
-        form.pack(fill="x", pady=(0, 12))
-
-        tk.Label(form, text="Your Location", font=(UI, fs(11), "bold"),
-                 bg=SURFACE, fg=ACCENT).pack(anchor="w", pady=(0, 4))
         self._up_loc_entry = tk.Entry(form, font=F_BODY, bg=CARD, fg=TEXT,
                                       insertbackground=TEXT, relief="flat", bd=0,
                                       highlightthickness=1, highlightbackground=BORDER,
                                       highlightcolor=ACCENT)
-        self._up_loc_entry.pack(fill="x", ipady=8, pady=(0, 10))
         self._up_loc_entry.bind("<Return>", lambda e: self._run_upcoming())
+
+        # Map goes above the form card (same ordering as every other search
+        # tab) -- built once the entry it fills exists, packed before the
+        # form itself so it renders on top.
+        self._build_simple_map(body, self._up_loc_entry,
+                               status_setter=lambda t, c: self._upcoming_status.config(text=t, fg=c))
+
+        form.pack(fill="x", pady=(0, 12))
+        tk.Label(form, text="Your Location", font=(UI, fs(11), "bold"),
+                 bg=SURFACE, fg=ACCENT).pack(anchor="w", pady=(0, 4))
+        self._up_loc_entry.pack(fill="x", ipady=8, pady=(0, 10))
 
         tk.Label(form, text="Search Radius", font=(UI, fs(11), "bold"),
                  bg=SURFACE, fg=ACCENT).pack(anchor="w", pady=(4, 4))
@@ -2073,16 +2154,22 @@ class BidCaller:
                  bg=BG, fg=TEXT3, wraplength=820, justify="left").pack(anchor="w", pady=(0, 12))
 
         form = tk.Frame(body, bg=SURFACE, padx=24, pady=18)
-        form.pack(fill="x", pady=(0, 12))
-
-        tk.Label(form, text="Your Location", font=(UI, fs(11), "bold"),
-                 bg=SURFACE, fg=ACCENT).pack(anchor="w", pady=(0, 4))
         self._leads_loc_entry = tk.Entry(form, font=F_BODY, bg=CARD, fg=TEXT,
                                          insertbackground=TEXT, relief="flat", bd=0,
                                          highlightthickness=1, highlightbackground=BORDER,
                                          highlightcolor=ACCENT)
-        self._leads_loc_entry.pack(fill="x", ipady=8, pady=(0, 10))
         self._leads_loc_entry.bind("<Return>", lambda e: self._run_leads())
+
+        # Map goes above the form card (same ordering as every other search
+        # tab) -- built once the entry it fills exists, packed before the
+        # form itself so it renders on top.
+        self._build_simple_map(body, self._leads_loc_entry,
+                               status_setter=lambda t, c: self._leads_status.config(text=t, fg=c))
+
+        form.pack(fill="x", pady=(0, 12))
+        tk.Label(form, text="Your Location", font=(UI, fs(11), "bold"),
+                 bg=SURFACE, fg=ACCENT).pack(anchor="w", pady=(0, 4))
+        self._leads_loc_entry.pack(fill="x", ipady=8, pady=(0, 10))
 
         tk.Label(form, text="Search Radius", font=(UI, fs(11), "bold"),
                  bg=SURFACE, fg=ACCENT).pack(anchor="w", pady=(4, 4))
