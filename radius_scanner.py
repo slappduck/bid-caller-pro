@@ -43,7 +43,11 @@ def auto_locate():
 
 
 def reverse_geocode(lat, lon):
-    """Turn (lat, lon) into a short 'City, State' label. Returns None on failure."""
+    """Turn (lat, lon) into a short 'City, State' label. Returns None on failure.
+    Tries Nominatim first, then falls back to BigDataCloud (same free,
+    keyless provider the server already uses) since Nominatim alone was
+    leaving map clicks stuck showing raw coordinates when it rate-limited
+    or failed to resolve."""
     try:
         r = requests.get("https://nominatim.openstreetmap.org/reverse",
                          params={"lat": lat, "lon": lon, "format": "json", "zoom": 10},
@@ -55,7 +59,22 @@ def reverse_geocode(lat, lon):
             state = addr.get("ISO3166-2-lvl4", "").split("-")[-1] or addr.get("state", "")
             if city and state:
                 return f"{city}, {state}"
-            return city or state or None
+            if city or state:
+                return city or state
+    except Exception:
+        pass
+    try:
+        r = requests.get("https://api.bigdatacloud.net/data/reverse-geocode-client",
+                         params={"latitude": lat, "longitude": lon, "localityLanguage": "en"},
+                         headers=UA, timeout=10)
+        if r.status_code == 200:
+            d = r.json()
+            city = d.get("city") or d.get("locality") or ""
+            state = (d.get("principalSubdivisionCode") or "").split("-")[-1]
+            if city and state:
+                return f"{city}, {state}"
+            if city or state:
+                return city or state
     except Exception:
         pass
     return None
