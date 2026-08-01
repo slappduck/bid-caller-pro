@@ -173,7 +173,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .map-card-head .x{background:none;border:none;color:var(--text2);font-size:0.85rem;cursor:pointer;padding:0.2rem 0.4rem;}
 #map-view{height:240px;}
 .map-legend{display:flex;gap:0.8rem;flex-wrap:wrap;font-size:0.72rem;color:var(--text2);padding:0.6rem 0.9rem 0.75rem;}
-#find-map-view{height:280px;}
+#find-map-view,#up-map-view,#leads-map-view{height:280px;}
 .map-legend span{display:inline-flex;align-items:center;gap:0.3rem;}
 .map-dot{width:9px;height:9px;border-radius:50%;display:inline-block;box-shadow:0 0 6px currentColor;}
 .leaflet-popup-content-wrapper{background:var(--surface);color:var(--text);}
@@ -288,6 +288,11 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
     <div class="screen" id="screen-upcoming">
       <div class="screen-title">Upcoming Work</div>
       <div class="screen-sub">Concrete projects spotted in council agendas, budgets &amp; plans &mdash; before they hit the bid boards.</div>
+      <div class="map-card show" id="up-map-card">
+        <div class="map-card-head"><span class="t">&#x1F4CD; You Are Here</span></div>
+        <div id="up-map-view"></div>
+        <div class="map-legend"><span>Click the map — or type below — to set your search location</span></div>
+      </div>
       <div class="field-label">Your Location</div>
       <input class="input" id="up-loc-input" placeholder="ZIP code or City, State" inputmode="text" />
       <div class="field-label" style="margin-top:1rem;">Search Radius</div>
@@ -308,6 +313,11 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
     <div class="screen" id="screen-leads">
       <div class="screen-title">Residential Leads</div>
       <div class="screen-sub">Fresh driveway &amp; sidewalk permits pulled straight from city permit records &mdash; homeowners and builders who just started this exact work.</div>
+      <div class="map-card show" id="leads-map-card">
+        <div class="map-card-head"><span class="t">&#x1F4CD; You Are Here</span></div>
+        <div id="leads-map-view"></div>
+        <div class="map-legend"><span>Click the map — or type below — to set your search location</span></div>
+      </div>
       <div class="field-label">Your Location</div>
       <input class="input" id="leads-loc-input" placeholder="ZIP code or City, State" inputmode="text" />
       <div class="field-label" style="margin-top:1rem;">Search Radius</div>
@@ -660,6 +670,8 @@ function showApp(){
   // ever. Always show a default view first so the map (and its click
   // handler) exists regardless of whether geolocation succeeds.
   updateFindMap(39.5,-98.35,"Click the map to set your location");
+  upPicker.show(39.5,-98.35,"Click the map to set your location");
+  leadsPicker.show(39.5,-98.35,"Click the map to set your location");
   autoFillZip();
   autoUnlock();
   checkSavedSearches();
@@ -951,6 +963,50 @@ async function pickFindLocation(lat,lon,label){
   }
   refreshFindTownMarkers(lat,lon);
 }
+
+// ── Reusable "click the map to set a location" picker for tabs that don't
+// need Find's extra nearby-town-marker/auto-locate machinery (Upcoming,
+// Leads) -- just click, reverse-geocode, and fill that tab's own location
+// input. Keeps the map standard across every search tab instead of only
+// the Find tab having one. ──
+function createLocationPicker(containerId,inputId){
+  const st={map:null,marker:null};
+  function show(lat,lon,label){
+    const mv=document.getElementById(containerId);
+    if(!mv)return;
+    if(!st.map){
+      st.map=L.map(mv,{attributionControl:false,tap:false}).setView([lat,lon],11);
+      const tiles=L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{
+        maxZoom:20,subdomains:"abcd"
+      }).addTo(st.map);
+      addTileRetry(tiles);
+      st.map.on("click",e=>pick(e.latlng.lat,e.latlng.lng));
+    } else {
+      st.map.setView([lat,lon],11);
+    }
+    if(st.marker)st.map.removeLayer(st.marker);
+    st.marker=L.circleMarker([lat,lon],{radius:9,color:"#f5b400",fillColor:"#f5b400",fillOpacity:0.9,weight:2})
+      .addTo(st.map).bindPopup(esc(label||"Selected location"));
+    setTimeout(()=>st.map.invalidateSize(),50);
+  }
+  async function pick(lat,lon){
+    const input=document.getElementById(inputId);
+    show(lat,lon,"Locating...");
+    try{
+      const r=await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`);
+      const d=await r.json();
+      const st2=(d.principalSubdivisionCode||"").split("-").pop();
+      const val=d.postcode||[d.city||d.locality,st2].filter(Boolean).join(", ")||`${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+      if(input)input.value=val;
+      show(lat,lon,val);
+    }catch(e){
+      if(input)input.value=`${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+    }
+  }
+  return {show};
+}
+const upPicker=createLocationPicker("up-map-view","up-loc-input");
+const leadsPicker=createLocationPicker("leads-map-view","leads-loc-input");
 
 // ── Auto ZIP + live map pin ──
 // fillInput=false (auto-run on load): only fills the box if it's empty, but
