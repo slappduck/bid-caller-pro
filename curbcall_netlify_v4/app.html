@@ -306,6 +306,9 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
       <button class="btn-primary" id="upcoming-btn">&#x1F4E1; Find Upcoming Projects</button>
       <div class="scan-status" id="upcoming-status"></div>
       <div class="progress" id="up-progress-wrap" style="display:none;"><div class="progress-bar" id="up-progress-bar"></div></div>
+      <div class="filter-row" id="up-filter-row" style="display:none;margin-top:1rem;">
+        <input id="up-search" placeholder="Search title or scope..." />
+      </div>
       <div id="upcoming-list" style="margin-top:1rem;"></div>
     </div>
 
@@ -331,6 +334,13 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
       <button class="btn-primary" id="leads-btn">&#x1F3E0; Find Residential Leads</button>
       <div class="scan-status" id="leads-status"></div>
       <div class="progress" id="leads-progress-wrap" style="display:none;"><div class="progress-bar" id="leads-progress-bar"></div></div>
+      <div class="filter-row" id="leads-filter-row" style="display:none;margin-top:1rem;">
+        <input id="leads-search" placeholder="Search address or description..." />
+        <select id="leads-sort">
+          <option value="match">Best Match</option>
+          <option value="new">Newest</option>
+        </select>
+      </div>
       <div id="leads-list" style="margin-top:1rem;"></div>
     </div>
 
@@ -1322,15 +1332,22 @@ function upcomingCard(city,b){
 
 function renderUpcoming(){
   const list=document.getElementById("upcoming-list");
+  const filterRow=document.getElementById("up-filter-row");
   const cities=Object.keys(upcomingData).filter(c=>(upcomingData[c]||[]).length);
   if(!cities.length){
+    filterRow.style.display="none";
     list.innerHTML=`<div class="empty"><div class="icon">&#x1F4E1;</div><h3>Nothing yet</h3><p>Search your area to spot planned work before it's a bid.</p></div>`;
     return;
   }
+  filterRow.style.display="flex";
   let rows=[];
   cities.sort().forEach(c=>upcomingData[c].forEach(b=>rows.push([c,b])));
+  const term=(document.getElementById("up-search").value||"").trim().toLowerCase();
+  if(term)rows=rows.filter(([c,b])=>(b.title||"").toLowerCase().includes(term)||(b.scope||"").toLowerCase().includes(term)||c.toLowerCase().includes(term));
   list.innerHTML=`<div class="feed-label">PLANNED PROJECTS</div>`+rows.map(([c,b])=>upcomingCard(c,b)).join("");
+  if(!rows.length)list.innerHTML=`<div class="empty"><div class="icon">&#x1F50D;</div><h3>No matches</h3><p>Try a different search term.</p></div>`;
 }
+document.getElementById("up-search").oninput=()=>renderUpcoming();
 
 // ── Residential Leads (driveway/sidewalk permits -- a live lead to pitch,
 // not a formal bid to respond to: no deadline, no RFP process, often
@@ -1425,15 +1442,29 @@ function leadCard(city,l){
 
 function renderLeads(){
   const list=document.getElementById("leads-list");
+  const filterRow=document.getElementById("leads-filter-row");
   const cities=Object.keys(leadsData).filter(c=>(leadsData[c]||[]).length);
   if(!cities.length){
+    filterRow.style.display="none";
     list.innerHTML=`<div class="empty"><div class="icon">&#x1F3E0;</div><h3>Nothing yet</h3><p>Search your area for fresh driveway &amp; sidewalk permits. Coverage is growing city by city — currently: Austin, TX & Cambridge, MA.</p></div>`;
     return;
   }
+  filterRow.style.display="flex";
   let rows=[];
   cities.sort().forEach(c=>leadsData[c].forEach(l=>rows.push([c,l])));
+  const term=(document.getElementById("leads-search").value||"").trim().toLowerCase();
+  if(term)rows=rows.filter(([c,l])=>(l.address||"").toLowerCase().includes(term)||(l.description||"").toLowerCase().includes(term)||(l.contractor_name||"").toLowerCase().includes(term)||c.toLowerCase().includes(term));
+  const sortMode=document.getElementById("leads-sort").value;
+  if(sortMode==="new"){
+    rows.sort((a,b)=>(b[1].issued_date||"").localeCompare(a[1].issued_date||""));
+  }
+  // sortMode==="match" (default): leave rows in the order /residential-leads
+  // returned them -- already sorted open-lead-first, freshest within type.
   list.innerHTML=`<div class="feed-label">RESIDENTIAL LEADS</div>`+rows.map(([c,l])=>leadCard(c,l)).join("");
+  if(!rows.length)list.innerHTML=`<div class="empty"><div class="icon">&#x1F50D;</div><h3>No matches</h3><p>Try a different search term.</p></div>`;
 }
+document.getElementById("leads-search").oninput=()=>renderLeads();
+document.getElementById("leads-sort").onchange=()=>renderLeads();
 
 // ── Bid helpers ──
 function bidId(city,b){return(city+(b.title||"")+(b.scope||"")).replace(/\s/g,"").slice(0,40);}
