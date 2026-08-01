@@ -28,7 +28,17 @@ ENV VARS (set in Render → your service → Environment):
 START COMMAND (raise the timeout — scans do real work, and wide-radius scans
 now search multiple towns around the area, not just the center one, so they
 take longer):
-  gunicorn license_server:app --timeout 240 --workers 1
+  gunicorn license_server:app --timeout 240 --workers 1 --threads 4
+
+IMPORTANT: this MUST match Render's actual "Start Command" in the service's
+Settings tab, or this comment is just decoration. --workers 1 alone means
+ONE request at a time server-wide -- two customers scanning simultaneously
+queue behind each other. --threads 4 lets that single worker process handle
+several requests concurrently (cheap: same dyno/plan, no extra cost) since
+scans are I/O-bound (network calls), not CPU-bound, so threads help here.
+Going further (more workers, an always-on paid plan to avoid free-tier
+cold starts) is a real cost tradeoff -- worth it once there's paying
+customer volume, not required to ship.
 """
 
 import os
