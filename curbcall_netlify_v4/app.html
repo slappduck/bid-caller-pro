@@ -796,7 +796,7 @@ async function checkSavedSearches(){
       const r=await fetchWithTimeout(SERVER+"/scan",{
         method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,location:s.location,radius:s.radius})
-      },15000);
+      },150000);
       const d=await r.json();
       if(d.ok){
         const added=mergeOpenBids(d.bids||{},Object.keys(d.city_coords||{}));
@@ -1482,7 +1482,7 @@ window.draftProposal=async function(cityEnc,idEnc){
         bid:{title:b.title||"",scope:b.scope||"",deadline:b.deadline||"",city},
         company:companyProfile
       })
-    },45000);
+    },75000);
     if(r.status===403){toast("Your trial or subscription isn't active.");goTo("account");return;}
     const d=await r.json();
     if(!d.ok){
@@ -1676,7 +1676,7 @@ function renderAccount(){
     const key=document.getElementById("key-input").value.trim().toUpperCase();
     if(!key){toast("Enter your license key");return;}
     try{
-      const r=await fetchWithTimeout(SERVER+"/validate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({key,device_id:deviceId()})});
+      const r=await fetchWithTimeout(SERVER+"/validate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({key,device_id:deviceId()})},60000);
       const d=await r.json();
       if(d.valid){store.set("license_key",key);toast("Activated!");renderAccount();}
       else toast("That key isn't valid.");
@@ -1693,7 +1693,7 @@ function renderAccount(){
     if(!msg){toast("Enter a message first");return;}
     statusEl.style.color="";statusEl.textContent="Sending...";
     try{
-      const r=await fetchWithTimeout(SERVER+"/support",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,message:msg})});
+      const r=await fetchWithTimeout(SERVER+"/support",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,message:msg})},60000);
       const d=await r.json();
       if(d.ok){statusEl.style.color="var(--green)";statusEl.textContent="Message sent — we'll get back to you soon.";msgBox.value="";}
       else{statusEl.style.color="var(--red)";statusEl.textContent=d.reason==="email_unavailable"?"Support messages aren't configured yet — email us directly instead.":"Couldn't send your message. Try again.";}
@@ -1771,7 +1771,7 @@ async function loadAccountStatus(){
   if(trialCountdownTimer){clearInterval(trialCountdownTimer);trialCountdownTimer=null;}
   if(key){
     try{
-      const r=await fetchWithTimeout(SERVER+"/validate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({key,device_id:deviceId()})});
+      const r=await fetchWithTimeout(SERVER+"/validate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({key,device_id:deviceId()})},60000);
       const d=await r.json();
       if(d.valid){html=`<div class="plan-name">✅ Active subscription</div><div class="plan-price" style="font-size:1.4rem;">${esc(d.plan||"Pro")}</div><p style="color:var(--text2);font-size:0.82rem;margin-top:0.4rem;">Expires ${esc(d.expires||"")}</p>`;featured=true;activePaid=true;}
     }catch{}
@@ -1780,7 +1780,7 @@ async function loadAccountStatus(){
   if(!html){
     try{
       const token=await getSupabaseToken();
-      const r=await fetchWithTimeout(SERVER+"/trial",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({device_id:deviceId(),supabase_token:token})});
+      const r=await fetchWithTimeout(SERVER+"/trial",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({device_id:deviceId(),supabase_token:token})},60000);
       const d=await r.json();
       if(d.active){
         trialExpiresAt=d.expires_at||null;
