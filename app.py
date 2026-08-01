@@ -997,9 +997,9 @@ class BidCaller:
         cb2.pack(side="left", padx=(0, 10))
         cb2.bind("<<ComboboxSelected>>", lambda e: self._render_feed())
 
-        self._sort_var = tk.StringVar(value="Newest")
+        self._sort_var = tk.StringVar(value="Best Match")
         cb3 = ttk.Combobox(inner, textvariable=self._sort_var, state="readonly",
-                           values=["Newest", "Deadline", "Est. Value"], font=F_BODY, width=12)
+                           values=["Best Match", "Deadline", "Est. Value"], font=F_BODY, width=12)
         cb3.pack(side="left")
         cb3.bind("<<ComboboxSelected>>", lambda e: self._render_feed())
 
@@ -1063,7 +1063,7 @@ class BidCaller:
                     if self._matches_filters(b):
                         rows.append((city, b))
 
-        sort_by = self._sort_var.get() if hasattr(self, "_sort_var") else "Newest"
+        sort_by = self._sort_var.get() if hasattr(self, "_sort_var") else "Best Match"
         if sort_by == "Deadline":
             def _deadline_key(cb):
                 d = days_until(cb[1])
@@ -1071,6 +1071,9 @@ class BidCaller:
             rows.sort(key=_deadline_key)
         elif sort_by == "Est. Value":
             rows.sort(key=lambda cb: -parse_value(cb[1].get("value")))
+        # "Best Match" (default): leave rows in the order /scan returned them --
+        # the server already ranks each city's bids by fit (deadline urgency,
+        # niche keyword strength, contact completeness).
 
         if not rows:
             self._empty_state(self._feed_frame,

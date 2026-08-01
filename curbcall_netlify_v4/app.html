@@ -260,6 +260,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
       <div class="filter-row" id="filter-row" style="display:none;">
         <input id="feed-search" placeholder="Search title or scope..." />
         <select id="feed-sort">
+          <option value="match">Best Match</option>
           <option value="new">Newest</option>
           <option value="deadline">Deadline</option>
           <option value="value">Est. Value</option>
@@ -1291,9 +1292,13 @@ function renderFeed(){
     rows.sort((a,b)=>{const da=daysUntil(a[1]),db=daysUntil(b[1]);if(da==null)return 1;if(db==null)return-1;return da-db;});
   }else if(sortMode==="value"){
     rows.sort((a,b)=>parseValue(b[1].value)-parseValue(a[1].value));
-  }else{
+  }else if(sortMode==="new"){
     rows.reverse(); // newest-added first
   }
+  // sortMode==="match" (default): leave rows in the order /scan returned them --
+  // the server already ranks each city's bids by fit (deadline urgency, niche
+  // keyword strength, contact completeness), so "Best Match" just means "don't
+  // re-sort what the server already ranked."
   lastFeedRows=rows;
   list.innerHTML=`<div class="feed-label">OPEN BIDS</div>`+rows.map(([c,b])=>bidCard(c,b)).join("");
   if(!rows.length)list.innerHTML=`<div class="empty"><div class="icon">&#x1F50D;</div><h3>No matches</h3><p>Try a different search term.</p></div>`;
