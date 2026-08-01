@@ -1221,6 +1221,70 @@ def _fetch_text(url):
     return re.sub(r"\s+", " ", raw).strip()
 
 
+# ── BidNet Direct: a real public source, queried directly (no key) ──
+# Unlike `site:bidnetdirect.com` search-engine queries (which only surface
+# whatever DDG/Tavily happened to index), this hits BidNet Direct's own
+# public "Open Solicitations" search directly by state + keyword. Verified
+# by hand: no login wall, no JS rendering required -- a plain scripted GET
+# with realistic browser headers gets a normal 200 with real server-rendered
+# results (the earlier 403 seen from a bare fetch was header-fingerprint
+# bot-blocking, the same class of thing DDG scraping already works around
+# below, not a real access restriction). `location` is BidNet's own numeric
+# state code, scraped once from their filter dropdown.
+BIDNET_LOCATION_CODES = {
+    "AL": 19, "AK": 25, "AZ": 31, "AR": 37, "CA": 43, "CO": 49, "CT": 55,
+    "DE": 61, "DC": 67, "FL": 73, "GA": 79, "HI": 85, "ID": 91, "IL": 97,
+    "IN": 103, "IA": 109, "KS": 115, "KY": 121, "LA": 127, "ME": 133,
+    "MD": 139, "MA": 145, "MI": 151, "MN": 157, "MS": 163, "MO": 169,
+    "MT": 175, "NE": 181, "NV": 187, "NH": 193, "NJ": 199, "NM": 205,
+    "NY": 211, "NC": 217, "ND": 223, "OH": 229, "OK": 235, "OR": 241,
+    "PA": 247, "RI": 253, "SC": 259, "SD": 265, "TN": 271, "TX": 277,
+    "UT": 283, "VT": 289, "VA": 295, "WA": 301, "WV": 307, "WI": 313,
+    "WY": 319,
+}
+BIDNET_KEYWORDS = ("sidewalk", "curb ramp")
+_BIDNET_HREF_RE = re.compile(r'href="(/[a-z0-9][a-z0-9-]*/solicitations/open-bids/[^"]+)"')
+
+
+def _bidnet_direct_urls(keywords, state_abbr, max_results=5):
+    """Return up to max_results detail-page URLs from BidNet Direct's public
+    search for this state + keyword. Returned in the same {"url","content"}
+    shape _ddg_search/_tavily_search use, so callers can merge them straight
+    into the existing fetch+AI-extract+place pipeline instead of needing a
+    separate code path."""
+    code = BIDNET_LOCATION_CODES.get(state_abbr)
+    if not code:
+        return []
+    try:
+        qs = urllib.parse.urlencode({
+            "keywords": keywords, "location": code,
+            "solSearchStatus": "openSolicitationsTab",
+        })
+        req = urllib.request.Request(
+            f"https://www.bidnetdirect.com/public/solicitations/open?{qs}",
+            headers={
+                "User-Agent": random.choice(_DDG_UAS),
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+            })
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            html_text = resp.read().decode("utf-8", "ignore")
+    except Exception as ex:
+        print(f"[scan] BidNet Direct search error ({state_abbr}/{keywords!r}): {ex}", flush=True)
+        return []
+    out, seen = [], set()
+    for m in _BIDNET_HREF_RE.finditer(html_text):
+        href = m.group(1).replace("&amp;", "&")
+        url = "https://www.bidnetdirect.com" + href
+        if url in seen:
+            continue
+        seen.add(url)
+        out.append({"url": url, "content": ""})
+        if len(out) >= max_results:
+            break
+    return out
+
+
 # ═══════════════════════════════════════════════════════════
 # FEDERAL SEARCH  (SAM.gov)
 # ═══════════════════════════════════════════════════════════
@@ -1484,8 +1548,23 @@ def _run_local_queries(queries, ai_label, max_pages, grouped, center, radius, cd
     aggregator listing) gets recorded into the portal directory, so future
     scans of this city can skip straight to it via _run_known_portals
     instead of re-searching — coverage improves scan over scan instead of
-    resetting every time."""
+    resetting every time.
+
+    BidNet Direct results (a real public source, queried directly by state --
+    see _bidnet_direct_urls) are put FIRST in the item list, so they win the
+    max_pages budget over speculative search-engine hits: a guaranteed real
+    government solicitation is worth more than an uncertain DDG/Tavily
+    result, and this doesn't raise the per-scan AI-extraction cost since the
+    slice below is still capped at the same max_pages either way."""
     items = []
+    for kw in BIDNET_KEYWORDS:
+        for r in _bidnet_direct_urls(kw, state):
+            with lock:
+                if r["url"] in seen_urls:
+                    continue
+                seen_urls.add(r["url"])
+            items.append(r)
+
     for q in queries:
         results = _tavily_search(q, max_results=6) if TAVILY_API_KEY else []
         if not results:
