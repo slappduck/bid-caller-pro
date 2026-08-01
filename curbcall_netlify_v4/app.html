@@ -1631,8 +1631,13 @@ function bidCard(city,b){
   const id=bidId(city,b);const isSaved=saved[id];
   const dleft=daysUntil(b);
   const barClass=dleft!=null&&dleft<=2?"urgent":dleft!=null&&dleft<=7?"soon":"";
+  // Deadline urgency is the single most decision-relevant thing on this
+  // card -- give it real visual weight (bold, slightly larger) instead of
+  // just a color tint, so it doesn't have to compete equally with chips
+  // that are just labels (city, "OPEN").
+  const urgent=dleft!=null&&dleft<=7;
   const deadlineChip=b.deadline
-    ?`<span class="chip" style="${dleft!=null&&dleft<=2?'color:var(--red);':dleft!=null&&dleft<=7?'color:var(--accent);':''}">\u{1F4C5} ${esc(b.deadline)}${dleft!=null&&dleft>=0?` \u2022 ${dleft===0?"today":dleft+"d left"}`:""}</span>`
+    ?`<span class="chip" style="${dleft!=null&&dleft<=2?'color:var(--red);':dleft!=null&&dleft<=7?'color:var(--accent);':''}${urgent?'font-weight:800;font-size:0.72rem;':''}">\u{1F4C5} ${esc(b.deadline)}${dleft!=null&&dleft>=0?` \u2022 ${dleft===0?"today":dleft+"d left"}`:""}</span>`
     :"";
   return `<div class="bid" data-id="${id}" data-city="${city}">
     <div class="bid-bar ${barClass}" style="${barClass?"":"background:var(--green)"}"></div>
@@ -1646,7 +1651,6 @@ function bidCard(city,b){
         <span class="chip">\u{1F4CD} ${esc(city)}</span>
         ${b.value?`<span class="chip value">\u{1F4B2} ${esc(b.value)}</span>`:""}
         ${deadlineChip}
-        <span class="chip">OPEN</span>
         ${pipeline[id]?`<span class="chip status-${pipeline[id]}">${pipeline[id].toUpperCase()}</span>`:""}
         ${notes[id]?`<span class="chip">\u{1F4DD} Note</span>`:""}
       </div>
