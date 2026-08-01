@@ -253,6 +253,27 @@ def write_leads(d):
     except Exception:
         pass
 
+# Outreach status per lead (Called/Quoted/Won/Lost) -- local-only for now,
+# keyed by permit_id. No Supabase table for leads yet the way there is for
+# saved_bids, so this doesn't sync across devices yet.
+LEAD_STATUS_PATH = os.path.join(BASE_DIR, "lead_status.json")
+LEAD_STATUSES = [("called", "Called"), ("quoted", "Quoted"),
+                  ("won", "Won"), ("lost", "Lost")]
+
+def load_lead_status():
+    try:
+        with open(LEAD_STATUS_PATH) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def write_lead_status(d):
+    try:
+        with open(LEAD_STATUS_PATH, "w") as f:
+            json.dump(d, f, indent=2)
+    except Exception:
+        pass
+
 # Company info used to personalize AI-drafted proposals — nothing here is
 # sent anywhere except as part of a /draft-proposal request.
 COMPANY_PATH = os.path.join(BASE_DIR, "company_profile.json")
@@ -377,6 +398,8 @@ class BidCaller:
         self.saved = load_saved()
         self.upcoming_data = load_upcoming()
         self.leads_data = load_leads()
+        self.lead_status = load_lead_status()
+        self._leads_status_filter = "All"
         self.company = load_company_profile()
         self.saved_searches = load_saved_searches()
         self.scan_running = False
@@ -2229,6 +2252,7 @@ class BidCaller:
         hdr = tk.Frame(pg, bg=BG, pady=18)
         hdr.pack(fill="x", padx=24)
         tk.Label(hdr, text="Residential Leads", font=F_HEAD, bg=BG, fg=TEXT).pack(side="left")
+        self._leads_export_btn = ghost_btn(hdr, "  ⬇  Export  ", self._export_leads_csv, font=F_SMALL)
         divider(pg, BORDER)
 
         body = tk.Frame(pg, bg=BG)
@@ -2279,8 +2303,11 @@ class BidCaller:
         self._leads_prog_bar = tk.Frame(self._leads_prog_frame, bg=ACCENT, height=4, width=0)
         self._leads_prog_bar.place(x=0, y=0)
 
+        self._leads_tiles_frame = tk.Frame(body, bg=BG)
+        self._leads_tiles_frame.pack(fill="x", pady=(12, 0))
+
         leads_filter = tk.Frame(body, bg=SURFACE, pady=6)
-        leads_filter.pack(fill="x", pady=(12, 0))
+        leads_filter.pack(fill="x", pady=(8, 0))
         tk.Label(leads_filter, text="🔎", font=F_BODY, bg=SURFACE, fg=TEXT3).pack(side="left", padx=(12, 6))
         self._leads_kw_var = tk.StringVar()
         leads_kw = tk.Entry(leads_filter, textvariable=self._leads_kw_var, font=F_BODY, bg=CARD, fg=TEXT,
@@ -2433,13 +2460,68 @@ class BidCaller:
         if lead.get("url"):
             chip("🔗  Permit Record", ACCENT, lambda: webbrowser.open(lead["url"]))
 
+        permit_id = lead.get("permit_id")
+        if permit_id:
+            cur = self.lead_status.get(permit_id, "")
+            prow = tk.Frame(body, bg=CARD)
+            prow.pack(fill="x", pady=(8, 0))
+            for skey, slabel in LEAD_STATUSES:
+                active = (cur == skey)
+                bg_c = {"won": GREEN, "lost": RED}.get(skey, ACCENT) if active else SURFACE
+                fg_c = "#000" if active else TEXT2
+                pill_btn(prow, slabel,
+                         lambda pid=permit_id, s=skey, c=cur: self._set_lead_status(pid, "" if c == s else s),
+                         bg=bg_c, fg=fg_c, px=12, py=6, font=F_SMALL).pack(side="left", padx=(0, 6))
+
+    def _set_lead_status(self, permit_id, status):
+        if status:
+            self.lead_status[permit_id] = status
+        else:
+            self.lead_status.pop(permit_id, None)
+        write_lead_status(self.lead_status)
+        self._render_leads()
+
+    def _export_leads_csv(self):
+        """Exports the currently filtered/sorted residential leads."""
+        rows = getattr(self, "_last_leads_rows", None)
+        if not rows:
+            messagebox.showinfo("Nothing to Export", "No leads match this filter.")
+            return
+        import csv
+        from tkinter import filedialog
+        default = f"bid_caller_leads_{datetime.datetime.now().strftime('%Y%m%d')}.csv"
+        path = filedialog.asksaveasfilename(
+            defaultextension=".csv", initialfile=default,
+            filetypes=[("CSV files", "*.csv")], title="Save leads as CSV")
+        if not path:
+            return
+        try:
+            with open(path, "w", newline="", encoding="utf-8") as f_out:
+                w = csv.writer(f_out)
+                w.writerow(["City", "Address", "Permit Type", "Description", "Issued Date",
+                            "Lead Type", "Builder/Contact", "Trade", "Phone", "Permit Record", "Status"])
+                for city, lead in rows:
+                    w.writerow([city, lead.get("address", ""), lead.get("permit_type", ""),
+                                lead.get("description", ""), lead.get("issued_date", ""),
+                                lead.get("lead_type_label", lead.get("lead_type", "")),
+                                lead.get("contractor_name", ""), lead.get("contractor_trade", ""),
+                                lead.get("contractor_phone", ""), lead.get("url", ""),
+                                self.lead_status.get(lead.get("permit_id"), "")])
+            messagebox.showinfo("Exported", f"Saved your leads to:\n{path}")
+        except Exception as e:
+            debug(f"Leads CSV export failed: {e}")
+            messagebox.showerror("Export Failed", "Couldn't save the file. Try a different location.")
+
     def _render_leads(self):
         if not hasattr(self, "_leads_list_frame"):
             return
         for w in self._leads_list_frame.winfo_children():
             w.destroy()
+        for w in self._leads_tiles_frame.winfo_children():
+            w.destroy()
         cities = sorted(c for c, items in self.leads_data.items() if items)
         if not cities:
+            self._leads_export_btn.pack_forget()
             tk.Label(self._leads_list_frame, text="🏠", font=(UI, fs(30)),
                      bg=BG, fg=TEXT3).pack(pady=(40, 6))
             tk.Label(self._leads_list_frame, text="Nothing yet", font=F_SUB,
@@ -2449,21 +2531,54 @@ class BidCaller:
                           "Coverage is growing city by city — currently: Austin, TX & Cambridge, MA.",
                      font=F_SMALL, bg=BG, fg=TEXT3, justify="center").pack(pady=(4, 40))
             return
+        self._leads_export_btn.pack(side="right")
+
+        all_rows = [(c, lead) for c in cities for lead in self.leads_data[c]]
+
+        # ── Status filter tiles (All/Not Contacted/Called/Quoted/Won/Lost) --
+        # same pattern as Active Bids' pipeline tiles ──
+        counts = {"All": len(all_rows), "none": 0, "called": 0, "quoted": 0, "won": 0, "lost": 0}
+        for _, lead in all_rows:
+            s = self.lead_status.get(lead.get("permit_id"), "")
+            counts[s if s else "none"] = counts.get(s if s else "none", 0) + 1
+        tile_defs = [("All", "All"), ("none", "Not Contacted")] + LEAD_STATUSES
+        for key, label in tile_defs:
+            if key != "All" and not counts.get(key):
+                continue
+            active = (self._leads_status_filter == key)
+            tile = tk.Frame(self._leads_tiles_frame, bg=CARD if active else SURFACE,
+                            highlightbackground=ACCENT if active else BORDER,
+                            highlightthickness=1, padx=12, pady=8, cursor="hand2")
+            tile.pack(side="left", padx=(0, 8))
+            n_lbl = tk.Label(tile, text=str(counts.get(key, 0)), font=(UI, fs(13), "bold"),
+                             bg=tile["bg"], fg=TEXT)
+            n_lbl.pack()
+            l_lbl = tk.Label(tile, text=label, font=F_SMALL, bg=tile["bg"], fg=TEXT2)
+            l_lbl.pack()
+            def pick(k=key):
+                self._leads_status_filter = k
+                self._render_leads()
+            for w in (tile, n_lbl, l_lbl):
+                w.bind("<Button-1>", lambda e, k=key: pick(k))
+
+        f = self._leads_status_filter
+        if f == "All":
+            rows = list(all_rows)
+        elif f == "none":
+            rows = [(c, l) for c, l in all_rows if not self.lead_status.get(l.get("permit_id"))]
+        else:
+            rows = [(c, l) for c, l in all_rows if self.lead_status.get(l.get("permit_id")) == f]
+
         kw = self._leads_kw_var.get().strip().lower() if hasattr(self, "_leads_kw_var") else ""
-        rows = []
-        for city in cities:
-            for lead in self.leads_data[city]:
-                if kw:
-                    blob = " ".join([lead.get("address", ""), lead.get("description", ""),
-                                     lead.get("contractor_name", ""), city]).lower()
-                    if kw not in blob:
-                        continue
-                rows.append((city, lead))
+        if kw:
+            rows = [(c, l) for c, l in rows if kw in " ".join(
+                [l.get("address", ""), l.get("description", ""), l.get("contractor_name", ""), c]).lower()]
         sort_mode = self._leads_sort_var.get() if hasattr(self, "_leads_sort_var") else "Best Match"
         if sort_mode == "Newest":
             rows.sort(key=lambda cl: cl[1].get("issued_date") or "", reverse=True)
         # "Best Match" (default): leave rows in the order /residential-leads
         # returned them -- already sorted open-lead-first, freshest within type.
+        self._last_leads_rows = rows
         if not rows:
             tk.Label(self._leads_list_frame, text="🔍", font=(UI, fs(30)),
                      bg=BG, fg=TEXT3).pack(pady=(40, 6))
