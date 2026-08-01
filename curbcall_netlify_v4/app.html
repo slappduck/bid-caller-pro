@@ -1367,7 +1367,7 @@ async function runLeads(){
       status.textContent=msg;toast(msg);return;
     }
     if(!d.covered){
-      status.textContent=`Residential leads aren't set up for ${d.location||location} yet — coverage is growing city by city. (Currently: Austin, TX.)`;
+      status.textContent=`Residential leads aren't set up for ${d.location||location} yet — coverage is growing city by city. (Currently: Austin, TX & Cambridge, MA.)`;
       return;
     }
     const city=d.location||location;
@@ -1419,7 +1419,7 @@ function renderLeads(){
   const list=document.getElementById("leads-list");
   const cities=Object.keys(leadsData).filter(c=>(leadsData[c]||[]).length);
   if(!cities.length){
-    list.innerHTML=`<div class="empty"><div class="icon">&#x1F3E0;</div><h3>Nothing yet</h3><p>Search your area for fresh driveway &amp; sidewalk permits. Coverage is growing city by city — currently: Austin, TX.</p></div>`;
+    list.innerHTML=`<div class="empty"><div class="icon">&#x1F3E0;</div><h3>Nothing yet</h3><p>Search your area for fresh driveway &amp; sidewalk permits. Coverage is growing city by city — currently: Austin, TX & Cambridge, MA.</p></div>`;
     return;
   }
   let rows=[];

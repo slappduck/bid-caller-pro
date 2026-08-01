@@ -23,12 +23,25 @@ writing any of this:
   - Kansas City's public dataset (data.kcmo.org, 6h9j-mu65) has no address,
     no coordinates, no permit-type field at all -- just a permit number and
     a free-text comment. Not usable for a location-based, actionable lead.
+    A second KC dataset (ntw8-aacc, same BLDS standard as Fort Worth) DOES
+    have address/coordinates, but its permit-type categories top out at
+    generic buckets like "Site Improvement" -- no dedicated driveway/
+    sidewalk/curb category, so same false-positive risk as Fort Worth.
+  - St. Louis's open-data portal only offers interactive dashboards for
+    building permits -- no CSV/JSON/API export at all. Not automatable.
+  - Springfield, MO has no public open-data portal for permits at all.
+  - Cambridge, MA's "Curb Cut Permits" dataset is single-purpose -- every
+    row IS a curb-cut/driveway-approach permit, so there's no false-positive
+    risk from filtering at all. Verified live: real addresses, coordinates,
+    applicant names. Much lower volume than Austin (a small city, roughly
+    1-2 permits/month) -- needs a longer lookback window (see "days" below)
+    or a 45-day default would come back empty most of the time.
 
 So: SOURCES is a per-city registry, each entry hand-verified against the
 niche (not "any Socrata URL with a permits-shaped name") before being added
 -- same discipline as bid_portals.py's seed list. Coverage starts narrow
-(Austin only) and is meant to grow city by city, verified each time, not by
-guessing at a schema and hoping it holds.
+and is meant to grow city by city, verified each time, not by guessing at
+a schema and hoping it holds.
 """
 
 import datetime
@@ -73,13 +86,41 @@ def _austin_parser(row):
     }
 
 
+def _cambridge_parser(row):
+    width = row.get("driveway_width")
+    desc = f"Curb cut / driveway approach, {width} ft wide" if width else "Curb cut permit"
+    return {
+        "permit_id": row.get("id", ""),
+        "address": row.get("full_address", ""),
+        "city": "Cambridge",
+        "state": "MA",
+        "zip": "",
+        "permit_type": row.get("permit_type", "Curb Cut"),
+        "description": desc,
+        "issued_date": (row.get("applicant_submit_date") or "")[:10],
+        "status": row.get("status", ""),
+        # No phone/company field in this dataset -- applicant_name (often
+        # the property owner, not always a contractor) is the only contact.
+        "contractor_name": row.get("applicant_name") or "",
+        "contractor_trade": "",
+        "contractor_phone": "",
+        "lat": _to_float(row.get("latitude")),
+        "lon": _to_float(row.get("longitude")),
+        "url": "",
+    }
+
+
 PARSERS = {
     "austin": _austin_parser,
+    "cambridge": _cambridge_parser,
 }
 
 # Each entry hand-verified: real address/contact data, a permit-type value
 # specific enough that filtering on it (not a free-text description search)
 # won't pull in unrelated trades. Key is (city.lower(), state.upper()).
+# "days": how far back to look by default -- a low-volume source (a small
+# city with a couple of permits a month) needs a much longer window than a
+# high-volume one to reliably return anything at all.
 SOURCES = {
     ("austin", "TX"): {
         "domain": "data.austintexas.gov",
@@ -87,6 +128,15 @@ SOURCES = {
         "date_field": "issue_date",
         "where_extra": "permit_type_desc='Driveway / Sidewalks'",
         "parser": "austin",
+        "days": 45,
+    },
+    ("cambridge", "MA"): {
+        "domain": "data.cambridgema.gov",
+        "dataset_id": "q2hw-5t8j",
+        "date_field": "applicant_submit_date",
+        "where_extra": None,
+        "parser": "cambridge",
+        "days": 270,
     },
 }
 
@@ -98,13 +148,17 @@ def has_source(city, state):
     ) in SOURCES
 
 
-def fetch_leads(city, state, days=45, limit=100):
+def fetch_leads(city, state, days=None, limit=100):
     """Return recent residential driveway/sidewalk permit leads for a city,
     or [] if no source is configured there yet (check has_source() to tell
-    that apart from "configured but genuinely found nothing recent")."""
+    that apart from "configured but genuinely found nothing recent").
+    days=None uses the source's own configured lookback window -- pass an
+    explicit value only to override it."""
     src = SOURCES.get(((city or "").strip().lower(), (state or "").strip().upper()))
     if not src:
         return []
+    if days is None:
+        days = src.get("days", 45)
     since = (datetime.date.today() - datetime.timedelta(days=days)).isoformat()
     where = f"{src['date_field']} >= '{since}T00:00:00.000'"
     if src.get("where_extra"):

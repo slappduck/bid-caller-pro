@@ -2245,7 +2245,7 @@ class BidCaller:
                     self._leads_status.config(
                         text=f"Residential leads aren't set up for "
                              f"{resp.get('location') or location} yet — coverage is "
-                             f"growing city by city. (Currently: Austin, TX.)",
+                             f"growing city by city. (Currently: Austin, TX & Cambridge, MA.)",
                         fg=TEXT3)
                     self._set_leads_prog(0)
                     return
@@ -2334,7 +2334,7 @@ class BidCaller:
                      bg=BG, fg=TEXT).pack()
             tk.Label(self._leads_list_frame,
                      text="Search your area for fresh driveway & sidewalk permits.\n"
-                          "Coverage is growing city by city — currently: Austin, TX.",
+                          "Coverage is growing city by city — currently: Austin, TX & Cambridge, MA.",
                      font=F_SMALL, bg=BG, fg=TEXT3, justify="center").pack(pady=(4, 40))
             return
         tk.Label(self._leads_list_frame, text="RESIDENTIAL LEADS", font=(UI, fs(9), "bold"),

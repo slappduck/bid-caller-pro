@@ -45,11 +45,42 @@ class HasSourceTests(unittest.TestCase):
     def test_known_city_covered(self):
         self.assertTrue(rp.has_source("Austin", "TX"))
 
+    def test_second_known_city_covered(self):
+        self.assertTrue(rp.has_source("Cambridge", "MA"))
+
     def test_case_and_whitespace_insensitive(self):
         self.assertTrue(rp.has_source("  austin ", "tx"))
 
     def test_unknown_city_not_covered(self):
         self.assertFalse(rp.has_source("Springfield", "MO"))
+
+
+class CambridgeParserTests(unittest.TestCase):
+    _SAMPLE = {
+        "id": "1206441",
+        "full_address": "87-101 BLANCHARD RD, Unit CCC, Cambridge, MA",
+        "latitude": "42.394072",
+        "longitude": "-71.158005",
+        "status": "Complete",
+        "applicant_submit_date": "2026-04-14T00:00:00.000",
+        "driveway_width": "23",
+        "permit_type": "Curb Cut",
+        "applicant_name": "Patrick Conte",
+    }
+
+    def test_parses_correctly(self):
+        lead = rp._cambridge_parser(self._SAMPLE)
+        self.assertEqual(lead["address"], "87-101 BLANCHARD RD, Unit CCC, Cambridge, MA")
+        self.assertEqual(lead["permit_type"], "Curb Cut")
+        self.assertIn("23 ft wide", lead["description"])
+        self.assertEqual(lead["contractor_name"], "Patrick Conte")
+        self.assertAlmostEqual(lead["lat"], 42.394072)
+
+    def test_uses_a_longer_lookback_than_austin(self):
+        # Cambridge is much lower-volume -- the whole reason it needs its
+        # own configured "days" instead of sharing Austin's 45-day default.
+        self.assertGreater(rp.SOURCES[("cambridge", "MA")]["days"],
+                           rp.SOURCES[("austin", "TX")]["days"])
 
 
 class FetchLeadsTests(unittest.TestCase):
