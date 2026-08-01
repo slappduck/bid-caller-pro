@@ -60,6 +60,8 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from werkzeug.exceptions import HTTPException
 
+import bid_portals
+
 app = Flask(__name__)
 
 # ── CORS: production Netlify site + deploy previews ──
@@ -133,8 +135,24 @@ def _save_db(db):
         pass
 
 
+_CACHE_KEY = "bidcaller:scan_cache"
+
+
 def _cache():
-    """Ephemeral scan/geo cache — fine to lose on restart, kept local."""
+    """Scan/geo cache. Upstash-backed (like the license db) so the geocode
+    cache and same-day scan cache survive Render restarts/redeploys instead
+    of resetting every time — previously this was local-file-only, which on
+    Render's ephemeral disk meant every deploy silently threw away the geo
+    cache and forced re-geocoding. Falls back to a local file when Upstash
+    isn't configured (dev)."""
+    result, ok = _upstash("GET", _CACHE_KEY)
+    if ok:
+        if result:
+            try:
+                return json.loads(result)
+            except Exception:
+                pass
+        return {"scan_cache": {}, "geo_cache": {}}
     try:
         with open(_LOCAL_CACHE) as f:
             return json.load(f)
@@ -143,6 +161,9 @@ def _cache():
 
 
 def _save_cache(c):
+    _, ok = _upstash("SET", _CACHE_KEY, json.dumps(c))
+    if ok:
+        return
     try:
         with open(_LOCAL_CACHE, "w") as f:
             json.dump(c, f)
@@ -750,6 +771,33 @@ def _parse_deadline(text):
     return None
 
 
+_NICHE_KEYWORDS = ("sidewalk", "ada ramp", "ada", "curb", "gutter", "concrete", "flatwork")
+
+
+def _score_bid(bid):
+    """Fit score used to sort each city's bids best-first, instead of
+    leaving them in whatever order sources happened to return them. Combines
+    deadline urgency, how strongly the text matches our niche (vs. a bid that
+    only qualified through the broad construction NAICS codes), and whether
+    there's enough info to actually act on it. Higher is better."""
+    score = 0.0
+    if bid.get("status") == "Closed":
+        score -= 100
+    else:
+        d = _parse_deadline(bid.get("deadline"))
+        if d:
+            days_left = (d - datetime.datetime.now().date()).days
+            score -= 50 if days_left < 0 else 0
+            score += max(0, 30 - min(days_left, 30)) if days_left >= 0 else 0
+    text = f"{bid.get('title', '')} {bid.get('scope', '')}".lower()
+    score += sum(2 for k in _NICHE_KEYWORDS if k in text)
+    if bid.get("email") or bid.get("phone"):
+        score += 3
+    if bid.get("value"):
+        score += 1
+    return score
+
+
 def _apply_deadline_status(bid):
     """Force status to Closed if the stated deadline has already passed.
     Bids with no parseable deadline are left as-is (can't verify either way)."""
@@ -933,6 +981,28 @@ def _parse_ddg(html):
     return out
 
 
+# Circuit breaker: DuckDuckGo scraping is the one search path with no API
+# key, so when TAVILY_API_KEY isn't set it's the *only* local search source.
+# If it starts getting blocked (layout change, IP block on Render's shared
+# dyno IP) every scan would silently return zero local bids with nothing in
+# the logs pointing at why. This counter + the check in /scan turns that into
+# a proactive admin email instead of a customer complaint.
+_ddg_lock = threading.Lock()
+_ddg_fail_streak = 0
+DDG_TRIP_THRESHOLD = 8
+
+
+def _ddg_note_result(found):
+    global _ddg_fail_streak
+    with _ddg_lock:
+        _ddg_fail_streak = 0 if found else _ddg_fail_streak + 1
+
+
+def _ddg_is_degraded():
+    with _ddg_lock:
+        return _ddg_fail_streak >= DDG_TRIP_THRESHOLD
+
+
 def _ddg_search(query, count=6):
     """Scrape DuckDuckGo with rotating, browser-like headers. Returns [{url, content}]."""
     ua = random.choice(_DDG_UAS)
@@ -945,10 +1015,12 @@ def _ddg_search(query, count=6):
                 html = resp.read().decode("utf-8", "ignore")
             found = _parse_ddg(html)
             if found:
+                _ddg_note_result(True)
                 return [{"url": u, "content": ""} for u in found[:count]]
             print(f"[scan] DDG no links from {endpoint} for {query!r}", flush=True)
         except Exception as ex:
             print(f"[scan] DDG error ({endpoint}): {ex}", flush=True)
+    _ddg_note_result(False)
     return []
 
 
@@ -1178,18 +1250,57 @@ def draft_proposal():
 # ═══════════════════════════════════════════════════════════
 # /scan  —  LOCAL (Brave + AI) + FEDERAL (SAM), radius-filtered
 # ═══════════════════════════════════════════════════════════
+def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
+                        city_coords, lock, pdb, default_city=""):
+    """Fetch URLs already known (from a prior scan or the seed list) to be
+    this city's real bid page, directly — no search engine involved. This is
+    the fast, deterministic path that /scan tries before falling back to
+    live search: no per-query search-API cost, no dependency on that day's
+    search rankings, and it can't be blocked the way scraping DuckDuckGo can.
+    Entries age out (via bid_portals.MAX_FAIL) if they stop returning real
+    content, so a site redesign doesn't silently keep failing forever."""
+    with lock:
+        portals = list(bid_portals.get_portals(pdb, city, state))[:6]
+    raw = 0
+    for entry in portals:
+        url = entry["url"]
+        text = _fetch_text(url)
+        ok = len(text) >= 200
+        with lock:
+            bid_portals.record_result(pdb, city, state, url, ok)
+        if not ok:
+            continue
+        bids = _ai_extract(ai_label, text)
+        if not bids:
+            continue
+        with lock:
+            raw += len(bids)
+            for b in bids:
+                if isinstance(b, dict):
+                    b.setdefault("url", url)
+                    _place_bid(grouped, b, center, radius, cdb, default_city=default_city,
+                              city_coords=city_coords)
+    return raw
+
+
 def _run_local_queries(queries, ai_label, max_pages, grouped, center, radius, cdb,
-                        city_coords, seen_urls, lock, default_city=""):
+                        city_coords, seen_urls, lock, pdb, default_city="", state=""):
     """Run one town's worth of search queries and extract bids from the top
     pages. Each town gets its own max_pages slice so a big scan with several
     anchor towns doesn't let the first town's results crowd out the rest.
 
     `lock` guards every read/write to the structures shared across towns
-    (seen_urls, grouped, city_coords, cdb's geo_cache) since towns are now
-    run concurrently from the /scan route. The searches themselves stay
-    sequential per-town (with the existing throttle) to avoid hammering
-    DuckDuckGo; only the independent per-page fetch+AI-extract step below
-    is fanned out."""
+    (seen_urls, grouped, city_coords, cdb's geo_cache, pdb the portal
+    directory) since towns are now run concurrently from the /scan route.
+    The searches themselves stay sequential per-town (with the existing
+    throttle) to avoid hammering DuckDuckGo; only the independent per-page
+    fetch+AI-extract step below is fanned out.
+
+    Any page that turns out to be a real per-agency bid page (not a generic
+    aggregator listing) gets recorded into the portal directory, so future
+    scans of this city can skip straight to it via _run_known_portals
+    instead of re-searching — coverage improves scan over scan instead of
+    resetting every time."""
     items = []
     for q in queries:
         results = _tavily_search(q, max_results=6) if TAVILY_API_KEY else []
@@ -1217,8 +1328,11 @@ def _run_local_queries(queries, ai_label, max_pages, grouped, center, radius, cd
             for b in bids:
                 if isinstance(b, dict):
                     b.setdefault("url", it["url"])
+                    bid_city = (b.get("city") or default_city or "").split(",")[0].strip()
                     _place_bid(grouped, b, center, radius, cdb, default_city=default_city,
                               city_coords=city_coords)
+                    if bid_city and state:
+                        bid_portals.learn_portal(pdb, bid_city, state, it["url"])
 
     with ThreadPoolExecutor(max_workers=4) as ex:
         list(ex.map(_process, items[:max_pages]))
@@ -1279,6 +1393,7 @@ def scan():
                                                    "label": f"{center['city']}, {center['state']}"}),
                         "cached": True})
 
+    pdb = bid_portals.load_directory()
     grouped = {}
     city_coords = {}
     local_raw = 0
@@ -1323,9 +1438,11 @@ def scan():
         # we don't fire too many simultaneous search-engine requests at once
         # (DuckDuckGo in particular will start blocking if hammered).
         def _run_center():
-            got = _run_local_queries(center_queries, f"{c}, {s}", MAX_PAGES,
+            got = _run_known_portals(c, s, f"{c}, {s}", grouped, center, radius,
+                                      cdb, city_coords, lock, pdb, default_city="")
+            got += _run_local_queries(center_queries, f"{c}, {s}", MAX_PAGES,
                                       grouped, center, radius, cdb, city_coords,
-                                      seen_urls, lock, default_city="")
+                                      seen_urls, lock, pdb, default_city="", state=s)
             print(f"[scan] {got} raw bids from {c}, {s} (center)", flush=True)
             return got
 
@@ -1341,9 +1458,11 @@ def scan():
             ]
             if ast == "MO":
                 anchor_queries.append(f"{ac} {ast} sidewalk ADA curb bid site:missouribuys.mo.gov")
-            got = _run_local_queries(anchor_queries, f"{ac}, {ast}", 5,
+            got = _run_known_portals(ac, ast, f"{ac}, {ast}", grouped, center, radius,
+                                      cdb, city_coords, lock, pdb, default_city=ac)
+            got += _run_local_queries(anchor_queries, f"{ac}, {ast}", 5,
                                       grouped, center, radius, cdb, city_coords,
-                                      seen_urls, lock, default_city=ac)
+                                      seen_urls, lock, pdb, default_city=ac, state=ast)
             print(f"[scan] {got} raw bids from {ac}, {ast} (anchor)", flush=True)
             return got
 
@@ -1355,6 +1474,17 @@ def scan():
         print(f"[scan] {local_raw} raw local bids extracted total "
               f"({len(anchors)} anchor town(s) searched)", flush=True)
 
+        if not TAVILY_API_KEY and _ddg_is_degraded():
+            _alert_admin(
+                "DuckDuckGo search appears blocked",
+                "DuckDuckGo has returned empty results on 8+ consecutive "
+                "searches and no TAVILY_API_KEY is configured, so local bid "
+                "search may be completely down (only SAM.gov federal bids "
+                "would still work). Add a TAVILY_API_KEY (tavily.com, free "
+                "tier) as a fallback search backend, or investigate whether "
+                "Render's outbound IP has been blocked by DuckDuckGo.",
+            )
+
     # ---- FEDERAL: SAM.gov for the state, radius-filtered ----
     if SAM_API_KEY:
         for opp in (_sam_fetch(center["state"]) or []):
@@ -1363,6 +1493,9 @@ def scan():
             bid, city = _normalize_opp(opp)
             _place_bid(grouped, bid, center, radius, cdb, default_city=city,
                       city_coords=city_coords)
+
+    for city_bids in grouped.values():
+        city_bids.sort(key=_score_bid, reverse=True)
 
     total = sum(len(v) for v in grouped.values())
     print(f"[scan] {int(radius)} mi from {center['city']},{center['state']} "
@@ -1376,6 +1509,7 @@ def scan():
     cache[ckey] = {"ts": datetime.datetime.now().isoformat(), **result}
     cdb["scan_cache"] = {k: v for k, v in cache.items() if k.endswith(today)}
     _save_cache(cdb)
+    bid_portals.save_directory(pdb)
 
     return jsonify({"ok": True, "location": f"{center['city']}, {center['state']}",
                     "bids": grouped, "total_bids": total, "city_coords": city_coords,

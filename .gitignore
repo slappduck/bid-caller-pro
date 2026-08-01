@@ -10,6 +10,8 @@ __pycache__/
 device_id.txt
 license_cache.json
 license_db.json
+scan_cache.json
+portal_directory.json
 last_scan.txt
 last_feed.json
 saved_bids.json
