@@ -170,6 +170,27 @@ def upcoming(location, radius):
         return {"ok": False, "reason": "unreachable"}
 
 
+def residential_leads(location, radius):
+    """Finds residential driveway/sidewalk permit leads via the server's
+    /residential-leads endpoint — same license gate and timeout budget as
+    scan()/upcoming(). Structured city permit data, not AI-extracted, so
+    there's no OpenAI dependency for this one."""
+    if requests is None:
+        return {"ok": False, "reason": "unreachable"}
+    cache = _load_cache()
+    payload = {
+        "key": cache.get("key", ""), "device_id": _device_id(),
+        "supabase_token": auth_client.current_access_token(),
+        "location": location, "radius": radius,
+    }
+    try:
+        r = requests.post(SERVER_URL.rstrip("/") + "/residential-leads", json=payload,
+                          timeout=SCAN_TIMEOUT)
+        return r.json()
+    except Exception:
+        return {"ok": False, "reason": "unreachable"}
+
+
 def my_key():
     """Checks whether this device has a key on file yet — the Stripe webhook
     records device_id -> key right after checkout completes (via

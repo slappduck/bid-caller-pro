@@ -236,6 +236,23 @@ def upcoming_id(city, item):
     raw = (str(city) + item.get("title", "") + item.get("scope", "")).encode("utf-8")
     return hashlib.md5(raw).hexdigest()[:12]
 
+# Persist residential permit leads found by the Leads tab across restarts
+LEADS_PATH = os.path.join(BASE_DIR, "leads_feed.json")
+
+def load_leads():
+    try:
+        with open(LEADS_PATH) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def write_leads(d):
+    try:
+        with open(LEADS_PATH, "w") as f:
+            json.dump(d, f, indent=2)
+    except Exception:
+        pass
+
 # Company info used to personalize AI-drafted proposals — nothing here is
 # sent anywhere except as part of a /draft-proposal request.
 COMPANY_PATH = os.path.join(BASE_DIR, "company_profile.json")
@@ -359,6 +376,7 @@ class BidCaller:
         self.bid_data = load_feed()
         self.saved = load_saved()
         self.upcoming_data = load_upcoming()
+        self.leads_data = load_leads()
         self.company = load_company_profile()
         self.saved_searches = load_saved_searches()
         self.scan_running = False
@@ -403,6 +421,7 @@ class BidCaller:
             ("saved",     "⭐", "Saved"),
             ("scan",      "🔍", "Find Bids"),
             ("upcoming",  "📡", "Upcoming"),
+            ("leads",     "🏠", "Residential Leads"),
             ("search",    "🌐", "Search City"),
             ("account",   "👤", "Account"),
             ("subscribe", "🛒", "Upgrade"),
@@ -490,6 +509,8 @@ class BidCaller:
             self._show_feed_badge(False)
         elif key == "upcoming":
             self._render_upcoming()
+        elif key == "leads":
+            self._render_leads()
         elif key == "account":
             self._render_account()
         elif key == "subscribe":
@@ -506,6 +527,7 @@ class BidCaller:
         self._page_saved()
         self._page_scan()
         self._page_upcoming()
+        self._page_leads()
         self._page_search()
         self._page_account()
         self._page_subscribe()
@@ -2030,6 +2052,210 @@ class BidCaller:
             for item in self.upcoming_data[city]:
                 self._upcoming_card(self._upcoming_list_frame, item, city)
         tk.Frame(self._upcoming_list_frame, bg=BG, height=30).pack()
+
+    # ═══════════ PAGE: RESIDENTIAL LEADS (driveway/sidewalk permits) ═══════════
+    def _page_leads(self):
+        pg = tk.Frame(self._container, bg=BG)
+        self._pages["leads"] = pg
+
+        hdr = tk.Frame(pg, bg=BG, pady=18)
+        hdr.pack(fill="x", padx=24)
+        tk.Label(hdr, text="Residential Leads", font=F_HEAD, bg=BG, fg=TEXT).pack(side="left")
+        divider(pg, BORDER)
+
+        body = tk.Frame(pg, bg=BG)
+        body.pack(fill="both", expand=True, padx=24, pady=18)
+
+        tk.Label(body, text="Fresh driveway & sidewalk permits pulled straight from city "
+                 "permit records — homeowners and builders who just started this exact "
+                 "work. Not a bid: no deadline, no RFP — the move is to call before a "
+                 "competitor does.", font=F_SMALL,
+                 bg=BG, fg=TEXT3, wraplength=820, justify="left").pack(anchor="w", pady=(0, 12))
+
+        form = tk.Frame(body, bg=SURFACE, padx=24, pady=18)
+        form.pack(fill="x", pady=(0, 12))
+
+        tk.Label(form, text="Your Location", font=(UI, fs(11), "bold"),
+                 bg=SURFACE, fg=ACCENT).pack(anchor="w", pady=(0, 4))
+        self._leads_loc_entry = tk.Entry(form, font=F_BODY, bg=CARD, fg=TEXT,
+                                         insertbackground=TEXT, relief="flat", bd=0,
+                                         highlightthickness=1, highlightbackground=BORDER,
+                                         highlightcolor=ACCENT)
+        self._leads_loc_entry.pack(fill="x", ipady=8, pady=(0, 10))
+        self._leads_loc_entry.bind("<Return>", lambda e: self._run_leads())
+
+        tk.Label(form, text="Search Radius", font=(UI, fs(11), "bold"),
+                 bg=SURFACE, fg=ACCENT).pack(anchor="w", pady=(4, 4))
+        self._leads_radius_var = tk.StringVar(value="25 miles")
+        ttk.Combobox(form, textvariable=self._leads_radius_var, state="readonly",
+                     values=["10 miles", "25 miles", "50 miles", "75 miles", "125 miles"],
+                     font=F_BODY, width=16).pack(anchor="w")
+
+        divider(form, BORDER, pad=0)
+
+        self._leads_btn = pill_btn(form, "  🏠  Find Residential Leads  ",
+                                   self._run_leads, px=26, py=12,
+                                   font=(UI, fs(12), "bold"))
+        self._leads_btn.pack(anchor="w", pady=(16, 0))
+
+        self._leads_status = tk.Label(body, text="", font=F_BODY, bg=BG, fg=TEXT3)
+        self._leads_status.pack(pady=(20, 6))
+        self._leads_prog_frame = tk.Frame(body, bg=BORDER, height=4, width=480)
+        self._leads_prog_frame.pack(pady=(0, 6))
+        self._leads_prog_bar = tk.Frame(self._leads_prog_frame, bg=ACCENT, height=4, width=0)
+        self._leads_prog_bar.place(x=0, y=0)
+
+        self._leads_list_frame = scrollable(body, bg=BG)
+        self._render_leads()
+
+    def _set_leads_prog(self, pct):
+        self._leads_prog_bar.config(width=int(480 * pct / 100))
+
+    def _run_leads(self):
+        if not self._scan_guard():
+            return
+        location = self._leads_loc_entry.get().strip()
+        if not location:
+            messagebox.showwarning("Location needed", "Enter a ZIP code or city.")
+            return
+        radius = int(self._leads_radius_var.get().split()[0])
+
+        self.scan_running = True
+        self._leads_btn.config(state="disabled", text="  Searching...  ")
+        self._set_leads_prog(15)
+
+        REASONS = {
+            "unreachable": "Couldn't reach the bid service. Check your internet.",
+            "not_licensed": "Your trial or subscription isn't active. Check the Subscription tab.",
+            "location_not_found": "Couldn't find that location. Try a ZIP code.",
+            "no_location": "Enter a ZIP code or city.",
+        }
+
+        def process():
+            done = threading.Event()
+
+            def tick():
+                pct = 15
+                while not done.wait(1.0):
+                    pct = min(90, pct + 8)
+                    self.root.after(0, lambda p=pct: self._set_leads_prog(p))
+
+            try:
+                self._leads_status.config(text="Checking city permit records...", fg=ACCENT)
+                threading.Thread(target=tick, daemon=True).start()
+
+                resp = subscription.residential_leads(location, radius)
+                done.set()
+                self._set_leads_prog(100)
+
+                if not resp.get("ok"):
+                    msg = REASONS.get(resp.get("reason"), "Search hit a snag. Try again.")
+                    self._leads_status.config(text=msg, fg=RED)
+                    self._set_leads_prog(0)
+                    return
+
+                if not resp.get("covered"):
+                    self._leads_status.config(
+                        text=f"Residential leads aren't set up for "
+                             f"{resp.get('location') or location} yet — coverage is "
+                             f"growing city by city. (Currently: Austin, TX.)",
+                        fg=TEXT3)
+                    self._set_leads_prog(0)
+                    return
+
+                city = resp.get("location") or location
+                have = self.leads_data.setdefault(city, [])
+                ids = {l.get("permit_id") for l in have}
+                added = 0
+                for lead in (resp.get("leads") or []):
+                    if lead.get("permit_id") not in ids:
+                        have.append(lead)
+                        ids.add(lead.get("permit_id"))
+                        added += 1
+                write_leads(self.leads_data)
+
+                total = resp.get("total", 0)
+                friendly = (f"Done — found {total} residential lead(s) near {city}."
+                            if total else
+                            "No recent driveway/sidewalk permits in this area. Try a wider radius.")
+                self._leads_status.config(text=friendly, fg=GREEN if total else TEXT3)
+                self.root.after(0, self._render_leads)
+            except Exception:
+                import traceback
+                done.set()
+                debug("Residential leads search error:\n" + traceback.format_exc())
+                self._leads_status.config(text="Search failed — try again", fg=RED)
+                self._set_leads_prog(0)
+            finally:
+                self.scan_running = False
+                self._leads_btn.config(state="normal", text="  🏠  Find Residential Leads  ")
+
+        threading.Thread(target=process, daemon=True).start()
+
+    def _lead_card(self, parent, lead, city=""):
+        outer = tk.Frame(parent, bg=CARD)
+        outer.pack(fill="x", padx=20, pady=5)
+        tk.Frame(outer, bg=ACCENT, width=4).pack(side="left", fill="y")
+        body = tk.Frame(outer, bg=CARD, padx=18, pady=14)
+        body.pack(side="left", fill="both", expand=True)
+
+        r1 = tk.Frame(body, bg=CARD)
+        r1.pack(fill="x")
+        tk.Label(r1, text=lead.get("address") or "Address unknown", font=F_SUB,
+                 bg=CARD, fg=TEXT, anchor="w").pack(side="left")
+        tk.Label(r1, text=f"  {lead.get('permit_type') or 'Residential Permit'}  ",
+                 font=F_SMALL, bg="#0c2a4a", fg=BLUE).pack(side="right")
+        if city:
+            tk.Label(r1, text=f"  {city}  ", font=F_SMALL, bg=BORDER,
+                     fg=TEXT2).pack(side="right", padx=(4, 0))
+
+        desc = (lead.get("description") or "").strip()
+        if desc:
+            tk.Label(body, text=desc, font=F_BODY, bg=CARD, fg=TEXT2,
+                     anchor="w", wraplength=820, justify="left").pack(fill="x", pady=(5, 8))
+
+        meta = tk.Frame(body, bg=CARD)
+        meta.pack(fill="x")
+
+        def chip(text, color=TEXT3, cmd=None):
+            lbl = tk.Label(meta, text=text, font=F_SMALL, bg=SURFACE, fg=color,
+                           padx=10, pady=4, cursor="hand2" if cmd else "arrow")
+            lbl.pack(side="left", padx=(0, 6))
+            if cmd:
+                lbl.bind("<Button-1>", lambda e: cmd())
+
+        if lead.get("issued_date"):
+            chip(f"🗓  Permitted {lead['issued_date']}", ACCENT)
+        if lead.get("contractor_name"):
+            trade = f" ({lead['contractor_trade']})" if lead.get("contractor_trade") else ""
+            chip(f"👤  {lead['contractor_name']}{trade}", TEXT2)
+        if lead.get("contractor_phone"):
+            chip(f"☎  {lead['contractor_phone']}", TEXT2)
+        if lead.get("url"):
+            chip("🔗  Permit Record", ACCENT, lambda: webbrowser.open(lead["url"]))
+
+    def _render_leads(self):
+        if not hasattr(self, "_leads_list_frame"):
+            return
+        for w in self._leads_list_frame.winfo_children():
+            w.destroy()
+        cities = sorted(c for c, items in self.leads_data.items() if items)
+        if not cities:
+            tk.Label(self._leads_list_frame, text="🏠", font=(UI, fs(30)),
+                     bg=BG, fg=TEXT3).pack(pady=(40, 6))
+            tk.Label(self._leads_list_frame, text="Nothing yet", font=F_SUB,
+                     bg=BG, fg=TEXT).pack()
+            tk.Label(self._leads_list_frame,
+                     text="Search your area for fresh driveway & sidewalk permits.\n"
+                          "Coverage is growing city by city — currently: Austin, TX.",
+                     font=F_SMALL, bg=BG, fg=TEXT3, justify="center").pack(pady=(4, 40))
+            return
+        tk.Label(self._leads_list_frame, text="RESIDENTIAL LEADS", font=(UI, fs(9), "bold"),
+                 bg=BG, fg=ACCENT).pack(anchor="w", padx=20, pady=(4, 6))
+        for city in cities:
+            for lead in self.leads_data[city]:
+                self._lead_card(self._leads_list_frame, lead, city)
+        tk.Frame(self._leads_list_frame, bg=BG, height=30).pack()
 
     def _export_csv(self):
         """Save all current bids to a CSV file the contractor can open in Excel."""
