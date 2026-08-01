@@ -83,6 +83,27 @@ class CambridgeParserTests(unittest.TestCase):
                            rp.SOURCES[("austin", "TX")]["days"])
 
 
+class ClassifyLeadTests(unittest.TestCase):
+    def test_general_contractor_is_builder_lead(self):
+        self.assertEqual(rp._classify_lead("General Contractor", "Highland Homes"), "builder")
+
+    def test_no_contractor_at_all_is_open_lead(self):
+        self.assertEqual(rp._classify_lead("", ""), "open")
+        self.assertEqual(rp._classify_lead(None, None), "open")
+
+    def test_named_individual_with_no_trade_is_open_lead(self):
+        # Cambridge-style: an applicant name but no trade field at all reads
+        # as an individual/owner permit, not a company.
+        self.assertEqual(rp._classify_lead("", "Patrick Conte"), "open")
+
+    def test_concrete_trade_already_listed_is_taken(self):
+        self.assertEqual(rp._classify_lead("Concrete Contractor", "ABC Concrete"), "taken")
+        self.assertEqual(rp._classify_lead("Paving", "XYZ Paving Co"), "taken")
+
+    def test_other_trade_is_unknown(self):
+        self.assertEqual(rp._classify_lead("Electrical", "Some Electrician"), "unknown")
+
+
 class FetchLeadsTests(unittest.TestCase):
     def test_uncovered_city_returns_empty_without_network_call(self):
         with patch("residential_permits.urllib.request.urlopen") as mock_open:
@@ -111,6 +132,20 @@ class FetchLeadsTests(unittest.TestCase):
         self.assertIsNone(leads[0]["lat"])
         self.assertIsNone(leads[0]["lon"])
         self.assertEqual(leads[0]["zip"], "78704")  # still usable as a fallback
+
+    def test_leads_are_labeled_and_sorted_open_first(self):
+        builder_row = {**_SAMPLE_ROW, "permit_number": "builder-1"}
+        open_row = {**_SAMPLE_ROW, "permit_number": "open-1",
+                    "contractor_trade": "", "contractor_company_name": "", "contractor_full_name": ""}
+        # Response order deliberately puts the builder lead first -- the
+        # sort should still bring the open lead to the front.
+        with patch("residential_permits.urllib.request.urlopen",
+                   return_value=_mock_response([builder_row, open_row])):
+            leads = rp.fetch_leads("Austin", "TX")
+        self.assertEqual([l["permit_id"] for l in leads], ["open-1", "builder-1"])
+        self.assertEqual(leads[0]["lead_type"], "open")
+        self.assertEqual(leads[1]["lead_type"], "builder")
+        self.assertIn("lead_type_label", leads[0])
 
     def test_network_failure_returns_empty_list_not_an_exception(self):
         with patch("residential_permits.urllib.request.urlopen", side_effect=OSError("boom")):

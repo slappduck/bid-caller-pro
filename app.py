@@ -2279,6 +2279,13 @@ class BidCaller:
 
         threading.Thread(target=process, daemon=True).start()
 
+    _LEAD_TYPE_STYLE = {
+        "open": ("#0f3d24", GREEN, "\U0001F513  Open Lead"),
+        "builder": ("#0c2a4a", BLUE, "\U0001F3D7  Builder Lead"),
+        "taken": ("#2a2a2a", TEXT3, "✓  Sub Already Listed"),
+        "unknown": ("#2a2a2a", TEXT2, "Contact Listed"),
+    }
+
     def _lead_card(self, parent, lead, city=""):
         outer = tk.Frame(parent, bg=CARD)
         outer.pack(fill="x", padx=20, pady=5)
@@ -2304,12 +2311,15 @@ class BidCaller:
         meta = tk.Frame(body, bg=CARD)
         meta.pack(fill="x")
 
-        def chip(text, color=TEXT3, cmd=None):
-            lbl = tk.Label(meta, text=text, font=F_SMALL, bg=SURFACE, fg=color,
+        def chip(text, color=TEXT3, cmd=None, bg=SURFACE):
+            lbl = tk.Label(meta, text=text, font=F_SMALL, bg=bg, fg=color,
                            padx=10, pady=4, cursor="hand2" if cmd else "arrow")
             lbl.pack(side="left", padx=(0, 6))
             if cmd:
                 lbl.bind("<Button-1>", lambda e: cmd())
+
+        bg, fg, label = self._LEAD_TYPE_STYLE.get(lead.get("lead_type"), self._LEAD_TYPE_STYLE["unknown"])
+        chip(label, fg, bg=bg)
 
         if lead.get("issued_date"):
             chip(f"🗓  Permitted {lead['issued_date']}", ACCENT)

@@ -115,6 +115,43 @@ PARSERS = {
     "cambridge": _cambridge_parser,
 }
 
+# ── Lead classification ──
+# The single most important thing about one of these leads isn't the address,
+# it's whether calling it is even useful. Real data check (Austin): every
+# sampled permit had contractor_trade="General Contractor" and a homebuilder
+# name (Highland Homes, Trophy Signature Homes, ...) -- these are new-
+# subdivision construction permits where a GC already holds the job. That's
+# NOT an open "nobody's hired anyone yet" lead; a GC almost never pours their
+# own concrete, so the real play is pitching to become THEIR subcontractor,
+# not cold-calling for this one driveway. Without labeling that distinction,
+# a user could easily burn calls on already-assigned jobs thinking they're
+# fresh leads.
+BUILDER_TRADE_KEYWORDS = ("general contractor", "builder", "homebuilder", "home builder")
+TAKEN_TRADE_KEYWORDS = ("concrete", "paving", "flatwork", "cement", "masonry")
+LEAD_TYPE_LABELS = {
+    "open": "Open Lead — no contractor listed",
+    "builder": "Builder Lead — pitch as a subcontractor",
+    "taken": "Concrete Sub Already Listed",
+    "unknown": "Contact Listed",
+}
+_LEAD_TYPE_PRIORITY = {"open": 0, "builder": 1, "unknown": 2, "taken": 3}
+
+
+def _classify_lead(contractor_trade, contractor_name):
+    trade = (contractor_trade or "").strip().lower()
+    name = (contractor_name or "").strip()
+    if not trade and not name:
+        return "open"
+    if any(k in trade for k in TAKEN_TRADE_KEYWORDS):
+        return "taken"
+    if any(k in trade for k in BUILDER_TRADE_KEYWORDS):
+        return "builder"
+    if not trade and name:
+        # A named applicant with no trade at all reads as an individual/
+        # owner permit rather than a company -- likely still open.
+        return "open"
+    return "unknown"
+
 # Each entry hand-verified: real address/contact data, a permit-type value
 # specific enough that filtering on it (not a free-text description search)
 # won't pull in unrelated trades. Key is (city.lower(), state.upper()).
@@ -181,4 +218,11 @@ def fetch_leads(city, state, days=None, limit=100):
     parser = PARSERS.get(src["parser"])
     if not parser:
         return []
-    return [parser(r) for r in rows if isinstance(r, dict)]
+    leads = [parser(r) for r in rows if isinstance(r, dict)]
+    for lead in leads:
+        lead["lead_type"] = _classify_lead(lead.get("contractor_trade"), lead.get("contractor_name"))
+        lead["lead_type_label"] = LEAD_TYPE_LABELS[lead["lead_type"]]
+    # Stable sort: most-actionable type first, freshest-within-type second
+    # (the query already sorted by date DESC, and Python's sort is stable).
+    leads.sort(key=lambda l: _LEAD_TYPE_PRIORITY.get(l["lead_type"], 2))
+    return leads

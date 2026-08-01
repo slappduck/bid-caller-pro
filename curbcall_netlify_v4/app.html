@@ -1395,13 +1395,21 @@ async function runLeads(){
   }
 }
 
+const LEAD_TYPE_STYLE={
+  open:{bg:"#0f3d24",fg:"var(--green)",label:"\u{1F513} Open Lead"},
+  builder:{bg:"#0c2a4a",fg:"var(--blue)",label:"\u{1F3D7} Builder Lead"},
+  taken:{bg:"#2a2a2a",fg:"var(--text3)",label:"✓ Sub Already Listed"},
+  unknown:{bg:"#2a2a2a",fg:"var(--text2)",label:"Contact Listed"},
+};
 function leadCard(city,l){
+  const t=LEAD_TYPE_STYLE[l.lead_type]||LEAD_TYPE_STYLE.unknown;
   return `<div class="bid planned">
     <div class="bid-bar"></div>
     <div class="bid-body">
       <div class="bid-top"><span class="bid-title">${esc(l.address||"Address unknown")}</span></div>
       ${l.description?`<div class="bid-scope">${esc(l.description)}</div>`:""}
       <div class="bid-meta">
+        <span class="chip" style="background:${t.bg};color:${t.fg};" title="${esc(l.lead_type_label||'')}">${t.label}</span>
         <span class="chip">\u{1F4CD} ${esc(city)}</span>
         ${l.issued_date?`<span class="chip">\u{1F5D3} Permitted ${esc(l.issued_date)}</span>`:""}
         <span class="chip">${esc(l.permit_type||"Residential Permit")}</span>
