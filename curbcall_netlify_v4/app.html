@@ -193,6 +193,9 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .pchip.active-won{background:var(--green);color:#000;border-color:var(--green);}
 .pchip.active-lost{background:var(--red);color:#fff;border-color:var(--red);}
 .pchip.active-passed{background:var(--text3);color:#fff;border-color:var(--text3);}
+.pchip.active-called{background:var(--accent);color:#000;border-color:var(--accent);}
+.pchip.active-quoted{background:var(--blue);color:#fff;border-color:var(--blue);}
+.lead-pipeline-row{display:flex;gap:0.4rem;margin-top:0.5rem;}
 
 /* ── Filter/sort row (Bids tab) ── */
 .filter-row{display:flex;gap:0.5rem;margin-bottom:0.8rem;}
@@ -334,7 +337,11 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
       <button class="btn-primary" id="leads-btn">&#x1F3E0; Find Residential Leads</button>
       <div class="scan-status" id="leads-status"></div>
       <div class="progress" id="leads-progress-wrap" style="display:none;"><div class="progress-bar" id="leads-progress-bar"></div></div>
-      <div class="filter-row" id="leads-filter-row" style="display:none;margin-top:1rem;">
+      <div class="feed-toolbar" id="leads-toolbar" style="display:none;margin-top:1rem;">
+        <button class="btn-ghost" id="export-leads-btn">&#x2B07; Export</button>
+      </div>
+      <div id="leads-tiles"></div>
+      <div class="filter-row" id="leads-filter-row" style="display:none;">
         <input id="leads-search" placeholder="Search address or description..." />
         <select id="leads-sort">
           <option value="match">Best Match</option>
@@ -1353,6 +1360,15 @@ document.getElementById("up-search").oninput=()=>renderUpcoming();
 // not a formal bid to respond to: no deadline, no RFP process, often
 // already has a builder/GC of record who may need a concrete sub) ──
 let leadsData=store.get("leads_feed",{});
+// Lead outreach status -- local-only for now (no Supabase table for leads
+// yet, unlike saved_bids/saved_searches), keyed by permit_id so it survives
+// leadsData being re-merged/re-fetched.
+let leadStatus=store.get("lead_status",{});
+function setLeadStatus(permitId,status){
+  if(status)leadStatus[permitId]=status;else delete leadStatus[permitId];
+  store.set("lead_status",leadStatus);
+  renderLeads();
+}
 const leadsBtn=document.getElementById("leads-btn");
 leadsBtn.onclick=runLeads;
 document.getElementById("leads-loc-input").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();runLeads();}});
@@ -1418,8 +1434,11 @@ const LEAD_TYPE_STYLE={
   taken:{bg:"#2a2a2a",fg:"var(--text3)",label:"✓ Sub Already Listed"},
   unknown:{bg:"#2a2a2a",fg:"var(--text2)",label:"Contact Listed"},
 };
+const LEAD_STATUSES=[["called","Called"],["quoted","Quoted"],["won","Won"],["lost","Lost"]];
 function leadCard(city,l){
   const t=LEAD_TYPE_STYLE[l.lead_type]||LEAD_TYPE_STYLE.unknown;
+  const pid=l.permit_id||"";
+  const curStatus=leadStatus[pid]||"";
   return `<div class="bid planned">
     <div class="bid-bar"></div>
     <div class="bid-body">
@@ -1436,22 +1455,45 @@ function leadCard(city,l){
         ${l.contractor_phone?`<a class="chip" href="tel:${esc(l.contractor_phone)}">☎ ${esc(l.contractor_phone)}</a>`:""}
       </div>`:""}
       ${l.url?`<div class="bid-meta" style="margin-top:0.4rem;"><a class="chip" href="${esc(l.url)}" target="_blank">\u{1F517} Permit Record</a></div>`:""}
+      ${pid?`<div class="lead-pipeline-row">
+        ${LEAD_STATUSES.map(([k,label])=>`<button class="pchip ${curStatus===k?"active-"+k:""}" onclick="setLeadStatus('${esc(pid)}','${curStatus===k?"":k}')">${label}</button>`).join("")}
+      </div>`:""}
     </div>
   </div>`;
 }
 
+let leadsStatusFilter="All";
 function renderLeads(){
   const list=document.getElementById("leads-list");
   const filterRow=document.getElementById("leads-filter-row");
+  const toolbar=document.getElementById("leads-toolbar");
+  const tilesWrap=document.getElementById("leads-tiles");
   const cities=Object.keys(leadsData).filter(c=>(leadsData[c]||[]).length);
   if(!cities.length){
     filterRow.style.display="none";
+    toolbar.style.display="none";
+    tilesWrap.innerHTML="";
     list.innerHTML=`<div class="empty"><div class="icon">&#x1F3E0;</div><h3>Nothing yet</h3><p>Search your area for fresh driveway &amp; sidewalk permits. Coverage is growing city by city — currently: Austin, TX & Cambridge, MA.</p></div>`;
     return;
   }
   filterRow.style.display="flex";
-  let rows=[];
-  cities.sort().forEach(c=>leadsData[c].forEach(l=>rows.push([c,l])));
+  toolbar.style.display="flex";
+  let all=[];
+  cities.sort().forEach(c=>leadsData[c].forEach(l=>all.push([c,l])));
+
+  // Status filter tiles -- same pattern as Active Bids' pipeline tiles.
+  const counts={All:all.length,none:0,called:0,quoted:0,won:0,lost:0};
+  all.forEach(([c,l])=>{const s=leadStatus[l.permit_id]||"";if(s)counts[s]++;else counts.none++;});
+  const tileDefs=[["All","All"],["none","Not Contacted"],...LEAD_STATUSES];
+  tilesWrap.innerHTML=`<div class="tiles">`+tileDefs.map(([k,label])=>
+    `<div class="tile ${leadsStatusFilter===k?"active":""}" data-k="${k}"><div class="n">${counts[k]||0}</div><div class="l">${label}</div></div>`
+  ).join("")+`</div>`;
+  tilesWrap.querySelectorAll(".tile").forEach(t=>t.onclick=()=>{leadsStatusFilter=t.dataset.k;renderLeads();});
+
+  let rows=all.filter(([c,l])=>{
+    const s=leadStatus[l.permit_id]||"";
+    return leadsStatusFilter==="All"||(leadsStatusFilter==="none"?!s:s===leadsStatusFilter);
+  });
   const term=(document.getElementById("leads-search").value||"").trim().toLowerCase();
   if(term)rows=rows.filter(([c,l])=>(l.address||"").toLowerCase().includes(term)||(l.description||"").toLowerCase().includes(term)||(l.contractor_name||"").toLowerCase().includes(term)||c.toLowerCase().includes(term));
   const sortMode=document.getElementById("leads-sort").value;
@@ -1460,11 +1502,29 @@ function renderLeads(){
   }
   // sortMode==="match" (default): leave rows in the order /residential-leads
   // returned them -- already sorted open-lead-first, freshest within type.
+  lastLeadsRows=rows;
   list.innerHTML=`<div class="feed-label">RESIDENTIAL LEADS</div>`+rows.map(([c,l])=>leadCard(c,l)).join("");
   if(!rows.length)list.innerHTML=`<div class="empty"><div class="icon">&#x1F50D;</div><h3>No matches</h3><p>Try a different search term.</p></div>`;
 }
 document.getElementById("leads-search").oninput=()=>renderLeads();
 document.getElementById("leads-sort").onchange=()=>renderLeads();
+
+let lastLeadsRows=[];
+function exportLeadsCSV(rows){
+  if(!rows||!rows.length){toast("Nothing to export yet");return;}
+  const header=["City","Address","Permit Type","Description","Issued Date","Lead Type","Builder/Contact","Trade","Phone","Permit Record","Status"];
+  const lines=[header.map(csvEscape).join(",")];
+  rows.forEach(([city,l])=>{
+    lines.push([city,l.address,l.permit_type,l.description,l.issued_date,l.lead_type_label||l.lead_type,
+                l.contractor_name,l.contractor_trade,l.contractor_phone,l.url,leadStatus[l.permit_id]||""].map(csvEscape).join(","));
+  });
+  const blob=new Blob([lines.join("\n")],{type:"text/csv"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;a.download="curbcall_leads_"+Date.now()+".csv";document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+document.getElementById("export-leads-btn").onclick=()=>exportLeadsCSV(lastLeadsRows);
 
 // ── Bid helpers ──
 function bidId(city,b){return(city+(b.title||"")+(b.scope||"")).replace(/\s/g,"").slice(0,40);}
