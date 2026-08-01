@@ -751,11 +751,13 @@ function showFeedBadge(show){
   if(b)b.style.display=show?"block":"none";
 }
 // ── Bid alert notifications ──
-// NOTE: this fires only while the app/tab is open (or backgrounded but still
-// loaded) — it piggybacks on checkSavedSearches, which itself only runs when
-// the app is opened. True "closed app" push notifications need a server that
-// can wake up and check on its own schedule; that's backend work, not
-// something this static site can do by itself.
+// NOTE: this in-browser notification fires only while the app/tab is open
+// (or backgrounded but still loaded) — it piggybacks on checkSavedSearches,
+// which itself only runs when the app is opened. For the "app is fully
+// closed" case, the server has its own independent path: /run-saved-search-
+// alerts (license_server.py), triggered daily by a GitHub Actions cron
+// workflow, emails users directly. That's a separate, real notification path
+// — this browser-notification code doesn't need to (and can't) cover it.
 function notifPermissionLabel(){
   if(!("Notification"in window))return"Not supported in this browser";
   if(Notification.permission==="granted")return"✅ Enabled — you'll be notified when a saved search finds new bids (while CurbCall Pro is open)";

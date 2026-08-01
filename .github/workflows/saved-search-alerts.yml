@@ -1,0 +1,37 @@
+name: Daily saved-search alerts
+
+# Render's web service has no way to wake itself up on a schedule, so this
+# workflow is the "clock" for /run-saved-search-alerts: once a day it pokes
+# the server, which runs every user's saved search and emails them anything
+# new. Safe to add this file before the feature is turned on server-side --
+# CRON_SECRET must be set for the endpoint to accept the request, so until
+# that's configured on both Render and here (as a repo secret), the endpoint
+# just replies 403 and nothing happens.
+#
+# Setup (once): in the GitHub repo, Settings -> Secrets and variables ->
+# Actions -> New repository secret, add:
+#   BIDCALLER_SERVER_URL  = https://<your-render-service>.onrender.com
+#   CRON_SECRET            = (same random value as the Render env var)
+#
+# Test it any time without waiting for the schedule: Actions tab -> this
+# workflow -> "Run workflow".
+
+on:
+  schedule:
+    - cron: "0 13 * * *"  # ~8am US Central / 9am Eastern, once daily
+  workflow_dispatch: {}
+
+jobs:
+  trigger-alerts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger saved-search alert run
+        run: |
+          curl -sS -X POST "${BIDCALLER_SERVER_URL}/run-saved-search-alerts" \
+            -H "Content-Type: application/json" \
+            -H "X-Cron-Secret: ${CRON_SECRET}" \
+            --max-time 280 \
+            --fail
+        env:
+          BIDCALLER_SERVER_URL: ${{ secrets.BIDCALLER_SERVER_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}

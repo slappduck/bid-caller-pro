@@ -25,6 +25,19 @@ ENV VARS (set in Render → your service → Environment):
   FROM_EMAIL               OPTIONAL sender, e.g. "Bids <keys@yourdomain.com>"
   (BRAVE_API_KEY is no longer used — you can delete it.)
 
+  Real automated saved-search email alerts (/run-saved-search-alerts) --
+  OFF until BOTH of these are set; safe to leave unset indefinitely:
+  SUPABASE_SERVICE_ROLE_KEY  Supabase -> Settings -> API -> service_role
+                             key. HIGH PRIVILEGE (bypasses row-level
+                             security for the whole project) -- Render env
+                             var ONLY, never send this to a client.
+  CRON_SECRET                a random string you make up; put the SAME
+                             value in this Render env var AND in the
+                             GitHub repo's Actions secrets (see
+                             .github/workflows/saved-search-alerts.yml).
+                             This is what lets that scheduled workflow
+                             (and only it) trigger the alert run.
+
 START COMMAND (raise the timeout — scans do real work, and wide-radius scans
 now search multiple towns around the area, not just the center one, so they
 take longer):
@@ -309,6 +322,17 @@ RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 FROM_EMAIL = os.environ.get("FROM_EMAIL", "Bid Caller Pro <onboarding@resend.dev>")
 SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL", "Yumiwave1@gmail.com")
 
+# Saved-search email alerts (/run-saved-search-alerts, see below). Both are
+# OPTIONAL and the feature is inert (returns "not_configured") until both are
+# set -- nothing changes for existing users until you deliberately turn this
+# on. SUPABASE_SERVICE_ROLE_KEY is a HIGH-PRIVILEGE secret (bypasses every
+# row-level-security policy in the project) -- only ever set it as a Render
+# env var, never ship it to a client. CRON_SECRET is a password only your
+# scheduler (e.g. a GitHub Actions workflow) knows, so this endpoint can't be
+# triggered by randoms hammering the URL.
+SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+CRON_SECRET = os.environ.get("CRON_SECRET", "")
+
 
 def _verify_supabase_token(token):
     """Ask Supabase if this access token belongs to a real signed-in user.
@@ -398,6 +422,166 @@ def _alert_admin(subject, detail):
         urllib.request.urlopen(req, timeout=15)
     except Exception as ex:
         print(f"[alert] failed to send alert email: {ex}", flush=True)
+
+
+# ── Saved-search alerts: Supabase admin access + new-bid emails ──
+# Uses the service-role key to read across ALL users' saved_searches (bypasses
+# the row-level-security policies the anon key is normally scoped by) and to
+# look up a user's email via the Auth admin API. See /run-saved-search-alerts.
+def _supabase_admin_request(path):
+    if not (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY):
+        return None
+    req = urllib.request.Request(
+        f"{SUPABASE_URL}{path}",
+        headers={
+            "apikey": SUPABASE_SERVICE_ROLE_KEY,
+            "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except Exception as ex:
+        print(f"[alerts] supabase admin request failed ({path}): {ex}", flush=True)
+        return None
+
+
+def _fetch_all_saved_searches():
+    data = _supabase_admin_request("/rest/v1/saved_searches?select=user_id,location,radius")
+    return data if isinstance(data, list) else []
+
+
+def _get_user_email(user_id):
+    data = _supabase_admin_request(f"/auth/v1/admin/users/{user_id}")
+    if isinstance(data, dict):
+        return data.get("email") or (data.get("user") or {}).get("email")
+    return None
+
+
+def _bid_sig(city, bid):
+    """Stable id for 'have we already told this user about this bid' —
+    based on content, not a server-assigned id (there isn't one), so the
+    same real-world bid gets the same signature scan over scan."""
+    raw = f"{city}|{bid.get('title', '')}|{bid.get('deadline', '')}|{bid.get('url', '')}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def _send_alert_email(email, location, radius, new_bids):
+    lines = [f'New bids matching your saved search "{location}" ({int(radius)} mi):', ""]
+    for city, b in new_bids[:20]:
+        line = f"- {b.get('title') or 'Untitled'} — {city}"
+        if b.get("deadline"):
+            line += f" (due {b['deadline']})"
+        lines.append(line)
+        if b.get("url"):
+            lines.append(f"  {b['url']}")
+    if len(new_bids) > 20:
+        lines.append(f"...and {len(new_bids) - 20} more.")
+    lines.append("")
+    lines.append("Open Bid Caller Pro to see full details or save any of these to your pipeline.")
+    body = json.dumps({
+        "from": FROM_EMAIL,
+        "to": [email],
+        "subject": f"{len(new_bids)} new bid(s) near {location}",
+        "text": "\n".join(lines),
+    }).encode("utf-8")
+    req = urllib.request.Request("https://api.resend.com/emails", data=body,
+        method="POST", headers={"Authorization": f"Bearer {RESEND_API_KEY}",
+                                "Content-Type": "application/json"})
+    try:
+        urllib.request.urlopen(req, timeout=15)
+        print(f"[alerts] sent {len(new_bids)} new-bid email to {email}", flush=True)
+    except Exception as ex:
+        print(f"[alerts] email failed for {email}: {ex}", flush=True)
+
+
+def _run_saved_search_alerts():
+    """Runs every saved search once, diffs against what that search already
+    notified about last time (persisted in the same Upstash-backed cache as
+    scan_cache/geo_cache), and emails the user only the NEW open bids. The
+    first run for a brand-new saved search has nothing to diff against, so
+    it emails everything currently open -- an immediate "yes, this is
+    working" confirmation rather than a bug.
+
+    Sequential, not parallelized across searches: reusing _perform_scan
+    already fans out per-town internally, and running many users' searches
+    concurrently on top of that risks hammering DuckDuckGo/OpenAI far harder
+    than a single interactive /scan does. Fine at today's volume; if the
+    saved-search count grows large enough that a daily run runs long, that's
+    a sign to add pagination/batching here, not to parallelize blindly."""
+    if not (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY):
+        return {"ok": False, "reason": "supabase_not_configured"}
+    if not RESEND_API_KEY:
+        return {"ok": False, "reason": "email_not_configured"}
+
+    searches = _fetch_all_saved_searches()
+    cdb = _cache()
+    seen_store = cdb.setdefault("alert_seen", {})
+    email_cache = {}
+    emails_sent = 0
+    users_checked = set()
+    errors = []
+
+    for s in searches:
+        user_id = s.get("user_id")
+        location = (s.get("location") or "").strip()
+        try:
+            radius = float(s.get("radius") or 25)
+        except (TypeError, ValueError):
+            radius = 25.0
+        if not (user_id and location):
+            continue
+        users_checked.add(user_id)
+
+        try:
+            outcome = _perform_scan(location, radius)
+        except Exception as ex:
+            errors.append(f"{user_id}/{location}: {ex}")
+            print(f"[alerts] scan failed for {location!r}: {ex}", flush=True)
+            continue
+        if not outcome:
+            continue
+
+        seen_key = f"{user_id}|{location.lower()}|{int(radius)}"
+        seen = set(seen_store.get(seen_key, []))
+        all_sigs, new_bids = [], []
+        for city, bids in (outcome.get("bids") or {}).items():
+            for b in bids:
+                if (b.get("status") or "").lower() == "closed":
+                    continue
+                sig = _bid_sig(city, b)
+                all_sigs.append(sig)
+                if sig not in seen:
+                    new_bids.append((city, b))
+        seen_store[seen_key] = all_sigs[-300:]  # cap so this can't grow forever
+
+        if new_bids:
+            if user_id not in email_cache:
+                email_cache[user_id] = _get_user_email(user_id) or ""
+            email = email_cache[user_id]
+            if email:
+                _send_alert_email(email, outcome.get("location", location), radius, new_bids)
+                emails_sent += 1
+
+    cdb["alert_seen"] = seen_store
+    _save_cache(cdb)
+    return {"ok": True, "searches_checked": len(searches),
+            "users_checked": len(users_checked),
+            "emails_sent": emails_sent, "errors": errors}
+
+
+@app.route("/run-saved-search-alerts", methods=["POST"])
+def run_saved_search_alerts():
+    """Triggered by an external scheduler (see .github/workflows) once a day
+    -- Render's web dyno alone has no way to wake itself up on a schedule.
+    Gated by CRON_SECRET, a shared secret only the scheduler knows, so this
+    can't be used by anyone who just finds the URL."""
+    data = request.get_json(force=True, silent=True) or {}
+    token = data.get("token") or request.headers.get("X-Cron-Secret", "")
+    if not CRON_SECRET or not hmac.compare_digest(token, CRON_SECRET):
+        return jsonify({"ok": False, "reason": "unauthorized"}), 403
+    result = _run_saved_search_alerts()
+    return jsonify(result), (200 if result.get("ok") else 500)
 
 
 @app.errorhandler(Exception)
@@ -1359,26 +1543,15 @@ def _place_bid(grouped, bid, center, radius, db, default_city="", city_coords=No
         city_coords[city] = {"lat": coords[0], "lon": coords[1]}
 
 
-@app.route("/scan", methods=["POST"])
-def scan():
-    data = request.get_json(force=True, silent=True) or {}
-    key = data.get("key", "")
-    device = data.get("device_id", "")
-    supabase_token = data.get("supabase_token", "")
-    location = (data.get("location") or "").strip()
-    try:
-        radius = float(data.get("radius") or 25)
-    except (TypeError, ValueError):
-        radius = 25.0
-
-    if not _license_is_active(key, device, supabase_token):
-        return jsonify({"ok": False, "reason": "not_licensed"}), 403
-    if not location:
-        return jsonify({"ok": False, "reason": "no_location"})
-
+def _perform_scan(location, radius):
+    """Core of /scan: resolve a location, search local + federal sources, rank
+    and cache the result. Extracted out of the /scan route so the saved-search
+    alert job can run the exact same pipeline (portal directory, DDG failover,
+    SAM.gov, fit ranking, same-day cache) instead of duplicating it.
+    Returns a dict of response fields, or None if the location can't be resolved."""
     center = _resolve_center(location)
     if not center:
-        return jsonify({"ok": False, "reason": "location_not_found"})
+        return None
 
     cdb = _cache()
     today = datetime.datetime.now().strftime("%Y%m%d")
@@ -1386,12 +1559,12 @@ def scan():
     ckey = f"{center['state']}|{center['city'].lower()}|{int(radius)}|{today}"
     if ckey in cache:
         c = cache[ckey]
-        return jsonify({"ok": True, "location": f"{center['city']}, {center['state']}",
-                        "bids": c["bids"], "total_bids": c["total"],
-                        "city_coords": c.get("city_coords", {}),
-                        "center": c.get("center", {"lat": center["lat"], "lon": center["lon"],
-                                                   "label": f"{center['city']}, {center['state']}"}),
-                        "cached": True})
+        return {"location": f"{center['city']}, {center['state']}",
+                "bids": c["bids"], "total_bids": c["total"],
+                "city_coords": c.get("city_coords", {}),
+                "center": c.get("center", {"lat": center["lat"], "lon": center["lon"],
+                                           "label": f"{center['city']}, {center['state']}"}),
+                "cached": True}
 
     pdb = bid_portals.load_directory()
     grouped = {}
@@ -1511,10 +1684,33 @@ def scan():
     _save_cache(cdb)
     bid_portals.save_directory(pdb)
 
-    return jsonify({"ok": True, "location": f"{center['city']}, {center['state']}",
-                    "bids": grouped, "total_bids": total, "city_coords": city_coords,
-                    "center": result["center"],
-                    "debug": {"raw_local": local_raw, "kept": total}})
+    return {"location": f"{center['city']}, {center['state']}",
+            "bids": grouped, "total_bids": total, "city_coords": city_coords,
+            "center": result["center"],
+            "debug": {"raw_local": local_raw, "kept": total}}
+
+
+@app.route("/scan", methods=["POST"])
+def scan():
+    data = request.get_json(force=True, silent=True) or {}
+    key = data.get("key", "")
+    device = data.get("device_id", "")
+    supabase_token = data.get("supabase_token", "")
+    location = (data.get("location") or "").strip()
+    try:
+        radius = float(data.get("radius") or 25)
+    except (TypeError, ValueError):
+        radius = 25.0
+
+    if not _license_is_active(key, device, supabase_token):
+        return jsonify({"ok": False, "reason": "not_licensed"}), 403
+    if not location:
+        return jsonify({"ok": False, "reason": "no_location"})
+
+    outcome = _perform_scan(location, radius)
+    if outcome is None:
+        return jsonify({"ok": False, "reason": "location_not_found"})
+    return jsonify({"ok": True, **outcome})
 
 
 # ═══════════════════════════════════════════════════════════
