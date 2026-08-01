@@ -377,7 +377,6 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
     <button class="nav-btn" data-s="upcoming"><span class="ic">&#x1F4E1;</span><span class="lb">Upcoming</span></button>
     <button class="nav-btn" data-s="leads"><span class="ic">&#x1F3E0;</span><span class="lb">Leads</span></button>
     <button class="nav-btn" data-s="saved"><span class="ic">&#x2B50;</span><span class="lb">Active</span></button>
-    <button class="nav-btn" data-s="account"><span class="ic">&#x1F464;</span><span class="lb">Account</span></button>
   </div>
 </div>
 
@@ -699,32 +698,36 @@ function showApp(){
 }
 
 // ── Nav ──
+// A named function instead of "find the nav-btn and simulate a click on it"
+// -- Account no longer has a bottom-nav button (reached via the top-right
+// user chip instead), so goTo('account') would otherwise call .click() on
+// a nav-btn that doesn't exist and throw. Switching screens directly here
+// works regardless of whether a nav-btn exists for that screen.
+function switchScreen(s){
+  document.querySelectorAll(".nav-btn").forEach(x=>x.classList.toggle("active",x.dataset.s===s));
+  document.querySelectorAll(".screen").forEach(x=>x.classList.remove("active"));
+  document.getElementById("screen-"+s).classList.add("active");
+  if(s==="feed"){renderFeed();showFeedBadge(false);}
+  if(s==="saved")renderSaved();
+  if(s==="account")renderAccount();
+  if(s==="upcoming")renderUpcoming();
+  if(s==="leads")renderLeads();
+  // The map's own invalidateSize() call (in show()) only ever runs once,
+  // at creation time -- for any tab that isn't the default visible one,
+  // that happens while the tab is still hidden (display:none), so
+  // Leaflet measures a zero-size container and the map renders half-
+  // blank until something re-triggers a size recalculation. Re-running
+  // it here, now that the tab has actually just become visible, is what
+  // was previously only happening by accident when a user clicked the
+  // map (which incidentally re-ran show() -> invalidateSize()).
+  if(s==="scan"&&findMap)setTimeout(()=>findMap.invalidateSize(),50);
+  if(s==="upcoming")setTimeout(()=>upPicker.invalidateSize(),50);
+  if(s==="leads")setTimeout(()=>leadsPicker.invalidateSize(),50);
+}
 document.querySelectorAll(".nav-btn").forEach(b=>{
-  b.onclick=()=>{
-    document.querySelectorAll(".nav-btn").forEach(x=>x.classList.remove("active"));
-    b.classList.add("active");
-    const s=b.dataset.s;
-    document.querySelectorAll(".screen").forEach(x=>x.classList.remove("active"));
-    document.getElementById("screen-"+s).classList.add("active");
-    if(s==="feed"){renderFeed();showFeedBadge(false);}
-    if(s==="saved")renderSaved();
-    if(s==="account")renderAccount();
-    if(s==="upcoming")renderUpcoming();
-    if(s==="leads")renderLeads();
-    // The map's own invalidateSize() call (in show()) only ever runs once,
-    // at creation time -- for any tab that isn't the default visible one,
-    // that happens while the tab is still hidden (display:none), so
-    // Leaflet measures a zero-size container and the map renders half-
-    // blank until something re-triggers a size recalculation. Re-running
-    // it here, now that the tab has actually just become visible, is what
-    // was previously only happening by accident when a user clicked the
-    // map (which incidentally re-ran show() -> invalidateSize()).
-    if(s==="scan"&&findMap)setTimeout(()=>findMap.invalidateSize(),50);
-    if(s==="upcoming")setTimeout(()=>upPicker.invalidateSize(),50);
-    if(s==="leads")setTimeout(()=>leadsPicker.invalidateSize(),50);
-  };
+  b.onclick=()=>switchScreen(b.dataset.s);
 });
-function goTo(s){document.querySelector(`.nav-btn[data-s="${s}"]`).click();}
+function goTo(s){switchScreen(s);}
 
 // ── Radius (scoped per row so Find and Upcoming don't fight over one value) ──
 let radius=25;
@@ -1959,9 +1962,9 @@ function renderAccount(){
       <div class="account-status" id="notif-status">${esc(notifPermissionLabel())}</div>
     </div>
     <div class="account-card">
-      <div class="account-email" style="font-size:0.85rem;display:flex;justify-content:space-between;align-items:center;">
-        <span>&#x1F4BC; Company Info</span>
-        ${companyEditMode?"":`<button class="btn-ghost" id="co-edit-btn" style="padding:0.35rem 0.8rem;font-size:0.78rem;">&#x270F; Edit</button>`}
+      <div style="font-size:0.85rem;font-weight:700;display:flex;flex-wrap:wrap;gap:0.5rem;justify-content:space-between;align-items:center;">
+        <span style="white-space:nowrap;">&#x1F4BC; Company Info</span>
+        ${companyEditMode?"":`<button class="btn-ghost" id="co-edit-btn" style="padding:0.35rem 0.8rem;font-size:0.78rem;flex-shrink:0;">&#x270F; Edit</button>`}
       </div>
       <div class="account-status" style="margin-bottom:0.7rem;">Used to personalize AI-drafted bid proposals. Nothing here is shared beyond that.</div>
       ${companyEditMode?`
