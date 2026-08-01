@@ -40,9 +40,11 @@ import hashlib
 import datetime
 import time
 import random
+import threading
 import urllib.request
 import urllib.parse
 import urllib.error
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -1101,35 +1103,51 @@ def draft_proposal():
 # /scan  —  LOCAL (Brave + AI) + FEDERAL (SAM), radius-filtered
 # ═══════════════════════════════════════════════════════════
 def _run_local_queries(queries, ai_label, max_pages, grouped, center, radius, cdb,
-                        city_coords, seen_urls, default_city=""):
+                        city_coords, seen_urls, lock, default_city=""):
     """Run one town's worth of search queries and extract bids from the top
     pages. Each town gets its own max_pages slice so a big scan with several
-    anchor towns doesn't let the first town's results crowd out the rest."""
+    anchor towns doesn't let the first town's results crowd out the rest.
+
+    `lock` guards every read/write to the structures shared across towns
+    (seen_urls, grouped, city_coords, cdb's geo_cache) since towns are now
+    run concurrently from the /scan route. The searches themselves stay
+    sequential per-town (with the existing throttle) to avoid hammering
+    DuckDuckGo; only the independent per-page fetch+AI-extract step below
+    is fanned out."""
     items = []
     for q in queries:
         results = _tavily_search(q, max_results=6) if TAVILY_API_KEY else []
         if not results:
             results = _ddg_search(q)
         for r in results:
-            if r["url"] not in seen_urls:
+            with lock:
+                if r["url"] in seen_urls:
+                    continue
                 seen_urls.add(r["url"])
-                items.append(r)
+            items.append(r)
         time.sleep(0.4)
-    raw = 0
-    for it in items[:max_pages]:
+
+    raw = [0]
+
+    def _process(it):
         text = it["content"] or _fetch_text(it["url"])
         if len(text) < 200:
-            continue
+            return
         bids = _ai_extract(ai_label, text)
         if not bids:
-            continue
-        raw += len(bids)
-        for b in bids:
-            if isinstance(b, dict):
-                b.setdefault("url", it["url"])
-                _place_bid(grouped, b, center, radius, cdb, default_city=default_city,
-                          city_coords=city_coords)
-    return raw
+            return
+        with lock:
+            raw[0] += len(bids)
+            for b in bids:
+                if isinstance(b, dict):
+                    b.setdefault("url", it["url"])
+                    _place_bid(grouped, b, center, radius, cdb, default_city=default_city,
+                              city_coords=city_coords)
+
+    with ThreadPoolExecutor(max_workers=4) as ex:
+        list(ex.map(_process, items[:max_pages]))
+
+    return raw[0]
 
 
 def _place_bid(grouped, bid, center, radius, db, default_city="", city_coords=None):
@@ -1198,6 +1216,7 @@ def scan():
     if OPENAI_API_KEY:
         c, s = center["city"], center["state"]
         seen_urls = set()
+        lock = threading.Lock()
         center_queries = [
             f"{c} {s} sidewalk replacement concrete construction bid invitation",
             f"{c} {s} ADA ramp curb gutter concrete bid opportunities",
@@ -1219,13 +1238,23 @@ def scan():
         ]
         if center["state"] == "MO":
             center_queries.append(f"{c} {s} sidewalk ADA curb bid site:missouribuys.mo.gov")
-        local_raw += _run_local_queries(center_queries, f"{c}, {s}", MAX_PAGES,
-                                         grouped, center, radius, cdb, city_coords,
-                                         seen_urls, default_city="")
-        print(f"[scan] {local_raw} raw bids from {c}, {s} (center)", flush=True)
 
         anchors = _nearby_anchor_towns(center, radius)
-        for ac, ast in anchors:
+
+        # Each "town job" (center + every anchor) is fully independent work,
+        # so they run concurrently instead of one after another — this is
+        # the biggest lever on wall-clock scan time. Capped at 4 workers so
+        # we don't fire too many simultaneous search-engine requests at once
+        # (DuckDuckGo in particular will start blocking if hammered).
+        def _run_center():
+            got = _run_local_queries(center_queries, f"{c}, {s}", MAX_PAGES,
+                                      grouped, center, radius, cdb, city_coords,
+                                      seen_urls, lock, default_city="")
+            print(f"[scan] {got} raw bids from {c}, {s} (center)", flush=True)
+            return got
+
+        def _run_anchor(anchor):
+            ac, ast = anchor
             anchor_queries = [
                 f"{ac} {ast} sidewalk ADA curb concrete bid invitation",
                 f"{ac} {ast} sidewalk ADA curb bid site:bidnetdirect.com OR site:demandstar.com",
@@ -1238,9 +1267,15 @@ def scan():
                 anchor_queries.append(f"{ac} {ast} sidewalk ADA curb bid site:missouribuys.mo.gov")
             got = _run_local_queries(anchor_queries, f"{ac}, {ast}", 5,
                                       grouped, center, radius, cdb, city_coords,
-                                      seen_urls, default_city=ac)
-            local_raw += got
+                                      seen_urls, lock, default_city=ac)
             print(f"[scan] {got} raw bids from {ac}, {ast} (anchor)", flush=True)
+            return got
+
+        with ThreadPoolExecutor(max_workers=4) as ex:
+            futures = [ex.submit(_run_center)] + [ex.submit(_run_anchor, a) for a in anchors]
+            for f in as_completed(futures):
+                local_raw += f.result()
+
         print(f"[scan] {local_raw} raw local bids extracted total "
               f"({len(anchors)} anchor town(s) searched)", flush=True)
 
