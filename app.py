@@ -3265,6 +3265,7 @@ class BidCaller:
         divider(pg, BORDER)
         self._account_frame = scrollable(pg)
         self._last_sync_at = None
+        self._company_edit_mode = False
 
     def _render_account(self):
         for w in self._account_frame.winfo_children():
@@ -3345,7 +3346,11 @@ class BidCaller:
         tk.Frame(body, bg=BG, height=20).pack()
 
         # ── Company Profile ──
-        tk.Label(body, text="Company Profile", font=F_SUB, bg=BG, fg=ACCENT).pack(anchor="w", pady=(0, 4))
+        co_hdr = tk.Frame(body, bg=BG)
+        co_hdr.pack(fill="x", pady=(0, 4))
+        tk.Label(co_hdr, text="Company Profile", font=F_SUB, bg=BG, fg=ACCENT).pack(side="left")
+        if not self._company_edit_mode:
+            ghost_btn(co_hdr, "✏  Edit", self._start_company_edit, font=F_SMALL).pack(side="left", padx=(10, 0))
         tk.Label(body, text="Used to personalize AI-drafted bid proposals. Nothing here is "
                  "shared beyond that.", font=F_SMALL, bg=BG, fg=TEXT3,
                  wraplength=500, justify="left").pack(anchor="w", pady=(0, 10))
@@ -3355,20 +3360,33 @@ class BidCaller:
                      ("phone", "Phone", "(555) 555-5555"),
                      ("email", "Email", "you@company.com"),
                      ("specialty", "Specialty (optional)", "sidewalk, ADA ramp & curb concrete work")]
-        self._co_entries = {}
-        for key, label, placeholder in co_fields:
-            tk.Label(body, text=label, font=F_SMALL, bg=BG, fg=TEXT2).pack(anchor="w", pady=(6, 2))
-            e = tk.Entry(body, font=F_BODY, bg=CARD, fg=TEXT, insertbackground=TEXT,
-                        relief="flat", bd=0, width=44, highlightthickness=1,
-                        highlightbackground=BORDER, highlightcolor=ACCENT)
-            e.pack(anchor="w", ipady=6)
-            e.insert(0, self.company.get(key, ""))
-            self._co_entries[key] = e
 
-        pill_btn(body, "Save Company Info", self._save_company_profile, px=18, py=9,
-                 font=F_SMALL).pack(anchor="w", pady=(14, 0))
-        self._co_saved_lbl = tk.Label(body, text="", font=F_SMALL, bg=BG, fg=GREEN)
-        self._co_saved_lbl.pack(anchor="w", pady=(6, 0))
+        if self._company_edit_mode:
+            self._co_entries = {}
+            for key, label, placeholder in co_fields:
+                tk.Label(body, text=label, font=F_SMALL, bg=BG, fg=TEXT2).pack(anchor="w", pady=(6, 2))
+                e = tk.Entry(body, font=F_BODY, bg=CARD, fg=TEXT, insertbackground=TEXT,
+                            relief="flat", bd=0, width=44, highlightthickness=1,
+                            highlightbackground=BORDER, highlightcolor=ACCENT)
+                e.pack(anchor="w", ipady=6)
+                e.insert(0, self.company.get(key, ""))
+                self._co_entries[key] = e
+
+            btn_row = tk.Frame(body, bg=BG)
+            btn_row.pack(anchor="w", pady=(14, 0))
+            pill_btn(btn_row, "✓  Confirm", self._save_company_profile, px=18, py=9,
+                     font=F_SMALL).pack(side="left")
+            ghost_btn(btn_row, "Cancel", self._cancel_company_edit, font=F_SMALL).pack(side="left", padx=(8, 0))
+            self._co_saved_lbl = tk.Label(body, text="", font=F_SMALL, bg=BG, fg=GREEN)
+            self._co_saved_lbl.pack(anchor="w", pady=(6, 0))
+        else:
+            for key, label, _ in co_fields:
+                row = tk.Frame(body, bg=BG)
+                row.pack(fill="x", pady=(6, 0))
+                tk.Label(row, text=label.upper(), font=(UI, fs(8), "bold"),
+                        bg=BG, fg=TEXT3, anchor="w").pack(anchor="w")
+                tk.Label(row, text=self.company.get(key) or "Not set", font=F_BODY,
+                        bg=BG, fg=TEXT, anchor="w").pack(anchor="w")
 
         divider(body, BORDER, pad=0)
         tk.Frame(body, bg=BG, height=20).pack()
@@ -3588,14 +3606,23 @@ class BidCaller:
             except Exception:
                 messagebox.showinfo("Restart", "Please close and reopen the app to apply.")
 
+    def _start_company_edit(self):
+        self._company_edit_mode = True
+        self._render_account()
+
+    def _cancel_company_edit(self):
+        self._company_edit_mode = False
+        self._render_account()
+
     def _save_company_profile(self):
         self.company = {k: e.get().strip() for k, e in self._co_entries.items()}
         write_company_profile(self.company)
-        self._co_saved_lbl.config(text="✅ Saved")
         token = auth_client.current_access_token()
         if token:
             threading.Thread(target=lambda: data_sync.push_company_profile(token, self.company),
                              daemon=True).start()
+        self._company_edit_mode = False
+        self._render_account()
 
     def _clear_saved(self):
         token = auth_client.current_access_token()
