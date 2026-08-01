@@ -219,8 +219,11 @@ def draft_proposal(bid, company):
         "bid": bid, "company": company,
     }
     try:
+        # Server's own OpenAI call budget is 45s -- give real headroom above
+        # that (same class of bug as the old /scan timeout: a client timeout
+        # equal to the server's internal timeout leaves no margin at all).
         r = requests.post(SERVER_URL.rstrip("/") + "/draft-proposal", json=payload,
-                          timeout=45)
+                          timeout=75)
         return r.json()
     except Exception:
         return {"ok": False, "reason": "unreachable"}
