@@ -843,7 +843,14 @@ function updateFindMap(lat,lon,label){
   if(!mv)return;
   findCenter={lat,lon};
   if(!findMap){
-    findMap=L.map(mv,{attributionControl:false}).setView([lat,lon],11);
+    // tap:false -- Leaflet's own legacy touch-tap handler (Tap.js) is known to
+    // misfire or swallow the synthetic click on current iOS Safari in some
+    // page layouts; modern mobile browsers reliably fire a native click after
+    // a real touch tap on their own, so disabling Leaflet's handler and
+    // relying on that is the standard fix for "tapping the map does nothing"
+    // reports. (Not independently reproduced on a physical device here --
+    // please confirm this actually fixes it on your phone.)
+    findMap=L.map(mv,{attributionControl:false,tap:false}).setView([lat,lon],11);
     const findTiles=L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{
       maxZoom:20,subdomains:"abcd"
     }).addTo(findMap);
@@ -1048,7 +1055,7 @@ function renderMap(){
   if(!lastScanMap||!lastScanMap.center){mv.innerHTML="";return;}
   if(!leafletMap){
     mv.innerHTML="";
-    leafletMap=L.map(mv,{attributionControl:false}).setView(
+    leafletMap=L.map(mv,{attributionControl:false,tap:false}).setView(
       [lastScanMap.center.lat,lastScanMap.center.lon],9);
     const resultTiles=L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{
       maxZoom:20,subdomains:"abcd"
