@@ -1988,6 +1988,16 @@ class BidCaller:
         self._up_prog_bar = tk.Frame(self._up_prog_frame, bg=ACCENT, height=4, width=0)
         self._up_prog_bar.place(x=0, y=0)
 
+        up_filter = tk.Frame(body, bg=SURFACE, pady=6)
+        up_filter.pack(fill="x", pady=(12, 0))
+        tk.Label(up_filter, text="🔎", font=F_BODY, bg=SURFACE, fg=TEXT3).pack(side="left", padx=(12, 6))
+        self._up_kw_var = tk.StringVar()
+        up_kw = tk.Entry(up_filter, textvariable=self._up_kw_var, font=F_BODY, bg=CARD, fg=TEXT,
+                         relief="flat", bd=0, insertbackground=TEXT,
+                         highlightthickness=1, highlightbackground=BORDER, highlightcolor=ACCENT)
+        up_kw.pack(side="left", fill="x", expand=True, ipady=6, padx=(0, 12))
+        up_kw.bind("<KeyRelease>", lambda e: self._render_upcoming())
+
         self._upcoming_list_frame = scrollable(body, bg=BG)
         self._render_upcoming()
 
@@ -2127,11 +2137,27 @@ class BidCaller:
                      text="Search your area to spot planned work before it's a bid.",
                      font=F_SMALL, bg=BG, fg=TEXT3).pack(pady=(4, 40))
             return
-        tk.Label(self._upcoming_list_frame, text="PLANNED PROJECTS", font=(UI, fs(9), "bold"),
-                 bg=BG, fg=ACCENT).pack(anchor="w", padx=20, pady=(4, 6))
+        kw = self._up_kw_var.get().strip().lower() if hasattr(self, "_up_kw_var") else ""
+        rows = []
         for city in cities:
             for item in self.upcoming_data[city]:
-                self._upcoming_card(self._upcoming_list_frame, item, city)
+                if kw:
+                    blob = (item.get("title", "") + " " + item.get("scope", "") + " " + city).lower()
+                    if kw not in blob:
+                        continue
+                rows.append((city, item))
+        if not rows:
+            tk.Label(self._upcoming_list_frame, text="🔍", font=(UI, fs(30)),
+                     bg=BG, fg=TEXT3).pack(pady=(40, 6))
+            tk.Label(self._upcoming_list_frame, text="No matches", font=F_SUB,
+                     bg=BG, fg=TEXT).pack()
+            tk.Label(self._upcoming_list_frame, text="Try a different search term.",
+                     font=F_SMALL, bg=BG, fg=TEXT3).pack(pady=(4, 40))
+            return
+        tk.Label(self._upcoming_list_frame, text="PLANNED PROJECTS", font=(UI, fs(9), "bold"),
+                 bg=BG, fg=ACCENT).pack(anchor="w", padx=20, pady=(4, 6))
+        for city, item in rows:
+            self._upcoming_card(self._upcoming_list_frame, item, city)
         tk.Frame(self._upcoming_list_frame, bg=BG, height=30).pack()
 
     # ═══════════ PAGE: RESIDENTIAL LEADS (driveway/sidewalk permits) ═══════════
@@ -2191,6 +2217,21 @@ class BidCaller:
         self._leads_prog_frame.pack(pady=(0, 6))
         self._leads_prog_bar = tk.Frame(self._leads_prog_frame, bg=ACCENT, height=4, width=0)
         self._leads_prog_bar.place(x=0, y=0)
+
+        leads_filter = tk.Frame(body, bg=SURFACE, pady=6)
+        leads_filter.pack(fill="x", pady=(12, 0))
+        tk.Label(leads_filter, text="🔎", font=F_BODY, bg=SURFACE, fg=TEXT3).pack(side="left", padx=(12, 6))
+        self._leads_kw_var = tk.StringVar()
+        leads_kw = tk.Entry(leads_filter, textvariable=self._leads_kw_var, font=F_BODY, bg=CARD, fg=TEXT,
+                            relief="flat", bd=0, insertbackground=TEXT,
+                            highlightthickness=1, highlightbackground=BORDER, highlightcolor=ACCENT)
+        leads_kw.pack(side="left", fill="x", expand=True, ipady=6, padx=(0, 12))
+        leads_kw.bind("<KeyRelease>", lambda e: self._render_leads())
+        self._leads_sort_var = tk.StringVar(value="Best Match")
+        leads_sort_cb = ttk.Combobox(leads_filter, textvariable=self._leads_sort_var, state="readonly",
+                                     values=["Best Match", "Newest"], font=F_BODY, width=12)
+        leads_sort_cb.pack(side="left", padx=(0, 12))
+        leads_sort_cb.bind("<<ComboboxSelected>>", lambda e: self._render_leads())
 
         self._leads_list_frame = scrollable(body, bg=BG)
         self._render_leads()
@@ -2347,11 +2388,33 @@ class BidCaller:
                           "Coverage is growing city by city — currently: Austin, TX & Cambridge, MA.",
                      font=F_SMALL, bg=BG, fg=TEXT3, justify="center").pack(pady=(4, 40))
             return
-        tk.Label(self._leads_list_frame, text="RESIDENTIAL LEADS", font=(UI, fs(9), "bold"),
-                 bg=BG, fg=ACCENT).pack(anchor="w", padx=20, pady=(4, 6))
+        kw = self._leads_kw_var.get().strip().lower() if hasattr(self, "_leads_kw_var") else ""
+        rows = []
         for city in cities:
             for lead in self.leads_data[city]:
-                self._lead_card(self._leads_list_frame, lead, city)
+                if kw:
+                    blob = " ".join([lead.get("address", ""), lead.get("description", ""),
+                                     lead.get("contractor_name", ""), city]).lower()
+                    if kw not in blob:
+                        continue
+                rows.append((city, lead))
+        sort_mode = self._leads_sort_var.get() if hasattr(self, "_leads_sort_var") else "Best Match"
+        if sort_mode == "Newest":
+            rows.sort(key=lambda cl: cl[1].get("issued_date") or "", reverse=True)
+        # "Best Match" (default): leave rows in the order /residential-leads
+        # returned them -- already sorted open-lead-first, freshest within type.
+        if not rows:
+            tk.Label(self._leads_list_frame, text="🔍", font=(UI, fs(30)),
+                     bg=BG, fg=TEXT3).pack(pady=(40, 6))
+            tk.Label(self._leads_list_frame, text="No matches", font=F_SUB,
+                     bg=BG, fg=TEXT).pack()
+            tk.Label(self._leads_list_frame, text="Try a different search term.",
+                     font=F_SMALL, bg=BG, fg=TEXT3).pack(pady=(4, 40))
+            return
+        tk.Label(self._leads_list_frame, text="RESIDENTIAL LEADS", font=(UI, fs(9), "bold"),
+                 bg=BG, fg=ACCENT).pack(anchor="w", padx=20, pady=(4, 6))
+        for city, lead in rows:
+            self._lead_card(self._leads_list_frame, lead, city)
         tk.Frame(self._leads_list_frame, bg=BG, height=30).pack()
 
     def _export_csv(self):
