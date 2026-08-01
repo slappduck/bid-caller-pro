@@ -58,6 +58,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from werkzeug.exceptions import HTTPException
 
 app = Flask(__name__)
 
@@ -344,6 +345,57 @@ def _send_key_email(email, key):
         print(f"[email] sent key to {email}", flush=True)
     except Exception as ex:
         print(f"[email] failed: {ex}", flush=True)
+
+
+# ── Admin error alerts: know about a crash before a customer reports it ──
+_alert_lock = threading.Lock()
+_alert_last_sent = {}
+ALERT_COOLDOWN_SEC = 1800  # don't re-alert the same error more than every 30 min
+
+
+def _alert_admin(subject, detail):
+    """Email SUPPORT_EMAIL on server errors (best-effort, never raises).
+    Rate-limited per distinct subject so a flapping error doesn't spam."""
+    if not (RESEND_API_KEY and SUPPORT_EMAIL):
+        return
+    now = time.time()
+    with _alert_lock:
+        last = _alert_last_sent.get(subject, 0)
+        if now - last < ALERT_COOLDOWN_SEC:
+            return
+        _alert_last_sent[subject] = now
+    body = json.dumps({
+        "from": FROM_EMAIL,
+        "to": [SUPPORT_EMAIL],
+        "subject": f"[CurbCall Pro] {subject}",
+        "text": detail[:4000],
+    }).encode("utf-8")
+    req = urllib.request.Request("https://api.resend.com/emails", data=body,
+        method="POST", headers={"Authorization": f"Bearer {RESEND_API_KEY}",
+                                "Content-Type": "application/json"})
+    try:
+        urllib.request.urlopen(req, timeout=15)
+    except Exception as ex:
+        print(f"[alert] failed to send alert email: {ex}", flush=True)
+
+
+@app.errorhandler(Exception)
+def _handle_unexpected_error(err):
+    """Safety net: any unhandled exception in any route lands here instead
+    of a bare 500 the customer can't do anything about, and we get an email
+    about it instead of finding out when a customer complains. Routine HTTP
+    errors (404 on a bad path, 405, etc.) are left to Flask's normal
+    handling -- only genuine unexpected exceptions get alerted."""
+    if isinstance(err, HTTPException):
+        return err
+    import traceback
+    tb = traceback.format_exc()
+    print(f"[error] unhandled exception on {request.path}: {err}\n{tb}", flush=True)
+    _alert_admin(
+        f"Unhandled error on {request.path}",
+        f"{request.method} {request.path}\n\n{tb}",
+    )
+    return jsonify({"ok": False, "reason": "server_error"}), 500
 
 
 def _issue_for(db, email, device, plan):
