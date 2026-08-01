@@ -123,8 +123,10 @@ def _post(path, payload):
 
 
 # Real scans take a while and the backend can be asleep (Render free tier) —
-# same generous timeout the web app uses for /scan.
-SCAN_TIMEOUT = 90
+# same generous timeout the web app uses for /scan. A real-world scan was
+# clocked at ~100s, so 90s was cutting it too close and silently dropping
+# good results — bumped with headroom for cold starts + larger radii.
+SCAN_TIMEOUT = 150
 
 
 def scan(location, radius):

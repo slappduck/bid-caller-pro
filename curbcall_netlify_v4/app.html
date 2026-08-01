@@ -1115,7 +1115,7 @@ async function runScan(){
     const r=await fetchWithTimeout(SERVER+"/scan",{
       method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,location,radius})
-    },90000);
+    },150000);
     clearInterval(tick);pb.style.width="100%";
     if(r.status===403){status.textContent="Your trial or subscription isn't active.";toast("Check Account tab");goTo("account");return;}
     const d=await r.json();
@@ -1169,7 +1169,7 @@ async function runUpcoming(){
     const r=await fetchWithTimeout(SERVER+"/upcoming",{
       method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,location,radius:upRadius})
-    },90000);
+    },150000);
     clearInterval(tick);pb.style.width="100%";
     if(r.status===403){status.textContent="Your trial or subscription isn't active.";toast("Check Account tab");goTo("account");return;}
     const d=await r.json();
