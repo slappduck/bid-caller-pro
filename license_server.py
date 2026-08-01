@@ -282,7 +282,7 @@ def trial():
 @app.route("/issue", methods=["POST"])
 def issue():
     data = request.get_json(force=True, silent=True) or {}
-    if data.get("admin_token") != ADMIN_TOKEN:
+    if not hmac.compare_digest(data.get("admin_token") or "", ADMIN_TOKEN):
         return jsonify({"ok": False, "reason": "unauthorized"}), 401
     plan = data.get("plan", "monthly")
     months = 12 if plan == "annual" else int(data.get("months", 1))
@@ -299,7 +299,7 @@ def issue():
 @app.route("/revoke", methods=["POST"])
 def revoke():
     data = request.get_json(force=True, silent=True) or {}
-    if data.get("admin_token") != ADMIN_TOKEN:
+    if not hmac.compare_digest(data.get("admin_token") or "", ADMIN_TOKEN):
         return jsonify({"ok": False, "reason": "unauthorized"}), 401
     key = (data.get("key") or "").strip().upper()
     db = _db()
