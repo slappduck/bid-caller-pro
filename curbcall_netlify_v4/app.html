@@ -1612,7 +1612,12 @@ function openDetail(city,b){
   const statuses=[["submitted","Submitted"],["won","Won"],["lost","Lost"],["passed","Passed"]];
   mc.innerHTML=`<h2>${esc(b.title||"Untitled Project")}</h2>
     <div class="bid-meta"><span class="chip">\u{1F4CD} ${esc(city)}</span><span class="chip">OPEN</span></div>
-    ${row("Scope of Work",b.scope)}${row("Est. Value",b.value||"Not listed")}${row("Deadline",b.deadline||"Not listed")}
+    ${row("Scope of Work",b.scope)}
+    <div class="detail-row">
+      <div class="detail-label">Est. Value</div>
+      <input id="bid-value" class="input" style="margin-top:0.3rem;" placeholder="Not listed -- enter your own estimate, e.g. $45,000" value="${esc(b.value||"")}" />
+    </div>
+    ${row("Deadline",b.deadline||"Not listed")}
     ${row("Contact",b.contact)}${row("Email",b.email,b.email?"mailto:"+b.email:null)}
     ${row("Phone",b.phone,b.phone?"tel:"+b.phone:null)}${row("Original Posting",b.url,b.url)}
     <div class="detail-row">
@@ -1635,6 +1640,25 @@ function openDetail(city,b){
     </div>`;
   document.getElementById("modal-back").classList.add("open");
   document.getElementById("modal").classList.add("open");
+  document.getElementById("bid-value").addEventListener("blur",()=>{
+    // Most scanned bids never state a dollar value at all (the AI
+    // extraction deliberately never guesses one) -- this is the only way
+    // it gets filled in for most bids. Mirrors the notes field's
+    // auto-save-if-not-tracked-yet behavior: entering a value on a bid
+    // that isn't saved yet starts tracking it.
+    const val=document.getElementById("bid-value").value.trim();
+    b.value=val;
+    store.set("last_feed",bidData);
+    if(val&&!saved[id]){
+      const[c,bb]=findBidWithCity(id);
+      if(bb){saved[id]={...bb,_city:c||city};store.set("saved",saved);}
+    }
+    if(saved[id]){
+      saved[id].value=val;
+      store.set("saved",saved);
+      pushSavedBid(id,saved[id]._city);
+    }
+  });
   document.getElementById("bid-notes").addEventListener("blur",()=>{
     const val=document.getElementById("bid-notes").value;
     if(val.trim()){

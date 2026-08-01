@@ -616,6 +616,17 @@ class BidCaller:
         note_btn.pack(side="right")
         note_btn.bind("<Button-1>", lambda e, c=city, b=dict(bid): self._edit_note(c, b))
 
+        # Most scanned bids don't state a dollar value at all (the AI
+        # extraction deliberately never guesses one) -- this lets a
+        # contractor plug in their own estimate once they've actually
+        # looked at the bid documents, instead of Est. Value just staying
+        # blank forever.
+        value_btn = tk.Label(meta, text="💲  Add value" if not bid.get("value") else "💲  Edit value",
+                             font=F_SMALL, bg=SURFACE, fg=TEXT2,
+                             padx=10, pady=4, cursor="hand2")
+        value_btn.pack(side="right", padx=(0, 6))
+        value_btn.bind("<Button-1>", lambda e, c=city, b=dict(bid): self._edit_value(c, b))
+
         # Make the whole title clickable too
         # (re-bind happens after title creation above via _title_lbl if present)
 
@@ -972,6 +983,56 @@ class BidCaller:
         row = tk.Frame(win, bg=SURFACE)
         row.pack(fill="x", padx=20, pady=(0, 16))
         pill_btn(row, "Save note", do_save, px=18, py=8).pack(side="right")
+        ghost_btn(row, "Cancel", win.destroy).pack(side="right", padx=(0, 8))
+
+    def _edit_value(self, city, bid):
+        """Manual override for Est. Value -- most scanned bids never state
+        one (the AI extraction is deliberately told not to guess), so this
+        is the only way it's ever filled in for most bids. Same
+        auto-save-if-not-tracked-yet behavior as _edit_note: annotating an
+        unsaved bid starts tracking it."""
+        bid = dict(bid)
+        key = bid_id(city, bid)
+
+        win = tk.Toplevel(self.root)
+        _apply_icon(win)
+        win.title("Est. Value")
+        win.configure(bg=SURFACE)
+        win.geometry("380x180")
+        win.transient(self.root)
+        win.grab_set()
+
+        tk.Label(win, text=bid.get("title", "Bid"), font=F_SUB, bg=SURFACE,
+                 fg=ACCENT, wraplength=340, justify="left").pack(padx=20, pady=(18, 4), anchor="w")
+        tk.Label(win, text="Enter your own estimate if the bid doesn't list one -- e.g. \"$45,000\" or \"$120k\"",
+                 font=F_SMALL, bg=SURFACE, fg=TEXT3, wraplength=340, justify="left").pack(padx=20, anchor="w")
+
+        entry = tk.Entry(win, font=F_BODY, bg=CARD, fg=TEXT, relief="flat", bd=0,
+                         insertbackground=TEXT, highlightthickness=1,
+                         highlightbackground=BORDER, highlightcolor=ACCENT)
+        entry.pack(fill="x", padx=20, pady=12, ipady=6)
+        current = self.saved.get(key, {}).get("value") or bid.get("value") or ""
+        entry.insert(0, current)
+        entry.bind("<Return>", lambda e: do_save())
+
+        def do_save():
+            text = entry.get().strip()
+            if key not in self.saved:
+                rec = dict(bid)
+                rec["_city"] = city
+                rec["value"] = text
+                rec["saved_at"] = datetime.datetime.now().strftime("%d %b %Y")
+                self.saved[key] = rec
+            else:
+                self.saved[key]["value"] = text
+            write_saved(self.saved)
+            self._sync_saved_bid(key)
+            win.destroy()
+            self._refresh_all()
+
+        row = tk.Frame(win, bg=SURFACE)
+        row.pack(fill="x", padx=20, pady=(0, 16))
+        pill_btn(row, "Save", do_save, px=18, py=8).pack(side="right")
         ghost_btn(row, "Cancel", win.destroy).pack(side="right", padx=(0, 8))
 
     def _refresh_all(self):
