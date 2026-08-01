@@ -1,6 +1,6 @@
 ; Inno Setup script for CurbCall Pro (BidCallerPro.exe)
 #define MyAppName "CurbCall Pro"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.0.1"
 #define MyAppPublisher "Oblique Systems"
 #define MyAppExeName "BidCallerPro.exe"
 
