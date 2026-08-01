@@ -346,8 +346,8 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 
     <!-- SAVED -->
     <div class="screen" id="screen-saved">
-      <div class="screen-title">Saved Bids</div>
-      <div class="screen-sub">Bids you've starred to follow up on. Tap one to set its status.</div>
+      <div class="screen-title">Active Bids</div>
+      <div class="screen-sub">Bids you're pursuing — track status, add notes, and follow them through to won or lost.</div>
       <div class="feed-toolbar">
         <button class="btn-ghost" id="export-saved-btn" style="display:none;">&#x2B07; Export</button>
       </div>
@@ -369,7 +369,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
     <button class="nav-btn" data-s="feed"><span class="ic">&#x1F4CB;</span><span class="nav-badge" id="feed-badge" style="display:none;"></span><span class="lb">Bids</span></button>
     <button class="nav-btn" data-s="upcoming"><span class="ic">&#x1F4E1;</span><span class="lb">Upcoming</span></button>
     <button class="nav-btn" data-s="leads"><span class="ic">&#x1F3E0;</span><span class="lb">Leads</span></button>
-    <button class="nav-btn" data-s="saved"><span class="ic">&#x2B50;</span><span class="lb">Saved</span></button>
+    <button class="nav-btn" data-s="saved"><span class="ic">&#x2B50;</span><span class="lb">Active</span></button>
     <button class="nav-btn" data-s="account"><span class="ic">&#x1F464;</span><span class="lb">Account</span></button>
   </div>
 </div>
@@ -1775,7 +1775,7 @@ function renderSaved(){
   if(!keys.length){
     ptiles.innerHTML="";exportBtn.style.display="none";
     document.getElementById("pipeline-stats").innerHTML="";
-    list.innerHTML=`<div class="empty"><div class="icon">&#x2B50;</div><h3>No saved bids</h3><p>Tap the &#x2606; on any bid to save it.</p></div>`;
+    list.innerHTML=`<div class="empty"><div class="icon">&#x2B50;</div><h3>No active bids</h3><p>Tap the &#x2606; on any bid to start tracking it here.</p></div>`;
     return;
   }
   exportBtn.style.display="inline-flex";
@@ -1788,7 +1788,7 @@ function renderSaved(){
   ptiles.querySelectorAll(".tile").forEach(t=>t.onclick=()=>{pipelineFilter=t.dataset.k;renderSaved();});
   const filteredKeys=keys.filter(id=>pipelineFilter==="All"||(pipelineFilter==="none"?!pipeline[id]:pipeline[id]===pipelineFilter));
   if(!filteredKeys.length){
-    list.innerHTML=`<div class="empty"><div class="icon">&#x2B50;</div><h3>Nothing here</h3><p>No saved bids with this status.</p></div>`;
+    list.innerHTML=`<div class="empty"><div class="icon">&#x2B50;</div><h3>Nothing here</h3><p>No active bids with this status.</p></div>`;
     return;
   }
   list.innerHTML=filteredKeys.map(id=>{const b=saved[id];return bidCard(b._city||"",b);}).join("");
@@ -1848,7 +1848,7 @@ function renderAccount(){
     <div class="account-card">
       <div class="account-email" style="font-size:0.85rem;margin-bottom:0.6rem;">&#x1F4CA; Your Stats</div>
       <div class="stats-grid">
-        <div class="stat-box"><div class="n">${stats.count}</div><div class="l">Saved Bids</div></div>
+        <div class="stat-box"><div class="n">${stats.count}</div><div class="l">Active Bids</div></div>
         <div class="stat-box"><div class="n">${stats.winRate}</div><div class="l">Win Rate</div></div>
         <div class="stat-box"><div class="n">${formatMoney(stats.wonValue)}</div><div class="l">Won</div></div>
         <div class="stat-box"><div class="n">${formatMoney(stats.trackedValue)}</div><div class="l">Tracked</div></div>

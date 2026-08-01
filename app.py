@@ -418,7 +418,7 @@ class BidCaller:
         self._nav_badges = {}
         items = [
             ("feed",      "📋", "Live Bids"),
-            ("saved",     "⭐", "Saved"),
+            ("saved",     "⭐", "Active Bids"),
             ("scan",      "🔍", "Find Bids"),
             ("upcoming",  "📡", "Upcoming"),
             ("leads",     "🏠", "Residential Leads"),
@@ -1177,7 +1177,7 @@ class BidCaller:
         self._saved_pipeline_filter = "All"
         hdr = tk.Frame(pg, bg=BG, pady=18)
         hdr.pack(fill="x", padx=24)
-        tk.Label(hdr, text="Saved Bids", font=F_HEAD, bg=BG, fg=TEXT).pack(side="left")
+        tk.Label(hdr, text="Active Bids", font=F_HEAD, bg=BG, fg=TEXT).pack(side="left")
         self._saved_export_btn = ghost_btn(hdr, "  ⬇  Export  ", self._export_saved_csv, font=F_SMALL)
         divider(pg, BORDER)
         self._saved_stats_frame = tk.Frame(pg, bg=BG)
@@ -1219,9 +1219,9 @@ class BidCaller:
             e = tk.Frame(self._saved_frame, bg=BG, pady=70)
             e.pack(fill="x")
             tk.Label(e, text="⭐", font=(UI, fs(36)), bg=BG, fg=BORDER).pack()
-            tk.Label(e, text="No saved bids yet", font=(UI, fs(16), "bold"),
+            tk.Label(e, text="No active bids yet", font=(UI, fs(16), "bold"),
                      bg=BG, fg=TEXT2).pack(pady=6)
-            tk.Label(e, text="Tap the ☆ on any bid to save it here for later.",
+            tk.Label(e, text="Tap the ☆ on any bid to start tracking it here.",
                      font=F_BODY, bg=BG, fg=TEXT3).pack()
             return
         self._saved_export_btn.pack(side="right")
@@ -3150,7 +3150,7 @@ class BidCaller:
         counts, win_rate, won_value, tracked_value = self._pipeline_stats()
         stats_row = tk.Frame(body, bg=BG)
         stats_row.pack(fill="x")
-        for n, label in [(str(counts["All"]), "Saved Bids"), (win_rate, "Win Rate"),
+        for n, label in [(str(counts["All"]), "Active Bids"), (win_rate, "Win Rate"),
                           (format_money(won_value), "Won"), (format_money(tracked_value), "Tracked Value")]:
             box = tk.Frame(stats_row, bg=CARD, padx=14, pady=10)
             box.pack(side="left", fill="x", expand=True, padx=(0, 8))
