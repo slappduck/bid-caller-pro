@@ -984,9 +984,24 @@ def _score_bid(bid):
 
 def _apply_deadline_status(bid):
     """Force status to Closed if the stated deadline has already passed.
-    Bids with no parseable deadline are left as-is (can't verify either way)."""
-    d = _parse_deadline(bid.get("deadline"))
-    if d and d < datetime.datetime.now().date():
+
+    A full date is checked first. If the deadline text doesn't match any
+    known date format (e.g. "FY2024", a stale notice reused from a prior
+    year, or other free-text the AI didn't clean up despite instructions),
+    fall back to a bare 4-digit year: a deadline field naming a year strictly
+    before the current one means this is almost certainly a stale/expired
+    listing, not a genuinely open bid, and got missed by the earlier version
+    of this check (its own docstring used to say unparseable deadlines were
+    "left as-is" -- which is exactly how old bids were slipping through as
+    apparently active)."""
+    deadline_text = bid.get("deadline")
+    d = _parse_deadline(deadline_text)
+    if d:
+        if d < datetime.datetime.now().date():
+            bid["status"] = "Closed"
+        return bid
+    m = re.search(r"(?<!\d)(20\d{2})(?!\d)", str(deadline_text or ""))
+    if m and int(m.group(1)) < datetime.datetime.now().year:
         bid["status"] = "Closed"
     return bid
 
