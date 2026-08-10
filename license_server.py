@@ -85,7 +85,25 @@ CORS(app, resources={r"/*": {"origins": [
 
 # ── Secrets ──
 LICENSE_SECRET = os.environ.get("LICENSE_SECRET", "CHANGE_THIS_LONG_RANDOM_SECRET")
-ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "CHANGE_THIS_ADMIN_TOKEN")
+_ADMIN_TOKEN_PLACEHOLDER = "CHANGE_THIS_ADMIN_TOKEN"
+ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", _ADMIN_TOKEN_PLACEHOLDER)
+
+
+def _admin_configured():
+    """False when ADMIN_TOKEN was never set to a real value.
+
+    The fallback above is a literal published in this public repo, so treating
+    it as a valid password would let anyone who reads the source mint
+    themselves unlimited licence keys through /issue. An unset or still-default
+    token disables the admin endpoints entirely rather than leaving them open.
+    """
+    return bool(ADMIN_TOKEN) and ADMIN_TOKEN != _ADMIN_TOKEN_PLACEHOLDER
+
+
+def _admin_ok(supplied):
+    """Constant-time admin token check. Compare with hmac, never ==, so the
+    response time can't be used to guess the token a character at a time."""
+    return _admin_configured() and hmac.compare_digest(supplied or "", ADMIN_TOKEN)
 TRIAL_DAYS = 7
 
 # ── Persistence ──────────────────────────────────────────────────────────
@@ -282,7 +300,9 @@ def trial():
 @app.route("/issue", methods=["POST"])
 def issue():
     data = request.get_json(force=True, silent=True) or {}
-    if not hmac.compare_digest(data.get("admin_token") or "", ADMIN_TOKEN):
+    if not _admin_configured():
+        return jsonify({"ok": False, "reason": "admin_not_configured"}), 503
+    if not _admin_ok(data.get("admin_token")):
         return jsonify({"ok": False, "reason": "unauthorized"}), 401
     plan = data.get("plan", "monthly")
     months = 12 if plan == "annual" else int(data.get("months", 1))
@@ -299,7 +319,9 @@ def issue():
 @app.route("/revoke", methods=["POST"])
 def revoke():
     data = request.get_json(force=True, silent=True) or {}
-    if not hmac.compare_digest(data.get("admin_token") or "", ADMIN_TOKEN):
+    if not _admin_configured():
+        return jsonify({"ok": False, "reason": "admin_not_configured"}), 503
+    if not _admin_ok(data.get("admin_token")):
         return jsonify({"ok": False, "reason": "unauthorized"}), 401
     key = (data.get("key") or "").strip().upper()
     db = _db()
@@ -734,16 +756,35 @@ def stripe_webhook():
 
 @app.route("/mykey", methods=["POST"])
 def mykey():
-    """App calls this with its device id to auto-unlock after a purchase."""
+    """App calls this to auto-unlock after a purchase.
+
+    Resolves by device id first, then by the signed-in account's email. The
+    email path matters because a checkout started from the marketing site
+    carries no device id at all -- those Stripe links can't know one -- so the
+    webhook recorded no device mapping and this endpoint always answered
+    "no_key". The buyer's Account tab then showed "Trial expired, subscribe
+    below" to someone who had just paid, which invites a second subscription.
+    It also covers paying on a laptop and then signing in on a phone.
+    """
     data = request.get_json(force=True, silent=True) or {}
     device = (data.get("device_id") or "").strip()
     db = _db()
-    key = db.get("devices", {}).get(device)
+    key = db.get("devices", {}).get(device) if device else None
+    matched_by_email = False
+    if not key:
+        email = _verify_supabase_token(data.get("supabase_token", ""))
+        if email:
+            key = db.get("emails", {}).get(email.lower())
+            matched_by_email = bool(key)
     if not key:
         return jsonify({"ok": False, "reason": "no_key"})
     valid, plan, exp, _ = verify_key(key)
     if not valid or key in db.get("revoked", []):
         return jsonify({"ok": False, "reason": "inactive"})
+    if matched_by_email and device:
+        # Remember the device so later calls take the fast path.
+        db.setdefault("devices", {})[device] = key
+        _save_db(db)
     return jsonify({"ok": True, "key": key, "plan": plan, "expires": exp[:10]})
 
 
@@ -781,9 +822,18 @@ def support():
 
 @app.route("/claim", methods=["POST"])
 def claim():
-    """Restore a purchase on a new device using the buyer's email."""
+    """Restore a purchase on a new device, for the signed-in account.
+
+    The email is taken from a verified Supabase token, never from the request
+    body. It used to be read straight out of the body, which meant anyone who
+    knew (or guessed) a customer's email address could POST it here and be
+    handed that customer's working licence key, bound to their own device --
+    an email address is not a secret and nothing else was being checked.
+    """
     data = request.get_json(force=True, silent=True) or {}
-    email = (data.get("email") or "").strip().lower()
+    email = (_verify_supabase_token(data.get("supabase_token", "")) or "").strip().lower()
+    if not email:
+        return jsonify({"ok": False, "reason": "signin_required"}), 403
     device = (data.get("device_id") or "").strip()
     db = _db()
     key = db.get("emails", {}).get(email)
@@ -802,7 +852,11 @@ def claim():
 def admin_list():
     """Admin dashboard data: trials, issued keys, counts."""
     data = request.get_json(force=True, silent=True) or {}
-    if data.get("admin_token") != ADMIN_TOKEN:
+    # Was a plain != comparison: timing-unsafe, and the fix applied to
+    # /issue and /revoke never reached here.
+    if not _admin_configured():
+        return jsonify({"ok": False, "reason": "admin_not_configured"}), 503
+    if not _admin_ok(data.get("admin_token")):
         return jsonify({"ok": False, "reason": "unauthorized"}), 401
     db = _db()
     now = datetime.datetime.now()

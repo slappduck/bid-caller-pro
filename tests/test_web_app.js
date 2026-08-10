@@ -411,7 +411,52 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
-  // ── 6. Saved-search throttling ──
+  // ── 6. Landing-page checkout links carry the device id ──
+  // The Stripe webhook records client_reference_id as the buyer's device, and
+  // the app asks /mykey for the key belonging to its device. Without the tag,
+  // a subscription bought from the marketing page left the buyer looking at a
+  // "trial expired, subscribe" screen.
+  console.log("\nLanding-page checkout links are tagged with the device id");
+  {
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const host = new URL(route.request().url()).hostname;
+      if (host.endsWith("fonts.googleapis.com") || host.endsWith("fonts.gstatic.com")) {
+        return route.abort();
+      }
+      return route.continue();
+    });
+
+    // Arrive at the marketing page first, as a new visitor would.
+    await page.goto(`${BASE}/index.html`, { waitUntil: "load" });
+    await page.waitForTimeout(500);
+
+    const links = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('a[href*="buy.stripe.com"]'))
+        .map((a) => a.getAttribute("href")));
+    const landingId = await page.evaluate(() => JSON.parse(localStorage.getItem("device_id")));
+
+    check("stripe links exist on the landing page", links.length >= 2, String(links.length));
+    check("every checkout link carries a client_reference_id",
+      links.length > 0 && links.every((h) => h.includes("client_reference_id=")),
+      links.join(" | "));
+    check("the id is stored under the key app.html uses", typeof landingId === "string" && !!landingId,
+      String(landingId));
+
+    // The app must then adopt that same id, not mint a second one.
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(800);
+    const appId = await page.evaluate(() => deviceId());
+    check("the app reuses the landing page's device id", appId === landingId,
+      `${landingId} vs ${appId}`);
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
+  // ── 7. Saved-search throttling ──
   console.log("\nSaved searches are not re-scanned on every app open");
   {
     async function openWith(checkedAt) {

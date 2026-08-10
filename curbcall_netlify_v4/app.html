@@ -1244,15 +1244,30 @@ async function getSupabaseToken(){
 }
 
 // ── Auto-unlock after Stripe payment ──
+let lastUnlockCheck=0;
 async function autoUnlock(){
   if(licenseKey())return;
+  if(isOffline())return;
+  // This runs on every visibilitychange, which on a phone means every single
+  // app switch \u2014 previously one un-timed request to a sleeping free-tier
+  // backend each time. A purchase doesn't need to be noticed faster than this.
+  if(Date.now()-lastUnlockCheck<5*60*1000)return;
+  lastUnlockCheck=Date.now();
   try{
-    const r=await fetch(SERVER+"/mykey",{
+    // The token lets the server match a purchase made from the marketing site
+    // (whose Stripe links carry no device id) or on a different device.
+    const token=await getSupabaseToken();
+    const r=await fetchWithTimeout(SERVER+"/mykey",{
       method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({device_id:deviceId()})
-    });
+      body:JSON.stringify({device_id:deviceId(),supabase_token:token})
+    },30000);
     const d=await r.json();
-    if(d.ok&&d.key){store.set("license_key",d.key);toast("Unlocked \u2014 thanks for subscribing!");}
+    if(d.ok&&d.key){
+      store.set("license_key",d.key);
+      toast("Unlocked \u2014 thanks for subscribing!");
+      // The Account tab may be showing a stale "trial expired" card.
+      if(document.getElementById("screen-account").classList.contains("active"))renderAccount();
+    }
   }catch{}
 }
 
