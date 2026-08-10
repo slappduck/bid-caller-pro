@@ -462,6 +462,34 @@ let saved=store.get("saved",{});
 let pipeline=store.get("pipeline",{}); // bid id -> "submitted"|"won"|"lost"|"passed"
 let notes=store.get("notes",{}); // bid id -> freeform text, private/local only
 let companyProfile=store.get("company_profile",{}); // used to personalize AI proposal drafts
+
+// Re-keys locally stored bids from the old truncated-text id to the hashed one
+// (see bidId). Runs once; without it, everything a user had already starred,
+// noted, or marked Submitted would look like it belonged to nothing.
+// Rows pulled down from Supabase are already keyed the desktop way, so keys
+// that are already a 12-char hash are left exactly as they are.
+function migrateBidIds(){
+  if(store.get("bid_id_scheme","")==="md5")return;
+  const remap={};
+  const note=(city,b)=>{
+    if(!b)return;
+    const from=legacyBidId(city||"",b),to=bidId(city||"",b);
+    if(from!==to)remap[from]=to;
+  };
+  for(const c in bidData)(bidData[c]||[]).forEach(b=>note(c,b));
+  for(const id in saved)note(saved[id]&&saved[id]._city,saved[id]);
+  const alreadyHashed=(k)=>/^[0-9a-f]{12}$/.test(k);
+  const rekey=(obj)=>{
+    const out={};
+    for(const k in obj)out[alreadyHashed(k)?k:(remap[k]||k)]=obj[k];
+    return out;
+  };
+  saved=rekey(saved);pipeline=rekey(pipeline);notes=rekey(notes);
+  store.set("saved",saved);store.set("pipeline",pipeline);store.set("notes",notes);
+  store.set("bid_id_scheme","md5");
+}
+migrateBidIds();
+
 let cityFilter="All";
 let pipelineFilter="All";
 let currentUser=null;
@@ -503,19 +531,34 @@ async function syncPullSavedBids(){
   if(!sb||!currentUser)return;
   const{data,error}=await sb.from("saved_bids").select("*");
   if(error||!data)return; // couldn't reach the cloud — leave local data alone
-  const cloudIds=new Set(data.map(r=>r.bid_id));
-  const localOnlyIds=Object.keys(saved).filter(id=>!cloudIds.has(id));
+  // A row's stored bid_id is not trusted — it is recomputed from the row's own
+  // content. Rows written by older versions of this web app carry the old
+  // truncated-text id, and taking them at face value would undo the local
+  // migration on every sync and leave those bids permanently unmatchable
+  // against the feed. Recomputing also repairs the cloud copy: the row is
+  // re-pushed under the correct id and the stale one deleted, so the two apps
+  // converge on one key per bid instead of accumulating duplicates.
+  const stale=[];
+  const cloudIds=new Set();
   data.forEach(row=>{
-    saved[row.bid_id]={
+    const id=bidId(row.city||"",{title:row.title,scope:row.scope});
+    cloudIds.add(id);
+    if(row.bid_id&&row.bid_id!==id)stale.push({old:row.bid_id,id});
+    saved[id]={
       title:row.title,scope:row.scope,value:row.value,deadline:row.deadline,
       contact:row.contact,email:row.email,phone:row.phone,url:row.url,
       status:row.status,_city:row.city,saved_at:row.saved_at,
     };
-    if(row.pipeline)pipeline[row.bid_id]=row.pipeline;else delete pipeline[row.bid_id];
-    if(row.note)notes[row.bid_id]=row.note;else delete notes[row.bid_id];
+    if(row.pipeline)pipeline[id]=row.pipeline;else delete pipeline[id];
+    if(row.note)notes[id]=row.note;else delete notes[id];
   });
+  const localOnlyIds=Object.keys(saved).filter(id=>!cloudIds.has(id));
   store.set("saved",saved);store.set("pipeline",pipeline);store.set("notes",notes);
   for(const id of localOnlyIds)await pushSavedBid(id,saved[id]._city);
+  for(const s of stale){
+    await pushSavedBid(s.id,saved[s.id]&&saved[s.id]._city);
+    await deleteSavedBidCloud(s.old);
+  }
   if(document.getElementById("screen-feed").classList.contains("active"))renderFeed();
   if(document.getElementById("screen-saved").classList.contains("active"))renderSaved();
 }
@@ -1185,15 +1228,52 @@ scanBtn.onclick=runScan;
 document.getElementById("detect-btn").onclick=()=>detectLocation(true);
 document.getElementById("loc-input").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();runScan();}});
 
+// Deadlines on real bid pages are rarely a bare date — "Due by 12/01/2026 at
+// 2:00 PM", "Bids due December 1, 2026 at 2:00 p.m.". Matching only an ISO
+// date and otherwise handing the whole string to new Date() failed on all of
+// those, which cost the card its "3d left" urgency chip, broke deadline
+// sorting, and made Add to Calendar refuse. Pull the date out of the prose
+// first. Mirrors _parse_deadline() in license_server.py.
+const _MONTH_WORDS="January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sept|Sep|Oct|Nov|Dec";
+const DEADLINE_PATTERNS=[
+  /\d{4}-\d{2}-\d{2}/,
+  /\d{1,2}\/\d{1,2}\/\d{4}/,
+  /\d{1,2}-\d{1,2}-\d{4}/,
+  new RegExp("(?:"+_MONTH_WORDS+")\\.?\\s+\\d{1,2},?\\s+\\d{4}","i"),
+  /\d{1,2}\/\d{1,2}\/\d{2}(?!\d)/,
+];
+function deadlineDate(b){
+  const raw=b&&b.deadline;
+  if(!raw)return null;
+  const t=String(raw).replace(/\s+/g," ").trim();
+  // No lookbehind anywhere in here on purpose: a regex literal is compiled
+  // when the script is parsed, so one unsupported construct would take the
+  // whole app down on older iOS Safari rather than just failing this parse.
+  const tryParse=(s,stripDots)=>{
+    // A bare ISO date is parsed as UTC by JS; pin it to local midnight so a
+    // deadline never reads as a day early west of Greenwich.
+    const d=/^\d{4}-\d{2}-\d{2}$/.test(s)?new Date(s+"T00:00:00")
+                                         :new Date(stripDots?s.replace(/\./g,""):s);
+    if(isNaN(d.getTime()))return null;
+    d.setHours(0,0,0,0);
+    return d;
+  };
+  for(const pat of DEADLINE_PATTERNS){
+    const m=t.match(pat);
+    if(!m)continue;
+    // Dots are only stripped from the matched date itself ("Sept. 1, 2026"),
+    // never from the surrounding sentence.
+    const hit=tryParse(m[0].replace(/\bSept\b/i,"Sep"),true);
+    if(hit)return hit;
+  }
+  return /\d/.test(t)?tryParse(t,false):null;
+}
 // A bid is only "open" if the server says so AND its deadline (if any) hasn't
 // already passed — some source pages leave old bids up without ever marking
 // them closed, so we double-check the date ourselves.
 function isPastDeadline(b){
-  const d=b.deadline;
-  if(!d)return false;
-  const m=String(d).match(/\d{4}-\d{2}-\d{2}/);
-  const t=m?new Date(m[0]+"T00:00:00"):new Date(d);
-  if(isNaN(t.getTime()))return false;
+  const t=deadlineDate(b);
+  if(!t)return false;
   const today=new Date();today.setHours(0,0,0,0);
   return t<today;
 }
@@ -1204,11 +1284,8 @@ function isOpen(b){
 // Days remaining until deadline (null if unknown/unparseable) — used to
 // color-code bid cards so the ones closing soonest visually pop out.
 function daysUntil(b){
-  const d=b.deadline;
-  if(!d)return null;
-  const m=String(d).match(/\d{4}-\d{2}-\d{2}/);
-  const t=m?new Date(m[0]+"T00:00:00"):new Date(d);
-  if(isNaN(t.getTime()))return null;
+  const t=deadlineDate(b);
+  if(!t)return null;
   const today=new Date();today.setHours(0,0,0,0);
   return Math.round((t-today)/86400000);
 }
@@ -1379,7 +1456,9 @@ const upcomingBtn=document.getElementById("upcoming-btn");
 upcomingBtn.onclick=runUpcoming;
 document.getElementById("up-loc-input").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();runUpcoming();}});
 
-function upcomingId(city,b){return(city+(b.title||"")+(b.scope||"")).replace(/\s/g,"").slice(0,40);}
+// Same hashing as bidId, and the same reason: matches app.py's upcoming_id
+// and stops two projects with long, similar titles deduping into one.
+function upcomingId(city,b){return md5(String(city)+(b.title||"")+(b.scope||"")).slice(0,12);}
 
 async function runUpcoming(){
   if(upcomingBtn.disabled)return; // guard against double-tap / double-submit
@@ -1652,7 +1731,61 @@ function exportLeadsCSV(rows){
 document.getElementById("export-leads-btn").onclick=()=>exportLeadsCSV(lastLeadsRows);
 
 // ── Bid helpers ──
-function bidId(city,b){return(city+(b.title||"")+(b.scope||"")).replace(/\s/g,"").slice(0,40);}
+// MD5, byte-for-byte compatible with Python's hashlib.md5, because the bid id
+// below has to match the desktop app's exactly (app.py: bid_id / upcoming_id).
+// SubtleCrypto can't help here — it has no MD5, and it's async, while ids are
+// needed synchronously all through rendering.
+function md5(input){
+  const bytes=Array.from(new TextEncoder().encode(input));
+  const bits=bytes.length*8;
+  bytes.push(0x80);
+  while(bytes.length%64!==56)bytes.push(0);
+  const lo=bits>>>0,hi=Math.floor(bits/4294967296)>>>0;
+  bytes.push(lo&255,(lo>>>8)&255,(lo>>>16)&255,(lo>>>24)&255,
+             hi&255,(hi>>>8)&255,(hi>>>16)&255,(hi>>>24)&255);
+  const S=[7,12,17,22,7,12,17,22,7,12,17,22,7,12,17,22,
+           5,9,14,20,5,9,14,20,5,9,14,20,5,9,14,20,
+           4,11,16,23,4,11,16,23,4,11,16,23,4,11,16,23,
+           6,10,15,21,6,10,15,21,6,10,15,21,6,10,15,21];
+  const K=[];
+  for(let i=0;i<64;i++)K[i]=Math.floor(Math.abs(Math.sin(i+1))*4294967296)>>>0;
+  let a0=0x67452301,b0=0xefcdab89,c0=0x98badcfe,d0=0x10325476;
+  const rotl=(x,c)=>((x<<c)|(x>>>(32-c)))>>>0;
+  for(let off=0;off<bytes.length;off+=64){
+    const M=[];
+    for(let j=0;j<16;j++){
+      M[j]=((bytes[off+j*4])|(bytes[off+j*4+1]<<8)|
+            (bytes[off+j*4+2]<<16)|(bytes[off+j*4+3]<<24))>>>0;
+    }
+    let A=a0,B=b0,C=c0,D=d0;
+    for(let i=0;i<64;i++){
+      let F,g;
+      if(i<16){F=(B&C)|(~B&D);g=i;}
+      else if(i<32){F=(D&B)|(~D&C);g=(5*i+1)%16;}
+      else if(i<48){F=B^C^D;g=(3*i+5)%16;}
+      else{F=C^(B|~D);g=(7*i)%16;}
+      F=(F+A+K[i]+M[g])>>>0;
+      A=D;D=C;C=B;
+      B=(B+rotl(F,S[i]))>>>0;
+    }
+    a0=(a0+A)>>>0;b0=(b0+B)>>>0;c0=(c0+C)>>>0;d0=(d0+D)>>>0;
+  }
+  const hex=(n)=>{let s="";for(let i=0;i<4;i++)s+=((n>>>(i*8))&255).toString(16).padStart(2,"0");return s;};
+  return hex(a0)+hex(b0)+hex(c0)+hex(d0);
+}
+
+// An id used to be the city + title + scope text with spaces stripped, cut to
+// 40 characters. That was wrong twice over:
+//   * 40 characters isn't enough to tell bids apart. "…Sidewalk Replacement
+//     Project Phase 1" and "Phase 2" produced the SAME id, so starring one
+//     starred the other and their notes and pipeline status ran together.
+//   * it didn't match the desktop app's id for the same bid, so a bid saved on
+//     the desktop synced into saved_bids under one key and the web app looked
+//     it up under another — the star never showed as saved across devices and
+//     saving again wrote a duplicate row.
+// Hashing the same three fields the way app.py does fixes both at once.
+function bidId(city,b){return md5(String(city)+(b.title||"")+(b.scope||"")).slice(0,12);}
+function legacyBidId(city,b){return(city+(b.title||"")+(b.scope||"")).replace(/\s/g,"").slice(0,40);}
 // Pulls a rough dollar figure out of a value string like "$310k" or "$1.2M"
 // so it can be sorted/summed. -1 means "couldn't parse / not listed".
 function parseValue(v){
@@ -1891,9 +2024,13 @@ window.shareBid=async function(city,id){
 };
 // Builds a minimal .ics file for a bid's deadline so it can be dropped
 // straight into Google/Apple/Outlook calendar — no backend needed.
+// Uses the shared prose-aware parser, so Add to Calendar works on the many
+// bids whose deadline isn't written as a bare ISO date.
 function icsDate(dateStr){
-  const m=String(dateStr||"").match(/\d{4}-\d{2}-\d{2}/);
-  return m?m[0].replace(/-/g,""):null;
+  const d=deadlineDate({deadline:dateStr});
+  if(!d)return null;
+  const pad=(n)=>String(n).padStart(2,"0");
+  return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
 }
 function icsEscape(s){return String(s||"").replace(/([,;])/g,"\\$1").replace(/\n/g,"\\n");}
 window.addToCalendar=function(city,id){

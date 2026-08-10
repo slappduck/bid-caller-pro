@@ -940,19 +940,48 @@ _DEADLINE_FORMATS = (
 )
 
 
+# Date shapes to pull out of surrounding prose. Ordered longest-first within a
+# family so "12/01/2026" isn't mistaken for a 2-digit year.
+_MONTH_WORDS = ("January|February|March|April|May|June|July|August|September|"
+                "October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sept|Sep|Oct|Nov|Dec")
+_DATE_PATTERNS = (
+    re.compile(r"\d{4}-\d{2}-\d{2}"),
+    re.compile(r"\d{1,2}/\d{1,2}/\d{4}"),
+    re.compile(r"\d{1,2}-\d{1,2}-\d{4}"),
+    re.compile(rf"(?:{_MONTH_WORDS})\.?\s+\d{{1,2}},?\s+\d{{4}}", re.I),
+    re.compile(r"\d{1,2}/\d{1,2}/\d{2}(?!\d)"),
+)
+
+
 def _parse_deadline(text):
-    """Best-effort parse of a free-text deadline into a date. None if unparseable."""
+    """Best-effort parse of a free-text deadline into a date. None if unparseable.
+
+    Deadlines on real bid pages are almost never a bare date -- they read
+    "Due by 12/01/2026 at 2:00 PM", "Bids due December 1, 2026 at 2:00 p.m.",
+    "Thursday, December 1, 2026". Parsing only the whole string missed every
+    one of those, and the miss was expensive in two directions: the bid lost
+    its entire deadline-urgency score (a job due in 3 days ranked like one with
+    no deadline at all), and _apply_deadline_status could not tell that an
+    expired listing had expired, so it kept showing as open. So find the date
+    inside the text first, then parse that.
+    """
     if not text:
         return None
-    t = str(text).strip()
-    m = re.search(r"\d{4}-\d{2}-\d{2}", t)
-    if m:
-        t = m.group(0)
-    for fmt in _DEADLINE_FORMATS:
-        try:
-            return datetime.datetime.strptime(t, fmt).date()
-        except ValueError:
-            continue
+    t = " ".join(str(text).split())
+    candidates = []
+    for pat in _DATE_PATTERNS:
+        m = pat.search(t)
+        if m:
+            candidates.append(m.group(0))
+    candidates.append(t)  # whole string, for anything the patterns don't cover
+    for cand in candidates:
+        # "Sept." -> "Sep" so %b matches; drop trailing punctuation.
+        cand = re.sub(r"(?i)\bsept\b", "Sep", cand).replace(".", "").strip().strip(",")
+        for fmt in _DEADLINE_FORMATS:
+            try:
+                return datetime.datetime.strptime(cand, fmt).date()
+            except ValueError:
+                continue
     return None
 
 
@@ -1066,18 +1095,39 @@ def _resolve_center(location):
     return None
 
 
+GEO_MISS_RETRY_HOURS = 24
+
+
 def _city_coords(city, state, db):
-    """Geocode a (city, state) to [lat, lon], cached in the JSON db."""
+    """Geocode a (city, state) to [lat, lon], cached in the JSON db.
+
+    Failures are only remembered briefly. They used to be stored as a plain
+    None and returned forever after, so a single transient geocoder outage
+    permanently blacklisted that city: every later scan looked it up, got the
+    cached None, and silently dropped every bid there. A legacy None counts as
+    an expired miss, so caches already poisoned that way heal on next scan.
+    """
     if not city or not state:
         return None
     gc = db.setdefault("geo_cache", {})
     k = f"{city.lower()}|{state.upper()}"
-    if k in gc:
-        return gc[k]
+    hit = gc.get(k)
+    if isinstance(hit, list):
+        return hit
+    if isinstance(hit, dict):
+        try:
+            missed_at = datetime.datetime.fromisoformat(hit.get("missed_at", ""))
+        except (TypeError, ValueError):
+            missed_at = None
+        if missed_at and (datetime.datetime.now() - missed_at).total_seconds() \
+                < GEO_MISS_RETRY_HOURS * 3600:
+            return None
     g = _geo_from_city(city, state)
-    coords = [g["lat"], g["lon"]] if g else None
-    gc[k] = coords
-    return coords
+    if not g:
+        gc[k] = {"missed_at": datetime.datetime.now().isoformat()}
+        return None
+    gc[k] = [g["lat"], g["lon"]]
+    return gc[k]
 
 
 # ═══════════════════════════════════════════════════════════
@@ -1349,6 +1399,9 @@ def _normalize_opp(opp):
     poc = poc_list[0] if poc_list else {}
     pop = opp.get("placeOfPerformance") or {}
     city = ((pop.get("city") or {}).get("name")) or ""
+    # SAM states the performance state outright; pass it along so the bid is
+    # geocoded against that rather than assumed to be in the centre's state.
+    perf_state = (((pop.get("state") or {}).get("code")) or "").upper()
     deadline = (opp.get("responseDeadLine") or "")[:10]
     is_open = (opp.get("active") or "").strip().lower() == "yes"
     agency = opp.get("fullParentPathName") or opp.get("organizationName") or ""
@@ -1365,7 +1418,7 @@ def _normalize_opp(opp):
         "url": opp.get("uiLink") or "",
     }
     _apply_deadline_status(bid)
-    return bid, city
+    return bid, city, perf_state
 
 
 # ═══════════════════════════════════════════════════════════
@@ -1551,7 +1604,7 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
                 if isinstance(b, dict):
                     b.setdefault("url", url)
                     _place_bid(grouped, b, center, radius, cdb, default_city=default_city,
-                              city_coords=city_coords)
+                              city_coords=city_coords, default_state=state)
     return raw
 
 
@@ -1617,7 +1670,7 @@ def _run_local_queries(queries, ai_label, max_pages, grouped, center, radius, cd
                     b.setdefault("url", it["url"])
                     bid_city = (b.get("city") or default_city or "").split(",")[0].strip()
                     _place_bid(grouped, b, center, radius, cdb, default_city=default_city,
-                              city_coords=city_coords)
+                              city_coords=city_coords, default_state=state)
                     if bid_city and state:
                         bid_portals.learn_portal(pdb, bid_city, state, it["url"])
 
@@ -1627,23 +1680,71 @@ def _run_local_queries(queries, ai_label, max_pages, grouped, center, radius, cd
     return raw[0]
 
 
-def _place_bid(grouped, bid, center, radius, db, default_city="", city_coords=None):
-    """Keep a bid ONLY if its real city geocodes within the radius."""
+def _split_city_state(raw):
+    """'Bentonville, AR' -> ('Bentonville', 'AR'). Bare city -> ('Bentonville', '')."""
+    parts = [p.strip() for p in str(raw or "").split(",")]
+    city = parts[0]
+    state = ""
+    if len(parts) > 1 and parts[1]:
+        cand = parts[1]
+        state = cand.upper() if cand.upper() in STATE_ABBRS \
+            else STATE_NAME_TO_ABBR.get(cand.lower(), "")
+    return city, state
+
+
+def _place_bid(grouped, bid, center, radius, db, default_city="", city_coords=None,
+               default_state=""):
+    """Keep a bid ONLY if its real city geocodes within the radius.
+
+    The city is resolved against the most specific state we have: the one the
+    AI actually stated, else the town whose search produced this bid, else the
+    search centre's. Previously every bid was geocoded against the CENTRE
+    state alone, and the state the AI returned was thrown away by splitting on
+    the comma. Any radius wide enough to cross a state line — which is most of
+    the 75mi and 125mi range, and the whole point of those options — then
+    looked up a real "Bentonville, AR" bid as "Bentonville, MO", found
+    nothing, and dropped it. Out-of-state bids were invisible on exactly the
+    wide scans meant to surface them.
+    """
     if not isinstance(bid, dict):
         return
-    city = (bid.get("city") or default_city or "").split(",")[0].strip()
+    city, stated_state = _split_city_state(bid.get("city") or default_city or "")
     if not city:
         return  # no stated location -> can't verify it's local -> drop
-    coords = _city_coords(city, center["state"], db)
+    # A stated state is taken as final: if the text says Springfield, IL, that
+    # is the Illinois one, and failing to geocode it must drop the bid rather
+    # than fall through to a same-named city in the centre's state. Guessing
+    # there would quietly relocate a bid hundreds of miles and present it as
+    # local, which is worse than missing it. The fallback chain only applies
+    # when no state was stated at all.
+    if stated_state:
+        candidates = [stated_state]
+    else:
+        candidates = [s for s in (default_state, center["state"]) if s]
+    coords, used_state = None, ""
+    tried = []
+    for st in candidates:
+        st = st.upper()
+        if st in tried:
+            continue
+        tried.append(st)
+        coords = _city_coords(city, st, db)
+        if coords:
+            used_state = st
+            break
     if not coords:
-        return  # city not found in this state -> can't verify -> drop
+        return  # can't confirm where this actually is -> drop rather than guess
     if _miles_between(center["lat"], center["lon"], coords[0], coords[1]) > radius:
         return  # outside the chosen radius
     _apply_deadline_status(bid)
     bid.pop("city", None)
-    grouped.setdefault(city, []).append(bid)
+    # Out-of-state towns keep their state in the label, both to disambiguate
+    # same-named cities and because "this one is across the line" is something
+    # a contractor wants to see before driving to look at it.
+    label = city if used_state == center["state"] else f"{city}, {used_state}"
+    grouped.setdefault(label, []).append(bid)
     if city_coords is not None:
-        city_coords[city] = {"lat": coords[0], "lon": coords[1]}
+        city_coords[label] = {"lat": coords[0], "lon": coords[1]}
 
 
 def _perform_scan(location, radius):
@@ -1714,8 +1815,12 @@ def _perform_scan(location, radius):
         # we don't fire too many simultaneous search-engine requests at once
         # (DuckDuckGo in particular will start blocking if hammered).
         def _run_center():
+            # default_city=c, not "": a known portal IS this city's own bid
+            # page, so a bid on it that doesn't restate the city is still that
+            # city's. Defaulting to blank made _place_bid drop those outright,
+            # losing bids from the single most reliable source in the pipeline.
             got = _run_known_portals(c, s, f"{c}, {s}", grouped, center, radius,
-                                      cdb, city_coords, lock, pdb, default_city="")
+                                      cdb, city_coords, lock, pdb, default_city=c)
             got += _run_local_queries(center_queries, f"{c}, {s}", MAX_PAGES,
                                       grouped, center, radius, cdb, city_coords,
                                       seen_urls, lock, pdb, default_city="", state=s)
@@ -1766,9 +1871,9 @@ def _perform_scan(location, radius):
         for opp in (_sam_fetch(center["state"]) or []):
             if not _is_construction(opp):
                 continue
-            bid, city = _normalize_opp(opp)
+            bid, city, perf_state = _normalize_opp(opp)
             _place_bid(grouped, bid, center, radius, cdb, default_city=city,
-                      city_coords=city_coords)
+                      city_coords=city_coords, default_state=perf_state)
 
     for city_bids in grouped.values():
         city_bids.sort(key=_score_bid, reverse=True)

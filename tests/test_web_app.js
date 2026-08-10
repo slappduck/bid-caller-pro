@@ -182,13 +182,115 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     const keys = Object.keys(stored);
     check("clicking Submitted persists the status",
       keys.length === 1 && stored[keys[0]] === "submitted", JSON.stringify(stored));
-    check("the id really does contain an apostrophe", !!keys[0] && keys[0].includes("'"), keys[0]);
+    // The city and title still carry an apostrophe; the id no longer does,
+    // because ids are hashed now. Both halves of the original bug are covered:
+    // hashing keeps quotes out of the id, and the delegated listeners keep the
+    // buttons working regardless of what the text contains.
+    check("the bid's own text still contains the apostrophe",
+      SEED_CITY.includes("'") && SEED_BID.title.includes("'"));
+    check("the id is a clean hash", /^[0-9a-f]{12}$/.test(keys[0] || ""), keys[0]);
     check("save action is wired", (await page.locator('#modal-content [data-act="save"]').count()) === 1);
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+
+    // Deadlines are usually prose, not a bare ISO date. Parsing only ISO cost
+    // the urgency chip, deadline sorting, and Add to Calendar.
+    const deadlines = await page.evaluate(() => {
+      const texts = ["2026-12-01", "12/01/2026", "December 1, 2026",
+                     "Due by 12/01/2026 at 2:00 PM",
+                     "Bids due December 1, 2026 at 2:00 p.m.",
+                     "Thursday, December 1, 2026", "12/01/2026 2:00 PM CST",
+                     "Submit no later than 3:00 PM on 12/1/2026"];
+      return {
+        parsed: texts.filter((t) => deadlineDate({ deadline: t }) !== null).length,
+        total: texts.length,
+        ics: icsDate("Bids due December 1, 2026 at 2:00 p.m."),
+        junk: ["", "TBD", "n/a"].filter((t) => deadlineDate({ deadline: t }) !== null).length,
+      };
+    });
+    check("every realistic deadline format parses",
+      deadlines.parsed === deadlines.total, `${deadlines.parsed}/${deadlines.total}`);
+    check("Add to Calendar works on a prose deadline",
+      deadlines.ics === "20261201", String(deadlines.ics));
+    check("non-dates still parse to nothing", deadlines.junk === 0);
+
+    await ctx.close();
+  }
+
+  // ── 3. Bid ids: collision-free and identical to the desktop app ──
+  console.log("\nBid ids match the desktop scheme and survive migration");
+  {
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const host = new URL(route.request().url()).hostname;
+      if (host.endsWith("supabase.co") || host.endsWith("onrender.com")) return route.abort();
+      return route.continue();
+    });
+
+    // Seed data written by the PREVIOUS id scheme, exactly as a real user's
+    // phone would already have it.
+    const legacy = (city, b) =>
+      (city + (b.title || "") + (b.scope || "")).replace(/\s/g, "").slice(0, 40);
+    const CITY = "Springfield";
+    const P1 = { title: "City of Springfield Sidewalk Replacement Project Phase 1",
+                 scope: "Remove and replace sidewalk on Main St.", status: "open" };
+    const oldId = legacy(CITY, P1);
+
+    // Seeded once only. addInitScript runs on every navigation, so without the
+    // guard the reload below would rewrite the legacy fixture and the
+    // idempotence check would be measuring the fixture, not the migration.
+    await page.addInitScript(({ city, p1, oldId }) => {
+      if (localStorage.getItem("__seeded")) return;
+      localStorage.setItem("__seeded", "1");
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      localStorage.setItem("last_feed", JSON.stringify({ [city]: [p1] }));
+      localStorage.setItem("saved", JSON.stringify({ [oldId]: { ...p1, _city: city } }));
+      localStorage.setItem("pipeline", JSON.stringify({ [oldId]: "submitted" }));
+      localStorage.setItem("notes", JSON.stringify({ [oldId]: "called the city clerk" }));
+    }, { city: CITY, p1: P1, oldId });
+
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(1000);
+
+    const r = await page.evaluate(({ city, p1 }) => {
+      const p2 = { title: "City of Springfield Sidewalk Replacement Project Phase 2",
+                   scope: "Remove and replace sidewalk on Elm St.", status: "open" };
+      return {
+        id1: bidId(city, p1),
+        id2: bidId(city, p2),
+        // Known-good value from Python: md5(city+title+scope)[:12]
+        aurora: bidId("Aurora, MO", { title: "Aurora Sidewalk & ADA Ramp Replacement",
+                                      scope: "1,200 LF sidewalk, 8 ADA ramps" }),
+        saved: JSON.parse(localStorage.getItem("saved")),
+        pipeline: JSON.parse(localStorage.getItem("pipeline")),
+        notes: JSON.parse(localStorage.getItem("notes")),
+      };
+    }, { city: CITY, p1: P1 });
+
+    check("Phase 1 and Phase 2 get different ids", r.id1 !== r.id2, `${r.id1} vs ${r.id2}`);
+    check("id matches the desktop md5 scheme", r.aurora === "b7e81f74ffb3", r.aurora);
+    check("migrated saved bid is re-keyed to the new id",
+      Object.keys(r.saved).length === 1 && Object.keys(r.saved)[0] === r.id1,
+      Object.keys(r.saved).join(","));
+    check("migrated pipeline status follows the bid",
+      r.pipeline[r.id1] === "submitted", JSON.stringify(r.pipeline));
+    check("migrated note follows the bid",
+      r.notes[r.id1] === "called the city clerk", JSON.stringify(r.notes));
+
+    // A second load must not re-run the migration or disturb anything.
+    await page.reload({ waitUntil: "load" });
+    await page.waitForTimeout(800);
+    const after = await page.evaluate(() => JSON.parse(localStorage.getItem("saved")));
+    check("migration is idempotent across reloads",
+      Object.keys(after).length === 1 && Object.keys(after)[0] === r.id1,
+      Object.keys(after).join(","));
     check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
     await ctx.close();
   }
 
-  // ── 3. Saved-search throttling ──
+  // ── 4. Saved-search throttling ──
   console.log("\nSaved searches are not re-scanned on every app open");
   {
     async function openWith(checkedAt) {
