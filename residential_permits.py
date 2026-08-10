@@ -158,6 +158,11 @@ def _classify_lead(contractor_trade, contractor_name):
 # "days": how far back to look by default -- a low-volume source (a small
 # city with a couple of permits a month) needs a much longer window than a
 # high-volume one to reliably return anything at all.
+# "center" is the city's own coordinates, stored rather than geocoded at
+# request time. Callers need them to decide which sources are near enough to a
+# search to be worth reading, and that decision shouldn't depend on a
+# third-party geocoder being reachable — this list is short, static and
+# hand-verified, so the coordinates belong with the rest of the entry.
 SOURCES = {
     ("austin", "TX"): {
         "domain": "data.austintexas.gov",
@@ -166,6 +171,7 @@ SOURCES = {
         "where_extra": "permit_type_desc='Driveway / Sidewalks'",
         "parser": "austin",
         "days": 45,
+        "center": (30.2672, -97.7431),
     },
     ("cambridge", "MA"): {
         "domain": "data.cambridgema.gov",
@@ -174,6 +180,7 @@ SOURCES = {
         "where_extra": None,
         "parser": "cambridge",
         "days": 270,
+        "center": (42.3736, -71.1097),
     },
 }
 

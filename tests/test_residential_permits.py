@@ -176,10 +176,13 @@ class ResidentialLeadsEndpointTests(unittest.TestCase):
 
     _AUSTIN_CENTER = {"lat": 30.2672, "lon": -97.7431, "city": "Austin", "state": "TX"}
 
-    def test_uncovered_city_reports_covered_false_not_a_bare_empty_list(self):
+    # A town ~20mi north of Austin: not itself a configured source, but well
+    # inside a 25mi search of Austin's permit data.
+    _ROUND_ROCK_CENTER = {"lat": 30.5083, "lon": -97.6789, "city": "Round Rock", "state": "TX"}
+
+    def test_area_with_no_source_anywhere_near_reports_covered_false(self):
         with patch("license_server._resolve_center",
                    return_value={"lat": 37.2153, "lon": -93.2982, "city": "Springfield", "state": "MO"}), \
-             patch("license_server.residential_permits.has_source", return_value=False), \
              patch("license_server.residential_permits.fetch_leads") as mock_fetch:
             resp = self.client.post("/residential-leads",
                                     json={"location": "Springfield, MO", "radius": 25})
@@ -193,7 +196,6 @@ class ResidentialLeadsEndpointTests(unittest.TestCase):
         near = {**rp._austin_parser(_SAMPLE_ROW)}  # real Austin, TX coords
         far = {**near, "permit_id": "far-one", "lat": 40.7128, "lon": -74.0060}  # NYC
         with patch("license_server._resolve_center", return_value=self._AUSTIN_CENTER), \
-             patch("license_server.residential_permits.has_source", return_value=True), \
              patch("license_server.residential_permits.fetch_leads", return_value=[near, far]):
             resp = self.client.post("/residential-leads",
                                     json={"location": "Austin, TX", "radius": 25})
@@ -202,6 +204,60 @@ class ResidentialLeadsEndpointTests(unittest.TestCase):
         ids = [l["permit_id"] for l in d["leads"]]
         self.assertIn(near["permit_id"], ids)
         self.assertNotIn("far-one", ids)
+
+    def test_a_nearby_town_is_covered_by_its_neighbours_source(self):
+        """Searching from a suburb used to report "not set up for your area
+        yet" even though the covered city's permits were inside the radius."""
+        near = {**rp._austin_parser(_SAMPLE_ROW)}
+        with patch("license_server._resolve_center", return_value=self._ROUND_ROCK_CENTER), \
+             patch("license_server.residential_permits.fetch_leads",
+                   return_value=[near]) as mock_fetch:
+            resp = self.client.post("/residential-leads",
+                                    json={"location": "Round Rock, TX", "radius": 25})
+            mock_fetch.assert_called_once_with("austin", "TX")
+        d = resp.get_json()
+        self.assertTrue(d["covered"])
+        self.assertEqual([l["permit_id"] for l in d["leads"]], [near["permit_id"]])
+
+    def test_source_selection_needs_no_geocoder(self):
+        # Source coordinates ship with the registry, so an unreachable
+        # geocoder must not make coverage collapse to nothing.
+        with patch("license_server._resolve_center", return_value=self._AUSTIN_CENTER), \
+             patch("license_server._geo_from_city", side_effect=AssertionError("geocoded!")), \
+             patch("license_server.residential_permits.fetch_leads", return_value=[]):
+            resp = self.client.post("/residential-leads",
+                                    json={"location": "Austin, TX", "radius": 25})
+        self.assertTrue(resp.get_json()["covered"])
+
+    def test_a_zip_geocode_blip_is_not_cached_forever(self):
+        """The ZIP cache used to store None on failure and reuse it forever.
+        Here the failure keeps the lead, so one blip meant that ZIP's leads
+        stopped being distance-checked at all — out-of-radius leads shown
+        permanently."""
+        cdb = {"zip_geo_cache": {"78701": None}}  # poisoned by the old code
+        lead = {"zip": "78701", "lat": None, "lon": None}
+        far_center = {"lat": 40.7128, "lon": -74.0060, "city": "New York", "state": "NY"}
+        with patch("license_server._geo_from_zip",
+                   return_value={"lat": 30.2672, "lon": -97.7431}):
+            inside = ls._lead_within_radius(lead, far_center, 25, cdb)
+        self.assertFalse(inside, "a legacy None should be retried, not trusted")
+        self.assertEqual(cdb["zip_geo_cache"]["78701"], [30.2672, -97.7431])
+
+    def test_a_zip_that_really_cannot_be_resolved_keeps_the_lead(self):
+        cdb = {}
+        lead = {"zip": "00000", "lat": None, "lon": None}
+        far_center = {"lat": 40.7128, "lon": -74.0060, "city": "New York", "state": "NY"}
+        with patch("license_server._geo_from_zip", return_value=None):
+            self.assertTrue(ls._lead_within_radius(lead, far_center, 25, cdb))
+
+    def test_a_tiny_radius_far_from_any_source_is_not_covered(self):
+        far_from_austin = {"lat": 32.7767, "lon": -96.7970, "city": "Dallas", "state": "TX"}
+        with patch("license_server._resolve_center", return_value=far_from_austin), \
+             patch("license_server.residential_permits.fetch_leads") as mock_fetch:
+            resp = self.client.post("/residential-leads",
+                                    json={"location": "Dallas, TX", "radius": 25})
+            mock_fetch.assert_not_called()
+        self.assertFalse(resp.get_json()["covered"])
 
 
 if __name__ == "__main__":

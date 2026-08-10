@@ -1314,20 +1314,17 @@ def _resolve_center(location):
 GEO_MISS_RETRY_HOURS = 24
 
 
-def _city_coords(city, state, db):
-    """Geocode a (city, state) to [lat, lon], cached in the JSON db.
+def _cached_point(cache, key, fetch):
+    """Look up a [lat, lon] in `cache`, calling `fetch()` on a miss.
 
-    Failures are only remembered briefly. They used to be stored as a plain
-    None and returned forever after, so a single transient geocoder outage
-    permanently blacklisted that city: every later scan looked it up, got the
-    cached None, and silently dropped every bid there. A legacy None counts as
-    an expired miss, so caches already poisoned that way heal on next scan.
+    Failures are remembered only briefly, and a legacy bare None counts as an
+    already-expired miss so previously poisoned caches heal by themselves.
+    Caching a miss forever is how one transient geocoder outage used to change
+    results permanently — for a city, bids there were dropped from every later
+    scan; for a ZIP, leads there stopped being distance-checked at all. One
+    helper for both so a third copy can't drift off on its own.
     """
-    if not city or not state:
-        return None
-    gc = db.setdefault("geo_cache", {})
-    k = f"{city.lower()}|{state.upper()}"
-    hit = gc.get(k)
+    hit = cache.get(key)
     if isinstance(hit, list):
         return hit
     if isinstance(hit, dict):
@@ -1338,12 +1335,25 @@ def _city_coords(city, state, db):
         if missed_at and (datetime.datetime.now() - missed_at).total_seconds() \
                 < GEO_MISS_RETRY_HOURS * 3600:
             return None
-    g = _geo_from_city(city, state)
-    if not g:
-        gc[k] = {"missed_at": datetime.datetime.now().isoformat()}
+    point = fetch()
+    if not point:
+        cache[key] = {"missed_at": datetime.datetime.now().isoformat()}
         return None
-    gc[k] = [g["lat"], g["lon"]]
-    return gc[k]
+    cache[key] = [point[0], point[1]]
+    return cache[key]
+
+
+def _city_coords(city, state, db):
+    """Geocode a (city, state) to [lat, lon], cached in the JSON db."""
+    if not city or not state:
+        return None
+
+    def _fetch():
+        g = _geo_from_city(city, state)
+        return (g["lat"], g["lon"]) if g else None
+
+    return _cached_point(db.setdefault("geo_cache", {}),
+                         f"{city.lower()}|{state.upper()}", _fetch)
 
 
 # ═══════════════════════════════════════════════════════════
@@ -1507,6 +1517,8 @@ def _parse_ddg(html):
 _ddg_lock = threading.Lock()
 _ddg_fail_streak = 0
 DDG_TRIP_THRESHOLD = 8
+# Pause between consecutive scraped searches, to stay unobtrusive.
+DDG_QUERY_PAUSE = float(os.environ.get("SCAN_DDG_PAUSE", "0.5"))
 
 
 def _ddg_note_result(found):
@@ -1914,7 +1926,8 @@ def _run_local_queries(queries, ai_label, max_pages, grouped, center, radius, cd
 
     for q in queries:
         results = _tavily_search(q, max_results=6) if TAVILY_API_KEY else []
-        if not results:
+        used_ddg = not results
+        if used_ddg:
             results = _ddg_search(q)
         for r in results:
             with lock:
@@ -1922,7 +1935,13 @@ def _run_local_queries(queries, ai_label, max_pages, grouped, center, radius, cd
                     continue
                 seen_urls.add(r["url"])
             items.append(r)
-        time.sleep(0.4)
+        # The pause exists to avoid hammering DuckDuckGo, which is scraped and
+        # will start blocking. It used to run after every query regardless, so
+        # with Tavily configured — where DDG is never even called — it was
+        # several seconds of pure dead time per town, on an endpoint already
+        # pushing against the client's timeout.
+        if used_ddg:
+            time.sleep(DDG_QUERY_PAUSE)
 
     # How the page budget gets spent decides recall as much as its size does.
     # The queries deliberately include several site: searches, so left in
@@ -2278,15 +2297,45 @@ def _lead_within_radius(lead, center, radius, cdb):
         z = (lead.get("zip") or "").strip()
         if not z:
             return True
-        zc = cdb.setdefault("zip_geo_cache", {})
-        if z not in zc:
+
+        def _fetch():
             g = _geo_from_zip(z)
-            zc[z] = [g["lat"], g["lon"]] if g else None
-        coords = zc[z]
+            return (g["lat"], g["lon"]) if g else None
+
+        coords = _cached_point(cdb.setdefault("zip_geo_cache", {}), z, _fetch)
         if not coords:
             return True
         lat, lon = coords
     return _miles_between(center["lat"], center["lon"], lat, lon) <= radius
+
+
+# A source city's permits sit inside that city, but its centroid can be just
+# outside the search radius while its near edge is well inside. Reaching a bit
+# further when picking sources costs one extra fetch and nothing else, because
+# _lead_within_radius still checks every individual lead exactly.
+LEAD_SOURCE_MARGIN_MI = 25.0
+
+
+def _nearby_lead_sources(center, radius, cdb):
+    """Every configured permit source close enough to hold leads in range.
+
+    Coverage used to be an exact match on the city the user typed, so someone
+    in a suburb twenty miles from Austin was told residential leads "aren't
+    set up for your area yet" while Austin's permit data covered addresses
+    comfortably inside their chosen radius. The radius was only ever used to
+    filter leads after the fact, never to work out which sources to read.
+    """
+    reach = radius + LEAD_SOURCE_MARGIN_MI
+    found = []
+    for (city, state), src in residential_permits.SOURCES.items():
+        # Coordinates ship with the registry, so choosing sources never depends
+        # on a geocoder being up. Anything without them falls back to a lookup.
+        point = src.get("center") or _city_coords(city, state, cdb)
+        if not point:
+            continue
+        if _miles_between(center["lat"], center["lon"], point[0], point[1]) <= reach:
+            found.append((city, state))
+    return found
 
 
 @app.route("/residential-leads", methods=["POST"])
@@ -2310,9 +2359,10 @@ def residential_leads():
     if not center:
         return jsonify({"ok": False, "reason": "location_not_found"})
 
-    covered = residential_permits.has_source(center["city"], center["state"])
-
     cdb = _cache()
+    sources = _nearby_lead_sources(center, radius, cdb)
+    covered = bool(sources)
+
     today = datetime.datetime.now().strftime("%Y%m%d")
     cache = cdb.setdefault("leads_cache", {})
     ckey = f"{center['state']}|{center['city'].lower()}|{int(radius)}|{today}"
@@ -2322,7 +2372,9 @@ def residential_leads():
                         "leads": c["leads"], "total": len(c["leads"]),
                         "covered": covered, "cached": True})
 
-    leads = residential_permits.fetch_leads(center["city"], center["state"]) if covered else []
+    leads = []
+    for scity, sstate in sources:
+        leads.extend(residential_permits.fetch_leads(scity, sstate))
     kept = [l for l in leads if _lead_within_radius(l, center, radius, cdb)]
 
     cache[ckey] = {"ts": datetime.datetime.now().isoformat(), "leads": kept}
@@ -2422,37 +2474,57 @@ def upcoming():
     seen, pages = set(), []
     for q in queries:
         results = _tavily_search(q, max_results=6) if TAVILY_API_KEY else []
-        if not results:
+        used_ddg = not results
+        if used_ddg:
             results = _ddg_search(q)
         for r in results:
             if r["url"] not in seen:
                 seen.add(r["url"])
                 pages.append(r)
-        time.sleep(0.6)
+        if used_ddg:  # only the scraped backend needs pacing — see _run_local_queries
+            time.sleep(DDG_QUERY_PAUSE)
 
-    grouped, city_coords = {}, {}
-    for it in pages[:MAX_PAGES]:
+    grouped, city_coords, drop_stats = {}, {}, {}
+    lock = threading.Lock()
+    center_coords = (center["lat"], center["lon"])
+
+    # Pages were processed one after another here, unlike /scan. Each one is a
+    # page fetch plus an OpenAI call, so a full budget ran well past the app's
+    # own request timeout and the user just saw "that took too long". Same
+    # prioritisation and fan-out as /scan, and the same recall handling: a
+    # planned project naming a county or an authority is anchored to the town
+    # we searched rather than dropped.
+    def _process(it):
         text = it["content"] or _fetch_text(it["url"])
         if len(text) < 200:
-            continue
+            return
         items = _ai_extract_upcoming(f"{c}, {s}", text)
         if not items:
-            continue
-        for b in items:
-            if isinstance(b, dict):
-                b.setdefault("url", it["url"])
-                b["status"] = "Planned"
-                _place_bid(grouped, b, center, radius, cdb, default_city="",
-                          city_coords=city_coords)
+            return
+        with lock:
+            for b in items:
+                if isinstance(b, dict):
+                    b.setdefault("url", it["url"])
+                    b["status"] = "Planned"
+                    _place_bid(grouped, b, center, radius, cdb, default_city="",
+                              city_coords=city_coords, default_state=s,
+                              fallback_coords=center_coords, stats=drop_stats)
+
+    with ThreadPoolExecutor(max_workers=PAGE_WORKERS) as ex:
+        list(ex.map(_process, _prioritize_pages(pages)[:MAX_PAGES]))
 
     total = sum(len(v) for v in grouped.values())
+    funnel = ", ".join(f"{k}={v}" for k, v in sorted(drop_stats.items())) or "none"
+    print(f"[upcoming] {int(radius)} mi from {c},{s} -> {total} planned "
+          f"({funnel})", flush=True)
     cache[ckey] = {"ts": datetime.datetime.now().isoformat(), "items": grouped,
                   "total": total, "city_coords": city_coords}
     cdb["upcoming_cache"] = {k: v for k, v in cache.items() if k.endswith(today)}
     _save_cache(cdb)
 
     return jsonify({"ok": True, "location": f"{center['city']}, {center['state']}",
-                    "items": grouped, "total": total, "city_coords": city_coords})
+                    "items": grouped, "total": total, "city_coords": city_coords,
+                    "debug": {"pages": len(pages), "kept": total, "funnel": drop_stats}})
 
 
 if __name__ == "__main__":
