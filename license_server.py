@@ -387,11 +387,17 @@ def health_detail():
         "status": "ok" if not problems else "degraded",
         "backends": backends,
         "local_search": ddg,
+        # The recall knobs, so what's actually running is visible without
+        # reading Render's env-var screen. All are env-tunable; raising them
+        # trades scan time and OpenAI spend for coverage.
         "scan_config": {
-            "max_pages_per_town": MAX_PAGES,
-            "federal_window_days": SCAN_WINDOW_DAYS,
+            "max_pages_per_town": MAX_PAGES,          # SCAN_MAX_PAGES
+            "page_workers": PAGE_WORKERS,             # SCAN_PAGE_WORKERS
+            "max_pages_per_domain": MAX_PAGES_PER_DOMAIN,  # SCAN_MAX_PAGES_PER_DOMAIN
+            "max_anchor_towns": MAX_ANCHOR_TOWNS,     # SCAN_MAX_ANCHORS
+            "federal_window_days": SCAN_WINDOW_DAYS,  # SCAN_WINDOW_DAYS
             "geo_miss_retry_hours": GEO_MISS_RETRY_HOURS,
-            "model": OPENAI_MODEL,
+            "model": OPENAI_MODEL,                    # OPENAI_MODEL
         },
         "problems": problems,
     })
@@ -966,7 +972,40 @@ def _geo_from_zip(zip_code):
         return None
 
 
-def _geo_from_city(city, state):
+# Public bodies rarely call themselves by a bare city name. The AI is told to
+# copy the location "exactly as written in the text", so it faithfully returns
+# things like "City of O'Fallon", "Greene County", or "Aurora R-VIII School
+# District" — none of which zippopotam can resolve, so every one of those bids
+# used to be thrown away. Counties, townships and school districts are core
+# buyers for sidewalk and ADA work, so that was a large hole in coverage.
+# \b + \s* rather than \s+ so a truncated "City of" reduces to nothing at all,
+# instead of leaving "City of" to be geocoded as if it were a place.
+_PLACE_PREFIX_RE = re.compile(
+    r"^(?:the\s+)?(?:city|town|village|township|borough|county|municipality)\s+of\b\s*", re.I)
+_PLACE_SUFFIX_RE = re.compile(
+    r"\s+(?:r-[ivxlc]+\s+)?(?:school\s+district|public\s+schools|community\s+schools|"
+    r"unified\s+school\s+district|isd|usd|county\s+schools|"
+    r"housing\s+authority|water\s+district|utility\s+district|"
+    r"public\s+works|road\s+district|fire\s+district|park\s+district)\b.*$", re.I)
+_PLACE_TRAILING_RE = re.compile(r"[\s,;:.\-]+$")
+
+
+def _normalize_place(name):
+    """Reduce an authority's name to the place it is named after.
+
+    "City of O'Fallon" -> "O'Fallon", "Aurora R-VIII School District" ->
+    "Aurora". Returns "" if nothing usable is left.
+    """
+    s = " ".join(str(name or "").split())
+    if not s:
+        return ""
+    s = _PLACE_PREFIX_RE.sub("", s)
+    s = _PLACE_SUFFIX_RE.sub("", s)
+    s = _PLACE_TRAILING_RE.sub("", s)
+    return s.strip()
+
+
+def _zippopotam_city(city, state):
     url = f"https://api.zippopotam.us/us/{state.upper()}/{urllib.parse.quote(city)}"
     data = _get_json(url)
     places = (data or {}).get("places") or []
@@ -978,9 +1017,61 @@ def _geo_from_city(city, state):
             continue
     if not pts:
         return None
-    lat = sum(x for x, _ in pts) / len(pts)
-    lon = sum(y for _, y in pts) / len(pts)
-    return {"lat": lat, "lon": lon, "city": city, "state": state.upper()}
+    return (sum(x for x, _ in pts) / len(pts), sum(y for _, y in pts) / len(pts))
+
+
+# Nominatim asks for a descriptive User-Agent and no more than one request a
+# second. Results are cached in the geo db, so real traffic here is low.
+_NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+_NOMINATIM_UA = "BidCallerPro/2.0 (bid search for concrete contractors)"
+_nominatim_lock = threading.Lock()
+_nominatim_last = [0.0]
+
+
+def _nominatim_place(place, state):
+    """Geocode anything zippopotam can't: counties, townships, unincorporated
+    communities, and other named administrative areas."""
+    with _nominatim_lock:
+        wait = 1.0 - (time.time() - _nominatim_last[0])
+        if wait > 0:
+            time.sleep(wait)
+        _nominatim_last[0] = time.time()
+    qs = urllib.parse.urlencode({
+        "q": f"{place}, {state}, USA", "format": "json", "limit": "1",
+        "countrycodes": "us", "addressdetails": "0",
+    })
+    data = _get_json(f"{_NOMINATIM_URL}?{qs}",
+                     headers={"User-Agent": _NOMINATIM_UA, "Accept": "application/json"})
+    if not isinstance(data, list) or not data:
+        return None
+    try:
+        return float(data[0]["lat"]), float(data[0]["lon"])
+    except (KeyError, ValueError, TypeError):
+        return None
+
+
+def _geo_from_city(city, state):
+    """Resolve a place name to coordinates, trying progressively looser forms.
+
+    zippopotam only knows names that appear in ZIP-code data, which excludes
+    most counties and townships, so it is tried first (fast, generous rate
+    limit) and Nominatim picks up whatever it misses.
+    """
+    state = (state or "").upper()
+    raw = " ".join(str(city or "").split())
+    if not raw or not state:
+        return None
+    normalized = _normalize_place(raw)
+    attempts = [a for a in dict.fromkeys([raw, normalized]) if a]
+    for attempt in attempts:
+        hit = _zippopotam_city(attempt, state)
+        if hit:
+            return {"lat": hit[0], "lon": hit[1], "city": attempt, "state": state}
+    for attempt in attempts:
+        hit = _nominatim_place(attempt, state)
+        if hit:
+            return {"lat": hit[0], "lon": hit[1], "city": attempt, "state": state}
+    return None
 
 
 def _miles_between(lat1, lon1, lat2, lon2):
@@ -1030,22 +1121,32 @@ def _nearby_anchor_towns(center, radius):
     tight radii where the center-only search already covers the area well."""
     if radius < 40:
         return []
-    n = max(2, min(6, round(radius / 25) - 1))
-    dist = radius * 0.7
+    n = max(2, min(MAX_ANCHOR_TOWNS, round(radius / 20)))
+    # One ring of towns at a single distance leaves the ground between it and
+    # the centre unsearched, which on a 125mi scan is most of the area. Wide
+    # radii get two rings, with the outer ring's bearings offset so the towns
+    # interleave rather than lining up along the same spokes.
+    rings = [0.7] if radius < 80 else [0.5, 0.85]
+    per_ring = max(1, n // len(rings))
     seen = {(center["city"].lower(), center["state"])}
     towns = []
-    for i in range(n):
-        bearing = i * (360.0 / n)
-        lat, lon = _destination_point(center["lat"], center["lon"], bearing, dist)
-        found = _reverse_geocode_city(lat, lon)
-        if not found:
-            continue
-        city, state = found
-        key = (city.lower(), state)
-        if key in seen:
-            continue
-        seen.add(key)
-        towns.append((city, state))
+    for ring_i, frac in enumerate(rings):
+        dist = radius * frac
+        for i in range(per_ring):
+            bearing = (i * (360.0 / per_ring)) + (ring_i * (180.0 / per_ring))
+            lat, lon = _destination_point(center["lat"], center["lon"], bearing, dist)
+            found = _reverse_geocode_city(lat, lon)
+            if not found:
+                continue
+            city, state = found
+            key = (city.lower(), state)
+            if key in seen:
+                continue
+            seen.add(key)
+            # Coordinates come back too: a bid found by searching this town but
+            # naming a place we can't geocode (a county, a school district) can
+            # be anchored here instead of discarded. See _place_bid.
+            towns.append((city, state, lat, lon))
     return towns
 
 
@@ -1250,7 +1351,58 @@ def _city_coords(city, state, db):
 # ═══════════════════════════════════════════════════════════
 TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "")
 TAVILY_URL = "https://api.tavily.com/search"
-MAX_PAGES = int(os.environ.get("SCAN_MAX_PAGES", "16"))
+
+# Recall knobs. All three trade scan time and OpenAI spend for coverage, and
+# the right values depend on how the live backend actually performs, so they
+# are env-tunable — watch the "funnel" figures in /scan's debug and the wall
+# clock, and dial from there. Fetch+extract is entirely I/O-bound, so raising
+# PAGE_WORKERS buys pages without proportionally more wall clock.
+MAX_PAGES = int(os.environ.get("SCAN_MAX_PAGES", "24"))
+# Kept well under the OpenAI burst limits: several towns run at once, each
+# with its own pool, so concurrent extractions is this times the town workers.
+PAGE_WORKERS = int(os.environ.get("SCAN_PAGE_WORKERS", "6"))
+# At most this many pages from any one domain, so a single aggregator can't
+# consume the whole per-town budget.
+MAX_PAGES_PER_DOMAIN = int(os.environ.get("SCAN_MAX_PAGES_PER_DOMAIN", "4"))
+# Towns searched around the radius, on top of the centre. More towns means
+# more of a wide radius is actually looked at, at the cost of scan time.
+MAX_ANCHOR_TOWNS = int(os.environ.get("SCAN_MAX_ANCHORS", "6"))
+
+# Primary sources: the agency actually letting the work, rather than a site
+# re-listing it. Preferred when the budget is tight.
+_GOV_DOMAIN_RE = re.compile(r"(?:^|\.)(?:gov|mil)$|(?:^|\.)[a-z]{2}\.us$", re.I)
+
+
+def _page_domain(url):
+    try:
+        return (urllib.parse.urlparse(url).hostname or "").lower()
+    except ValueError:
+        return ""
+
+
+def _prioritize_pages(items):
+    """Order candidate pages so a fixed budget buys the widest, best coverage.
+
+    BidNet entries keep their existing precedence (they arrive first and carry
+    no content), then government domains, then everything else — with a per
+    domain cap applied across the whole list so one site can't dominate.
+    """
+    def rank(pair):
+        idx, it = pair
+        dom = _page_domain(it.get("url", ""))
+        bidnet = 0 if "bidnetdirect.com" in dom else 1
+        gov = 0 if _GOV_DOMAIN_RE.search(dom) else 1
+        return (bidnet, gov, idx)
+
+    ordered = [it for _, it in sorted(enumerate(items), key=rank)]
+    per_domain, head, tail = {}, [], []
+    for it in ordered:
+        dom = _page_domain(it.get("url", ""))
+        per_domain[dom] = per_domain.get(dom, 0) + 1
+        # Over-quota pages aren't discarded, just moved behind everything else,
+        # so they're still used if the budget outlasts the diverse candidates.
+        (head if per_domain[dom] <= MAX_PAGES_PER_DOMAIN else tail).append(it)
+    return head + tail
 
 _SCRIPT_RE = re.compile(r"<(script|style)[^>]*>.*?</\1>", re.I | re.S)
 _TAG_RE = re.compile(r"<[^>]+>")
@@ -1691,7 +1843,8 @@ def draft_proposal():
 # /scan  —  LOCAL (Brave + AI) + FEDERAL (SAM), radius-filtered
 # ═══════════════════════════════════════════════════════════
 def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
-                        city_coords, lock, pdb, default_city=""):
+                        city_coords, lock, pdb, default_city="", town_coords=None,
+                        stats=None):
     """Fetch URLs already known (from a prior scan or the seed list) to be
     this city's real bid page, directly — no search engine involved. This is
     the fast, deterministic path that /scan tries before falling back to
@@ -1719,12 +1872,14 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
                 if isinstance(b, dict):
                     b.setdefault("url", url)
                     _place_bid(grouped, b, center, radius, cdb, default_city=default_city,
-                              city_coords=city_coords, default_state=state)
+                              city_coords=city_coords, default_state=state,
+                              fallback_coords=town_coords, stats=stats)
     return raw
 
 
 def _run_local_queries(queries, ai_label, max_pages, grouped, center, radius, cdb,
-                        city_coords, seen_urls, lock, pdb, default_city="", state=""):
+                        city_coords, seen_urls, lock, pdb, default_city="", state="",
+                        town_coords=None, stats=None):
     """Run one town's worth of search queries and extract bids from the top
     pages. Each town gets its own max_pages slice so a big scan with several
     anchor towns doesn't let the first town's results crowd out the rest.
@@ -1769,6 +1924,15 @@ def _run_local_queries(queries, ai_label, max_pages, grouped, center, radius, cd
             items.append(r)
         time.sleep(0.4)
 
+    # How the page budget gets spent decides recall as much as its size does.
+    # The queries deliberately include several site: searches, so left in
+    # discovery order one aggregator can swallow the whole allowance while the
+    # agency's own posting further down the list is never opened. Ordering
+    # keeps BidNet's verified solicitations first, then favours government
+    # domains (a .gov page is the primary source, not a re-listing), and caps
+    # how many pages any single domain may take.
+    items = _prioritize_pages(items)
+
     raw = [0]
 
     def _process(it):
@@ -1785,11 +1949,12 @@ def _run_local_queries(queries, ai_label, max_pages, grouped, center, radius, cd
                     b.setdefault("url", it["url"])
                     bid_city = (b.get("city") or default_city or "").split(",")[0].strip()
                     _place_bid(grouped, b, center, radius, cdb, default_city=default_city,
-                              city_coords=city_coords, default_state=state)
+                              city_coords=city_coords, default_state=state,
+                              fallback_coords=town_coords, stats=stats)
                     if bid_city and state:
                         bid_portals.learn_portal(pdb, bid_city, state, it["url"])
 
-    with ThreadPoolExecutor(max_workers=4) as ex:
+    with ThreadPoolExecutor(max_workers=PAGE_WORKERS) as ex:
         list(ex.map(_process, items[:max_pages]))
 
     return raw[0]
@@ -1819,7 +1984,7 @@ def _split_city_state(raw):
 
 
 def _place_bid(grouped, bid, center, radius, db, default_city="", city_coords=None,
-               default_state=""):
+               default_state="", fallback_coords=None, stats=None):
     """Keep a bid ONLY if its real city geocodes within the radius.
 
     The city is resolved against the most specific state we have: the one the
@@ -1832,10 +1997,16 @@ def _place_bid(grouped, bid, center, radius, db, default_city="", city_coords=No
     nothing, and dropped it. Out-of-state bids were invisible on exactly the
     wide scans meant to surface them.
     """
+    def _count(reason):
+        if stats is not None:
+            stats[reason] = stats.get(reason, 0) + 1
+
     if not isinstance(bid, dict):
+        _count("malformed")
         return
     city, stated_state = _split_city_state(bid.get("city") or default_city or "")
     if not city:
+        _count("no_location")
         return  # no stated location -> can't verify it's local -> drop
     # A stated state is taken as final: if the text says Springfield, IL, that
     # is the Illinois one, and failing to geocode it must drop the bid rather
@@ -1859,8 +2030,21 @@ def _place_bid(grouped, bid, center, radius, db, default_city="", city_coords=No
             used_state = st
             break
     if not coords:
-        return  # can't confirm where this actually is -> drop rather than guess
+        # Last resort: anchor the bid to the town whose search turned it up.
+        # Plenty of real buyers name themselves in ways no gazetteer resolves
+        # ("Greene County", a road district, a regional authority), and this
+        # page was found by searching a specific town, so the work is around
+        # there. Only safe when the text didn't name a different state — a bid
+        # explicitly in another state must not be pinned to this one.
+        search_state = (default_state or center["state"]).upper()
+        if fallback_coords and (not stated_state or stated_state == search_state):
+            coords, used_state = fallback_coords, search_state
+            _count("placed_by_search_town")
+        else:
+            _count("unresolvable_place")
+            return
     if _miles_between(center["lat"], center["lon"], coords[0], coords[1]) > radius:
+        _count("out_of_radius")
         return  # outside the chosen radius
     _apply_deadline_status(bid)
     bid.pop("city", None)
@@ -1876,8 +2060,10 @@ def _place_bid(grouped, bid, center, radius, db, default_city="", city_coords=No
     bucket = grouped.setdefault(label, [])
     key = _bid_dupe_key(bid)
     if key[0] and any(_bid_dupe_key(existing) == key for existing in bucket):
+        _count("duplicate")
         return
     bucket.append(bid)
+    _count("kept")
     if city_coords is not None:
         city_coords[label] = {"lat": coords[0], "lon": coords[1]}
 
@@ -1909,6 +2095,10 @@ def _perform_scan(location, radius):
     grouped = {}
     city_coords = {}
     local_raw = 0
+    # Why extracted bids did or did not make it into the result. Recall is the
+    # thing that matters most here and it fails silently, so the funnel is
+    # reported in the response rather than left to be guessed at.
+    drop_stats = {}
 
     # ---- LOCAL: disguised DuckDuckGo first, Tavily fallback if it's empty ----
     # A wide radius is only useful if we actually search more than the one
@@ -1949,21 +2139,25 @@ def _perform_scan(location, radius):
         # the biggest lever on wall-clock scan time. Capped at 4 workers so
         # we don't fire too many simultaneous search-engine requests at once
         # (DuckDuckGo in particular will start blocking if hammered).
+        center_coords = (center["lat"], center["lon"])
+
         def _run_center():
             # default_city=c, not "": a known portal IS this city's own bid
             # page, so a bid on it that doesn't restate the city is still that
             # city's. Defaulting to blank made _place_bid drop those outright,
             # losing bids from the single most reliable source in the pipeline.
             got = _run_known_portals(c, s, f"{c}, {s}", grouped, center, radius,
-                                      cdb, city_coords, lock, pdb, default_city=c)
+                                      cdb, city_coords, lock, pdb, default_city=c,
+                                      town_coords=center_coords, stats=drop_stats)
             got += _run_local_queries(center_queries, f"{c}, {s}", MAX_PAGES,
                                       grouped, center, radius, cdb, city_coords,
-                                      seen_urls, lock, pdb, default_city="", state=s)
+                                      seen_urls, lock, pdb, default_city="", state=s,
+                                      town_coords=center_coords, stats=drop_stats)
             print(f"[scan] {got} raw bids from {c}, {s} (center)", flush=True)
             return got
 
         def _run_anchor(anchor):
-            ac, ast = anchor
+            ac, ast, alat, alon = anchor
             anchor_queries = [
                 f"{ac} {ast} sidewalk ADA curb concrete bid invitation",
                 f"{ac} {ast} sidewalk ADA curb bid site:bidnetdirect.com OR site:demandstar.com",
@@ -1975,10 +2169,12 @@ def _perform_scan(location, radius):
             if ast == "MO":
                 anchor_queries.append(f"{ac} {ast} sidewalk ADA curb bid site:missouribuys.mo.gov")
             got = _run_known_portals(ac, ast, f"{ac}, {ast}", grouped, center, radius,
-                                      cdb, city_coords, lock, pdb, default_city=ac)
+                                      cdb, city_coords, lock, pdb, default_city=ac,
+                                      town_coords=(alat, alon), stats=drop_stats)
             got += _run_local_queries(anchor_queries, f"{ac}, {ast}", 5,
                                       grouped, center, radius, cdb, city_coords,
-                                      seen_urls, lock, pdb, default_city=ac, state=ast)
+                                      seen_urls, lock, pdb, default_city=ac, state=ast,
+                                      town_coords=(alat, alon), stats=drop_stats)
             print(f"[scan] {got} raw bids from {ac}, {ast} (anchor)", flush=True)
             return got
 
@@ -2008,7 +2204,8 @@ def _perform_scan(location, radius):
                 continue
             bid, city, perf_state = _normalize_opp(opp)
             _place_bid(grouped, bid, center, radius, cdb, default_city=city,
-                      city_coords=city_coords, default_state=perf_state)
+                      city_coords=city_coords, default_state=perf_state,
+                      stats=drop_stats)
 
     for city_bids in grouped.values():
         city_bids.sort(key=_score_bid, reverse=True)
@@ -2018,8 +2215,9 @@ def _perform_scan(location, radius):
     # that turned up nothing but expired listings announced "12 bids" and then
     # dropped the user on an empty feed.
     total = sum(1 for v in grouped.values() for b in v if _is_open_bid(b))
+    funnel = ", ".join(f"{k}={v}" for k, v in sorted(drop_stats.items())) or "none"
     print(f"[scan] {int(radius)} mi from {center['city']},{center['state']} "
-          f"-> {total} bids kept (local_raw={local_raw})", flush=True)
+          f"-> {total} bids kept (local_raw={local_raw}; {funnel})", flush=True)
 
     result = {"bids": grouped, "total": total, "city_coords": city_coords,
               "center": {"lat": center["lat"], "lon": center["lon"],
@@ -2034,7 +2232,7 @@ def _perform_scan(location, radius):
     return {"location": f"{center['city']}, {center['state']}",
             "bids": grouped, "total_bids": total, "city_coords": city_coords,
             "center": result["center"],
-            "debug": {"raw_local": local_raw, "kept": total}}
+            "debug": {"raw_local": local_raw, "kept": total, "funnel": drop_stats}}
 
 
 @app.route("/scan", methods=["POST"])
