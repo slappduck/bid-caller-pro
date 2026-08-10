@@ -1079,6 +1079,12 @@ const MAP_TILE_URL="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.p
 // plain amber or yellow circle has very little contrast, while the ring reads
 // clearly against pale streets whatever colour sits inside it.
 const PIN_RING="#1b2233";
+// The search centre is drawn inverted — dark fill, amber ring — rather than as
+// another amber dot. Bid pins are amber when a deadline is close, and at
+// #f5b400 vs #f59e0b the two were the same colour: on the map you couldn't
+// tell your own location from a job due this week. Inverting it is legible at
+// a glance and needs no legend.
+const CENTER_PIN={radius:10,color:"#f5b400",fillColor:PIN_RING,fillOpacity:1,weight:3.5};
 
 function addTileRetry(layer){
   const retries=new WeakMap();
@@ -1116,7 +1122,7 @@ function updateFindMap(lat,lon,label){
     findMap.setView([lat,lon],11);
   }
   if(findMarker)findMap.removeLayer(findMarker);
-  findMarker=L.circleMarker([lat,lon],{radius:9,color:PIN_RING,fillColor:"#f5b400",fillOpacity:1,weight:2.5})
+  findMarker=L.circleMarker([lat,lon],CENTER_PIN)
     .addTo(findMap).bindPopup(esc(label||"You are here"));
   drawFindRadiusCircle();
   setTimeout(()=>findMap.invalidateSize(),50);
@@ -1200,7 +1206,7 @@ function createLocationPicker(containerId,inputId){
       st.map.setView([lat,lon],11);
     }
     if(st.marker)st.map.removeLayer(st.marker);
-    st.marker=L.circleMarker([lat,lon],{radius:9,color:PIN_RING,fillColor:"#f5b400",fillOpacity:1,weight:2.5})
+    st.marker=L.circleMarker([lat,lon],CENTER_PIN)
       .addTo(st.map).bindPopup(esc(label||"Selected location"));
     setTimeout(()=>st.map.invalidateSize(),50);
   }
@@ -1550,9 +1556,7 @@ function renderMap(){
   }
   leafletMap.eachLayer(l=>{if(l instanceof L.CircleMarker)leafletMap.removeLayer(l);});
   const bounds=[[lastScanMap.center.lat,lastScanMap.center.lon]];
-  L.circleMarker([lastScanMap.center.lat,lastScanMap.center.lon],{
-    radius:9,color:PIN_RING,fillColor:"#f5b400",fillOpacity:1,weight:2.5,
-  }).addTo(leafletMap).bindPopup(`Search center: ${esc(lastScanMap.center.label||"")}`);
+  L.circleMarker([lastScanMap.center.lat,lastScanMap.center.lon],CENTER_PIN).addTo(leafletMap).bindPopup(`Search center: ${esc(lastScanMap.center.label||"")}`);
   for(const city in(lastScanMap.cityCoords||{})){
     const c=lastScanMap.cityCoords[city];
     const jobs=(bidData[city]||[]).filter(isOpen);
