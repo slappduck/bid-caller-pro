@@ -446,9 +446,26 @@ const HAS_MAPS = typeof L !== "undefined" && L && typeof L.map === "function";
 const sb = HAS_SB ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
 // ── storage helpers ──
+// set() reports whether the write actually landed. It used to swallow every
+// error, which matters because the three feeds only ever grow — upcoming and
+// leads never prune at all — so hitting the ~5MB localStorage quota is a
+// question of when, not if. Past that point starring a bid or typing a note
+// silently did nothing and the work vanished on reload with no explanation.
+let storageWarned=false;
 const store = {
   get(k,d){try{return JSON.parse(localStorage.getItem(k))??d;}catch{return d;}},
-  set(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch{}}
+  set(k,v){
+    try{localStorage.setItem(k,JSON.stringify(v));return true;}
+    catch(e){
+      // Warn once per session: a failed write usually comes in bursts and a
+      // toast per key would bury the app.
+      if(!storageWarned){
+        storageWarned=true;
+        try{toast("Storage full — tap Clear all bids on the Bids tab to free space.");}catch(_){}
+      }
+      return false;
+    }
+  }
 };
 function deviceId(){
   let id=store.get("device_id",null);
@@ -608,6 +625,23 @@ function toast(msg){
   clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),2600);
 }
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+// Returns the URL only if it uses a scheme we actually intend to open, else "".
+// A bid's url/email/phone are extracted by the AI out of whatever page a search
+// engine pointed us at, so they are untrusted input. Escaping alone is not
+// enough here: href="javascript:..." needs no quotes to break anything, and it
+// would run in this app's origin, where the Supabase session and licence key
+// are kept. Callers still esc() the result — safeUrl gates the scheme, esc()
+// gates the quoting, and both are needed.
+function safeUrl(u){
+  const s=String(u==null?"":u).trim();
+  if(!s)return"";
+  // Browsers strip control characters before resolving the scheme, so
+  // "java\tscript:alert(1)" is a live javascript: URL to them even though a
+  // naive prefix test says otherwise. Refuse anything containing them.
+  if(/[\u0000-\u001F\u007F]/.test(s))return"";
+  return /^(https?:\/\/|mailto:|tel:)/i.test(s)?s:"";
+}
 
 // ── Offline state ──
 // Everything the app already knows (feed, saved bids, pipeline, notes) lives in
@@ -1298,13 +1332,30 @@ function daysUntil(b){
 // Cities we didn't just rescan are left untouched.
 function mergeOpenBids(incoming,scannedCities){
   let added=0;
+  const now=Date.now();
   const cities=scannedCities&&scannedCities.length?scannedCities:Object.keys(incoming||{});
   for(const city of cities){
     const openOnes=(((incoming||{})[city])||[]).filter(isOpen);
     const have=bidData[city]||[];
-    const ids=new Set(have.map(b=>bidId(city,b)));
-    openOnes.forEach(b=>{if(!ids.has(bidId(city,b)))added++;});
-    if(openOnes.length)bidData[city]=openOnes;
+    // When was each bid first seen? The city's list is replaced wholesale
+    // below, so without carrying this across a rescan every bid would look
+    // brand new again — and "Newest" has nothing else to sort on, since bids
+    // carry no date from the source.
+    const firstSeen=new Map(have.map(b=>[bidId(city,b),b._first_seen]));
+    // The same bid often turns up on two different source pages (an
+    // aggregator and the agency's own site), which used to produce two
+    // identical cards sharing one id — starring one appeared to star both.
+    const seen=new Set();
+    const merged=[];
+    for(const b of openOnes){
+      const id=bidId(city,b);
+      if(seen.has(id))continue;
+      seen.add(id);
+      if(firstSeen.has(id))b._first_seen=firstSeen.get(id);
+      else{b._first_seen=now;added++;}
+      merged.push(b);
+    }
+    if(merged.length)bidData[city]=merged;
     else delete bidData[city];
   }
   store.set("last_feed",bidData);
@@ -1527,10 +1578,10 @@ function upcomingCard(city,b){
       </div>
       ${b.contact||b.email||b.phone?`<div class="bid-meta" style="margin-top:0.4rem;">
         ${b.contact?`<span class="chip">${esc(b.contact)}</span>`:""}
-        ${b.email?`<a class="chip" href="mailto:${esc(b.email)}">✉ Email</a>`:""}
-        ${b.phone?`<a class="chip" href="tel:${esc(b.phone)}">☎ ${esc(b.phone)}</a>`:""}
+        ${safeUrl("mailto:"+b.email)?`<a class="chip" href="${esc(safeUrl("mailto:"+b.email))}">✉ Email</a>`:""}
+        ${safeUrl("tel:"+b.phone)?`<a class="chip" href="${esc(safeUrl("tel:"+b.phone))}">☎ ${esc(b.phone)}</a>`:""}
       </div>`:""}
-      ${b.url?`<div class="bid-meta" style="margin-top:0.4rem;"><a class="chip" href="${esc(b.url)}" target="_blank">\u{1F517} Source</a></div>`:""}
+      ${safeUrl(b.url)?`<div class="bid-meta" style="margin-top:0.4rem;"><a class="chip" href="${esc(safeUrl(b.url))}" target="_blank" rel="noopener noreferrer">\u{1F517} Source</a></div>`:""}
     </div>
   </div>`;
 }
@@ -1651,9 +1702,9 @@ function leadCard(city,l){
       </div>
       ${l.contractor_name||l.contractor_phone?`<div class="bid-meta" style="margin-top:0.4rem;">
         ${l.contractor_name?`<span class="chip">${esc(l.contractor_name)}${l.contractor_trade?` (${esc(l.contractor_trade)})`:""}</span>`:""}
-        ${l.contractor_phone?`<a class="chip" href="tel:${esc(l.contractor_phone)}">☎ ${esc(l.contractor_phone)}</a>`:""}
+        ${safeUrl("tel:"+l.contractor_phone)?`<a class="chip" href="${esc(safeUrl("tel:"+l.contractor_phone))}">☎ ${esc(l.contractor_phone)}</a>`:""}
       </div>`:""}
-      ${l.url?`<div class="bid-meta" style="margin-top:0.4rem;"><a class="chip" href="${esc(l.url)}" target="_blank">\u{1F517} Permit Record</a></div>`:""}
+      ${safeUrl(l.url)?`<div class="bid-meta" style="margin-top:0.4rem;"><a class="chip" href="${esc(safeUrl(l.url))}" target="_blank" rel="noopener noreferrer">\u{1F517} Permit Record</a></div>`:""}
       ${pid?`<div class="lead-pipeline-row">
         ${LEAD_STATUSES.map(([k,label])=>`<button class="pchip ${curStatus===k?"active-"+k:""}" data-lead-id="${esc(pid)}" data-lead-status="${esc(curStatus===k?"":k)}">${label}</button>`).join("")}
       </div>`:""}
@@ -1839,7 +1890,10 @@ function renderFeed(){
   }else if(sortMode==="value"){
     rows.sort((a,b)=>parseValue(b[1].value)-parseValue(a[1].value));
   }else if(sortMode==="new"){
-    rows.reverse(); // newest-added first
+    // Sorted on when the bid first appeared in a scan. This used to be a bare
+    // rows.reverse(), which just flipped city order and had nothing to do with
+    // recency. Bids merged before _first_seen existed sort last.
+    rows.sort((a,b)=>(b[1]._first_seen||0)-(a[1]._first_seen||0));
   }
   // sortMode==="match" (default): leave rows in the order /scan returned them --
   // the server already ranks each city's bids by fit (deadline urgency, niche
@@ -1895,7 +1949,7 @@ function bidCard(city,b){
         <span class="chip">\u{1F4CD} ${esc(city)}</span>
         ${b.value?`<span class="chip value">\u{1F4B2} ${esc(b.value)}</span>`:""}
         ${deadlineChip}
-        ${pipeline[id]?`<span class="chip status-${pipeline[id]}">${pipeline[id].toUpperCase()}</span>`:""}
+        ${pipeline[id]?`<span class="chip status-${esc(pipeline[id])}">${esc(String(pipeline[id]).toUpperCase())}</span>`:""}
         ${notes[id]?`<span class="chip">\u{1F4DD} Note</span>`:""}
       </div>
     </div>
@@ -1927,7 +1981,9 @@ function openDetail(city,b){
   const pStatus=pipeline[id]||"";
   function row(label,val,link){
     if(!val)return"";
-    const v=link?`<a href="${link}">${esc(val)}</a>`:esc(val);
+    // Falls back to plain text when the URL is not one we will open.
+    const href=safeUrl(link);
+    const v=href?`<a href="${esc(href)}">${esc(val)}</a>`:esc(val);
     return`<div class="detail-row"><div class="detail-label">${label}</div><div class="detail-val">${v}</div></div>`;
   }
   const statuses=[["submitted","Submitted"],["won","Won"],["lost","Lost"],["passed","Passed"]];
@@ -1952,8 +2008,8 @@ function openDetail(city,b){
       <textarea id="bid-notes" class="input" style="min-height:70px;resize:vertical;margin-top:0.3rem;font-family:inherit;" placeholder="Estimate, who you talked to, next steps...">${esc(notes[id]||"")}</textarea>
     </div>
     <div class="modal-actions">
-      ${b.email?`<a class="ma-gold" href="mailto:${esc(b.email)}">\u2709 Email</a>`:""}
-      ${b.url?`<a class="ma-ghost" href="${esc(b.url)}" target="_blank">\u{1F517} Open</a>`:""}
+      ${safeUrl("mailto:"+b.email)?`<a class="ma-gold" href="${esc(safeUrl("mailto:"+b.email))}">\u2709 Email</a>`:""}
+      ${safeUrl(b.url)?`<a class="ma-ghost" href="${esc(safeUrl(b.url))}" target="_blank" rel="noopener noreferrer">\u{1F517} Open</a>`:""}
       <button class="ma-ghost" data-act="share">\u{1F4E4} Share</button>
       <button class="ma-ghost" data-act="save">${saved[bidId(city,b)]?"\u2605 Saved":"\u2606 Save"}</button>
       ${b.deadline?`<button class="ma-ghost" data-act="calendar">\u{1F4C5} Add to Calendar</button>`:""}

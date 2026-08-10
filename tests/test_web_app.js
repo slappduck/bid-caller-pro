@@ -290,7 +290,128 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
-  // ── 4. Saved-search throttling ──
+  // ── 4. Hostile bid URLs ──
+  // A bid's url is AI-extracted from whatever page a search engine pointed at,
+  // so it is untrusted. It must never reach an href as a javascript: URL or
+  // break out of the attribute.
+  console.log("\nHostile bid URLs cannot inject into the detail view");
+  {
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const host = new URL(route.request().url()).hostname;
+      if (host.endsWith("supabase.co") || host.endsWith("onrender.com")) return route.abort();
+      return route.continue();
+    });
+
+    const CITY = "Testville";
+    const HOSTILE = [
+      { title: "Scheme injection", scope: "s", status: "open",
+        url: "javascript:window.__pwned=1" },
+      { title: "Attribute break-out", scope: "s", status: "open",
+        url: 'https://ok.example/" onmouseover="window.__pwned=1' },
+      { title: "Control char smuggling", scope: "s", status: "open",
+        url: "java\tscript:window.__pwned=1" },
+      { title: "Hostile mailto", scope: "s", status: "open",
+        email: 'a@b.com" onclick="window.__pwned=1' },
+      { title: "Benign control", scope: "s", status: "open",
+        url: "https://ok.example/bid/1" },
+    ];
+    await page.addInitScript(({ city, bids }) => {
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      localStorage.setItem("last_feed", JSON.stringify({ [city]: bids }));
+    }, { city: CITY, bids: HOSTILE });
+
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(1000);
+    await page.evaluate(() => { if (typeof bootOffline === "function") bootOffline(); });
+    await page.locator('.nav-btn[data-s="feed"]').click();
+    await page.waitForTimeout(300);
+
+    const cards = page.locator("#feed-list .bid");
+    check("all hostile bids still render", (await cards.count()) === HOSTILE.length,
+      String(await cards.count()));
+
+    let sawJsHref = false, sawInjectedAttr = false, benignLinkWorked = false;
+    for (let i = 0; i < HOSTILE.length; i++) {
+      await cards.nth(i).click();
+      await page.waitForTimeout(200);
+      const info = await page.evaluate(() => {
+        const anchors = Array.from(document.querySelectorAll("#modal-content a"));
+        return {
+          hrefs: anchors.map((a) => a.getAttribute("href") || ""),
+          injected: anchors.some((a) => a.hasAttribute("onmouseover") || a.hasAttribute("onclick")),
+        };
+      });
+      if (info.hrefs.some((h) => /^\s*javascript:/i.test(h))) sawJsHref = true;
+      if (info.injected) sawInjectedAttr = true;
+      if (info.hrefs.includes("https://ok.example/bid/1")) benignLinkWorked = true;
+      await page.evaluate(() => closeModal());
+      await page.waitForTimeout(120);
+    }
+    const pwned = await page.evaluate(() => typeof window.__pwned !== "undefined");
+
+    check("no javascript: URL ever reaches an href", !sawJsHref);
+    check("no event-handler attribute is injected", !sawInjectedAttr);
+    check("no script executed", !pwned);
+    check("a legitimate https link still renders", benignLinkWorked);
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
+  // ── 5. Feed merge: de-duplication and a real "Newest" order ──
+  console.log("\nFeed merge de-duplicates and tracks when a bid first appeared");
+  {
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const host = new URL(route.request().url()).hostname;
+      if (host.endsWith("supabase.co") || host.endsWith("onrender.com")) return route.abort();
+      return route.continue();
+    });
+    await page.addInitScript(() =>
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com")));
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(1000);
+
+    const r = await page.evaluate(async () => {
+      const city = "Testville";
+      const A = { title: "Alpha sidewalk job", scope: "a", status: "open" };
+      const B = { title: "Beta curb job", scope: "b", status: "open" };
+      // A arrives twice in one payload, as it would from two source pages.
+      const firstAdded = mergeOpenBids({ [city]: [A, { ...A }, B] }, [city]);
+      const afterFirst = bidData[city].length;
+      const stampA = bidData[city].find((x) => x.title === A.title)._first_seen;
+
+      await new Promise((res) => setTimeout(res, 25));
+      // Rescan: A is unchanged, B is gone, C is new.
+      const C = { title: "Gamma ADA ramp job", scope: "c", status: "open" };
+      const secondAdded = mergeOpenBids({ [city]: [A, C] }, [city]);
+      const rows = bidData[city];
+      return {
+        firstAdded, afterFirst, secondAdded,
+        titles: rows.map((x) => x.title),
+        stampPreserved: rows.find((x) => x.title === A.title)._first_seen === stampA,
+        newerIsC: rows.find((x) => x.title === C.title)._first_seen >
+                  rows.find((x) => x.title === A.title)._first_seen,
+      };
+    });
+
+    check("a bid repeated in one payload is stored once", r.afterFirst === 2, String(r.afterFirst));
+    check("the duplicate is not counted as a new find", r.firstAdded === 2, String(r.firstAdded));
+    check("a rescan only counts genuinely new bids", r.secondAdded === 1, String(r.secondAdded));
+    check("a bid gone from the rescan is dropped", !r.titles.includes("Beta curb job"));
+    check("first-seen survives a rescan", r.stampPreserved);
+    check("a newly found bid sorts as newer", r.newerIsC);
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
+  // ── 6. Saved-search throttling ──
   console.log("\nSaved searches are not re-scanned on every app open");
   {
     async function openWith(checkedAt) {

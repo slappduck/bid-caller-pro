@@ -314,6 +314,67 @@ def health():
     return jsonify({"service": "Bid Caller Pro License Server", "status": "ok"})
 
 
+@app.route("/health", methods=["GET"])
+def health_detail():
+    """Which backends are actually wired up, and is local search still working.
+
+    Exists because the failure that matters most here is silent: if a search
+    backend is unset or has started getting blocked, /scan still returns 200
+    with a smaller, worse set of bids and nothing anywhere says why. This
+    answers "is the search engine actually at full strength right now" from a
+    browser, without running a scan or spending an API call.
+
+    Reports only whether each secret is present, never any part of its value,
+    so it is safe to leave unauthenticated the way the plain / probe is.
+    """
+    # Never call out to a provider here: this endpoint has to stay instant and
+    # free, and a hung upstream must not make the health check itself look down.
+    backends = {
+        "openai": bool(OPENAI_API_KEY),          # AI bid extraction — /scan is inert without it
+        "tavily": bool(TAVILY_API_KEY),          # primary local search
+        "sam_gov": bool(SAM_API_KEY),            # federal bids
+        "supabase": bool(SUPABASE_URL and SUPABASE_ANON_KEY),
+        "upstash_redis": bool(UPSTASH_URL and UPSTASH_TOKEN),  # else state is lost on redeploy
+        "resend_email": bool(RESEND_API_KEY),
+        "saved_search_alerts": bool(SUPABASE_SERVICE_ROLE_KEY and CRON_SECRET and RESEND_API_KEY),
+    }
+    with _ddg_lock:
+        ddg_streak = _ddg_fail_streak
+    # DuckDuckGo is scraped, so it can be blocked outright. That only threatens
+    # local search when Tavily isn't configured to take over.
+    ddg = {
+        "consecutive_empty_searches": ddg_streak,
+        "degraded": ddg_streak >= DDG_TRIP_THRESHOLD,
+        "is_sole_local_search": not bool(TAVILY_API_KEY),
+    }
+    problems = []
+    if not backends["openai"]:
+        problems.append("OPENAI_API_KEY unset — /scan and /upcoming return no local bids at all")
+    if not backends["tavily"] and ddg["degraded"]:
+        problems.append("DuckDuckGo appears blocked and no TAVILY_API_KEY is set — "
+                        "local bid search is effectively down")
+    elif not backends["tavily"]:
+        problems.append("TAVILY_API_KEY unset — local search depends solely on scraping DuckDuckGo")
+    if not backends["sam_gov"]:
+        problems.append("SAM_API_KEY unset — no federal bids in results")
+    if not backends["upstash_redis"]:
+        problems.append("Upstash unset — licenses, portal directory and geo cache "
+                        "are lost on every redeploy")
+    return jsonify({
+        "service": "Bid Caller Pro License Server",
+        "status": "ok" if not problems else "degraded",
+        "backends": backends,
+        "local_search": ddg,
+        "scan_config": {
+            "max_pages_per_town": MAX_PAGES,
+            "federal_window_days": SCAN_WINDOW_DAYS,
+            "geo_miss_retry_hours": GEO_MISS_RETRY_HOURS,
+            "model": OPENAI_MODEL,
+        },
+        "problems": problems,
+    })
+
+
 # ═══════════════════════════════════════════════════════════
 # PAYMENTS: Stripe webhook -> auto-issue keys (survives restarts)
 # ═══════════════════════════════════════════════════════════
@@ -1680,6 +1741,17 @@ def _run_local_queries(queries, ai_label, max_pages, grouped, center, radius, cd
     return raw[0]
 
 
+def _is_open_bid(bid):
+    """A bid the client will actually display. Mirrors isOpen() in app.html."""
+    return str((bid or {}).get("status") or "Open").strip().lower() == "open"
+
+
+def _bid_dupe_key(bid):
+    """Identity of a solicitation for de-duplication: title + deadline."""
+    title = re.sub(r"\s+", " ", str((bid or {}).get("title") or "")).strip().lower()
+    return title, str((bid or {}).get("deadline") or "").strip().lower()
+
+
 def _split_city_state(raw):
     """'Bentonville, AR' -> ('Bentonville', 'AR'). Bare city -> ('Bentonville', '')."""
     parts = [p.strip() for p in str(raw or "").split(",")]
@@ -1742,7 +1814,16 @@ def _place_bid(grouped, bid, center, radius, db, default_city="", city_coords=No
     # same-named cities and because "this one is across the line" is something
     # a contractor wants to see before driving to look at it.
     label = city if used_state == center["state"] else f"{city}, {used_state}"
-    grouped.setdefault(label, []).append(bid)
+    # The same solicitation routinely turns up on two different pages -- an
+    # aggregator and the agency's own site -- and both used to be kept. The
+    # client derives a bid's id from its city + title + scope, so the copies
+    # came out as duplicate cards sharing one id: starring one appeared to
+    # star the other. Same title and deadline in the same town is the same job.
+    bucket = grouped.setdefault(label, [])
+    key = _bid_dupe_key(bid)
+    if key[0] and any(_bid_dupe_key(existing) == key for existing in bucket):
+        return
+    bucket.append(bid)
     if city_coords is not None:
         city_coords[label] = {"lat": coords[0], "lon": coords[1]}
 
@@ -1878,7 +1959,11 @@ def _perform_scan(location, radius):
     for city_bids in grouped.values():
         city_bids.sort(key=_score_bid, reverse=True)
 
-    total = sum(len(v) for v in grouped.values())
+    # Open bids only. Closed ones are still returned (ranked last) but counting
+    # them made the reported total disagree with what the app shows: a scan
+    # that turned up nothing but expired listings announced "12 bids" and then
+    # dropped the user on an empty feed.
+    total = sum(1 for v in grouped.values() for b in v if _is_open_bid(b))
     print(f"[scan] {int(radius)} mi from {center['city']},{center['state']} "
           f"-> {total} bids kept (local_raw={local_raw})", flush=True)
 

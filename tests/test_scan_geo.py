@@ -104,6 +104,65 @@ class PlaceBidStateTests(unittest.TestCase):
         self.assertEqual(self.grouped, {})  # the IL one is >100mi away
 
 
+class DuplicateBidTests(unittest.TestCase):
+    """The same solicitation is routinely found on an aggregator AND the
+    agency's own site. Both copies used to be kept, and since the client
+    derives a bid's id from city + title + scope they rendered as two cards
+    sharing one id — starring one appeared to star the other."""
+
+    def setUp(self):
+        self.grouped, self.db = {}, {}
+
+    def _place(self, bid):
+        with patch.object(ls, "_geo_from_city", side_effect=_fake_geo):
+            ls._place_bid(self.grouped, bid, CENTER, 100, self.db)
+
+    def test_same_title_and_deadline_in_one_town_is_kept_once(self):
+        for url in ("https://aggregator.example/a", "https://city.example/b"):
+            self._place({"title": "Sidewalk & ADA Ramp Program", "city": "Springfield",
+                         "deadline": "2026-12-01", "status": "Open", "url": url})
+        self.assertEqual(len(self.grouped["Springfield"]), 1)
+
+    def test_whitespace_and_case_differences_still_count_as_duplicates(self):
+        self._place({"title": "Sidewalk  Program", "city": "Springfield",
+                     "deadline": "2026-12-01", "status": "Open"})
+        self._place({"title": "sidewalk program", "city": "Springfield",
+                     "deadline": "2026-12-01", "status": "Open"})
+        self.assertEqual(len(self.grouped["Springfield"]), 1)
+
+    def test_same_title_with_a_different_deadline_is_a_different_bid(self):
+        # Annual re-lets share a title; the deadline is what separates them.
+        self._place({"title": "Annual Sidewalk Program", "city": "Springfield",
+                     "deadline": "2026-12-01", "status": "Open"})
+        self._place({"title": "Annual Sidewalk Program", "city": "Springfield",
+                     "deadline": "2026-12-15", "status": "Open"})
+        self.assertEqual(len(self.grouped["Springfield"]), 2)
+
+    def test_same_title_in_two_towns_is_not_deduplicated(self):
+        self._place({"title": "Sidewalk Program", "city": "Springfield",
+                     "deadline": "2026-12-01", "status": "Open"})
+        self._place({"title": "Sidewalk Program", "city": "Aurora",
+                     "deadline": "2026-12-01", "status": "Open"})
+        self.assertEqual(sum(len(v) for v in self.grouped.values()), 2)
+
+    def test_untitled_bids_are_not_collapsed_together(self):
+        for scope in ("first job", "second job"):
+            self._place({"title": "", "scope": scope, "city": "Springfield",
+                         "deadline": "2026-12-01", "status": "Open"})
+        self.assertEqual(len(self.grouped["Springfield"]), 2)
+
+
+class OpenBidCountTests(unittest.TestCase):
+    def test_closed_bids_are_not_counted_as_findings(self):
+        self.assertTrue(ls._is_open_bid({"status": "Open"}))
+        self.assertTrue(ls._is_open_bid({}))            # unstated means open
+        self.assertFalse(ls._is_open_bid({"status": "Closed"}))
+        self.assertFalse(ls._is_open_bid({"status": "closed"}))
+
+    def test_planned_upcoming_items_are_not_open_bids(self):
+        self.assertFalse(ls._is_open_bid({"status": "Planned"}))
+
+
 class CityCoordsCacheTests(unittest.TestCase):
     def test_success_is_cached_and_not_refetched(self):
         db, calls = {}, []
