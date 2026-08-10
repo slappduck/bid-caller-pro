@@ -15,8 +15,8 @@
 //
 // API calls (Render backend, Supabase REST) and map tiles are still never
 // cached — bid data, auth, and the map must never be served stale.
-const SHELL_CACHE = "curbcall-shell-v3";
-const ASSET_CACHE = "curbcall-assets-v3";
+const SHELL_CACHE = "curbcall-shell-v4";
+const ASSET_CACHE = "curbcall-assets-v4";
 const KEEP = [SHELL_CACHE, ASSET_CACHE];
 
 const SHELL_FILES = [
@@ -110,9 +110,20 @@ self.addEventListener("fetch", (event) => {
         if (cached) return cached;
         return fetch(event.request)
           .then((res) => {
-            // Opaque (no-cors) responses are cached too: they replay fine for
-            // <script>/<link>/font loads, which is all these hosts serve here.
-            if (res && (res.ok || res.type === "opaque")) {
+            // Only ever cache a response we could actually verify succeeded.
+            //
+            // This previously also cached opaque responses. A cross-origin
+            // <script src> is a no-cors request, so its response is opaque —
+            // status 0 and ok false whether it succeeded or 404'd. Caching
+            // those meant one failed fetch of supabase-js got stored as if it
+            // were the library, and because this path is cache-first it was
+            // then served forever. The app would find no supabase, conclude it
+            // was offline, and refuse to sign anyone in, permanently.
+            //
+            // Install-time precaching fetches these same URLs with mode:"cors"
+            // and cache.add(), which rejects on a bad status, so the cache
+            // still gets populated properly — just never with a failure.
+            if (res && res.ok && res.type !== "opaque") {
               const copy = res.clone();
               caches.open(ASSET_CACHE).then((cache) => cache.put(event.request, copy));
             }

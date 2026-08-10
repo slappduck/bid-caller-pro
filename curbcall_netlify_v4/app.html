@@ -12,9 +12,9 @@
 <link rel="icon" href="icon-192.png" />
 <link rel="apple-touch-icon" href="icon-192.png" />
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" crossorigin="anonymous"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 :root{
@@ -669,6 +669,31 @@ function updateOfflineBar(){
 }
 window.addEventListener("online",()=>{updateOfflineBar();toast("\u{1F4F6} Back online");});
 window.addEventListener("offline",updateOfflineBar);
+// Sign-in has two different failure modes and they need different advice:
+// no connection, or the auth library never loaded (usually a bad cached copy).
+// Telling someone with full signal that they are offline sends them hunting
+// for the wrong problem.
+function signInAvailable(){
+  if(!HAS_SB){
+    setMsg("Couldn't load the sign-in service. Tap Reload below to fetch a fresh copy.","err");
+    const card=document.getElementById("auth-card");
+    if(card&&!document.getElementById("lib-reload-btn")){
+      const b=document.createElement("button");
+      b.id="lib-reload-btn";b.className="btn-primary";b.textContent="Reload the app";
+      b.onclick=()=>{
+        try{sessionStorage.removeItem("lib_reload_tried");}catch(e){}
+        (self.caches?caches.keys():Promise.reject())
+          .then(keys=>Promise.all(keys.map(k=>caches.delete(k))))
+          .catch(()=>{}).then(()=>location.reload());
+      };
+      card.appendChild(b);
+    }
+    return false;
+  }
+  if(!navigator.onLine){setMsg("You're offline — signing in needs a connection.","err");return false;}
+  return true;
+}
+
 // Guard for actions that genuinely cannot work without a connection.
 function requireOnline(what){
   if(!isOffline())return true;
@@ -734,17 +759,17 @@ function showPasswordReset(){
 }
 
 document.getElementById("google-btn").onclick=async()=>{
-  if(isOffline()){setMsg("You're offline — signing in needs a connection.","err");return;}
+  if(!signInAvailable())return;
   setMsg("","");
   const{error}=await sb.auth.signInWithOAuth({
     provider:"google",
-    options:{redirectTo:window.location.href}
+    options:{redirectTo:window.location.origin+window.location.pathname}
   });
   if(error)setMsg(error.message,"err");
 };
 
 document.getElementById("email-btn").onclick=async()=>{
-  if(isOffline()){setMsg("You're offline — signing in needs a connection.","err");return;}
+  if(!signInAvailable())return;
   const email=document.getElementById("auth-email").value.trim();
   const password=document.getElementById("auth-password").value;
   if(!email){setMsg("Enter your email","err");return;}
@@ -766,7 +791,7 @@ document.getElementById("email-btn").onclick=async()=>{
 };
 
 document.getElementById("magic-btn").onclick=async()=>{
-  if(isOffline()){setMsg("You're offline — signing in needs a connection.","err");return;}
+  if(!signInAvailable())return;
   const email=document.getElementById("auth-email").value.trim();
   if(!email){setMsg("Enter your email first","err");return;}
   setMsg("Sending...","");
@@ -2671,6 +2696,14 @@ if("serviceWorker"in navigator){
 // auth-screen-vs-app decision — no separate manual check needed here.
 // The exception is a missing supabase-js: no client means no listener and no
 // event, so nothing would ever decide what to show. Boot that path by hand.
+// Deliberately no automatic purge-and-reload here. A missing library is often
+// a bad cached copy, but navigator.onLine only reports whether a network
+// interface exists — it is true on a phone with no usable signal. Clearing the
+// asset cache on that signal would delete the very copies that make the app
+// work offline, for exactly the users who need them, and reloading mid-boot
+// helps nobody. Bumping the service worker's cache version already clears any
+// poisoned entry on deploy; beyond that the recovery is offered to the user
+// as a button rather than taken on their behalf. See signInAvailable().
 if(!HAS_SB)bootOffline();
 updateOfflineBar();
 </script>
