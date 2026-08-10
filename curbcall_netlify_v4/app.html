@@ -20,6 +20,7 @@
 :root{
   --bg:#0d0f18;--surface:#13162a;--card:#1c2035;--border:#2a2f4a;
   --accent:#f59e0b;--accent-d:#d97706;--blue:#3b82f6;--green:#22c55e;--red:#ef4444;
+  --amber:#f59e0b; /* alias for --accent: index/terms/privacy name it this way */
   --text:#f1f5f9;--text2:#94a3b8;--text3:#475569;
   --ui:'Inter',sans-serif;--mono:'DM Mono',monospace;
 }
@@ -214,6 +215,11 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 /* ── Nav badge ── */
 .nav-btn{position:relative;}
 .nav-badge{position:absolute;top:2px;right:calc(50% - 20px);width:8px;height:8px;border-radius:50%;background:var(--red);box-shadow:0 0 0 2px var(--surface);}
+
+/* ── Offline banner ── */
+#offline-bar{display:none;background:#3a2a08;color:var(--accent);font-size:0.78rem;font-weight:600;text-align:center;padding:0.5rem 1rem;border-bottom:1px solid var(--border);flex-shrink:0;}
+#offline-bar.show{display:block;}
+.map-card.offline{display:none !important;}
 </style>
 </head>
 <body>
@@ -222,6 +228,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
     <div class="brand">&#x1F6A7;<span class="brand-name">Curb<span>Call</span></span></div>
     <span class="user-chip" id="user-chip" onclick="goTo('account')">...</span>
   </div>
+  <div id="offline-bar"></div>
   <div class="screens">
 
     <!-- FIND -->
@@ -426,7 +433,17 @@ const SERVER = "https://bid-caller-pro.onrender.com";
 const PORTAL_URL = "https://billing.stripe.com/p/login/3cIcN4an28420Yad2fejK00";
 const SUPPORT_EMAIL = "Yumiwave1@gmail.com";
 
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Leaflet and supabase-js load from CDNs. The service worker caches both, but
+// a very first run on a dead connection (or a blocked/ad-filtered CDN) can
+// still leave them missing — and calling supabase.createClient() on a missing
+// library throws right here, at the top level, killing this entire script.
+// That failure mode is the worst one this app has: a contractor parked on a
+// job site with no bars would get a dead sign-in screen instead of the bids
+// already saved on their phone. So detect the libraries rather than assume
+// them, and let the app fall back to a read-only local mode.
+const HAS_SB = typeof supabase !== "undefined" && supabase && typeof supabase.createClient === "function";
+const HAS_MAPS = typeof L !== "undefined" && L && typeof L.map === "function";
+const sb = HAS_SB ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
 // ── storage helpers ──
 const store = {
@@ -473,17 +490,17 @@ function bidRowForSync(id,city){
   };
 }
 async function pushSavedBid(id,city){
-  if(!currentUser)return;
+  if(!sb||!currentUser)return;
   const row=bidRowForSync(id,city);
   if(!row)return;
   try{await sb.from("saved_bids").upsert(row,{onConflict:"user_id,bid_id"});}catch(e){}
 }
 async function deleteSavedBidCloud(id){
-  if(!currentUser)return;
+  if(!sb||!currentUser)return;
   try{await sb.from("saved_bids").delete().eq("bid_id",id);}catch(e){}
 }
 async function syncPullSavedBids(){
-  if(!currentUser)return;
+  if(!sb||!currentUser)return;
   const{data,error}=await sb.from("saved_bids").select("*");
   if(error||!data)return; // couldn't reach the cloud — leave local data alone
   const cloudIds=new Set(data.map(r=>r.bid_id));
@@ -504,14 +521,14 @@ async function syncPullSavedBids(){
 }
 
 async function pushCompanyProfile(){
-  if(!currentUser)return;
+  if(!sb||!currentUser)return;
   const row={name:companyProfile.name||"",contact:companyProfile.contact||"",
              phone:companyProfile.phone||"",email:companyProfile.email||"",
              specialty:companyProfile.specialty||""};
   try{await sb.from("company_profiles").upsert(row,{onConflict:"user_id"});}catch(e){}
 }
 async function syncPullCompanyProfile(){
-  if(!currentUser)return;
+  if(!sb||!currentUser)return;
   const{data,error}=await sb.from("company_profiles").select("*").maybeSingle();
   if(error)return;
   if(data&&data.name){
@@ -536,8 +553,7 @@ window.setPipelineStatus=function(id,status){
   }
   if(saved[id])pushSavedBid(id,saved[id]._city);
 };
-window.refreshAfterPipeline=function(cityEnc,idEnc){
-  const city=decodeURIComponent(cityEnc),id=decodeURIComponent(idEnc);
+window.refreshAfterPipeline=function(city,id){
   if(document.getElementById("screen-feed").classList.contains("active"))renderFeed();
   if(document.getElementById("screen-saved").classList.contains("active"))renderSaved();
   const b=findBid(id);if(b)openDetail(city,b);
@@ -548,7 +564,35 @@ function toast(msg){
   t.textContent=msg;t.classList.add("show");
   clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),2600);
 }
-function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+// ── Offline state ──
+// Everything the app already knows (feed, saved bids, pipeline, notes) lives in
+// localStorage, so with no connection the app is still genuinely useful — it
+// just can't scan, sync, or sign in. Track that state explicitly so the UI can
+// say so instead of failing with generic "couldn't reach the server" errors.
+let offlineMode=!HAS_SB; // libraries missing entirely — hard offline
+function isOffline(){return offlineMode||!navigator.onLine;}
+function updateOfflineBar(){
+  const bar=document.getElementById("offline-bar");
+  if(!bar)return;
+  const off=isOffline();
+  bar.classList.toggle("show",off);
+  bar.textContent=offlineMode
+    ?"\u{1F4F4} Offline — showing your saved bids. Scanning and sync need a connection."
+    :"\u{1F4F4} You're offline — saved bids still work. Scans will resume when you're back.";
+  // Map tiles come from a CDN that isn't cached, so an offline map is just a
+  // grey box promising something it can't deliver — hide it rather than show it.
+  document.querySelectorAll(".map-card").forEach(c=>c.classList.toggle("offline",off));
+}
+window.addEventListener("online",()=>{updateOfflineBar();toast("\u{1F4F6} Back online");});
+window.addEventListener("offline",updateOfflineBar);
+// Guard for actions that genuinely cannot work without a connection.
+function requireOnline(what){
+  if(!isOffline())return true;
+  toast(`${what} needs a connection — you're offline.`);
+  return false;
+}
 
 // ── Auth screen logic ──
 let authMode="signup"; // signup | signin
@@ -582,7 +626,7 @@ document.getElementById("forgot-link").onclick=async()=>{
 };
 // Supabase redirects back with a recovery session — catch that and let the
 // user set a new password instead of dropping them straight into the app.
-sb.auth.onAuthStateChange((event,session)=>{
+if(sb)sb.auth.onAuthStateChange((event,session)=>{
   if(event==="PASSWORD_RECOVERY")showPasswordReset();
 });
 function showPasswordReset(){
@@ -608,6 +652,7 @@ function showPasswordReset(){
 }
 
 document.getElementById("google-btn").onclick=async()=>{
+  if(isOffline()){setMsg("You're offline — signing in needs a connection.","err");return;}
   setMsg("","");
   const{error}=await sb.auth.signInWithOAuth({
     provider:"google",
@@ -617,6 +662,7 @@ document.getElementById("google-btn").onclick=async()=>{
 };
 
 document.getElementById("email-btn").onclick=async()=>{
+  if(isOffline()){setMsg("You're offline — signing in needs a connection.","err");return;}
   const email=document.getElementById("auth-email").value.trim();
   const password=document.getElementById("auth-password").value;
   if(!email){setMsg("Enter your email","err");return;}
@@ -638,6 +684,7 @@ document.getElementById("email-btn").onclick=async()=>{
 };
 
 document.getElementById("magic-btn").onclick=async()=>{
+  if(isOffline()){setMsg("You're offline — signing in needs a connection.","err");return;}
   const email=document.getElementById("auth-email").value.trim();
   if(!email){setMsg("Enter your email first","err");return;}
   setMsg("Sending...","");
@@ -653,13 +700,17 @@ function setMsg(msg,cls){
 }
 
 // ── Session management ──
-sb.auth.onAuthStateChange((event,session)=>{
+if(sb)sb.auth.onAuthStateChange((event,session)=>{
   if(event==="PASSWORD_RECOVERY")return; // handled separately — don't drop into the app mid-reset
   if(session){
     currentUser=session.user;
+    // Remembered so a later offline start knows this device belongs to a
+    // signed-in user and can go straight to their cached bids.
+    store.set("last_user_email",session.user.email||"");
     showApp();
   } else {
     currentUser=null;
+    store.set("last_user_email","");
     showAuth();
   }
 });
@@ -667,6 +718,31 @@ sb.auth.onAuthStateChange((event,session)=>{
 function showAuth(){
   document.getElementById("auth-screen").style.display="flex";
   document.getElementById("app").style.display="none";
+}
+
+// ── Offline boot ──
+// Reached only when supabase-js itself never loaded, so there is no way to
+// verify a session. A device that was signed in before is trusted to still be
+// signed in and shown its own locally-cached data (which never left this phone
+// anyway); anyone else gets told plainly why they can't sign in yet.
+function bootOffline(){
+  const knownEmail=store.get("last_user_email","");
+  if(!knownEmail){
+    showAuth();
+    const card=document.getElementById("auth-card");
+    if(card)card.innerHTML=`
+      <div class="auth-title">\u{1F4F4} You're offline</div>
+      <div class="auth-sub">Signing in needs a connection. Reconnect and reopen CurbCall Pro to get started.</div>
+      <button class="btn-primary" onclick="location.reload()">Try again</button>`;
+    return;
+  }
+  currentUser={email:knownEmail};
+  document.getElementById("auth-screen").style.display="none";
+  document.getElementById("app").style.display="flex";
+  updateUserChip();
+  updateOfflineBar();
+  renderFeed();
+  toast("\u{1F4F4} Offline — showing your saved bids");
 }
 
 function updateUserChip(){
@@ -679,6 +755,7 @@ function showApp(){
   document.getElementById("auth-screen").style.display="none";
   document.getElementById("app").style.display="flex";
   updateUserChip();
+  updateOfflineBar();
   renderFeed();
   // The map only ever got created inside detectLocation()'s geolocation
   // success callback — if a user denies the location prompt (extremely
@@ -688,6 +765,10 @@ function showApp(){
   updateFindMap(39.5,-98.35,"Click the map to set your location");
   upPicker.show(39.5,-98.35,"Click the map to set your location");
   leadsPicker.show(39.5,-98.35,"Click the map to set your location");
+  // Everything below needs the network. Offline, the app still opens to a
+  // fully readable feed — it just doesn't waste a launch firing requests that
+  // are all going to time out.
+  if(isOffline())return;
   autoFillZip();
   autoUnlock();
   checkSavedSearches();
@@ -761,15 +842,15 @@ document.getElementById("clear-feed").onclick=()=>{
 // ── Saved searches (auto-alerts) ──
 let savedSearches=store.get("saved_searches",[]);
 async function pushSavedSearch(location,radiusVal){
-  if(!currentUser)return;
+  if(!sb||!currentUser)return;
   try{await sb.from("saved_searches").insert({location,radius:radiusVal});}catch(e){}
 }
 async function deleteSavedSearchCloud(location,radiusVal){
-  if(!currentUser)return;
+  if(!sb||!currentUser)return;
   try{await sb.from("saved_searches").delete().eq("location",location).eq("radius",radiusVal);}catch(e){}
 }
 async function syncPullSavedSearches(){
-  if(!currentUser)return;
+  if(!sb||!currentUser)return;
   const{data,error}=await sb.from("saved_searches").select("*");
   if(error||!data)return;
   const sig=s=>`${s.location.trim().toLowerCase()}|${s.radius}`;
@@ -859,11 +940,23 @@ async function fireNotification(title,body){
   }catch(e){}
 }
 
-// Silently re-scans every saved search when the app opens, so bids show up
-// without the user having to remember to tap Scan — the closest thing to a
-// real alert we can do without a paid always-on backend + push service.
+// Silently re-scans every saved search, so bids show up without the user
+// having to remember to tap Scan — the closest thing to a real alert we can do
+// without a paid always-on backend + push service.
+//
+// Rate-limited, because this used to run on every single app open: one /scan
+// per saved search, back to back, each with a 150s timeout. Three saved
+// searches meant up to seven minutes of mobile-data requests per launch and a
+// matching pile of work for the backend. Bid boards post daily at best, so a
+// few hours between automatic checks costs nothing — and tapping Scan on a
+// saved search still runs it immediately, on demand.
+const SAVED_SEARCH_CHECK_MS=6*60*60*1000; // 6 hours
 async function checkSavedSearches(){
   if(!savedSearches.length)return;
+  if(isOffline())return;
+  const last=store.get("saved_search_checked_at",0);
+  if(last&&Date.now()-last<SAVED_SEARCH_CHECK_MS)return;
+  store.set("saved_search_checked_at",Date.now());
   let newTotal=0;
   for(const s of savedSearches){
     try{
@@ -912,7 +1005,7 @@ function addTileRetry(layer){
 let findMap=null,findMarker=null,findRadiusCircle=null,findCenter=null,findTownMarkers=[];
 function updateFindMap(lat,lon,label){
   const mv=document.getElementById("find-map-view");
-  if(!mv)return;
+  if(!mv||!HAS_MAPS)return; // Leaflet never loaded — the rest of the app still works
   findCenter={lat,lon};
   if(!findMap){
     // tap:false -- Leaflet's own legacy touch-tap handler (Tap.js) is known to
@@ -1004,7 +1097,7 @@ function createLocationPicker(containerId,inputId){
   const st={map:null,marker:null};
   function show(lat,lon,label){
     const mv=document.getElementById(containerId);
-    if(!mv)return;
+    if(!mv||!HAS_MAPS)return;
     if(!st.map){
       st.map=L.map(mv,{attributionControl:false,tap:false}).setView([lat,lon],11);
       const tiles=L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{
@@ -1068,6 +1161,7 @@ function autoFillZip(){detectLocation(false);}
 
 // ── Supabase token helper ──
 async function getSupabaseToken(){
+  if(!sb)return"";
   const{data:{session}}=await sb.auth.getSession();
   return session?.access_token||"";
 }
@@ -1161,13 +1255,24 @@ function jitteredLatLon(lat,lon,idx){
   const dLon=(radiusDeg*Math.cos(angle))/Math.cos(lat*Math.PI/180);
   return[lat+dLat,lon+dLon];
 }
-window.mapOpenBid=function(cityEnc,idEnc){
-  const city=decodeURIComponent(cityEnc),id=decodeURIComponent(idEnc);
-  const b=findBid(id);
-  if(b)openDetail(city,b);
-};
+// Popup content is built as a real DOM node rather than an HTML string so the
+// "View details" link can carry a closure instead of an interpolated bid id —
+// same apostrophe trap the modal buttons had.
+function bidPopupNode(city,b){
+  const wrap=document.createElement("div");
+  const bits=[`<b>${esc(b.title||"Untitled Project")}</b>`,esc(city)];
+  if(b.value)bits.push(esc(b.value));
+  wrap.innerHTML=bits.join(" • ")+(b.deadline?`<br>Due ${esc(b.deadline)}`:"")+`<br>`;
+  const link=document.createElement("a");
+  link.href="#";
+  link.textContent="View details →";
+  link.onclick=(e)=>{e.preventDefault();openDetail(city,b);};
+  wrap.appendChild(link);
+  return wrap;
+}
 function renderMap(){
   const mv=document.getElementById("map-view");
+  if(!mv||!HAS_MAPS)return;
   if(!lastScanMap||!lastScanMap.center){mv.innerHTML="";return;}
   if(!leafletMap){
     mv.innerHTML="";
@@ -1196,11 +1301,9 @@ function renderMap(){
       const[lat,lon]=jitteredLatLon(c.lat,c.lon,i);
       const dleft=daysUntil(b);
       const color=dleft!=null&&dleft<=2?"#ef4444":dleft!=null&&dleft<=7?"#f59e0b":"#22c55e";
-      const id=bidId(city,b);
-      const cityArg=encodeURIComponent(city),idArg=encodeURIComponent(id);
       L.circleMarker([lat,lon],{radius:8,color,fillColor:color,fillOpacity:0.95,weight:2})
         .addTo(leafletMap)
-        .bindPopup(`<b>${esc(b.title||"Untitled Project")}</b><br>${esc(city)}${b.value?" • "+esc(b.value):""}${b.deadline?"<br>Due "+esc(b.deadline):""}<br><a href="#" onclick="mapOpenBid('${cityArg}','${idArg}');return false;">View details →</a>`);
+        .bindPopup(bidPopupNode(city,b));
       bounds.push([lat,lon]);
     });
   }
@@ -1222,6 +1325,7 @@ if(lastScanMap&&lastScanMap.center){
 
 async function runScan(){
   if(scanBtn.disabled)return; // guard against double-tap / double-submit
+  if(!requireOnline("Scanning for bids"))return;
   const location=document.getElementById("loc-input").value.trim();
   if(!location){toast("Enter a ZIP or city first");return;}
   scanBtn.disabled=true;
@@ -1279,6 +1383,7 @@ function upcomingId(city,b){return(city+(b.title||"")+(b.scope||"")).replace(/\s
 
 async function runUpcoming(){
   if(upcomingBtn.disabled)return; // guard against double-tap / double-submit
+  if(!requireOnline("Finding upcoming projects"))return;
   const location=document.getElementById("up-loc-input").value.trim();
   if(!location){toast("Enter a ZIP or city first");return;}
   upcomingBtn.disabled=true;
@@ -1389,6 +1494,7 @@ document.getElementById("leads-loc-input").addEventListener("keydown",e=>{if(e.k
 
 async function runLeads(){
   if(leadsBtn.disabled)return; // guard against double-tap / double-submit
+  if(!requireOnline("Finding residential leads"))return;
   const location=document.getElementById("leads-loc-input").value.trim();
   if(!location){toast("Enter a ZIP or city first");return;}
   leadsBtn.disabled=true;
@@ -1470,7 +1576,7 @@ function leadCard(city,l){
       </div>`:""}
       ${l.url?`<div class="bid-meta" style="margin-top:0.4rem;"><a class="chip" href="${esc(l.url)}" target="_blank">\u{1F517} Permit Record</a></div>`:""}
       ${pid?`<div class="lead-pipeline-row">
-        ${LEAD_STATUSES.map(([k,label])=>`<button class="pchip ${curStatus===k?"active-"+k:""}" onclick="setLeadStatus('${esc(pid)}','${curStatus===k?"":k}')">${label}</button>`).join("")}
+        ${LEAD_STATUSES.map(([k,label])=>`<button class="pchip ${curStatus===k?"active-"+k:""}" data-lead-id="${esc(pid)}" data-lead-status="${esc(curStatus===k?"":k)}">${label}</button>`).join("")}
       </div>`:""}
     </div>
   </div>`;
@@ -1519,6 +1625,11 @@ function renderLeads(){
   lastLeadsRows=rows;
   list.innerHTML=`<div class="feed-label">RESIDENTIAL LEADS</div>`+rows.map(([c,l])=>leadCard(c,l)).join("");
   if(!rows.length)list.innerHTML=`<div class="empty"><div class="icon">&#x1F50D;</div><h3>No matches</h3><p>Try a different search term.</p></div>`;
+  // Real listeners, not interpolated onclick — a permit id containing a quote
+  // would otherwise break the status buttons on that lead.
+  list.querySelectorAll("[data-lead-id]").forEach(btn=>{
+    btn.onclick=()=>setLeadStatus(btn.dataset.leadId,btn.dataset.leadStatus);
+  });
 }
 document.getElementById("leads-search").oninput=()=>renderLeads();
 document.getElementById("leads-sort").onchange=()=>renderLeads();
@@ -1581,7 +1692,7 @@ function renderFeed(){
   }
   if(cities.length>1){
     let html=`<div class="tiles"><div class="tile ${cityFilter==="All"?"active":""}" data-c="All"><div class="n">${total}</div><div class="l">All</div></div>`;
-    cities.sort().forEach(c=>{const n=bidData[c].filter(isOpen).length;html+=`<div class="tile ${cityFilter===c?"active":""}" data-c="${c}"><div class="n">${n}</div><div class="l">${c}</div></div>`;});
+    cities.sort().forEach(c=>{const n=bidData[c].filter(isOpen).length;html+=`<div class="tile ${cityFilter===c?"active":""}" data-c="${esc(c)}"><div class="n">${n}</div><div class="l">${esc(c)}</div></div>`;});
     html+=`</div>`;tiles.innerHTML=html;
     tiles.querySelectorAll(".tile").forEach(t=>t.onclick=()=>{cityFilter=t.dataset.c;renderFeed();});
   } else tiles.innerHTML="";
@@ -1639,12 +1750,12 @@ function bidCard(city,b){
   const deadlineChip=b.deadline
     ?`<span class="chip" style="${dleft!=null&&dleft<=2?'color:var(--red);':dleft!=null&&dleft<=7?'color:var(--accent);':''}${urgent?'font-weight:800;font-size:0.72rem;':''}">\u{1F4C5} ${esc(b.deadline)}${dleft!=null&&dleft>=0?` \u2022 ${dleft===0?"today":dleft+"d left"}`:""}</span>`
     :"";
-  return `<div class="bid" data-id="${id}" data-city="${city}">
+  return `<div class="bid" data-id="${esc(id)}" data-city="${esc(city)}">
     <div class="bid-bar ${barClass}" style="${barClass?"":"background:var(--green)"}"></div>
     <div class="bid-body">
       <div class="bid-top">
         <span class="bid-title">${esc(b.title||"Untitled Project")}</span>
-        <span class="star ${isSaved?"on":""}" data-star="${id}" data-city="${city}">${isSaved?"\u2605":"\u2606"}</span>
+        <span class="star ${isSaved?"on":""}" data-star="${esc(id)}" data-city="${esc(city)}">${isSaved?"\u2605":"\u2606"}</span>
       </div>
       ${b.scope?`<div class="bid-scope">${esc(b.scope)}</div>`:""}
       <div class="bid-meta">
@@ -1681,7 +1792,6 @@ function openDetail(city,b){
   const mc=document.getElementById("modal-content");
   const id=bidId(city,b);
   const pStatus=pipeline[id]||"";
-  const cityEnc=encodeURIComponent(city),idEnc=encodeURIComponent(id);
   function row(label,val,link){
     if(!val)return"";
     const v=link?`<a href="${link}">${esc(val)}</a>`:esc(val);
@@ -1701,7 +1811,7 @@ function openDetail(city,b){
     <div class="detail-row">
       <div class="detail-label">Bid Status</div>
       <div class="pipeline-row">
-        ${statuses.map(([k,label])=>`<button class="pchip ${pStatus===k?"active-"+k:""}" onclick="setPipelineStatus('${id}','${pStatus===k?"":k}');refreshAfterPipeline('${cityEnc}','${idEnc}');">${label}</button>`).join("")}
+        ${statuses.map(([k,label])=>`<button class="pchip ${pStatus===k?"active-"+k:""}" data-pstatus="${esc(pStatus===k?"":k)}">${label}</button>`).join("")}
       </div>
     </div>
     <div class="detail-row">
@@ -1711,11 +1821,30 @@ function openDetail(city,b){
     <div class="modal-actions">
       ${b.email?`<a class="ma-gold" href="mailto:${esc(b.email)}">\u2709 Email</a>`:""}
       ${b.url?`<a class="ma-ghost" href="${esc(b.url)}" target="_blank">\u{1F517} Open</a>`:""}
-      <button class="ma-ghost" onclick="shareBid('${cityEnc}','${idEnc}');">\u{1F4E4} Share</button>
-      <button class="ma-ghost" onclick="toggleSave(decodeURIComponent('${cityEnc}'),decodeURIComponent('${idEnc}'));closeModal();">${saved[bidId(city,b)]?"\u2605 Saved":"\u2606 Save"}</button>
-      ${b.deadline?`<button class="ma-ghost" onclick="addToCalendar('${cityEnc}','${idEnc}');">\u{1F4C5} Add to Calendar</button>`:""}
-      <button class="ma-ghost" onclick="draftProposal('${cityEnc}','${idEnc}');">✍️ Draft Proposal</button>
+      <button class="ma-ghost" data-act="share">\u{1F4E4} Share</button>
+      <button class="ma-ghost" data-act="save">${saved[bidId(city,b)]?"\u2605 Saved":"\u2606 Save"}</button>
+      ${b.deadline?`<button class="ma-ghost" data-act="calendar">\u{1F4C5} Add to Calendar</button>`:""}
+      <button class="ma-ghost" data-act="draft">✍️ Draft Proposal</button>
     </div>`;
+  // Wired as real listeners instead of onclick="fn('${id}')" attributes. A bid
+  // id is built from its city + title text, so a bid anywhere like O'Fallon
+  // carried an apostrophe straight into the JS string literal and broke the
+  // handler — every button on that bid silently did nothing. Closing over the
+  // values sidesteps quoting entirely. (encodeURIComponent was not protection
+  // here: it leaves apostrophes untouched.)
+  mc.querySelectorAll("[data-pstatus]").forEach(btn=>{
+    btn.onclick=()=>{setPipelineStatus(id,btn.dataset.pstatus);refreshAfterPipeline(city,id);};
+  });
+  mc.querySelectorAll("[data-act]").forEach(btn=>{
+    btn.onclick=()=>{
+      const a=btn.dataset.act;
+      if(a==="share")shareBid(city,id);
+      else if(a==="save"){toggleSave(city,id);closeModal();}
+      else if(a==="calendar")addToCalendar(city,id);
+      else if(a==="draft")draftProposal(city,id);
+    };
+  });
+
   document.getElementById("modal-back").classList.add("open");
   document.getElementById("modal").classList.add("open");
   document.getElementById("bid-value").addEventListener("blur",()=>{
@@ -1752,8 +1881,7 @@ function openDetail(city,b){
     if(saved[id])pushSavedBid(id,saved[id]._city);
   });
 }
-window.shareBid=async function(cityEnc,idEnc){
-  const city=decodeURIComponent(cityEnc),id=decodeURIComponent(idEnc);
+window.shareBid=async function(city,id){
   const b=findBid(id);if(!b)return;
   const text=`${b.title||"Bid"} \u2014 ${city}${b.value?" \u2022 "+b.value:""}${b.deadline?" \u2022 Due "+b.deadline:""}${b.url?"\n"+b.url:""}`;
   try{
@@ -1768,8 +1896,7 @@ function icsDate(dateStr){
   return m?m[0].replace(/-/g,""):null;
 }
 function icsEscape(s){return String(s||"").replace(/([,;])/g,"\\$1").replace(/\n/g,"\\n");}
-window.addToCalendar=function(cityEnc,idEnc){
-  const city=decodeURIComponent(cityEnc),id=decodeURIComponent(idEnc);
+window.addToCalendar=function(city,id){
   const b=findBid(id);if(!b)return;
   const dt=icsDate(b.deadline);
   if(!dt){toast("Couldn't read a calendar date from this deadline");return;}
@@ -1804,9 +1931,9 @@ document.getElementById("modal-back").onclick=closeModal;
 // to the backend, which asks OpenAI for a ready-to-edit proposal cover
 // letter. Nothing about the company is stored server-side — it's just
 // passed through on this one request the same way the license key is.
-window.draftProposal=async function(cityEnc,idEnc){
-  const city=decodeURIComponent(cityEnc),id=decodeURIComponent(idEnc);
+window.draftProposal=async function(city,id){
   const b=findBid(id);if(!b)return;
+  if(!requireOnline("Drafting a proposal"))return;
   toast("✍️ Drafting proposal...");
   try{
     const token=await getSupabaseToken();
@@ -2034,6 +2161,12 @@ function renderAccount(){
     }catch(e){toast("Couldn't reach the server. Try again.");}
   };
   document.getElementById("signout-btn").onclick=async()=>{
+    if(!sb){
+      // Offline shim session — there's no server session to end, so just drop
+      // the local "this device is signed in" marker and go back to the gate.
+      store.set("last_user_email","");currentUser=null;
+      showAuth();toast("Signed out");return;
+    }
     await sb.auth.signOut();toast("Signed out");
   };
   document.getElementById("notif-card").onclick=toggleNotifPermission;
@@ -2060,6 +2193,7 @@ function renderAccount(){
     const file=e.target.files[0];
     if(!file)return;
     if(!currentUser){toast("Sign in first");return;}
+    if(!sb||!requireOnline("Uploading a photo"))return;
     toast("Uploading photo...");
     const ext=(file.name.split(".").pop()||"png").toLowerCase();
     const path=`${currentUser.id}/avatar.${ext}`;
@@ -2173,6 +2307,10 @@ if("serviceWorker"in navigator){
 // Supabase's onAuthStateChange (registered above) fires once immediately with
 // whatever session is currently stored, so it alone drives the initial
 // auth-screen-vs-app decision — no separate manual check needed here.
+// The exception is a missing supabase-js: no client means no listener and no
+// event, so nothing would ever decide what to show. Boot that path by hand.
+if(!HAS_SB)bootOffline();
+updateOfflineBar();
 </script>
 </body>
 </html>
