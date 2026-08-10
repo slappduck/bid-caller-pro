@@ -1,0 +1,152 @@
+# Making the search engine reliable
+
+The plan of record for search. Update the checkboxes as things land; the point
+is that "is it better?" stops being an opinion.
+
+---
+
+## The problem in one paragraph
+
+`/scan` pays a search API to *guess* which pages might contain bids, then pays
+OpenAI to read whatever comes back. That is expensive per query, capped by
+whatever credit is left, dependent on that day's search rankings, and it fails
+silently — when the search backend is rate-limited the scan still returns 200,
+just nearly empty, which is indistinguishable from "this area has no work."
+
+Public bids don't live in arbitrary corners of the web. They live in a handful
+of procurement platforms with stable, predictable URLs. Springfield MO is a
+CivicPlus site: every open solicitation has been sitting on
+`springfieldmo.gov/Bids.aspx` the whole time, free to read.
+
+**The shift:** use the search engine *once* to work out which platform a town
+uses. After that, read that platform directly, every scan, forever.
+
+---
+
+## What "working" means
+
+A 50-mile scan of a metro like Springfield should return **10–40 open bids**.
+Not hundreds — public bids stay open 2–4 weeks and a city that size lets a
+handful of concrete projects a year. Hundreds only becomes real if we widen
+scope deliberately (Phase 4).
+
+Current baseline: **1**.
+
+---
+
+## Phase 0 — Stop the bleeding, start measuring
+
+Nothing else can be judged until we can see what's happening.
+
+- [x] Cut Tavily to `basic` depth — `advanced` cost 2 credits per search against
+      1, so a 50mi scan burned ~78 of a 1,000/month allowance
+- [x] Report Tavily's real state in `/health` (working, not merely configured)
+      and email on the first quota rejection
+- [x] `force` flag on `/scan` + a Force-a-fresh-scan control, so one bad scan
+      no longer owns an area until midnight
+- [x] Per-scan funnel in `/scan`'s debug and in the Render log
+- [ ] **Confirm the Tavily allowance** — check `/health` and the Tavily
+      dashboard. If it's spent, that alone explains the current result
+- [ ] **Recall benchmark.** A fixed list of real bids known to be open near
+      Springfield and Aurora, and a script that reports what fraction the
+      scanner finds. This is the number that has to go up; without it every
+      change after this is guesswork
+
+## Phase 1 — Read the platforms directly
+
+The largest single win. Each adapter is pure text-in/rows-out so it can be
+tuned against a saved fixture without waiting on a live site.
+
+- [x] `bid_sources.py`: platform recognition + CivicPlus reader (RSS and the
+      `Bids.aspx` listing) + a relevance prefilter
+- [ ] Wire `bid_sources` into `/scan` ahead of the search path
+- [ ] Seed the portal directory with the CivicPlus domain for Springfield and
+      the surrounding towns, and confirm the two known Springfield bids appear
+- [ ] DemandStar / Euna OpenBids adapter (Springfield posts here too)
+- [ ] Bonfire, OpenGov, PlanetBids adapters
+- [ ] MissouriBUYS, then the other state portals
+- [ ] Contractor-association bid calendars and plan rooms — the highest
+      *density* source for this trade specifically, e.g. the Springfield
+      Contractors Association calendar carries sidewalk and ADA jobs directly
+
+## Phase 2 — Discover platforms once, keep them forever
+
+- [ ] Given a town, detect its platform and store it (`bid_portals.py` already
+      persists; discovery is the weak half)
+- [ ] Demote generic web search to discovery only — never the way an individual
+      bid is found
+- [ ] Pre-seed the top ~200 metros so a new user's first scan is good rather
+      than a cold start
+- [ ] Age out sources that stop returning content (`MAX_FAIL` already does this)
+
+## Phase 3 — Extraction quality and cost
+
+- [ ] Run `looks_relevant()` before every AI call — listings arrive already
+      structured, so most never need one, which is what makes a much bigger
+      page budget affordable
+- [ ] Revisit the extraction prompt. It currently says "when in doubt, leave it
+      out", which protects precision at recall's expense; a bid whose concrete
+      work is one line of a larger scope is exactly what we must not miss
+- [ ] Separate listing-level extraction (cheap, structured) from detail-page
+      extraction (AI, only for bids that passed the filter)
+- [ ] Measure precision as well as recall — junk results cost trust faster than
+      missing ones
+
+## Phase 4 — Widen what counts (deliberately)
+
+Only after Phases 1–3, and each is a product decision, not just a code change.
+
+- [ ] Bids where concrete is *part* of a larger scope
+- [ ] Planned/upcoming work surfaced alongside open bids
+- [ ] Private GC subcontract opportunities and plan rooms
+- [ ] Adjacent trades the same crew can bid
+
+## Phase 5 — Freshness at scale
+
+The destination. Today everything happens inside one 150-second request, which
+caps how much ground a scan can cover.
+
+- [ ] Background crawler that continuously indexes known sources
+- [ ] `/scan` reads the index instead of crawling live — instant, and far more
+      complete
+- [ ] New-bid alerts become genuinely real-time rather than daily
+- [ ] Per-source freshness tracking, and an alert when a source goes quiet
+
+---
+
+## Ground truth for Springfield, MO
+
+Known-good sources, found by hand in about a minute:
+
+| Source | What it is |
+|---|---|
+| `springfieldmo.gov/Bids.aspx` | CivicPlus listing — every open city solicitation |
+| `springfieldmo.gov/5375/Current-Bid-Notices` | Human-readable index |
+| DemandStar / Euna OpenBids | Where the city takes submissions |
+| `springfieldcontractors.org/category/bid-calendar/` | Association calendar — dense in this exact trade |
+| `sgfcitizen.org/public-notices/` | Statutory public notices |
+
+Two bids that were open and that the scanner missed:
+
+- **Springfield ADA Improvement Project** — ~5,000 SY concrete ramps, 3,000 SY
+  ADA sidewalk (Sunshine, Battlefield, National)
+- **Mt. Vernon & Miller Sidewalks** — ~13,500 SF sidewalk, 1,000 SF ADA ramp,
+  ~1,000 LF curb & gutter
+
+These two are the first acceptance test: when a Springfield scan returns both,
+Phase 1 is working.
+
+---
+
+## Running costs
+
+Worth deciding early — the architecture above exists partly to shrink these.
+
+| Item | Now | After Phase 1–3 |
+|---|---|---|
+| Search credits per 50mi scan | ~39 searches (~78 credits at advanced) | near zero — direct reads are free |
+| OpenAI calls per scan | one per fetched page | only pages that pass the prefilter |
+| Wall clock | close to the 150s client timeout | dominated by direct fetches, parallel |
+
+The single biggest cost saving and the single biggest recall gain are the same
+change: stop searching for pages we already know the address of.
