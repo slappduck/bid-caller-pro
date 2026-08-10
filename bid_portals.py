@@ -46,10 +46,17 @@ AGGREGATOR_DOMAINS = {
 
 # Known-good URLs already in production use (regional_printer.py's default
 # scan targets) — safe to seed since they're verified real bid pages.
+# platform matters now, not just as a label: "civicplus" entries are read by
+# bid_sources' structured parser instead of being scraped and handed to the AI.
+#
+# AgendaCenter is the council-MEETINGS module, not the bids one. Two of these
+# entries pointed there, so those cities were being scanned for bids on a page
+# that never contains any. Bids.aspx is the right module.
 SEED_PORTALS = {
-    ("aurora", "MO"): [{"url": "https://www.aurora-cityhall.org/AgendaCenter", "platform": "civicplus"}],
-    ("springfield", "MO"): [{"url": "https://www.springfieldmo.gov/bids.aspx", "platform": "custom"}],
-    ("joplin", "MO"): [{"url": "https://www.joplinmo.org/agendacenter", "platform": "civicplus"}],
+    ("aurora", "MO"): [{"url": "https://www.aurora-cityhall.org/Bids.aspx", "platform": "civicplus"},
+                       {"url": "https://www.aurora-cityhall.org/AgendaCenter", "platform": "custom"}],
+    ("springfield", "MO"): [{"url": "https://www.springfieldmo.gov/Bids.aspx", "platform": "civicplus"}],
+    ("joplin", "MO"): [{"url": "https://www.joplinmo.org/Bids.aspx", "platform": "civicplus"}],
     ("republic", "MO"): [{"url": "https://www.republicmo.com/Bids.aspx", "platform": "civicplus"}],
     ("ozark", "MO"): [{"url": "https://ozarkmissouri.com/Bids.aspx", "platform": "civicplus"}],
 }

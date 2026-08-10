@@ -74,6 +74,7 @@ from flask_cors import CORS
 from werkzeug.exceptions import HTTPException
 
 import bid_portals
+import bid_sources
 import residential_permits
 
 app = Flask(__name__)
@@ -1615,6 +1616,17 @@ def _ddg_search(query, count=6):
     return []
 
 
+def _fetch_raw(url):
+    """Page source, untouched. _fetch_text strips tags, which is right for
+    feeding prose to the AI and useless for a parser that needs the markup."""
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 BidCallerPro"})
+        with urllib.request.urlopen(req, timeout=18) as resp:
+            return resp.read(800000).decode("utf-8", "ignore")
+    except Exception:
+        return ""
+
+
 def _fetch_text(url):
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 BidCallerPro"})
@@ -1931,6 +1943,34 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
     raw = 0
     for entry in portals:
         url = entry["url"]
+
+        # A recognised procurement platform is read directly. Its listing is
+        # already structured — title, link, closing date — so there is nothing
+        # for an LLM to interpret, and skipping that call is what makes reading
+        # every known portal on every scan affordable. Search engines and AI
+        # extraction stay for pages we don't have a reader for.
+        if bid_sources.identify_platform(url) == "civicplus":
+            rows = bid_sources.parse_civicplus_html(_fetch_raw(url), base_url=url)
+            with lock:
+                bid_portals.record_result(pdb, city, state, url, bool(rows))
+            if rows:
+                with lock:
+                    for row in rows:
+                        if not bid_sources.looks_relevant(row["title"], row.get("scope")):
+                            if stats is not None:
+                                stats["filtered_not_niche"] = stats.get("filtered_not_niche", 0) + 1
+                            continue
+                        raw += 1
+                        _place_bid(grouped, {
+                            "title": row["title"], "scope": row.get("scope", ""),
+                            "status": "Open", "deadline": row.get("deadline", ""),
+                            "contact": "", "email": "", "phone": "", "value": "",
+                            "url": row["url"], "city": default_city or city,
+                        }, center, radius, cdb, default_city=default_city or city,
+                            city_coords=city_coords, default_state=state,
+                            fallback_coords=town_coords, stats=stats)
+                continue
+
         text = _fetch_text(url)
         ok = len(text) >= 200
         with lock:

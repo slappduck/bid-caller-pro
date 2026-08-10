@@ -59,9 +59,12 @@ tuned against a saved fixture without waiting on a live site.
 
 - [x] `bid_sources.py`: platform recognition + CivicPlus reader (RSS and the
       `Bids.aspx` listing) + a relevance prefilter
-- [ ] Wire `bid_sources` into `/scan` ahead of the search path
-- [ ] Seed the portal directory with the CivicPlus domain for Springfield and
-      the surrounding towns, and confirm the two known Springfield bids appear
+- [x] Wire `bid_sources` into `/scan` ahead of the search path
+- [~] Seed the portal directory: Springfield/Aurora/Joplin corrected to the
+      Bids.aspx module and labelled `civicplus` (two were pointing at
+      AgendaCenter, the council-meetings module, which never contains bids).
+      Still to do: verify each URL against the live site and widen to the
+      rest of the 50mi ring
 - [ ] DemandStar / Euna OpenBids adapter (Springfield posts here too)
 - [ ] Bonfire, OpenGov, PlanetBids adapters
 - [ ] MissouriBUYS, then the other state portals

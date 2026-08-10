@@ -36,7 +36,21 @@ class BidPortalsTests(unittest.TestCase):
         d = bp.load_directory()
         got = bp.get_portals(d, "Springfield", "MO")
         self.assertTrue(got)
-        self.assertEqual(got[0]["url"], "https://www.springfieldmo.gov/bids.aspx")
+        # Asserting the behaviour rather than the exact string: it must point at
+        # the bids module, and be labelled so the structured reader picks it up.
+        self.assertIn("bids.aspx", got[0]["url"].lower())
+        self.assertEqual(got[0]["platform"], "civicplus")
+
+    def test_no_seed_points_at_the_meetings_module_alone(self):
+        """AgendaCenter is council meetings, not bids. Two cities were seeded
+        pointing only there, so they were scanned for bids on a page that never
+        contains any."""
+        d = bp.load_directory()
+        for city, state in (("Aurora", "MO"), ("Joplin", "MO"), ("Springfield", "MO")):
+            with self.subTest(city=city):
+                urls = [e["url"].lower() for e in bp.get_portals(d, city, state)]
+                self.assertTrue(any("bids.aspx" in u for u in urls),
+                                f"{city} has no bids page seeded: {urls}")
 
     def test_lookup_is_case_and_whitespace_insensitive(self):
         d = bp.load_directory()

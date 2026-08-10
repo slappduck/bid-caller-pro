@@ -421,3 +421,78 @@ class DeadlineParsingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CivicPlusPortalReadTests(unittest.TestCase):
+    """A recognised platform is read structurally instead of being scraped and
+    handed to the AI. That is what makes reading every known portal on every
+    scan affordable, and it is not subject to a search budget at all."""
+
+    LISTING = """
+      <a href="/Bids.aspx?bidID=412">FY26 Sidewalk Improvements &amp; ADA Ramps</a>
+      <span>Bid Opening: December 1, 2026</span>
+      <a href="/Bids.aspx?bidID=413">Janitorial Services</a>
+      <span>Closes: 11/02/2026</span>
+      <a href="/Bids.aspx?bidID=414">Curb &amp; Gutter Replacement - Phase 2</a>
+      <span>Due: 12/15/2026</span>
+    """
+
+    def setUp(self):
+        self.grouped, self.coords, self.stats = {}, {}, {}
+        self.cdb = {}
+        self.pdb = {}
+
+    def _run(self):
+        import threading
+        with patch.object(ls, "_fetch_raw", return_value=self.LISTING), \
+             patch.object(ls, "_ai_extract") as ai, \
+             patch.object(ls, "_geo_from_city", side_effect=_fake_geo), \
+             patch.object(ls.bid_portals, "get_portals", return_value=[
+                 {"url": "https://www.springfieldmo.gov/Bids.aspx", "platform": "civicplus"}]), \
+             patch.object(ls.bid_portals, "record_result"):
+            got = ls._run_known_portals(
+                "Springfield", "MO", "Springfield, MO", self.grouped, CENTER, 100,
+                self.cdb, self.coords, threading.Lock(), self.pdb,
+                default_city="Springfield", town_coords=(37.2, -93.3), stats=self.stats)
+        return got, ai
+
+    def test_bids_are_extracted_without_any_ai_call(self):
+        got, ai = self._run()
+        ai.assert_not_called()
+        self.assertGreater(got, 0)
+
+    def test_only_the_relevant_listings_are_kept(self):
+        self._run()
+        titles = [b["title"] for v in self.grouped.values() for b in v]
+        self.assertEqual(len(titles), 2, titles)
+        self.assertTrue(any("Sidewalk" in t for t in titles))
+        self.assertTrue(any("Curb" in t for t in titles))
+        self.assertFalse(any("Janitorial" in t for t in titles))
+
+    def test_the_skipped_listing_is_counted_in_the_funnel(self):
+        self._run()
+        self.assertEqual(self.stats.get("filtered_not_niche"), 1)
+
+    def test_closing_dates_survive_into_the_bid(self):
+        self._run()
+        bids = [b for v in self.grouped.values() for b in v]
+        self.assertTrue(all(b["deadline"] for b in bids), bids)
+
+    def test_links_are_absolute_so_open_works(self):
+        self._run()
+        bids = [b for v in self.grouped.values() for b in v]
+        self.assertTrue(all(b["url"].startswith("https://") for b in bids), bids)
+
+    def test_an_empty_page_records_a_failure_and_keeps_going(self):
+        import threading
+        with patch.object(ls, "_fetch_raw", return_value=""), \
+             patch.object(ls, "_geo_from_city", side_effect=_fake_geo), \
+             patch.object(ls.bid_portals, "get_portals", return_value=[
+                 {"url": "https://x.gov/Bids.aspx", "platform": "civicplus"}]), \
+             patch.object(ls.bid_portals, "record_result") as rec:
+            ls._run_known_portals("X", "MO", "X, MO", self.grouped, CENTER, 100,
+                                  self.cdb, self.coords, threading.Lock(), self.pdb,
+                                  stats=self.stats)
+        self.assertEqual(self.grouped, {})
+        # Marked as a failure so MAX_FAIL eventually retires a dead entry.
+        self.assertFalse(rec.call_args[0][-1])
