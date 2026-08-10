@@ -172,13 +172,17 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .map-card-head{display:flex;align-items:center;justify-content:space-between;padding:0.7rem 0.9rem;background:linear-gradient(90deg,rgba(245,158,11,0.14),transparent);border-bottom:1px solid var(--border);}
 .map-card-head .t{font-size:0.78rem;font-weight:800;letter-spacing:0.03em;display:flex;align-items:center;gap:0.4rem;}
 .map-card-head .x{background:none;border:none;color:var(--text2);font-size:0.85rem;cursor:pointer;padding:0.2rem 0.4rem;}
-#map-view{height:240px;}
+#map-view{height:240px;background:#e8eaed;}
 .map-legend{display:flex;gap:0.8rem;flex-wrap:wrap;font-size:0.72rem;color:var(--text2);padding:0.6rem 0.9rem 0.75rem;}
-#find-map-view,#up-map-view,#leads-map-view{height:280px;}
+#find-map-view,#up-map-view,#leads-map-view{height:280px;background:#e8eaed;}
 .map-legend span{display:inline-flex;align-items:center;gap:0.3rem;}
 .map-dot{width:9px;height:9px;border-radius:50%;display:inline-block;box-shadow:0 0 6px currentColor;}
+/* Popups stay dark on purpose: against the light basemap they read as a panel
+   floating above the map rather than part of it, and they match the app. */
 .leaflet-popup-content-wrapper{background:var(--surface);color:var(--text);}
 .leaflet-popup-tip{background:var(--surface);}
+/* Leaflet's default link blue is close to unreadable on that dark panel. */
+.leaflet-popup-content a{color:var(--accent);font-weight:700;}
 
 /* ── Upcoming ── */
 .bid.planned .bid-bar{background:var(--blue) !important;}
@@ -1066,6 +1070,16 @@ async function checkSavedSearches(){
 // slow response) — it just leaves it blank. Cache-bust and retry a few
 // times with backoff so a transient network hiccup doesn't leave a
 // permanent gap in the map.
+// Light basemap. The dark one matched the app's chrome but washed out the pins
+// on top of it — which are the entire point of the map — and street names went
+// grey-on-grey at the zoom levels people actually use. Defined once here
+// rather than repeated at each of the three maps.
+const MAP_TILE_URL="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
+// Pins are drawn as a coloured fill inside a dark ring: on a light basemap a
+// plain amber or yellow circle has very little contrast, while the ring reads
+// clearly against pale streets whatever colour sits inside it.
+const PIN_RING="#1b2233";
+
 function addTileRetry(layer){
   const retries=new WeakMap();
   layer.on("tileerror",(e)=>{
@@ -1093,7 +1107,7 @@ function updateFindMap(lat,lon,label){
     // reports. (Not independently reproduced on a physical device here --
     // please confirm this actually fixes it on your phone.)
     findMap=L.map(mv,{attributionControl:false,tap:false}).setView([lat,lon],11);
-    const findTiles=L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{
+    const findTiles=L.tileLayer(MAP_TILE_URL,{
       maxZoom:20,subdomains:"abcd"
     }).addTo(findMap);
     addTileRetry(findTiles);
@@ -1102,7 +1116,7 @@ function updateFindMap(lat,lon,label){
     findMap.setView([lat,lon],11);
   }
   if(findMarker)findMap.removeLayer(findMarker);
-  findMarker=L.circleMarker([lat,lon],{radius:9,color:"#f5b400",fillColor:"#f5b400",fillOpacity:0.9,weight:2})
+  findMarker=L.circleMarker([lat,lon],{radius:9,color:PIN_RING,fillColor:"#f5b400",fillOpacity:1,weight:2.5})
     .addTo(findMap).bindPopup(esc(label||"You are here"));
   drawFindRadiusCircle();
   setTimeout(()=>findMap.invalidateSize(),50);
@@ -1111,7 +1125,7 @@ function drawFindRadiusCircle(){
   if(!findMap||!findCenter)return;
   if(findRadiusCircle)findMap.removeLayer(findRadiusCircle);
   findRadiusCircle=L.circle([findCenter.lat,findCenter.lon],{
-    radius:radius*1609.34,color:"#f59e0b",weight:2,fillOpacity:0.05,
+    radius:radius*1609.34,color:"#b45309",weight:2,fillOpacity:0.08,fillColor:"#f59e0b",
   }).addTo(findMap);
 }
 function clearFindTownMarkers(){
@@ -1135,7 +1149,7 @@ async function refreshFindTownMarkers(lat,lon){
       seen.add(name.toLowerCase());
       const state=el.tags?.["addr:state"]||"";
       const label=state?`${name}, ${state}`:name;
-      const m=L.circleMarker([el.lat,el.lon],{radius:6,color:"#3b82f6",fillColor:"#3b82f6",fillOpacity:0.85,weight:2})
+      const m=L.circleMarker([el.lat,el.lon],{radius:6,color:PIN_RING,fillColor:"#3b82f6",fillOpacity:1,weight:2})
         .addTo(findMap).bindPopup(esc(label));
       m.on("click",()=>pickFindLocation(el.lat,el.lon,label));
       findTownMarkers.push(m);
@@ -1177,7 +1191,7 @@ function createLocationPicker(containerId,inputId){
     if(!mv||!HAS_MAPS)return;
     if(!st.map){
       st.map=L.map(mv,{attributionControl:false,tap:false}).setView([lat,lon],11);
-      const tiles=L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{
+      const tiles=L.tileLayer(MAP_TILE_URL,{
         maxZoom:20,subdomains:"abcd"
       }).addTo(st.map);
       addTileRetry(tiles);
@@ -1186,7 +1200,7 @@ function createLocationPicker(containerId,inputId){
       st.map.setView([lat,lon],11);
     }
     if(st.marker)st.map.removeLayer(st.marker);
-    st.marker=L.circleMarker([lat,lon],{radius:9,color:"#f5b400",fillColor:"#f5b400",fillOpacity:0.9,weight:2})
+    st.marker=L.circleMarker([lat,lon],{radius:9,color:PIN_RING,fillColor:"#f5b400",fillOpacity:1,weight:2.5})
       .addTo(st.map).bindPopup(esc(label||"Selected location"));
     setTimeout(()=>st.map.invalidateSize(),50);
   }
@@ -1529,7 +1543,7 @@ function renderMap(){
     mv.innerHTML="";
     leafletMap=L.map(mv,{attributionControl:false,tap:false}).setView(
       [lastScanMap.center.lat,lastScanMap.center.lon],9);
-    const resultTiles=L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{
+    const resultTiles=L.tileLayer(MAP_TILE_URL,{
       maxZoom:20,subdomains:"abcd"
     }).addTo(leafletMap);
     addTileRetry(resultTiles);
@@ -1537,13 +1551,13 @@ function renderMap(){
   leafletMap.eachLayer(l=>{if(l instanceof L.CircleMarker)leafletMap.removeLayer(l);});
   const bounds=[[lastScanMap.center.lat,lastScanMap.center.lon]];
   L.circleMarker([lastScanMap.center.lat,lastScanMap.center.lon],{
-    radius:9,color:"#f5b400",fillColor:"#f5b400",fillOpacity:0.9,weight:2,
+    radius:9,color:PIN_RING,fillColor:"#f5b400",fillOpacity:1,weight:2.5,
   }).addTo(leafletMap).bindPopup(`Search center: ${esc(lastScanMap.center.label||"")}`);
   for(const city in(lastScanMap.cityCoords||{})){
     const c=lastScanMap.cityCoords[city];
     const jobs=(bidData[city]||[]).filter(isOpen);
     if(!jobs.length){
-      L.circleMarker([c.lat,c.lon],{radius:6,color:"#3b82f6",fillColor:"#3b82f6",fillOpacity:0.7,weight:2})
+      L.circleMarker([c.lat,c.lon],{radius:6,color:PIN_RING,fillColor:"#3b82f6",fillOpacity:0.9,weight:2})
         .addTo(leafletMap).bindPopup(`${esc(city)} — scanned, none open`);
       bounds.push([c.lat,c.lon]);
       continue;
@@ -1552,7 +1566,7 @@ function renderMap(){
       const[lat,lon]=jitteredLatLon(c.lat,c.lon,i);
       const dleft=daysUntil(b);
       const color=dleft!=null&&dleft<=2?"#ef4444":dleft!=null&&dleft<=7?"#f59e0b":"#22c55e";
-      L.circleMarker([lat,lon],{radius:8,color,fillColor:color,fillOpacity:0.95,weight:2})
+      L.circleMarker([lat,lon],{radius:8,color:PIN_RING,fillColor:color,fillOpacity:1,weight:2.5})
         .addTo(leafletMap)
         .bindPopup(bidPopupNode(city,b));
       bounds.push([lat,lon]);
