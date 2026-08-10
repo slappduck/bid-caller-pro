@@ -100,6 +100,31 @@ def civicplus_endpoints(domain):
     ]
 
 
+# Given only a hostname, these are the paths a municipal bid page actually
+# takes, most likely first. Deliberately short: each one is a live fetch, so
+# this is a probe, not a crawl. A hit gets recorded in the portal directory by
+# the caller and is free on every later scan.
+CANDIDATE_BID_PATHS = (
+    "/Bids.aspx",          # CivicPlus — by far the most common
+    "/bids",
+    "/bids-and-rfps",
+    "/purchasing",
+    "/rfp",
+)
+
+
+def candidate_bid_urls(domain, limit=None):
+    """Bid-page URLs worth probing for a bare government hostname."""
+    host = str(domain or "").strip().strip("/").lower()
+    if not host:
+        return []
+    if "//" not in host:
+        host = "https://" + host
+    base = host.rstrip("/")
+    paths = CANDIDATE_BID_PATHS if limit is None else CANDIDATE_BID_PATHS[:limit]
+    return [base + p for p in paths]
+
+
 # ── Relevance prefilter ─────────────────────────────────────────────────────
 # Deliberately generous. This runs BEFORE any AI call, so its job is only to
 # throw out listings that obviously have nothing to do with the trade —

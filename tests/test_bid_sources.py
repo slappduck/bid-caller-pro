@@ -208,3 +208,70 @@ class RelevanceFilterTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GovDirectoryTests(unittest.TestCase):
+    """CISA's .gov registry, shipped as data. The scanner's weak point was
+    never parsing — it was not knowing where to look, and paying a search API
+    per query for an answer that never changes."""
+
+    def setUp(self):
+        import gov_directory
+        self.gd = gov_directory
+
+    def test_the_whole_country_is_loaded(self):
+        self.assertGreater(self.gd.loaded_count(), 10000)
+
+    def test_the_town_you_asked_for_ranks_above_its_neighbours(self):
+        # Fremont Hills is registered with Nixa as its mailing city, so a naive
+        # sort put a different town's domain first.
+        self.assertEqual(self.gd.domains_for("Nixa", "MO")[0], "nixamo.gov")
+
+    def test_a_citys_own_domain_outranks_its_county(self):
+        got = self.gd.domains_for("Springfield", "MO")
+        self.assertEqual(got[0], "springfieldmo.gov")
+        self.assertIn("greenecountymo.gov", got)
+
+    def test_counties_are_reachable_at_all(self):
+        # Counties let a lot of curb and road work and were previously invisible.
+        for city, state, want in (("Springfield", "MO", "greenecountymo.gov"),
+                                  ("Ozark", "MO", "christiancountymo.gov"),
+                                  ("Bolivar", "MO", "polkcountymo.gov")):
+            with self.subTest(city=city):
+                self.assertIn(want, self.gd.domains_for(city, state))
+
+    def test_lookup_is_case_and_space_insensitive(self):
+        self.assertEqual(self.gd.domains_for("  sPrInGfIeLd ", "mo")[0],
+                         "springfieldmo.gov")
+
+    def test_unknown_places_return_nothing_rather_than_raising(self):
+        for city, state in (("Nowhereville", "ZZ"), ("", "MO"), (None, None)):
+            with self.subTest(city=city):
+                self.assertEqual(self.gd.domains_for(city, state), [])
+
+    def test_counties_can_be_excluded(self):
+        got = self.gd.domains_for("Springfield", "MO", include_county=False)
+        self.assertNotIn("greenecountymo.gov", got)
+
+    def test_coverage_is_national_not_just_missouri(self):
+        for city, state in (("Twentynine Palms", "CA"), ("Detroit", "MI")):
+            with self.subTest(city=city):
+                self.assertTrue(self.gd.domains_for(city, state))
+
+
+class CandidateUrlTests(unittest.TestCase):
+    def test_civicplus_path_is_tried_first(self):
+        self.assertTrue(bs.candidate_bid_urls("nixamo.gov")[0].endswith("/Bids.aspx"))
+
+    def test_urls_are_absolute_https(self):
+        self.assertTrue(all(u.startswith("https://")
+                            for u in bs.candidate_bid_urls("nixamo.gov")))
+
+    def test_the_probe_can_be_kept_short(self):
+        # Each candidate is a live fetch, so callers cap it.
+        self.assertEqual(len(bs.candidate_bid_urls("x.gov", limit=2)), 2)
+
+    def test_a_blank_domain_probes_nothing(self):
+        for bad in ("", None, "   "):
+            with self.subTest(bad=bad):
+                self.assertEqual(bs.candidate_bid_urls(bad), [])

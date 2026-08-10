@@ -72,15 +72,25 @@ tuned against a saved fixture without waiting on a live site.
       *density* source for this trade specifically, e.g. the Springfield
       Contractors Association calendar carries sidewalk and ADA jobs directly
 
-## Phase 2 — Discover platforms once, keep them forever
+## Phase 2 — Every city in the country
 
-- [ ] Given a town, detect its platform and store it (`bid_portals.py` already
-      persists; discovery is the weak half)
+- [x] **National government-domain index.** CISA publishes the authoritative
+      registry of every .gov domain and who owns it. `data/gov_domains.csv` is
+      that registry filtered to local government — **12,711 domains: 8,928
+      cities, 2,623 counties, special districts and school districts, across
+      all 53 states and territories.** Refresh with
+      `tools/refresh_gov_domains.py`
+- [x] Use it in `/scan`: a town with no learned portal gets its real domain
+      looked up and probed directly, instead of being searched for
+- [x] Counties are reachable at all for the first time — they let a lot of
+      curb, road and drainage work and were previously invisible
+- [ ] Widen `CANDIDATE_BID_PATHS` once real hit rates are known
+- [ ] Cities on `.org`/`.com`/`.us` domains — the registry only covers `.gov`,
+      so places like Aurora MO (`aurora-cityhall.org`) still need discovery.
+      Wikidata's official-website property is the likely second source
 - [ ] Demote generic web search to discovery only — never the way an individual
       bid is found
-- [ ] Pre-seed the top ~200 metros so a new user's first scan is good rather
-      than a cold start
-- [ ] Age out sources that stop returning content (`MAX_FAIL` already does this)
+- [x] Age out sources that stop returning content (`MAX_FAIL` already does this)
 
 ## Phase 3 — Extraction quality and cost
 

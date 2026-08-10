@@ -75,6 +75,7 @@ from werkzeug.exceptions import HTTPException
 
 import bid_portals
 import bid_sources
+import gov_directory
 import residential_permits
 
 app = Flask(__name__)
@@ -1940,6 +1941,22 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
     content, so a site redesign doesn't silently keep failing forever."""
     with lock:
         portals = list(bid_portals.get_portals(pdb, city, state))[:6]
+
+    # Nothing learned for this town yet? Its official domain is already known —
+    # CISA publishes the registry of every .gov, so there is no need to search
+    # for it. Probe the handful of paths a municipal bid page actually takes;
+    # a hit is recorded below and costs nothing on every later scan.
+    #
+    # This also finally reaches counties. They let a great deal of curb, road
+    # and drainage work and were entirely absent before: none were seeded, and
+    # a county name doesn't geocode, so any bid naming one was thrown away.
+    if not portals:
+        probed = []
+        for entry in gov_directory.lookup(city, state)[:2]:
+            for candidate in bid_sources.candidate_bid_urls(entry["domain"], limit=2):
+                probed.append({"url": candidate, "platform": "civicplus"
+                               if candidate.lower().endswith("bids.aspx") else "custom"})
+        portals = probed[:4]
     raw = 0
     for entry in portals:
         url = entry["url"]
