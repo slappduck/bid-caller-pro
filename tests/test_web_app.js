@@ -456,7 +456,90 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
-  // ── 7. Saved-search throttling ──
+  // ── 7. Diagnostics card ──
+  // A quiet area and a pipeline discarding everything it found look identical
+  // from the outside. This is what tells them apart during a live test.
+  console.log("\nDiagnostics card reports the scan funnel and server health");
+  {
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+
+    const SCAN_BODY = {
+      ok: true, location: "Aurora, MO", total_bids: 2,
+      bids: { Aurora: [{ title: "Sidewalk repair", scope: "s", status: "open" },
+                       { title: "ADA ramps", scope: "r", status: "open" }] },
+      city_coords: { Aurora: { lat: 36.97, lon: -93.72 } },
+      center: { lat: 36.97, lon: -93.72, label: "Aurora, MO" },
+      debug: { raw_local: 41, kept: 2,
+               funnel: { kept: 2, unresolvable_place: 9, out_of_radius: 30 } },
+    };
+    const HEALTH_BODY = {
+      service: "Bid Caller Pro License Server", status: "degraded",
+      backends: { openai: true, tavily: true, sam_gov: false, supabase: true,
+                  upstash_redis: true, resend_email: true, saved_search_alerts: false },
+      local_search: { consecutive_empty_searches: 0, degraded: false,
+                      is_sole_local_search: false },
+      problems: ["SAM_API_KEY unset — no federal bids in results"],
+    };
+
+    await page.route("**/*", (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      if (u.includes("/health")) {
+        return route.fulfill({ status: 200, contentType: "application/json",
+                               body: JSON.stringify(HEALTH_BODY) });
+      }
+      if (u.includes("/scan")) {
+        return route.fulfill({ status: 200, contentType: "application/json",
+                               body: JSON.stringify(SCAN_BODY) });
+      }
+      if (u.includes("/trial")) {
+        return route.fulfill({ status: 200, contentType: "application/json",
+                               body: '{"ok":true,"active":true,"days_left":5}' });
+      }
+      if (u.includes("/mykey")) {
+        return route.fulfill({ status: 200, contentType: "application/json",
+                               body: '{"ok":false,"reason":"no_key"}' });
+      }
+      if (host === "cdn.jsdelivr.net") {
+        return route.fulfill({ status: 200, contentType: "application/javascript",
+                               body: SB_STUB });
+      }
+      if (host.endsWith("supabase.co") || host.endsWith("onrender.com")) return route.abort();
+      return route.continue();
+    });
+    await page.addInitScript(seedSignedIn, {});
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(900);
+    await page.evaluate(() => { if (typeof bootOffline === "function") bootOffline(); });
+
+    // Run a scan so there is something to report.
+    await page.locator('.nav-btn[data-s="scan"]').click();
+    await page.fill("#loc-input", "Aurora, MO");
+    await page.locator("#scan-btn").click();
+    await page.waitForTimeout(1200);
+
+    await page.evaluate(() => goTo("account"));
+    await page.waitForTimeout(1200);
+
+    const card = await page.locator("#account-body").innerText();
+    check("the discard count is surfaced, not just the kept count",
+      /unresolvable place: 9/.test(card) && /out of radius: 30/.test(card), card.slice(0, 400));
+    check("pre-filter total is shown", /41/.test(card));
+    check("scan duration is shown", /\d+\.\ds/.test(card));
+    check("an unset backend is called out",
+      /SAM_API_KEY/.test(card) && /Degraded/i.test(card), card.slice(0, 400));
+
+    const copied = await page.evaluate(() => diagnosticsText());
+    check("copyable text includes the funnel", copied.includes("unresolvable_place: 9"), copied);
+    check("copyable text includes backend state", copied.includes("sam_gov=OFF"), copied);
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
+  // ── 8. Saved-search throttling ──
   console.log("\nSaved searches are not re-scanned on every app open");
   {
     async function openWith(checkedAt) {

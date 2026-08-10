@@ -1236,6 +1236,114 @@ async function detectLocation(fillInput){
 }
 function autoFillZip(){detectLocation(false);}
 
+// ── Diagnostics ──
+// A scan can come back "successful" with two bids because the area is quiet,
+// or because the pipeline found forty and discarded thirty-eight. Those look
+// identical from the outside, and the difference is the whole question when
+// judging whether search is working. The server reports its funnel; this keeps
+// the last one so it can be read in the app instead of in the Render logs.
+let lastScanDebug=store.get("last_scan_debug",null);
+function recordScanDiagnostics(entry){
+  lastScanDebug={...entry,at:new Date().toISOString()};
+  store.set("last_scan_debug",lastScanDebug);
+}
+function diagnosticsText(){
+  const lines=[];
+  const d=lastScanDebug;
+  if(d){
+    lines.push(`Last ${d.kind}: ${d.location} · ${d.radius} mi · ${(d.ms/1000).toFixed(1)}s`
+      +(d.cached?" (cached)":""));
+    lines.push(`  shown: ${d.total}   newly added: ${d.added}`);
+    const f=(d.debug&&d.debug.funnel)||null;
+    if(d.debug&&d.debug.raw_local!=null)lines.push(`  extracted before filtering: ${d.debug.raw_local}`);
+    if(f&&Object.keys(f).length){
+      lines.push("  outcome of each extracted bid:");
+      Object.keys(f).sort().forEach(k=>lines.push(`    ${k}: ${f[k]}`));
+    }
+    lines.push(`  at: ${d.at}`);
+  }else{
+    lines.push("No scan recorded yet on this device.");
+  }
+  if(lastHealth){
+    lines.push("");
+    lines.push(`Server: ${lastHealth.status}`);
+    const b=lastHealth.backends||{};
+    lines.push("  backends: "+Object.keys(b).sort()
+      .map(k=>`${k}=${b[k]?"on":"OFF"}`).join(", "));
+    (lastHealth.problems||[]).forEach(p=>lines.push(`  ! ${p}`));
+    const ls_=lastHealth.local_search||{};
+    lines.push(`  search: empty_streak=${ls_.consecutive_empty_searches}`
+      +`, degraded=${ls_.degraded}`);
+  }
+  lines.push("");
+  lines.push(`app: ${location.host}  device: ${deviceId()}`);
+  return lines.join("\n");
+}
+let lastHealth=null;
+async function loadHealth(){
+  const box=document.getElementById("diag-health");
+  if(!box)return;
+  if(isOffline()){box.textContent="Offline — can't reach the server.";return;}
+  box.textContent="Checking server...";
+  try{
+    const r=await fetchWithTimeout(SERVER+"/health",{},45000);
+    lastHealth=await r.json();
+  }catch(e){
+    box.textContent="Couldn't reach the server (it may be waking up — try again).";
+    return;
+  }
+  const b=lastHealth.backends||{};
+  const problems=lastHealth.problems||[];
+  const dot=(on)=>on?'<span style="color:var(--green);">●</span>'
+                    :'<span style="color:var(--red);">●</span>';
+  box.innerHTML=
+    `<div style="margin-bottom:0.4rem;font-weight:700;color:${problems.length?"var(--accent)":"var(--green)"};">`
+    +`${problems.length?"⚠ Degraded":"✅ All systems configured"}</div>`
+    +Object.keys(b).sort().map(k=>
+      `<div>${dot(b[k])} ${esc(k.replace(/_/g," "))}</div>`).join("")
+    +(problems.length?`<div style="margin-top:0.5rem;">`
+      +problems.map(p=>`<div style="color:var(--accent);">• ${esc(p)}</div>`).join("")
+      +`</div>`:"");
+}
+function renderDiagnostics(){
+  const d=lastScanDebug;
+  const f=(d&&d.debug&&d.debug.funnel)||{};
+  const keys=Object.keys(f).sort();
+  // "kept" is the good outcome; everything else is a bid that was found and
+  // then discarded, which is the number worth watching.
+  const discarded=keys.filter(k=>k!=="kept"&&k!=="placed_by_search_town")
+                      .reduce((n,k)=>n+f[k],0);
+  return `
+    <div class="account-card">
+      <div class="account-email" style="font-size:0.85rem;">&#x1FA7A; Diagnostics</div>
+      <div class="account-status" style="margin-bottom:0.7rem;">
+        What the last search actually did, and whether the server has everything it needs.
+        Handy when a search returns less than you expected.
+      </div>
+      <div class="account-status" id="diag-health" style="line-height:1.7;">Checking server...</div>
+      <div style="border-top:1px solid var(--border);margin:0.8rem 0;"></div>
+      ${d?`
+        <div class="detail-row"><div class="detail-label">Last search</div>
+          <div class="detail-val">${esc(d.location)} &middot; ${esc(String(d.radius))} mi
+            &middot; ${(d.ms/1000).toFixed(1)}s${d.cached?" (cached)":""}</div></div>
+        <div class="detail-row"><div class="detail-label">Bids shown</div>
+          <div class="detail-val">${d.total} (${d.added} new)</div></div>
+        ${d.debug&&d.debug.raw_local!=null?`<div class="detail-row">
+          <div class="detail-label">Found before filtering</div>
+          <div class="detail-val">${d.debug.raw_local}</div></div>`:""}
+        ${keys.length?`<div class="detail-row">
+          <div class="detail-label">What happened to each one${discarded?` — ${discarded} discarded`:""}</div>
+          <div class="detail-val" style="line-height:1.7;">
+            ${keys.map(k=>`${esc(k.replace(/_/g," "))}: <b>${f[k]}</b>`).join("<br>")}
+          </div></div>`:""}
+      `:`<div class="account-status">No search recorded on this device yet.</div>`}
+      <div style="display:flex;gap:0.6rem;margin-top:0.8rem;">
+        <button class="btn-ghost" id="diag-copy" style="margin-top:0;">&#x1F4CB; Copy</button>
+        <button class="btn-ghost" id="diag-refresh" style="margin-top:0;">&#x21BB; Recheck</button>
+      </div>
+    </div>`;
+}
+
 // ── Supabase token helper ──
 async function getSupabaseToken(){
   if(!sb)return"";
@@ -1471,6 +1579,7 @@ async function runScan(){
   if(!requireOnline("Scanning for bids"))return;
   const location=document.getElementById("loc-input").value.trim();
   if(!location){toast("Enter a ZIP or city first");return;}
+  const startedAt=Date.now();
   scanBtn.disabled=true;
   scanBtn.innerHTML='<span class="spin"></span> Scanning...';
   const status=document.getElementById("scan-status");
@@ -1499,6 +1608,10 @@ async function runScan(){
     const total=d.total_bids||0;
     const added=mergeOpenBids(d.bids||{},Object.keys(d.city_coords||{}));
     if(d.center)saveScanMap(d.center,d.city_coords||{});
+    recordScanDiagnostics({
+      kind:"scan",location:d.location||location,radius,
+      ms:Date.now()-startedAt,total,added,cached:!!d.cached,debug:d.debug||null,
+    });
     status.textContent=total>0
       ?`Done \u2014 ${added} new open bid(s) added near ${d.location||location}.`
       :"No open bids posted here right now. Try a wider radius.";
@@ -2296,6 +2409,7 @@ function renderAccount(){
         <a href="#" id="sync-now-link" style="color:var(--amber);">Sync now</a>
       </div>
     </div>
+    ${renderDiagnostics()}
     <div class="account-card" id="notif-card" style="cursor:pointer;">
       <div class="account-email" style="font-size:0.85rem;">&#x1F514; Bid Alerts</div>
       <div class="account-status" id="notif-status">${esc(notifPermissionLabel())}</div>
@@ -2378,6 +2492,22 @@ function renderAccount(){
     await sb.auth.signOut();toast("Signed out");
   };
   document.getElementById("notif-card").onclick=toggleNotifPermission;
+  document.getElementById("diag-refresh").onclick=()=>loadHealth();
+  document.getElementById("diag-copy").onclick=async()=>{
+    const text=diagnosticsText();
+    try{await navigator.clipboard.writeText(text);toast("Diagnostics copied");}
+    catch(e){
+      // Clipboard access is blocked in some mobile browsers unless the page is
+      // focused; showing the text is better than failing silently.
+      const mc=document.getElementById("modal-content");
+      mc.innerHTML=`<h2>Diagnostics</h2>
+        <textarea class="input" style="min-height:260px;font-family:var(--mono);font-size:0.75rem;">${esc(text)}</textarea>
+        <div class="modal-actions"><button class="ma-ghost" onclick="closeModal();">Close</button></div>`;
+      document.getElementById("modal-back").classList.add("open");
+      document.getElementById("modal").classList.add("open");
+    }
+  };
+  loadHealth();
   document.getElementById("support-send-btn").onclick=async()=>{
     const msgBox=document.getElementById("support-msg");
     const msg=msgBox.value.trim();
