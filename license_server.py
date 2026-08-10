@@ -360,6 +360,7 @@ def health_detail():
         "resend_email": bool(RESEND_API_KEY),
         "saved_search_alerts": bool(SUPABASE_SERVICE_ROLE_KEY and CRON_SECRET and RESEND_API_KEY),
     }
+    tav = _tavily_health()
     with _ddg_lock:
         ddg_streak = _ddg_fail_streak
     # DuckDuckGo is scraped, so it can be blocked outright. That only threatens
@@ -370,6 +371,15 @@ def health_detail():
         "is_sole_local_search": not bool(TAVILY_API_KEY),
     }
     problems = []
+    # A configured-but-rejected key is worse than an absent one: everything
+    # keeps returning 200 and scans just quietly come back nearly empty.
+    if backends["tavily"] and tav["quota_or_auth_failure"]:
+        problems.append(
+            f"Tavily is rejecting searches (HTTP {tav['last_status']}) — most likely the "
+            "monthly credit allowance is spent. Local bid search has fallen back to "
+            "scraping DuckDuckGo and scans will look almost empty until this clears.")
+    elif backends["tavily"] and tav["failing"]:
+        problems.append("Every Tavily search this run has failed — local bid search is degraded.")
     if not backends["openai"]:
         problems.append("OPENAI_API_KEY unset — /scan and /upcoming return no local bids at all")
     if not backends["tavily"] and ddg["degraded"]:
@@ -387,6 +397,10 @@ def health_detail():
         "status": "ok" if not problems else "degraded",
         "backends": backends,
         "local_search": ddg,
+        "tavily": {k: tav[k] for k in
+                   ("ok", "failed", "last_status", "last_error",
+                    "quota_or_auth_failure", "failing")},
+        "search_depth": TAVILY_DEPTH,
         # The recall knobs, so what's actually running is visible without
         # reading Render's env-var screen. All are env-tunable; raising them
         # trades scan time and OpenAI spend for coverage.
@@ -1418,6 +1432,42 @@ _SCRIPT_RE = re.compile(r"<(script|style)[^>]*>.*?</\1>", re.I | re.S)
 _TAG_RE = re.compile(r"<[^>]+>")
 
 
+# Tavily bills per search and charges DOUBLE for "advanced" depth. A 50mi scan
+# issues ~39 searches, so at advanced depth one scan cost ~78 credits and the
+# free 1,000/month allowance was gone in about a dozen scans — after which
+# every search silently returns nothing and the scan quietly falls back to
+# scraping DuckDuckGo. Depth only affects how hard Tavily works at ranking;
+# we use the results as a URL list and fetch the pages ourselves, so basic is
+# the right trade and halves the bill.
+TAVILY_DEPTH = os.environ.get("TAVILY_SEARCH_DEPTH", "basic")
+
+# A quota or auth failure here is the single most damaging silent failure in
+# the product: /scan still returns 200, just with almost nothing in it. Track
+# it the same way the DuckDuckGo breaker does so /health can say so out loud.
+_tavily_lock = threading.Lock()
+_tavily_state = {"ok": 0, "failed": 0, "last_error": "", "last_status": 0}
+
+
+def _tavily_note(ok, status=0, detail=""):
+    with _tavily_lock:
+        if ok:
+            _tavily_state["ok"] += 1
+        else:
+            _tavily_state["failed"] += 1
+            _tavily_state["last_status"] = status
+            _tavily_state["last_error"] = (detail or "")[:200]
+
+
+def _tavily_health():
+    with _tavily_lock:
+        st = dict(_tavily_state)
+    total = st["ok"] + st["failed"]
+    # 402/429/432 are the shapes a spent allowance arrives in.
+    st["quota_or_auth_failure"] = st["last_status"] in (401, 402, 429, 432)
+    st["failing"] = total > 0 and st["ok"] == 0 and st["failed"] > 0
+    return st
+
+
 def _tavily_search(query, max_results=5):
     """Search via Tavily; returns [{url, content}]."""
     if not TAVILY_API_KEY:
@@ -1426,7 +1476,7 @@ def _tavily_search(query, max_results=5):
     body = json.dumps({
         "api_key": TAVILY_API_KEY,
         "query": query,
-        "search_depth": "advanced",
+        "search_depth": TAVILY_DEPTH,
         "max_results": max_results,
         "include_raw_content": True,
     }).encode("utf-8")
@@ -1444,10 +1494,22 @@ def _tavily_search(query, max_results=5):
         except Exception:
             pass
         print(f"[scan] Tavily HTTP {e.code}: {detail}", flush=True)
+        _tavily_note(False, e.code, detail)
+        if e.code in (401, 402, 429, 432):
+            _alert_admin(
+                f"Tavily returning HTTP {e.code} — local bid search is degraded",
+                "Tavily rejected a search. 402/429/432 normally means the monthly "
+                "credit allowance is spent; 401 means the key is wrong. While this "
+                "lasts, /scan falls back to scraping DuckDuckGo, which from a shared "
+                "Render IP often returns nothing — so scans will look like the area "
+                f"simply has no bids.\n\nResponse: {detail}",
+            )
         return []
     except Exception as ex:
         print(f"[scan] Tavily error: {ex}", flush=True)
+        _tavily_note(False, 0, str(ex))
         return []
+    _tavily_note(True)
     results = data.get("results") or []
     print(f"[scan] Tavily: {len(results)} results for {query!r}", flush=True)
     out = []
@@ -2087,7 +2149,7 @@ def _place_bid(grouped, bid, center, radius, db, default_city="", city_coords=No
         city_coords[label] = {"lat": coords[0], "lon": coords[1]}
 
 
-def _perform_scan(location, radius):
+def _perform_scan(location, radius, force=False):
     """Core of /scan: resolve a location, search local + federal sources, rank
     and cache the result. Extracted out of the /scan route so the saved-search
     alert job can run the exact same pipeline (portal directory, DDG failover,
@@ -2101,7 +2163,12 @@ def _perform_scan(location, radius):
     today = datetime.datetime.now().strftime("%Y%m%d")
     cache = cdb.setdefault("scan_cache", {})
     ckey = f"{center['state']}|{center['city'].lower()}|{int(radius)}|{today}"
-    if ckey in cache:
+    # The cache is per calendar day, so the FIRST scan of an area sets what
+    # everyone sees until midnight. If that scan ran while a search backend was
+    # down — or against a cold server mid-deploy — its thin result was locked in
+    # and every retry returned the same disappointment with no way to force a
+    # real re-run. `force` is that way.
+    if ckey in cache and not force:
         c = cache[ckey]
         return {"location": f"{center['city']}, {center['state']}",
                 "bids": c["bids"], "total_bids": c["total"],
@@ -2271,7 +2338,7 @@ def scan():
     if not location:
         return jsonify({"ok": False, "reason": "no_location"})
 
-    outcome = _perform_scan(location, radius)
+    outcome = _perform_scan(location, radius, force=bool(data.get("force")))
     if outcome is None:
         return jsonify({"ok": False, "reason": "location_not_found"})
     return jsonify({"ok": True, **outcome})

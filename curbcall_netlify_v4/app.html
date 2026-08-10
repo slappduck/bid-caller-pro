@@ -258,6 +258,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
       <button class="btn-primary" id="scan-btn">&#x1F50D; Scan for Bids</button>
       <div class="scan-status" id="scan-status"></div>
       <div class="progress" id="progress-wrap" style="display:none;"><div class="progress-bar" id="progress-bar"></div></div>
+      <button class="btn-ghost" id="force-scan-btn" style="margin-top:0.6rem;font-size:0.8rem;">&#x21BB; Force a fresh scan (ignore today&#39;s cached result)</button>
       <button class="btn-ghost" id="save-search-btn" style="margin-top:1.2rem;">&#x1F4CC; Save this search for auto-alerts</button>
       <div id="saved-searches-wrap"></div>
     </div>
@@ -1401,7 +1402,11 @@ async function autoUnlock(){
 
 // ── Scan ──
 const scanBtn=document.getElementById("scan-btn");
-scanBtn.onclick=runScan;
+scanBtn.onclick=()=>runScan(false);
+// Results are cached per area per day, so the first scan of an area decides
+// what you see until midnight. If that one ran while a search backend was
+// down, this is how you get a real answer without waiting a day.
+document.getElementById("force-scan-btn").onclick=()=>runScan(true);
 document.getElementById("detect-btn").onclick=()=>detectLocation(true);
 document.getElementById("loc-input").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();runScan();}});
 
@@ -1592,7 +1597,7 @@ if(lastScanMap&&lastScanMap.center){
   if(mapVisible)showMapCard(true);
 }
 
-async function runScan(){
+async function runScan(force){
   if(scanBtn.disabled)return; // guard against double-tap / double-submit
   if(!requireOnline("Scanning for bids"))return;
   const location=document.getElementById("loc-input").value.trim();
@@ -1614,7 +1619,7 @@ async function runScan(){
     // hangs forever if the server is truly unreachable.
     const r=await fetchWithTimeout(SERVER+"/scan",{
       method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,location,radius})
+      body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,location,radius,force:!!force})
     },150000);
     clearInterval(tick);pb.style.width="100%";
     if(r.status===403){status.textContent="Your trial or subscription isn't active.";toast("Check Account tab");goTo("account");return;}
@@ -1630,9 +1635,10 @@ async function runScan(){
       kind:"scan",location:d.location||location,radius,
       ms:Date.now()-startedAt,total,added,cached:!!d.cached,debug:d.debug||null,
     });
-    status.textContent=total>0
+    const cachedNote=d.cached?" (today\u2019s saved result \u2014 use Force a fresh scan to re-search)":"";
+    status.textContent=(total>0
       ?`Done \u2014 ${added} new open bid(s) added near ${d.location||location}.`
-      :"No open bids posted here right now. Try a wider radius.";
+      :"No open bids posted here right now. Try a wider radius.")+cachedNote;
     if(total>0){toast(added>0?`Added ${added} new bid(s)!`:"No new bids \u2014 already in your list.");cityFilter="All";goTo("feed");}
   }catch(e){
     clearInterval(tick);

@@ -85,3 +85,84 @@ class HealthTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TavilyVisibilityTests(unittest.TestCase):
+    """A spent Tavily allowance is the most damaging silent failure here:
+    /scan keeps returning 200 and just comes back nearly empty, which reads
+    as "the area has no bids"."""
+
+    def setUp(self):
+        self.client = ls.app.test_client()
+        ls._tavily_state.update({"ok": 0, "failed": 0, "last_error": "", "last_status": 0})
+
+    def tearDown(self):
+        ls._tavily_state.update({"ok": 0, "failed": 0, "last_error": "", "last_status": 0})
+
+    def _health(self):
+        with patch.multiple(ls, **FULLY_CONFIGURED):
+            return self.client.get("/health").get_json()
+
+    def test_basic_depth_is_the_default(self):
+        # advanced costs double per search and buys nothing here — the results
+        # are used as a URL list and the pages are fetched separately.
+        self.assertEqual(ls.TAVILY_DEPTH, "basic")
+
+    def test_a_spent_allowance_is_reported_as_a_problem(self):
+        for status in (402, 429, 432):
+            with self.subTest(status=status):
+                ls._tavily_state.update({"ok": 0, "failed": 3, "last_status": status})
+                body = self._health()
+                self.assertEqual(body["status"], "degraded")
+                self.assertTrue(body["tavily"]["quota_or_auth_failure"])
+                self.assertTrue(any("Tavily is rejecting searches" in p
+                                    for p in body["problems"]))
+
+    def test_a_bad_key_is_reported(self):
+        ls._tavily_state.update({"ok": 0, "failed": 1, "last_status": 401})
+        self.assertTrue(self._health()["tavily"]["quota_or_auth_failure"])
+
+    def test_healthy_tavily_raises_nothing(self):
+        ls._tavily_state.update({"ok": 12, "failed": 0, "last_status": 0})
+        body = self._health()
+        self.assertEqual(body["problems"], [])
+        self.assertFalse(body["tavily"]["failing"])
+
+    def test_some_failures_alongside_successes_is_not_an_outage(self):
+        ls._tavily_state.update({"ok": 10, "failed": 2, "last_status": 500})
+        self.assertFalse(self._health()["tavily"]["failing"])
+
+
+class ForceRescanTests(unittest.TestCase):
+    """The scan cache is per area per day, so one bad scan used to decide what
+    the user saw until midnight."""
+
+    def setUp(self):
+        self.client = ls.app.test_client()
+        self._orig_gate = ls._license_is_active
+        ls._license_is_active = lambda *a, **k: True
+
+    def tearDown(self):
+        ls._license_is_active = self._orig_gate
+
+    def test_force_bypasses_the_same_day_cache(self):
+        calls = []
+        center = {"lat": 37.2, "lon": -93.3, "city": "Springfield", "state": "MO"}
+        cache = {}
+
+        def fake_geo(city, state):
+            return None
+
+        with patch.object(ls, "_resolve_center", return_value=center), \
+             patch.object(ls, "_cache", side_effect=lambda: cache), \
+             patch.object(ls, "_save_cache"), \
+             patch.object(ls, "OPENAI_API_KEY", ""), \
+             patch.object(ls, "SAM_API_KEY", ""), \
+             patch.object(ls, "bid_portals") as bp:
+            bp.load_directory.return_value = {}
+            for force in (False, False, True):
+                body = self.client.post("/scan", json={
+                    "location": "Springfield, MO", "radius": 50, "force": force}).get_json()
+                calls.append(bool(body.get("cached")))
+        # first populates, second is served from cache, third forces a re-run
+        self.assertEqual(calls, [False, True, False])
