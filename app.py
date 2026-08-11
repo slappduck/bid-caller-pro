@@ -188,6 +188,18 @@ def bid_id(city, bid):
     raw = (str(city) + bid.get("title", "") + bid.get("scope", "")).encode("utf-8")
     return hashlib.md5(raw).hexdigest()[:12]
 
+def saved_field(saved, key, field, bid):
+    """A field's value, preferring what the user manually edited over what
+    the raw bid says. Edits (Est. Value, notes, pipeline status) are written
+    only into `saved` -- self.bid_data (where `bid` comes from) is never
+    touched by an edit, only overwritten wholesale by the next scan -- so a
+    display that reads `bid` alone misses every edit until then, and looks
+    like saving silently failed."""
+    rec = saved.get(key)
+    if rec and rec.get(field):
+        return rec[field]
+    return bid.get(field, "")
+
 _DEADLINE_FORMATS = (
     "%Y-%m-%d", "%m/%d/%Y", "%m-%d-%Y", "%B %d, %Y", "%b %d, %Y",
     "%B %d %Y", "%b %d %Y", "%m/%d/%y",
@@ -565,12 +577,7 @@ class BidCaller:
         bid["_id"] = bid_id(city, bid)
         is_saved = bid["_id"] in self.saved
         note = self.saved.get(bid["_id"], {}).get("note", "") if is_saved else ""
-        # A manually-entered Est. Value lives in self.saved, not in `bid`
-        # itself (bid comes from self.bid_data, which _edit_value never
-        # touches) -- so this has to be read the same overridden way as
-        # note/pipeline above, or a value just saved from this exact card
-        # looks like it silently failed to save.
-        value = (self.saved.get(bid["_id"], {}).get("value") if is_saved else "") or bid.get("value", "")
+        value = saved_field(self.saved, bid["_id"], "value", bid)
 
         status_key = bid.get("status", "open").lower()
         pill_bg, pill_fg = STATUS_COLORS.get(status_key, ("#1c1917", TEXT3))
@@ -672,9 +679,7 @@ class BidCaller:
         key = bid_id(city, bid)
         saved = key in self.saved
         note = self.saved.get(key, {}).get("note", "") if saved else ""
-        # Same override as _bid_card: a manually-entered value lives in
-        # self.saved, not in `bid` (which is untouched raw scan data).
-        value = (self.saved.get(key, {}).get("value") if saved else "") or bid.get("value", "")
+        value = saved_field(self.saved, key, "value", bid)
 
         win = tk.Toplevel(self.root)
         _apply_icon(win)
@@ -1185,14 +1190,8 @@ class BidCaller:
                 return d if d is not None else 9999
             rows.sort(key=_deadline_key)
         elif sort_by == "Est. Value":
-            # A manually-entered value lives in self.saved, not in the raw
-            # bid dict -- without this override, sorting by value ignores
-            # every value the user typed in themselves (see _bid_card).
-            def _value_key(cb):
-                city, b = cb
-                override = self.saved.get(bid_id(city, b), {}).get("value")
-                return -parse_value(override or b.get("value"))
-            rows.sort(key=_value_key)
+            rows.sort(key=lambda cb: -parse_value(
+                saved_field(self.saved, bid_id(cb[0], cb[1]), "value", cb[1])))
         # "Best Match" (default): leave rows in the order /scan returned them --
         # the server already ranks each city's bids by fit (deadline urgency,
         # niche keyword strength, contact completeness).
