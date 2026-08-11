@@ -364,6 +364,9 @@ def health_detail():
         "backends": backends,
         "local_search": ddg,
         "storage": kv_backend.health(),
+        # The most recent scan's funnel. This is the fastest way to tell a
+        # genuinely quiet area from a pipeline dropping everything it found.
+        "last_scan": kv_backend.get("bidcaller:last_scan", None),
         "tavily": {k: tav[k] for k in
                    ("ok", "failed", "last_status", "last_error",
                     "quota_or_auth_failure", "failing")},
@@ -1591,23 +1594,55 @@ PROBE_TIMEOUT = int(os.environ.get("SCAN_PROBE_TIMEOUT", "6"))
 PORTAL_WORKERS = int(os.environ.get("SCAN_PORTAL_WORKERS", "6"))
 
 
+def _page_headers():
+    """Headers a real browser sends.
+
+    Municipal sites sit behind bot filters that reject on header fingerprint.
+    This codebase already learned that for DuckDuckGo and BidNet Direct — the
+    comment above _bidnet_direct_urls records a 403 from a bare fetch — but the
+    function that fetches every town's bid page still announced itself as
+    "Mozilla/5.0 BidCallerPro", which is neither a real browser nor an honest
+    bot, and is exactly the shape a filter drops.
+    """
+    return {
+        "User-Agent": random.choice(_DDG_UAS),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1",
+    }
+
+
+def _fetch_page(url, timeout=None):
+    """Fetch a page. Returns (text, outcome) where outcome explains a failure.
+
+    The outcome matters: a 403 and an empty page were previously
+    indistinguishable, both arriving as "" — so a portal being actively blocked
+    looked exactly like a town with no bids.
+    """
+    try:
+        req = urllib.request.Request(url, headers=_page_headers())
+        with urllib.request.urlopen(req, timeout=timeout or FETCH_TIMEOUT) as resp:
+            return resp.read(800000).decode("utf-8", "ignore"), "ok"
+    except urllib.error.HTTPError as e:
+        return "", f"http_{e.code}"
+    except Exception as ex:
+        name = type(ex).__name__.lower()
+        return "", "timeout" if "timeout" in name else "unreachable"
+
+
 def _fetch_raw(url, timeout=None):
     """Page source, untouched. _fetch_text strips tags, which is right for
     feeding prose to the AI and useless for a parser that needs the markup."""
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 BidCallerPro"})
-        with urllib.request.urlopen(req, timeout=timeout or FETCH_TIMEOUT) as resp:
-            return resp.read(800000).decode("utf-8", "ignore")
-    except Exception:
-        return ""
+    return _fetch_page(url, timeout=timeout)[0]
 
 
 def _fetch_text(url, timeout=None):
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 BidCallerPro"})
-        with urllib.request.urlopen(req, timeout=timeout or FETCH_TIMEOUT) as resp:
-            raw = resp.read(800000).decode("utf-8", "ignore")
-    except Exception:
+    raw = _fetch_page(url, timeout=timeout)[0]
+    if not raw:
         return ""
     raw = _SCRIPT_RE.sub(" ", raw)
     raw = _TAG_RE.sub(" ", raw)
@@ -1950,8 +1985,12 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
         # as a success even when our regex didn't understand it — a parser gap
         # is our problem, not a dead site.
         if bid_sources.identify_platform(url) == "civicplus":
-            rows = bid_sources.parse_civicplus_html(
-                _fetch_raw(url, timeout=timeout), base_url=url)
+            page, outcome = _fetch_page(url, timeout=timeout)
+            if outcome != "ok" and stats is not None:
+                with lock:
+                    k = f"portal_fetch_{outcome}"
+                    stats[k] = stats.get(k, 0) + 1
+            rows = bid_sources.parse_civicplus_html(page, base_url=url)
             if rows:
                 with lock:
                     bid_portals.record_result(pdb, city, state, url, True)
@@ -2351,6 +2390,22 @@ def _perform_scan(location, radius, force=False):
     funnel = ", ".join(f"{k}={v}" for k, v in sorted(drop_stats.items())) or "none"
     print(f"[scan] {int(radius)} mi from {center['city']},{center['state']} "
           f"-> {total} bids kept (local_raw={local_raw}; {funnel})", flush=True)
+
+    # Kept so the last scan can be inspected from /health. Diagnosing recall
+    # otherwise means asking someone to run a scan and relay numbers back,
+    # which is slow and lossy; a URL anyone can open is not.
+    try:
+        kv_backend.set("bidcaller:last_scan", {
+            "at": datetime.datetime.now().isoformat(timespec="seconds"),
+            "location": f"{center['city']}, {center['state']}",
+            "radius": int(radius),
+            "kept": total,
+            "raw_local": local_raw,
+            "anchor_towns": len(anchors) if OPENAI_API_KEY else 0,
+            "funnel": drop_stats,
+        })
+    except Exception:
+        pass
 
     result = {"bids": grouped, "total": total, "city_coords": city_coords,
               "center": {"lat": center["lat"], "lon": center["lon"],

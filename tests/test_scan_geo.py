@@ -444,7 +444,7 @@ class CivicPlusPortalReadTests(unittest.TestCase):
 
     def _run(self):
         import threading
-        with patch.object(ls, "_fetch_raw", return_value=self.LISTING), \
+        with patch.object(ls, "_fetch_page", return_value=(self.LISTING, "ok")), \
              patch.object(ls, "_ai_extract") as ai, \
              patch.object(ls, "_geo_from_city", side_effect=_fake_geo), \
              patch.object(ls.bid_portals, "get_portals", return_value=[
@@ -485,7 +485,7 @@ class CivicPlusPortalReadTests(unittest.TestCase):
 
     def test_an_empty_page_records_a_failure_and_keeps_going(self):
         import threading
-        with patch.object(ls, "_fetch_raw", return_value=""), \
+        with patch.object(ls, "_fetch_page", return_value=("", "ok")), \
              patch.object(ls, "_geo_from_city", side_effect=_fake_geo), \
              patch.object(ls.bid_portals, "get_portals", return_value=[
                  {"url": "https://x.gov/Bids.aspx", "platform": "civicplus"}]), \
@@ -511,7 +511,7 @@ class StructuredReadNeverLosesBidsTests(unittest.TestCase):
     def _run(self, page_html, ai_returns):
         import threading
         rec = None
-        with patch.object(ls, "_fetch_raw", return_value=page_html), \
+        with patch.object(ls, "_fetch_page", return_value=(page_html, "ok")), \
              patch.object(ls, "_fetch_text", return_value="x" * 500), \
              patch.object(ls, "_ai_extract", return_value=ai_returns) as ai, \
              patch.object(ls, "_geo_from_city", side_effect=_fake_geo), \

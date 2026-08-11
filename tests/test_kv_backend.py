@@ -15,6 +15,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import kv_backend as kv
 
 
+def _unlink(path):
+    try:
+        os.unlink(path)
+    except OSError:
+        pass
+
+
 class BackendSelectionTests(unittest.TestCase):
     def test_upstash_wins_when_configured(self):
         with patch.multiple(kv, UPSTASH_URL="https://x.upstash.io", UPSTASH_TOKEN="t",
@@ -70,12 +77,19 @@ class SupabaseRoundTripTests(unittest.TestCase):
     def test_an_unreachable_backend_still_writes_somewhere_but_says_it_is_not_durable(self):
         # Losing the write entirely would be worse; claiming it was durable
         # would be worse still.
+        key = "bidcaller:test_undurable_write"
+        self.addCleanup(lambda: _unlink(kv._local_path(key)))
         with patch.object(kv, "_supabase_set", return_value=False):
-            self.assertFalse(kv.set("k", {"v": 1}))
+            self.assertFalse(kv.set(key, {"v": 1}))
 
-    def test_a_read_failure_falls_through_rather_than_raising(self):
+    def test_a_read_failure_falls_through_to_the_local_copy(self):
+        # Deliberate: an unreachable backend should serve whatever is on disk
+        # rather than behave as though the data never existed. Its own key, so
+        # a neighbouring test's leftovers can't decide the result.
+        key = "bidcaller:test_read_failure"
+        _unlink(kv._local_path(key))
         with patch.object(kv, "_supabase_get", return_value=(None, False)):
-            self.assertEqual(kv.get("k", "fallback"), "fallback")
+            self.assertEqual(kv.get(key, "fallback"), "fallback")
 
 
 class HealthReportTests(unittest.TestCase):

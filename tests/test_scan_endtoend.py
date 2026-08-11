@@ -53,7 +53,7 @@ class ScanEndToEndTests(unittest.TestCase):
 
     def test_a_seeded_civicplus_portal_alone_produces_bids(self):
         """No search backend at all — the portal on its own must deliver."""
-        with patch.object(ls, "_fetch_raw", return_value=CIVICPLUS_PAGE), \
+        with patch.object(ls, "_fetch_page", return_value=(CIVICPLUS_PAGE, "ok")), \
              patch.object(ls, "_tavily_search", return_value=[]), \
              patch.object(ls, "_ddg_search", return_value=[]), \
              patch.object(ls, "_ai_extract", return_value=[]):
@@ -67,7 +67,7 @@ class ScanEndToEndTests(unittest.TestCase):
 
     def test_the_search_path_alone_also_produces_bids(self):
         """Portal unreachable, search working — the other half must still run."""
-        with patch.object(ls, "_fetch_raw", return_value=""), \
+        with patch.object(ls, "_fetch_page", return_value=("", "ok")), \
              patch.object(ls, "_fetch_text", return_value="x" * 500), \
              patch.object(ls, "_tavily_search",
                           return_value=[{"url": "https://x.gov/bid/1", "content": ""}]), \
@@ -82,7 +82,7 @@ class ScanEndToEndTests(unittest.TestCase):
         self.assertIn("Sidewalk repair", titles, out["debug"])
 
     def test_both_paths_together_do_not_cancel_each_other_out(self):
-        with patch.object(ls, "_fetch_raw", return_value=CIVICPLUS_PAGE), \
+        with patch.object(ls, "_fetch_page", return_value=(CIVICPLUS_PAGE, "ok")), \
              patch.object(ls, "_fetch_text", return_value="x" * 500), \
              patch.object(ls, "_tavily_search",
                           return_value=[{"url": "https://x.gov/bid/1", "content": ""}]), \
@@ -96,7 +96,7 @@ class ScanEndToEndTests(unittest.TestCase):
 
     def test_the_funnel_explains_a_zero_result(self):
         """A scan that finds nothing must say why, not just return nothing."""
-        with patch.object(ls, "_fetch_raw", return_value=""), \
+        with patch.object(ls, "_fetch_page", return_value=("", "ok")), \
              patch.object(ls, "_fetch_text", return_value=""), \
              patch.object(ls, "_tavily_search", return_value=[]), \
              patch.object(ls, "_ddg_search", return_value=[]), \
@@ -124,11 +124,11 @@ class ScanBudgetTests(unittest.TestCase):
             time.sleep(0.15)
             with lock:
                 overlap["now"] -= 1
-            return ""
+            return "", "ok"
 
         portals = [{"url": f"https://x{i}.gov/Bids.aspx", "platform": "civicplus"}
                    for i in range(6)]
-        with patch.object(ls, "_fetch_raw", side_effect=slow_fetch), \
+        with patch.object(ls, "_fetch_page", side_effect=slow_fetch), \
              patch.object(ls, "_fetch_text", return_value=""), \
              patch.object(ls, "_geo_from_city", return_value=None), \
              patch.object(ls.bid_portals, "get_portals", return_value=portals), \
@@ -150,12 +150,12 @@ class ScanBudgetTests(unittest.TestCase):
 
         def record(url, timeout=None):
             seen[url] = timeout
-            return ""
+            return "", "ok"
 
         portals = [{"url": "https://known.gov/Bids.aspx", "platform": "civicplus"},
                    {"url": "https://guess.gov/Bids.aspx", "platform": "civicplus",
                     "probe": True}]
-        with patch.object(ls, "_fetch_raw", side_effect=record), \
+        with patch.object(ls, "_fetch_page", side_effect=record), \
              patch.object(ls, "_fetch_text", return_value=""), \
              patch.object(ls, "_geo_from_city", return_value=None), \
              patch.object(ls.bid_portals, "get_portals", return_value=portals), \
