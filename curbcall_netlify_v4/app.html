@@ -2048,6 +2048,7 @@ function leadCard(city,l){
         ${safeUrl("tel:"+l.contractor_phone)?`<a class="chip" href="${esc(safeUrl("tel:"+l.contractor_phone))}">${esc(l.contractor_phone)}</a>`:""}
       </div>`:""}
       ${safeUrl(l.url)?`<div class="bid-meta" style="margin-top:0.4rem;"><a class="chip" href="${esc(safeUrl(l.url))}" target="_blank" rel="noopener noreferrer">\u{1F517} Permit Record</a></div>`:""}
+      ${l.lead_type==="builder"?`<div style="background:var(--surface);color:var(--text2);font-size:0.78rem;line-height:1.4;padding:0.5rem 0.6rem;border-radius:8px;margin-top:0.5rem;">ℹ️ A general contractor already holds this project. Worth a call only if you already have a relationship with them as a subcontractor.</div>`:""}
       ${pid?`<div class="lead-pipeline-row">
         ${LEAD_STATUSES.map(([k,label])=>`<button class="pchip ${curStatus===k?"active-"+k:""}" data-lead-id="${esc(pid)}" data-lead-status="${esc(curStatus===k?"":k)}">${label}</button>`).join("")}
       </div>`:""}

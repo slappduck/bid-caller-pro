@@ -2475,6 +2475,19 @@ class BidCaller:
         if lead.get("url"):
             chip("🔗  Permit Record", ACCENT, lambda: webbrowser.open(lead["url"]))
 
+        # The "Builder's Job" chip alone doesn't explain itself -- a first-
+        # time user has no reason to already know that a listed general
+        # contractor means a slow "get on their vendor list" pitch, not a
+        # fresh lead. Say it plainly in the card, not just in a tooltip.
+        if lead.get("lead_type") == "builder":
+            nf = tk.Frame(body, bg="#0f1320")
+            nf.pack(fill="x", pady=(8, 0))
+            tk.Label(nf, text="  ℹ  A general contractor already holds this "
+                     "project. Worth a call only if you already have a "
+                     "relationship with them as a subcontractor.",
+                     font=F_SMALL, bg="#0f1320", fg=TEXT2, anchor="w",
+                     wraplength=800, justify="left", padx=8, pady=6).pack(fill="x")
+
         permit_id = lead.get("permit_id")
         if permit_id:
             cur = self.lead_status.get(permit_id, "")
