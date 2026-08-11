@@ -3707,7 +3707,6 @@ def _dark_title_bar(window):
         return
     try:
         import ctypes
-        from ctypes import wintypes
         window.update_idletasks()
         hwnd = ctypes.windll.user32.GetParent(window.winfo_id())
         # DWMWA_USE_IMMERSIVE_DARK_MODE = 20 (or 19 on older builds)

@@ -22,7 +22,6 @@ pattern as license_server.py's `cdb = _cache()` / `_save_cache(cdb)`.
 """
 
 import os
-import json
 import datetime
 import urllib.request
 import urllib.parse

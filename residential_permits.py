@@ -46,7 +46,6 @@ a schema and hoping it holds.
 
 import datetime
 import json
-import re
 import urllib.parse
 import urllib.request
 
