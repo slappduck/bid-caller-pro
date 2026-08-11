@@ -565,6 +565,12 @@ class BidCaller:
         bid["_id"] = bid_id(city, bid)
         is_saved = bid["_id"] in self.saved
         note = self.saved.get(bid["_id"], {}).get("note", "") if is_saved else ""
+        # A manually-entered Est. Value lives in self.saved, not in `bid`
+        # itself (bid comes from self.bid_data, which _edit_value never
+        # touches) -- so this has to be read the same overridden way as
+        # note/pipeline above, or a value just saved from this exact card
+        # looks like it silently failed to save.
+        value = (self.saved.get(bid["_id"], {}).get("value") if is_saved else "") or bid.get("value", "")
 
         status_key = bid.get("status", "open").lower()
         pill_bg, pill_fg = STATUS_COLORS.get(status_key, ("#1c1917", TEXT3))
@@ -618,8 +624,8 @@ class BidCaller:
                 suffix = "  •  today" if dleft == 0 else f"  •  {dleft}d left"
             dl_color = RED if (dleft is not None and dleft <= 2) else ACCENT
             chip(f"📅  {bid['deadline']}{suffix}", dl_color)
-        if bid.get("value"):
-            chip(f"💲  {bid['value']}", GREEN)
+        if value:
+            chip(f"💲  {value}", GREEN)
         if bid.get("contact"):
             chip(f"👤  {bid['contact']}", TEXT2)
         pipeline = self.saved.get(bid["_id"], {}).get("pipeline", "") if is_saved else ""
@@ -644,7 +650,7 @@ class BidCaller:
         # contractor plug in their own estimate once they've actually
         # looked at the bid documents, instead of Est. Value just staying
         # blank forever.
-        value_btn = tk.Label(meta, text="💲  Add value" if not bid.get("value") else "💲  Edit value",
+        value_btn = tk.Label(meta, text="💲  Add value" if not value else "💲  Edit value",
                              font=F_SMALL, bg=SURFACE, fg=TEXT2,
                              padx=10, pady=4, cursor="hand2")
         value_btn.pack(side="right", padx=(0, 6))
@@ -666,6 +672,9 @@ class BidCaller:
         key = bid_id(city, bid)
         saved = key in self.saved
         note = self.saved.get(key, {}).get("note", "") if saved else ""
+        # Same override as _bid_card: a manually-entered value lives in
+        # self.saved, not in `bid` (which is untouched raw scan data).
+        value = (self.saved.get(key, {}).get("value") if saved else "") or bid.get("value", "")
 
         win = tk.Toplevel(self.root)
         _apply_icon(win)
@@ -725,7 +734,7 @@ class BidCaller:
                          anchor="w", wraplength=480, justify="left").pack(anchor="w")
 
         field("Scope of Work", bid.get("scope"))
-        field("Est. Value (if listed)", bid.get("value") or "Not listed")
+        field("Est. Value (if listed)", value or "Not listed")
         field("Deadline", bid.get("deadline") or "Not listed")
         field("Contact", bid.get("contact"))
         field("Email", bid.get("email"), link=True, link_type="email")
@@ -1176,7 +1185,14 @@ class BidCaller:
                 return d if d is not None else 9999
             rows.sort(key=_deadline_key)
         elif sort_by == "Est. Value":
-            rows.sort(key=lambda cb: -parse_value(cb[1].get("value")))
+            # A manually-entered value lives in self.saved, not in the raw
+            # bid dict -- without this override, sorting by value ignores
+            # every value the user typed in themselves (see _bid_card).
+            def _value_key(cb):
+                city, b = cb
+                override = self.saved.get(bid_id(city, b), {}).get("value")
+                return -parse_value(override or b.get("value"))
+            rows.sort(key=_value_key)
         # "Best Match" (default): leave rows in the order /scan returned them --
         # the server already ranks each city's bids by fit (deadline urgency,
         # niche keyword strength, contact completeness).
