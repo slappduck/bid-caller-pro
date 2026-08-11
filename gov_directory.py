@@ -69,6 +69,7 @@ def _load():
             # Missing data file degrades this to "no help", never to a crash.
             by_place, everything = {}, []
         _by_place, _all = by_place, everything
+        _build_org_index()
 
 
 def loaded_count():
@@ -121,3 +122,45 @@ def domains_for(city, state, include_county=True):
 
 def is_county(entry):
     return entry.get("type") == "County" or bool(_COUNTY_RE.search(entry.get("org", "")))
+
+
+# ── Lookup by organisation name ─────────────────────────────────────────────
+# `lookup()` keys on the registry's MAILING city, which for a county is its
+# seat — so "DuPage County" is filed under Wheaton and can't be found by name.
+# These search the organisation name instead, which is what a bid page actually
+# calls itself.
+_org_index = None
+
+
+def _build_org_index():
+    global _org_index
+    _org_index = [(_squash(e["org"]) + "|" + _squash(e["domain"]), e["state"])
+                  for e in _all]
+
+
+# Below this length a name is too generic to match on: "Water" or "Board"
+# would hit half the registry.
+_MIN_ORG_MATCH = 8
+
+
+def states_for_org(name):
+    """Every state with a government body of this name. Empty if unknown.
+
+    Used to catch a bid that names a real authority somewhere else entirely —
+    a scan centred in Missouri turned up "DuPage County" work, which is in
+    Illinois, and pinned it to Missouri because a county name doesn't geocode
+    and the fallback assumed anything unmappable must be local.
+    """
+    _load()
+    wanted = _squash(name)
+    if len(wanted) < _MIN_ORG_MATCH:
+        return set()
+    return {state for blob, state in _org_index if wanted in blob}
+
+
+def known_in_state(name, state):
+    """True if a place or body of this name is registered in this state."""
+    st = str(state or "").strip().upper()
+    if not st:
+        return False
+    return bool(lookup(name, st)) or st in states_for_org(name)

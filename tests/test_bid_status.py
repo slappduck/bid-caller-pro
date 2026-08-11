@@ -189,6 +189,129 @@ class SearchTownFallbackTests(unittest.TestCase):
         self.assertEqual(stats.get("unresolvable_place"), 1)
 
 
+class OutOfStateAuthorityTests(unittest.TestCase):
+    """A Missouri scan returned "DuPage County Sidewalks, curb ramps and
+    lighting". DuPage is in Illinois, 350 miles away. It survived the
+    plain-town check because "County" makes a name look unmappable."""
+
+    CENTER = {"lat": 38.515, "lon": -92.343, "city": "Russellville", "state": "MO"}
+
+    def _place(self, city, **kw):
+        grouped, stats = {}, {}
+        with patch.object(ls, "_city_coords", return_value=None):
+            ls._place_bid(grouped, {"title": "Sidewalk work", "city": city},
+                          self.CENTER, 125, {}, default_state="MO",
+                          fallback_coords=(38.6, -92.5), stats=stats, **kw)
+        return grouped, stats
+
+    def test_a_county_that_only_exists_elsewhere_is_dropped(self):
+        grouped, stats = self._place("DuPage County")
+        self.assertEqual(grouped, {})
+        self.assertEqual(stats.get("authority_in_another_state"), 1, stats)
+
+    def test_a_county_that_exists_here_is_kept(self):
+        for city in ("Greene County", "Cole County"):
+            with self.subTest(city=city):
+                grouped, stats = self._place(city)
+                self.assertEqual(stats.get("placed_by_search_town"), 1, stats)
+
+    def test_an_ambiguous_county_name_is_left_alone(self):
+        # Christian County is registered in IL, KY and MO. A name in several
+        # states proves nothing, so it must not be dropped.
+        grouped, stats = self._place("Christian County")
+        self.assertIsNone(stats.get("authority_in_another_state"), stats)
+        self.assertTrue(grouped)
+
+    def test_a_county_the_registry_has_never_heard_of_still_anchors(self):
+        grouped, stats = self._place("Frobnitz County")
+        self.assertEqual(stats.get("placed_by_search_town"), 1, stats)
+
+    def test_the_rule_does_not_reach_townships_and_districts(self):
+        # The registry covers these far too thinly for "known in one state" to
+        # mean anything: Ohio owning the only registered Wayne Township says
+        # nothing about Missouri.
+        for city in ("Wayne Township", "Boone County Road District"):
+            with self.subTest(city=city):
+                _, stats = self._place(city)
+                self.assertIsNone(stats.get("authority_in_another_state"), stats)
+
+    def test_the_town_we_searched_is_never_second_guessed(self):
+        # Russellville is registered in AR and KY but not MO — the registry
+        # holds only 194 of Missouri's ~950 incorporated places. Absence from
+        # it is not evidence of anything.
+        grouped, stats = self._place("Russellville", default_city="Russellville")
+        self.assertEqual(stats.get("placed_by_search_town"), 1, stats)
+        self.assertTrue(grouped)
+
+
+class ReverseGeocodeCenterTests(unittest.TestCase):
+    """A live scan came back centred on "Township of Rock Prairie, MO" — a
+    rural civil township with no procurement office and no registered domain.
+    The centre's name is not cosmetic: it becomes every search query the scan
+    builds and the key the .gov directory is asked for, so the structured
+    portal path never ran at all."""
+
+    @staticmethod
+    def _payload(city="", locality="", admin=()):
+        return {"countryCode": "US", "principalSubdivisionCode": "US-MO",
+                "city": city, "locality": locality,
+                "localityInfo": {"administrative": list(admin)}}
+
+    def _resolve(self, payload):
+        with patch.object(ls, "_get_json", return_value=payload):
+            return ls._reverse_geocode_city(37.1, -93.4)
+
+    def test_a_township_is_not_accepted_as_the_centre(self):
+        got = self._resolve(self._payload(
+            locality="Township of Rock Prairie",
+            admin=[{"name": "Greene County", "adminLevel": 6},
+                   {"name": "Township of Rock Prairie", "adminLevel": 7}]))
+        self.assertEqual(got, ("Greene County", "MO"))
+
+    def test_a_real_city_still_wins_outright(self):
+        got = self._resolve(self._payload(
+            city="Springfield",
+            admin=[{"name": "Greene County", "adminLevel": 6},
+                   {"name": "Springfield", "adminLevel": 8}]))
+        self.assertEqual(got, ("Springfield", "MO"))
+
+    def test_the_municipality_beats_the_township_it_sits_in(self):
+        got = self._resolve(self._payload(
+            locality="Township of Campbell",
+            admin=[{"name": "Greene County", "adminLevel": 6},
+                   {"name": "Township of Campbell", "adminLevel": 7},
+                   {"name": "Springfield", "adminLevel": 8}]))
+        self.assertEqual(got, ("Springfield", "MO"))
+
+    def test_an_unregistered_town_is_still_preferred_over_a_township(self):
+        # Most small towns have no .gov domain; that must not push the scan
+        # up to the county.
+        got = self._resolve(self._payload(
+            city="Fair Grove",
+            admin=[{"name": "Township of Franklin", "adminLevel": 7}]))
+        self.assertEqual(got, ("Fair Grove", "MO"))
+
+    def test_nothing_usable_returns_nothing(self):
+        self.assertIsNone(self._resolve(self._payload(
+            locality="Unincorporated Area",
+            admin=[{"name": "Unorganized Territory", "adminLevel": 7}])))
+
+    def test_a_non_us_point_is_rejected(self):
+        payload = self._payload(city="Toronto")
+        payload["countryCode"] = "CA"
+        self.assertIsNone(self._resolve(payload))
+
+    def test_a_dead_provider_does_not_raise(self):
+        for bad in (None, {}, {"countryCode": "US"}):
+            with self.subTest(bad=bad):
+                self.assertIsNone(self._resolve(bad))
+
+    def test_malformed_admin_entries_are_survived(self):
+        got = self._resolve(self._payload(
+            city="Springfield", admin=[None, "junk", {"name": None}, 42]))
+        self.assertEqual(got, ("Springfield", "MO"))
+
+
 class AuthorityDetectionTests(unittest.TestCase):
     def test_organisations_are_recognised(self):
         for name in ("Greene County", "St. Louis County", "Wayne Township",

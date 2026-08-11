@@ -1081,21 +1081,75 @@ def _destination_point(lat, lon, bearing_deg, distance_mi):
     return math.degrees(lat2), math.degrees(lon2)
 
 
+# Civil divisions that are not places anyone lets a bid from. A rural point
+# reverse-geocodes to one of these constantly, and BigDataCloud writes them
+# with an "of" prefix ("Township of Rock Prairie").
+_NON_PLACE_RE = re.compile(
+    r"\b(township|twp|unincorporated|unorganized|census\s+designated|"
+    r"CDP|precinct|ward|survey|reservation)\b", re.I)
+
+
 def _reverse_geocode_city(lat, lon):
     """Free, keyless reverse geocode (same provider the app uses client-side
     for auto-fill) -- turns a lat/lon into a {city, state} so we can search
-    towns scattered across a wide radius, not just the one the user typed."""
+    towns scattered across a wide radius, not just the one the user typed.
+
+    The name this returns is not cosmetic: it becomes the label the user sees,
+    every search query the scan builds, and the key the .gov directory is asked
+    for. A live scan came back centred on "Township of Rock Prairie, MO" — a
+    rural civil township with no procurement office, no registered domain, and
+    no meaning in a search query. The structured portal path never ran at all,
+    because there is nothing to look up. So candidates are considered in order
+    and the first one that names a real government is taken, falling back to
+    the county — which does let road and curb work, and which the registry
+    knows — rather than to a township.
+    """
     url = (f"https://api.bigdatacloud.net/data/reverse-geocode-client"
            f"?latitude={lat}&longitude={lon}&localityLanguage=en")
     data = _get_json(url)
     if not data:
         return None
-    city = data.get("city") or data.get("locality") or ""
     sub = (data.get("principalSubdivisionCode") or "").split("-")[-1].upper()
     country = (data.get("countryCode") or "").upper()
-    if not city or sub not in STATE_ABBRS or country != "US":
+    if sub not in STATE_ABBRS or country != "US":
         return None
-    return city, sub
+
+    # Best first. adminLevel 8 is the municipality, 7 the civil township, 6 the
+    # county; the top-level "city" is usually 8 but is empty in rural areas.
+    admin = ((data.get("localityInfo") or {}).get("administrative") or [])
+
+    def _named(level):
+        return [str(e.get("name") or "").strip() for e in admin
+                if isinstance(e, dict) and e.get("adminLevel") == level
+                and str(e.get("name") or "").strip()]
+
+    # Kept as (cleaned, original) pairs: _normalize_place strips the very
+    # "Township of" prefix that marks a name as unusable, so the check below
+    # has to run against what the provider actually said.
+    candidates, seen = [], set()
+    for raw in ([str(data.get("city") or "").strip()] + _named(8)
+                + [str(data.get("locality") or "").strip()]
+                + _named(7) + _named(6)):
+        cleaned = _normalize_place(raw)
+        if cleaned and cleaned.lower() not in seen:
+            seen.add(cleaned.lower())
+            candidates.append((cleaned, raw))
+    if not candidates:
+        return None
+
+    # A name the .gov registry recognises is one we can actually search — but
+    # a township still doesn't qualify just because stripping "Township of"
+    # leaves something that happens to be registered. "Township of Franklin"
+    # became "Franklin", which Missouri does have a domain for, and beat the
+    # actual city the point was in.
+    for cleaned, raw in candidates:
+        if not _NON_PLACE_RE.search(raw) and gov_directory.known_in_state(cleaned, sub):
+            return cleaned, sub
+    # Otherwise anything that isn't a bare civil division.
+    for cleaned, raw in candidates:
+        if not _NON_PLACE_RE.search(raw):
+            return cleaned, sub
+    return None
 
 
 def _nearby_anchor_towns(center, radius):
@@ -2273,6 +2327,9 @@ _AUTHORITY_RE = re.compile(
     r"regional|council|association|consolidated|R-[IVX]+)\b", re.I)
 
 
+_COUNTY_SHAPED_RE = re.compile(r"\bcount(?:y|ies)\b|\bparish\b|\bborough\b", re.I)
+
+
 def _looks_like_authority(name):
     """True if a name is an organisation rather than a town.
 
@@ -2360,8 +2417,36 @@ def _place_bid(grouped, bid, center, radius, db, default_city="", city_coords=No
         # Aledo IL — ordinary cities that simply don't exist in Missouri, so
         # they failed to geocode, got stamped with a Missouri anchor town's
         # coordinates, and passed the radius check on borrowed location.
-        anchorable = (_looks_like_authority(city)
-                      or city.strip().lower() == str(default_city or "").strip().lower())
+        # The town this search was run against is local by definition, and must
+        # never be second-guessed below: the .gov registry only covers bodies
+        # that own a domain (194 of Missouri's ~950 incorporated places), so a
+        # small town's absence from it means nothing at all.
+        is_search_town = (city.strip().lower()
+                          == str(default_city or "").strip().lower()
+                          and bool(str(default_city or "").strip()))
+        anchorable = _looks_like_authority(city) or is_search_town
+        # An authority we can place elsewhere is not local, whatever page it
+        # was found on. A Missouri scan returned "DuPage County" sidewalk work
+        # — DuPage is in Illinois, 350 miles away — and it passed the check
+        # above because "County" makes a name look unmappable.
+        #
+        # Only acted on when the registry knows the name in exactly ONE state
+        # and it isn't ours. Coverage is far too thin to read absence as
+        # evidence: Kansas is missing 40% of its own counties, so "not
+        # registered here" would throw away real local work. A name in several
+        # states is ambiguous and left alone; a name in none is the road
+        # district / drainage board case this fallback exists to catch.
+        # Counties only. They are the one tier the registry covers densely
+        # (3,137 entries against ~3,143 real counties), so "known in exactly
+        # one state" is meaningful for them. For townships and districts it is
+        # not — Ohio's Wayne Township owning the only registered domain of that
+        # name says nothing about whether Missouri has one.
+        if anchorable and not stated_state and not is_search_town \
+                and _COUNTY_SHAPED_RE.search(city):
+            elsewhere = gov_directory.states_for_org(city)
+            if len(elsewhere) == 1 and search_state not in elsewhere:
+                _count("authority_in_another_state")
+                return
         if fallback_coords and anchorable \
                 and (not stated_state or stated_state == search_state):
             coords, used_state = fallback_coords, search_state
