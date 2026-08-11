@@ -1703,11 +1703,22 @@ function mergeOpenBids(incoming,scannedCities){
 
 // ── Map data from the last scan (shown inline above the feed, not a replacement view) ──
 let lastScanMap=store.get("last_scan_map",null); // {center:{lat,lon,label}, cityCoords:{city:{lat,lon}}}
+// Town coordinates learned across EVERY scan, not just the latest one. The
+// feed (bidData) accumulates bids across scans by design -- mergeOpenBids
+// only replaces the towns it just rescanned, leaving older ones in place --
+// but lastScanMap.cityCoords used to be overwritten wholesale on every scan.
+// So a feed built from several scans over time (e.g. 35 bids across 6 towns)
+// only ever had markers for whichever towns were in the MOST RECENT scan;
+// every other town's bids were still counted in the feed total but had no
+// known coordinates left, so renderMap silently skipped them.
+let allCityCoords=store.get("all_city_coords",{});
 let leafletMap=null;
 let mapVisible=store.get("map_visible",true);
 function saveScanMap(center,cityCoords){
   lastScanMap={center,cityCoords};
   store.set("last_scan_map",lastScanMap);
+  allCityCoords={...allCityCoords,...(cityCoords||{})};
+  store.set("all_city_coords",allCityCoords);
   document.getElementById("map-toggle").style.display=center?"inline-flex":"none";
   if(center&&mapVisible)showMapCard(true);
 }
@@ -1735,6 +1746,17 @@ function bidPopupNode(city,b){
   link.textContent="View details →";
   link.onclick=(e)=>{e.preventDefault();openDetail(city,b);};
   wrap.appendChild(link);
+  // Straight from the pin to the source page -- opening the in-app detail
+  // view first was the only way to reach it, which buries the one link a
+  // contractor standing at the map actually wants: the original posting.
+  const src=safeUrl(b.url);
+  if(src){
+    wrap.appendChild(document.createTextNode(" · "));
+    const open=document.createElement("a");
+    open.href=src;open.target="_blank";open.rel="noopener noreferrer";
+    open.textContent="Bid page ↗";
+    wrap.appendChild(open);
+  }
   return wrap;
 }
 function renderMap(){
@@ -1753,14 +1775,23 @@ function renderMap(){
   leafletMap.eachLayer(l=>{if(l instanceof L.CircleMarker)leafletMap.removeLayer(l);});
   const bounds=[[lastScanMap.center.lat,lastScanMap.center.lon]];
   L.circleMarker([lastScanMap.center.lat,lastScanMap.center.lon],CENTER_PIN).addTo(leafletMap).bindPopup(`Search center: ${esc(lastScanMap.center.label||"")}`);
-  for(const city in(lastScanMap.cityCoords||{})){
-    const c=lastScanMap.cityCoords[city];
+  // Every town currently in the feed gets a shot at a pin, not just the towns
+  // from the most recent scan -- see the note on allCityCoords above.
+  const scannedNow=lastScanMap.cityCoords||{};
+  const towns=new Set([...Object.keys(allCityCoords||{}),...Object.keys(scannedNow)]);
+  towns.forEach(city=>{
+    const c=allCityCoords[city]||scannedNow[city];
+    if(!c)return; // no known coordinates for this town -- can't place a pin
     const jobs=(bidData[city]||[]).filter(isOpen);
     if(!jobs.length){
+      // A grey "scanned, none open" dot is only meaningful for a town that
+      // was part of THIS scan -- otherwise every town ever scanned would
+      // carry one forever, most of them stale.
+      if(!scannedNow[city])return;
       L.circleMarker([c.lat,c.lon],{radius:6,color:PIN_RING,fillColor:"#3b82f6",fillOpacity:0.9,weight:2})
         .addTo(leafletMap).bindPopup(`${esc(city)} — scanned, none open`);
       bounds.push([c.lat,c.lon]);
-      continue;
+      return;
     }
     jobs.forEach((b,i)=>{
       const[lat,lon]=jitteredLatLon(c.lat,c.lon,i);
@@ -1771,7 +1802,7 @@ function renderMap(){
         .bindPopup(bidPopupNode(city,b));
       bounds.push([lat,lon]);
     });
-  }
+  });
   if(bounds.length>1)leafletMap.fitBounds(bounds,{padding:[30,30]});
   setTimeout(()=>leafletMap.invalidateSize(),50);
 }
@@ -2280,6 +2311,10 @@ function bidCard(city,b){
   const deadlineChip=b.deadline
     ?`<span class="chip" style="${dleft!=null&&dleft<=2?'color:var(--red);':dleft!=null&&dleft<=7?'color:var(--accent);':''}${urgent?'font-weight:800;font-size:0.72rem;':''}">\u{1F4C5} ${esc(b.deadline)}${dleft!=null&&dleft>=0?` \u2022 ${dleft===0?"today":dleft+"d left"}`:""}</span>`
     :"";
+  // A link straight to the source page, right on the card -- previously the
+  // only way to reach it was tapping into the detail view first, which
+  // buries the one thing a contractor wants fastest: the original posting.
+  const srcHref=safeUrl(b.url);
   return `<div class="bid" data-id="${esc(id)}" data-city="${esc(city)}">
     <div class="bid-bar ${barClass}" style="${barClass?"":"background:var(--green)"}"></div>
     <div class="bid-body">
@@ -2294,6 +2329,7 @@ function bidCard(city,b){
         ${deadlineChip}
         ${pipeline[id]?`<span class="chip status-${esc(pipeline[id])}">${esc(String(pipeline[id]).toUpperCase())}</span>`:""}
         ${notes[id]?`<span class="chip">\u{1F4DD} Note</span>`:""}
+        ${srcHref?`<a class="chip src-link" href="${esc(srcHref)}" target="_blank" rel="noopener noreferrer">\u{1F517} Bid Page</a>`:""}
       </div>
     </div>
   </div>`;
@@ -2305,6 +2341,11 @@ function attachBidEvents(container){
   });
   container.querySelectorAll(".star").forEach(s=>{
     s.onclick=(e)=>{e.stopPropagation();toggleSave(s.dataset.city,s.dataset.star);};
+  });
+  // Let the link navigate (new tab) without also triggering the card's own
+  // click handler, which would pop the detail modal open behind it.
+  container.querySelectorAll(".src-link").forEach(a=>{
+    a.onclick=(e)=>e.stopPropagation();
   });
 }
 function findBid(id){
