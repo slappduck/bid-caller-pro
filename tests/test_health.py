@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import license_server as ls
+import kv_backend
 
 SECRET = "sk-do-not-leak-this-value"
 
@@ -36,7 +37,13 @@ class HealthTests(unittest.TestCase):
     def _get(self, **overrides):
         env = dict(FULLY_CONFIGURED)
         env.update(overrides)
-        with patch.multiple(ls, **env):
+        # Storage moved into kv_backend, so durability is read from there —
+        # patching only license_server would leave /health reporting the real
+        # (undurable) sandbox state and mask what these tests are checking.
+        with patch.multiple(ls, **env), \
+             patch.multiple(kv_backend,
+                            UPSTASH_URL="https://example.upstash.io",
+                            UPSTASH_TOKEN=SECRET):
             return self.client.get("/health").get_json()
 
     def test_plain_root_probe_is_unchanged(self):
@@ -100,7 +107,10 @@ class TavilyVisibilityTests(unittest.TestCase):
         ls._tavily_state.update({"ok": 0, "failed": 0, "last_error": "", "last_status": 0})
 
     def _health(self):
-        with patch.multiple(ls, **FULLY_CONFIGURED):
+        with patch.multiple(ls, **FULLY_CONFIGURED), \
+             patch.multiple(kv_backend,
+                            UPSTASH_URL="https://example.upstash.io",
+                            UPSTASH_TOKEN=SECRET):
             return self.client.get("/health").get_json()
 
     def test_basic_depth_is_the_default(self):

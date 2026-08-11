@@ -27,6 +27,8 @@ import datetime
 import urllib.request
 import urllib.parse
 
+import kv_backend
+
 UPSTASH_URL = os.environ.get("UPSTASH_REDIS_REST_URL", "").rstrip("/")
 UPSTASH_TOKEN = os.environ.get("UPSTASH_REDIS_REST_TOKEN", "")
 _DIR_KEY = "bidcaller:portal_directory"
@@ -62,39 +64,11 @@ SEED_PORTALS = {
 }
 
 
-def _upstash(*cmd):
-    if not (UPSTASH_URL and UPSTASH_TOKEN):
-        return None, False
-    body = json.dumps(list(cmd)).encode("utf-8")
-    req = urllib.request.Request(UPSTASH_URL, data=body, method="POST", headers={
-        "Authorization": f"Bearer {UPSTASH_TOKEN}",
-        "Content-Type": "application/json",
-    })
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            return json.loads(resp.read().decode("utf-8")).get("result"), True
-    except Exception as ex:
-        print(f"[bid_portals] upstash error: {ex}", flush=True)
-        return None, False
-
-
 def load_directory():
-    """Load the directory (Upstash if configured, else local file), seeded
-    with known-good defaults for any key not already present."""
-    result, ok = _upstash("GET", _DIR_KEY)
-    directory = None
-    if ok:
-        if result:
-            try:
-                directory = json.loads(result)
-            except Exception:
-                directory = None
-    else:
-        try:
-            with open(_LOCAL_FILE) as f:
-                directory = json.load(f)
-        except Exception:
-            directory = None
+    """Load the directory, seeded with known-good defaults for any key not
+    already present. Storage lives in kv_backend — this is the data that makes
+    the scanner improve scan over scan, so it has to outlive a restart."""
+    directory = kv_backend.get(_DIR_KEY, None)
     if directory is None:
         directory = {}
     _seed(directory)
@@ -102,14 +76,9 @@ def load_directory():
 
 
 def save_directory(directory):
-    _, ok = _upstash("SET", _DIR_KEY, json.dumps(directory))
-    if ok:
-        return
-    try:
-        with open(_LOCAL_FILE, "w") as f:
-            json.dump(directory, f, indent=2)
-    except Exception:
-        pass
+    """Persist the directory. Fails soft: losing a write costs the learning
+    from one scan, never the scan itself."""
+    kv_backend.set(_DIR_KEY, directory)
 
 
 def _key(city, state):

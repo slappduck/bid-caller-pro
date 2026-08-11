@@ -75,6 +75,7 @@ from werkzeug.exceptions import HTTPException
 
 import bid_portals
 import bid_sources
+import kv_backend
 import gov_directory
 import residential_permits
 
@@ -142,67 +143,25 @@ def _upstash(*cmd):
 
 
 def _db():
-    """Load persistent license data (Upstash if configured, else local file)."""
-    result, ok = _upstash("GET", _LIC_KEY)
-    if ok:
-        if result:
-            try:
-                return json.loads(result)
-            except Exception:
-                pass
-        return _empty_lic()
-    try:
-        with open(_LOCAL_LIC) as f:
-            return json.load(f)
-    except Exception:
-        return _empty_lic()
+    """Load persistent licence data. See kv_backend for where it actually lives."""
+    return kv_backend.get(_LIC_KEY, None) or _empty_lic()
 
 
 def _save_db(db):
-    _, ok = _upstash("SET", _LIC_KEY, json.dumps(db))
-    if ok:
-        return
-    try:
-        with open(_LOCAL_LIC, "w") as f:
-            json.dump(db, f, indent=2)
-    except Exception:
-        pass
+    kv_backend.set(_LIC_KEY, db)
 
 
 _CACHE_KEY = "bidcaller:scan_cache"
 
 
 def _cache():
-    """Scan/geo cache. Upstash-backed (like the license db) so the geocode
-    cache and same-day scan cache survive Render restarts/redeploys instead
-    of resetting every time — previously this was local-file-only, which on
-    Render's ephemeral disk meant every deploy silently threw away the geo
-    cache and forced re-geocoding. Falls back to a local file when Upstash
-    isn't configured (dev)."""
-    result, ok = _upstash("GET", _CACHE_KEY)
-    if ok:
-        if result:
-            try:
-                return json.loads(result)
-            except Exception:
-                pass
-        return {"scan_cache": {}, "geo_cache": {}}
-    try:
-        with open(_LOCAL_CACHE) as f:
-            return json.load(f)
-    except Exception:
-        return {"scan_cache": {}, "geo_cache": {}}
+    """Scan and geocode cache. Durable via kv_backend, so the geocode cache and
+    the same-day scan cache survive a restart instead of resetting every time."""
+    return kv_backend.get(_CACHE_KEY, None) or {"scan_cache": {}, "geo_cache": {}}
 
 
 def _save_cache(c):
-    _, ok = _upstash("SET", _CACHE_KEY, json.dumps(c))
-    if ok:
-        return
-    try:
-        with open(_LOCAL_CACHE, "w") as f:
-            json.dump(c, f)
-    except Exception:
-        pass
+    kv_backend.set(_CACHE_KEY, c)
 
 
 # ── Key signing / verification ──
@@ -358,7 +317,8 @@ def health_detail():
         "tavily": bool(TAVILY_API_KEY),          # primary local search
         "sam_gov": bool(SAM_API_KEY),            # federal bids
         "supabase": bool(SUPABASE_URL and SUPABASE_ANON_KEY),
-        "upstash_redis": bool(UPSTASH_URL and UPSTASH_TOKEN),  # else state is lost on redeploy
+        "upstash_redis": bool(UPSTASH_URL and UPSTASH_TOKEN),
+        "durable_storage": kv_backend.is_durable(),
         "resend_email": bool(RESEND_API_KEY),
         "saved_search_alerts": bool(SUPABASE_SERVICE_ROLE_KEY and CRON_SECRET and RESEND_API_KEY),
     }
@@ -391,14 +351,19 @@ def health_detail():
         problems.append("TAVILY_API_KEY unset — local search depends solely on scraping DuckDuckGo")
     if not backends["sam_gov"]:
         problems.append("SAM_API_KEY unset — no federal bids in results")
-    if not backends["upstash_redis"]:
-        problems.append("Upstash unset — licenses, portal directory and geo cache "
-                        "are lost on every redeploy")
+    if not kv_backend.is_durable():
+        problems.append(
+            "No durable storage configured — licences, trial records, the portal "
+            "directory and the geocode cache are written to Render's disk, which "
+            "is wiped on every deploy and whenever a free instance sleeps. Set "
+            "UPSTASH_REDIS_REST_URL/TOKEN, or apply supabase_kv_schema.sql to use "
+            "the Supabase project already configured here.")
     return jsonify({
         "service": "Bid Caller Pro License Server",
         "status": "ok" if not problems else "degraded",
         "backends": backends,
         "local_search": ddg,
+        "storage": kv_backend.health(),
         "tavily": {k: tav[k] for k in
                    ("ok", "failed", "last_status", "last_error",
                     "quota_or_auth_failure", "failing")},

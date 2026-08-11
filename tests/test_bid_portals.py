@@ -9,28 +9,25 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import bid_portals as bp
+import kv_backend
 
 
 class BidPortalsTests(unittest.TestCase):
     def setUp(self):
         self._orig_url = bp.UPSTASH_URL
         self._orig_token = bp.UPSTASH_TOKEN
-        self._orig_file = bp._LOCAL_FILE
-        bp.UPSTASH_URL = ""
-        bp.UPSTASH_TOKEN = ""
-        fd, path = tempfile.mkstemp(suffix=".json")
-        os.close(fd)
-        os.unlink(path)  # start from "file doesn't exist yet"
-        bp._LOCAL_FILE = path
+        # Storage moved behind kv_backend, so pinning bp._LOCAL_FILE no longer
+        # isolates anything — writes were landing in kv_backend's own file and
+        # leaking between tests. Swap the whole backend for a dict instead.
+        self._store = {}
+        self._kv_get = kv_backend.get
+        self._kv_set = kv_backend.set
+        kv_backend.get = lambda key, default=None: self._store.get(key, default)
+        kv_backend.set = lambda key, value: (self._store.__setitem__(key, value), True)[1]
 
     def tearDown(self):
-        bp.UPSTASH_URL = self._orig_url
-        bp.UPSTASH_TOKEN = self._orig_token
-        try:
-            os.unlink(bp._LOCAL_FILE)
-        except OSError:
-            pass
-        bp._LOCAL_FILE = self._orig_file
+        kv_backend.get = self._kv_get
+        kv_backend.set = self._kv_set
 
     def test_seed_present_on_first_load(self):
         d = bp.load_directory()

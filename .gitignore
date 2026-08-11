@@ -33,3 +33,7 @@ all_regional_intel.txt
 
 # Local tooling config (machine-specific)
 .claude/settings.local.json
+
+# Local-only kv_backend fallback files (Render disk is ephemeral; these are
+# dev scratch and must never be committed — the licence db lives in one).
+kv_*.json
