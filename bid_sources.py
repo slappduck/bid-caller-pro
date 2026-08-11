@@ -181,10 +181,41 @@ def _unescape(text):
     return out
 
 
+_MONTHS = ("January|February|March|April|May|June|July|August|September|October|"
+           "November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sept|Sep|Oct|Nov|Dec")
+_DATE = (rf"(?:{_MONTHS})\.?\s+\d{{1,2}},?\s+\d{{4}}"
+         r"|\d{1,2}/\d{1,2}/\d{2,4}|\d{4}-\d{2}-\d{2}")
+
+# A closing date is almost never written as "Closes: <date>". CivicPlus labels
+# its columns "Closing Date/Time", "Bid Opening Date/Time", "Due Date and
+# Time" — so the keyword and the date are separated by a few words of label.
+# Requiring them to be adjacent (which the first version of this did) meant
+# every bid read off a real CivicPlus listing came back with NO deadline. That
+# costs twice: the bid loses its whole urgency score, and an expired listing
+# can't be recognised as expired, so it shows as open.
+#
+# The gap is capped and may not contain a digit, so the pattern can never skip
+# over one label to grab a neighbouring column's date.
 _CLOSE_RE = re.compile(
-    r"(?:bid\s+opening|closing|closes|due|deadline|open\s+until)\s*[:\-]?\s*"
-    r"([A-Z][a-z]+\s+\d{1,2},?\s+\d{4}|\d{1,2}/\d{1,2}/\d{2,4}|\d{4}-\d{2}-\d{2})",
+    r"(?:bid\s+opening|bids?\s+due|clos(?:e|es|ed|ing)|due|deadline|"
+    r"submittals?|responses?\s+due|proposals?\s+due|open\s+until|"
+    r"accepted\s+until|received\s+until)"
+    r"[^\d<>]{0,20}?"
+    rf"({_DATE})",
     re.I)
+
+# CivicPlus prints the posting's own status on the listing row. It is the
+# authoritative answer to "is this still live?" and it is free — far better
+# than inferring it from a date we may have failed to parse.
+_STATUS_RE = re.compile(
+    r"\bstatus\b\s*[:\-]?\s*"
+    r"(open|closed|awarded|cancell?ed|withdrawn|pending|expired)\b", re.I)
+
+
+def _status_near(text):
+    """The posting status stated in a listing row, normalised. "" if absent."""
+    m = _STATUS_RE.search(str(text or ""))
+    return m.group(1).strip().capitalize() if m else ""
 
 
 def parse_civicplus_rss(xml_text):
@@ -213,7 +244,8 @@ def parse_civicplus_rss(xml_text):
         if m:
             closes = m.group(1)
         rows.append({"title": title, "url": link, "scope": desc,
-                     "deadline": closes, "source": "civicplus-rss"})
+                     "deadline": closes, "status": _status_near(desc),
+                     "source": "civicplus-rss"})
     return rows
 
 
@@ -243,11 +275,13 @@ def parse_civicplus_html(html, base_url=""):
         if url in seen:
             continue
         seen.add(url)
-        # Closing dates sit in the markup near the link rather than inside it.
-        window = text[m.end():m.end() + 600]
-        cm = _CLOSE_RE.search(_clean(_unescape(window)))
+        # Closing dates and the posting status sit in the markup near the link
+        # rather than inside it.
+        window = _clean(_unescape(text[m.end():m.end() + 600]))
+        cm = _CLOSE_RE.search(window)
         rows.append({"title": label, "url": url, "scope": "",
                      "deadline": cm.group(1) if cm else "",
+                     "status": _status_near(window),
                      "source": "civicplus"})
     return rows
 

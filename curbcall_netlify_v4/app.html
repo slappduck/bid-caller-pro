@@ -1484,8 +1484,17 @@ function isPastDeadline(b){
   const today=new Date();today.setHours(0,0,0,0);
   return t<today;
 }
+// Words that mean a solicitation is no longer biddable. Anything else counts
+// as open. This used to demand the status be exactly "open" and hide anything
+// else, which threw away every bid written up as "Accepting Bids", "Active",
+// "Advertised" or "Open - Bids Due 12/1". Must stay in step with
+// _is_open_bid() in license_server.py.
+const CLOSED_STATUS_WORDS=["closed","close date","awarded","award to","cancel",
+  "expired","withdrawn","archived","no longer","not accepting","complete",
+  "planned","upcoming","anticipated"];
 function isOpen(b){
-  if((b.status||"open").toLowerCase()!=="open")return false;
+  const s=String((b&&b.status)||"").trim().toLowerCase();
+  if(s&&CLOSED_STATUS_WORDS.some(w=>s.includes(w)))return false;
   return !isPastDeadline(b);
 }
 // Days remaining until deadline (null if unknown/unparseable) — used to

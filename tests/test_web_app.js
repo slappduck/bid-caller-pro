@@ -110,7 +110,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
 
 (async () => {
   const server = await startServer();
-  const browser = await chromium.launch();
+  const browser = await chromium.launch(process.env.PW_CHROME ? { executablePath: process.env.PW_CHROME } : {});
 
   // ── 1. The truck-with-no-bars case ──
   console.log("\nOffline boot with Leaflet + supabase-js unreachable");

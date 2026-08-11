@@ -46,6 +46,28 @@ CIVICPLUS_HTML = """
   <a href="/SomethingElse.aspx">Not a bid link</a>
 </div>"""
 
+# How a real CivicPlus listing is actually laid out: the closing date is a
+# labelled column ("Closing Date/Time"), not "Closes: <date>", and each row
+# states its own status. Parsing only the tight form meant every bid read off a
+# live site arrived with no deadline and an assumed status.
+CIVICPLUS_REAL_HTML = """
+<div class="bidItem">
+  <h3><a href="/bids.aspx?bidID=501">2026 Sidewalk &amp; ADA Ramp Program</a></h3>
+  <div class="bidStatus">Status: Open</div>
+  <div>Publication Date/Time: 7/1/2026 8:00 AM</div>
+  <div>Closing Date/Time: 12/1/2026 2:00 PM</div>
+</div>
+<div class="bidItem">
+  <h3><a href="/bids.aspx?bidID=502">Curb and Gutter Replacement - Grant Ave</a></h3>
+  <div class="bidStatus">Status: Closed</div>
+  <div>Publication Date/Time: 1/5/2026 8:00 AM</div>
+  <div>Bid Opening Date/Time: March 3, 2026 10:00 AM</div>
+</div>
+<div class="bidItem">
+  <h3><a href="/bids.aspx?bidID=503">Concrete Flatwork Annual Contract</a></h3>
+  <div>Due Date and Time: 2026-11-20 2:00 PM</div>
+</div>"""
+
 RSS_INDEX = """
 <ul>
   <li><a href="/RSSFeed.aspx?ModID=65&amp;CID=All-calendar.xml">Calendar</a></li>
@@ -151,6 +173,44 @@ class HtmlParsingTests(unittest.TestCase):
         for bad in ("", None, "<html", 12345):
             with self.subTest(bad=bad):
                 self.assertEqual(bs.parse_civicplus_html(bad), [])
+
+
+class RealCivicPlusLayoutTests(unittest.TestCase):
+    """The labelled-column layout a live CivicPlus site actually serves."""
+
+    def setUp(self):
+        self.rows = bs.parse_civicplus_html(CIVICPLUS_REAL_HTML, "https://x.gov")
+        self.by_title = {r["title"]: r for r in self.rows}
+
+    def test_every_posting_is_found(self):
+        self.assertEqual(len(self.rows), 3, [r["title"] for r in self.rows])
+
+    def test_a_labelled_closing_column_yields_a_deadline(self):
+        # "Closing Date/Time: 12/1/2026" — words between keyword and date.
+        self.assertEqual(
+            self.by_title["2026 Sidewalk & ADA Ramp Program"]["deadline"], "12/1/2026")
+
+    def test_bid_opening_and_due_date_labels_work_too(self):
+        self.assertEqual(
+            self.by_title["Curb and Gutter Replacement - Grant Ave"]["deadline"],
+            "March 3, 2026")
+        self.assertEqual(
+            self.by_title["Concrete Flatwork Annual Contract"]["deadline"], "2026-11-20")
+
+    def test_the_publication_date_is_never_mistaken_for_the_deadline(self):
+        for row in self.rows:
+            with self.subTest(title=row["title"]):
+                self.assertNotIn("7/1/2026", row["deadline"])
+                self.assertNotIn("1/5/2026", row["deadline"])
+
+    def test_the_listing_status_is_carried_through(self):
+        self.assertEqual(self.by_title["2026 Sidewalk & ADA Ramp Program"]["status"],
+                         "Open")
+        self.assertEqual(
+            self.by_title["Curb and Gutter Replacement - Grant Ave"]["status"], "Closed")
+
+    def test_no_stated_status_is_left_blank_rather_than_guessed(self):
+        self.assertEqual(self.by_title["Concrete Flatwork Annual Contract"]["status"], "")
 
 
 class FeedDiscoveryTests(unittest.TestCase):

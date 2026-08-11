@@ -621,7 +621,7 @@ def _run_saved_search_alerts():
         all_sigs, new_bids = [], []
         for city, bids in (outcome.get("bids") or {}).items():
             for b in bids:
-                if (b.get("status") or "").lower() == "closed":
+                if not _is_open_bid(b):
                     continue
                 sig = _bid_sig(city, b)
                 all_sigs.append(sig)
@@ -1195,7 +1195,7 @@ def _score_bid(bid):
     only qualified through the broad construction NAICS codes), and whether
     there's enough info to actually act on it. Higher is better."""
     score = 0.0
-    if bid.get("status") == "Closed":
+    if not _is_open_bid(bid):
         score -= 100
     else:
         d = _parse_deadline(bid.get("deadline"))
@@ -2002,7 +2002,11 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
                         raw[0] += 1
                         _place_bid(grouped, {
                             "title": row["title"], "scope": row.get("scope", ""),
-                            "status": "Open", "deadline": row.get("deadline", ""),
+                            # The listing states its own status where it has
+                            # one; trust that over assuming everything on the
+                            # page is live.
+                            "status": row.get("status") or "Open",
+                            "deadline": row.get("deadline", ""),
                             "contact": "", "email": "", "phone": "", "value": "",
                             "url": row["url"], "city": default_city or city,
                         }, center, radius, cdb, default_city=default_city or city,
@@ -2127,9 +2131,59 @@ def _run_local_queries(queries, ai_label, max_pages, grouped, center, radius, cd
     return raw[0]
 
 
+# Words that mean a solicitation can't be bid on right now — either it is over,
+# or (in /upcoming's case) it hasn't been let yet. Anything else counts as open.
+_CLOSED_STATUS_WORDS = ("closed", "close date", "awarded", "award to",
+                        "cancel", "expired", "withdrawn", "archived",
+                        "no longer", "not accepting", "complete",
+                        "planned", "upcoming", "anticipated")
+
+
 def _is_open_bid(bid):
-    """A bid the client will actually display. Mirrors isOpen() in app.html."""
-    return str((bid or {}).get("status") or "Open").strip().lower() == "open"
+    """A bid the client will actually display. Mirrors isOpen() in app.html.
+
+    This used to require the status to be exactly "open", and dropped anything
+    else. That is not how the real world writes it: agencies and the extraction
+    model both produce "Accepting Bids", "Active", "Advertised", "Open - Bids
+    Due 12/1", "Currently Open". Every one of those was placed into the result
+    by _place_bid, counted as kept in the funnel, and then reported as zero and
+    hidden by the app — a scan could find seven genuine local bids and still
+    tell the contractor there was nothing out there. So the test is inverted:
+    a bid is open unless it says it isn't.
+    """
+    status = str((bid or {}).get("status") or "").strip().lower()
+    if not status:
+        return True  # unstated status is not evidence of a closed bid
+    return not any(word in status for word in _CLOSED_STATUS_WORDS)
+
+
+def _status_breakdown(grouped):
+    """How many bids in a result carry each status, e.g. {"Open": 2, "Closed": 7}."""
+    out = {}
+    for bids in (grouped or {}).values():
+        for b in bids:
+            label = str((b or {}).get("status") or "(none)").strip() or "(none)"
+            out[label] = out.get(label, 0) + 1
+    return out
+
+
+def _scan_sample(grouped, limit=8):
+    """A handful of what the last scan actually placed, for /health.
+
+    Only fields that already appear on a public bid notice — no contact
+    details, nothing about who ran the scan.
+    """
+    out = []
+    for city, bids in sorted((grouped or {}).items()):
+        for b in bids:
+            out.append({"city": city,
+                        "title": str((b or {}).get("title") or "")[:120],
+                        "deadline": str((b or {}).get("deadline") or ""),
+                        "status": str((b or {}).get("status") or ""),
+                        "open": _is_open_bid(b)})
+            if len(out) >= limit:
+                return out
+    return out
 
 
 def _bid_dupe_key(bid):
@@ -2231,6 +2285,13 @@ def _place_bid(grouped, bid, center, radius, db, default_city="", city_coords=No
         return
     bucket.append(bid)
     _count("kept")
+    # "kept" counts bids that made it into the result; the reported total counts
+    # only the OPEN ones. When those two disagree the difference is invisible,
+    # and a scan that placed seven bids and reported zero looked like a bug in
+    # the geography rather than what it was — everything found had been ruled
+    # expired. Count the gap so the funnel explains itself.
+    if not _is_open_bid(bid):
+        _count("kept_but_closed")
     if city_coords is not None:
         city_coords[label] = {"lat": coords[0], "lon": coords[1]}
 
@@ -2403,6 +2464,12 @@ def _perform_scan(location, radius, force=False):
             "raw_local": local_raw,
             "anchor_towns": len(anchors) if OPENAI_API_KEY else 0,
             "funnel": drop_stats,
+            # Counts alone can't distinguish "found nothing" from "found real
+            # work and threw it away", which is exactly the question that
+            # matters. These two make the last scan legible without asking
+            # anyone to re-run it and read numbers back.
+            "statuses": _status_breakdown(grouped),
+            "sample": _scan_sample(grouped),
         })
     except Exception:
         pass
