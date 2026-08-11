@@ -453,6 +453,15 @@ const SUPABASE_ANON_KEY = "sb_publishable_sUuQHkrN_wsJqakUMfL_VA_58koZ76C";
 const SERVER = "https://bid-caller-pro.onrender.com";
 const PORTAL_URL = "https://billing.stripe.com/p/login/3cIcN4an28420Yad2fejK00";
 const SUPPORT_EMAIL = "Yumiwave1@gmail.com";
+// Keep identical to _REFERRAL_SEP in license_server.py and REFERRAL_SEP in
+// index.html — the separator client_reference_id is split on server-side.
+const REFERRAL_SEP = "~ref~";
+(function stashReferral(){
+  try{
+    const ref=new URLSearchParams(location.search).get("ref");
+    if(ref) localStorage.setItem("pending_ref", ref);
+  }catch(e){}
+})();
 
 // Leaflet and supabase-js load from CDNs. The service worker caches both, but
 // a very first run on a dead connection (or a blocked/ad-filtered CDN) can
@@ -2586,6 +2595,29 @@ function pipelineStatsSummary(){
 }
 let lastSyncAt=null;
 let companyEditMode=false;
+async function loadReferralCard(){
+  const el=document.getElementById("referral-body");
+  if(!el) return;
+  try{
+    let code=store.get("referral_code","");
+    if(!code){
+      const token=await getSupabaseToken();
+      const r=await fetchWithTimeout(SERVER+"/referral/code",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({supabase_token:token})},30000);
+      const d=await r.json();
+      if(d.ok&&d.code){code=d.code;store.set("referral_code",code);}
+    }
+    if(!code){el.textContent="Couldn't load your referral link right now.";return;}
+    const link=`${location.origin}/?ref=${encodeURIComponent(code)}`;
+    el.innerHTML=`<div class="input" style="display:flex;align-items:center;gap:0.5rem;overflow:hidden;padding:0.6rem 0.8rem;">
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.78rem;color:var(--text2);">${esc(link)}</span>
+      <button class="btn-ghost" id="referral-copy-btn" style="flex-shrink:0;width:auto;margin:0;padding:0.35rem 0.7rem;font-size:0.78rem;">Copy</button>
+    </div>`;
+    document.getElementById("referral-copy-btn").onclick=async()=>{
+      try{await navigator.clipboard.writeText(link);toast("Referral link copied");}
+      catch(e){toast("Couldn't copy — long-press the link to copy manually");}
+    };
+  }catch(e){el.textContent="Couldn't load your referral link right now.";}
+}
 function renderAccount(){
   const body=document.getElementById("account-body");
   const email=currentUser?.email||"";
@@ -2598,8 +2630,10 @@ function renderAccount(){
   // tag stripe links with device id — these are the live $19/mo and $149/yr
   // Payment Links (match the ones on index.html); update both files together
   // if pricing changes.
-  const mLink=`https://buy.stripe.com/5kQcN43YEbge0YafanejK01?client_reference_id=${encodeURIComponent(deviceId())}`;
-  const aLink=`https://buy.stripe.com/8x26oG7aQesqgX87HVejK03?client_reference_id=${encodeURIComponent(deviceId())}`;
+  const pendingRef=(()=>{try{return localStorage.getItem("pending_ref")||"";}catch(e){return"";}})();
+  const refId=pendingRef?deviceId()+REFERRAL_SEP+pendingRef:deviceId();
+  const mLink=`https://buy.stripe.com/5kQcN43YEbge0YafanejK01?client_reference_id=${encodeURIComponent(refId)}`;
+  const aLink=`https://buy.stripe.com/8x26oG7aQesqgX87HVejK03?client_reference_id=${encodeURIComponent(refId)}`;
 
   body.innerHTML=`
     <div class="account-card" style="display:flex;align-items:center;gap:0.9rem;">
@@ -2666,6 +2700,11 @@ function renderAccount(){
       <button class="btn-ghost" id="support-send-btn">Send Message</button>
       <div class="account-status" id="support-status" style="margin-top:0.5rem;"></div>
     </div>
+    <div class="account-card" id="referral-card">
+      <div class="account-email" style="font-size:0.85rem;">&#x1F91D; Refer a Contractor</div>
+      <div class="account-status" style="margin-bottom:0.7rem;">Give a free month, get a free month — when someone you refer subscribes, you both get bonus time added automatically.</div>
+      <div id="referral-body" class="account-status">Loading your link&hellip;</div>
+    </div>
     <div class="account-email" style="font-size:0.85rem;margin:0.4rem 0 0.5rem;">&#x1F4B3; Billing</div>
     <div class="plan" id="status-card"><div class="plan-name" style="display:flex;align-items:center;gap:0.5rem;"><span class="spin" style="border-top-color:var(--accent);border-color:rgba(245,158,11,0.25);"></span> Checking your plan...</div></div>
     <a class="btn-ghost" style="text-decoration:none;display:block;text-align:center;box-sizing:border-box;" href="${PORTAL_URL}" target="_blank">&#x1F4B3; Manage Billing on Stripe &rarr;</a>
@@ -2708,6 +2747,7 @@ function renderAccount(){
     await sb.auth.signOut();toast("Signed out");
   };
   document.getElementById("notif-card").onclick=toggleNotifPermission;
+  loadReferralCard();
   document.getElementById("diag-refresh").onclick=()=>loadHealth();
   document.getElementById("diag-copy").onclick=async()=>{
     const text=diagnosticsText();

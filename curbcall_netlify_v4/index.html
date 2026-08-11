@@ -280,6 +280,18 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
   t.addEventListener("click", function(){ l.classList.toggle("open"); });
   l.querySelectorAll("a").forEach(function(a){ a.addEventListener("click", function(){ l.classList.remove("open"); }); });
 
+  // A referral link lands here as ?ref=CODE (shared from a subscriber's
+  // Account tab). Stash it so it survives browsing the page, then fold it
+  // into the checkout link below — same separator the server splits on
+  // (_REFERRAL_SEP in license_server.py), so no new Stripe-side field.
+  var REFERRAL_SEP = "~ref~";
+  (function stashReferral(){
+    try {
+      var ref = new URLSearchParams(location.search).get("ref");
+      if (ref) localStorage.setItem("pending_ref", ref);
+    } catch (e) {}
+  })();
+
   // Tag checkout links with this browser's device id so a purchase started
   // here can be matched back to the app. The Stripe webhook stores
   // client_reference_id as the buyer's device, and the app asks /mykey for
@@ -297,11 +309,14 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
         localStorage.setItem("device_id", JSON.stringify(id));
       }
     } catch (e) { return; } // private mode / storage blocked — links still work
+    var ref;
+    try { ref = localStorage.getItem("pending_ref"); } catch (e) {}
+    var refId = ref ? id + REFERRAL_SEP + ref : id;
     document.querySelectorAll('a[href*="buy.stripe.com"]').forEach(function(a){
       var u = a.getAttribute("href");
       if (u.indexOf("client_reference_id=") !== -1) return;
       a.setAttribute("href", u + (u.indexOf("?") === -1 ? "?" : "&")
-        + "client_reference_id=" + encodeURIComponent(id));
+        + "client_reference_id=" + encodeURIComponent(refId));
     });
   })();
 </script>

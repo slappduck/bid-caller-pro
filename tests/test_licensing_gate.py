@@ -181,5 +181,89 @@ class StripeWebhookTests(unittest.TestCase):
         self.assertTrue(r.get_json()["ok"])
 
 
+class ReferralTests(unittest.TestCase):
+    """give-a-month-get-a-month: a signed-in user gets a stable code from
+    /referral/code, and a checkout carrying that code in client_reference_id
+    (as `<device>~ref~<code>`) grants both sides bonus days exactly once."""
+
+    def setUp(self):
+        self.client = ls.app.test_client()
+        self.db = {}
+
+    def _signed(self, body, secret):
+        payload = json.dumps(body).encode("utf-8")
+        t = str(int(time.time()))
+        signed = f"{t}.{payload.decode('utf-8')}".encode("utf-8")
+        v1 = hmac.new(secret.encode(), signed, hashlib.sha256).hexdigest()
+        return payload, f"t={t},v1={v1}"
+
+    def _checkout(self, ref_id, email, amount=5000):
+        body = {"type": "checkout.session.completed",
+                 "data": {"object": {"customer_email": email, "amount_total": amount,
+                                      "client_reference_id": ref_id}}}
+        payload, sig = self._signed(body, "right-secret")
+        with patch.object(ls, "STRIPE_WEBHOOK_SECRET", "right-secret"), \
+             patch.object(ls, "_db", return_value=self.db), \
+             patch.object(ls, "_save_db"), \
+             patch.object(ls, "_send_key_email"), \
+             patch.object(ls, "_send_referral_email"):
+            return self.client.post("/stripe/webhook", data=payload,
+                                     headers={"Stripe-Signature": sig})
+
+    def test_referral_code_requires_sign_in(self):
+        with patch.object(ls, "_verify_supabase_token", return_value=None):
+            r = self.client.post("/referral/code", json={"supabase_token": "bad"})
+        self.assertEqual(r.status_code, 401)
+
+    def test_referral_code_is_stable_for_the_same_email(self):
+        with patch.object(ls, "_db", return_value=self.db), \
+             patch.object(ls, "_save_db"), \
+             patch.object(ls, "_verify_supabase_token", return_value="ref@example.com"):
+            r1 = self.client.post("/referral/code", json={"supabase_token": "t"})
+            r2 = self.client.post("/referral/code", json={"supabase_token": "t"})
+        self.assertEqual(r1.get_json()["code"], r2.get_json()["code"])
+
+    def test_referred_checkout_grants_both_sides_bonus_days(self):
+        self.db["referral_codes"] = {"ABCD1234": {"email": "referrer@example.com", "redemptions": 0}}
+        self.db["referral_owner"] = {"referrer@example.com": "ABCD1234"}
+        r = self._checkout("web-newbuyer~ref~ABCD1234", "referred@example.com")
+        self.assertTrue(r.get_json()["ok"])
+        # Referrer got a bonus key even though they never bought anything themselves.
+        referrer_key = self.db["emails"].get("referrer@example.com")
+        self.assertIsNotNone(referrer_key)
+        referrer_exp = self.db["issued"][referrer_key]["expires"]
+        # Referred buyer's own key should expire further out than a bare
+        # 1-month plan would, since the 14-day bonus stacks on top.
+        referred_key = self.db["emails"].get("referred@example.com")
+        self.assertIsNotNone(referred_key)
+        self.assertGreater(
+            self.db["issued"][referred_key]["expires"],
+            (ls.datetime.datetime.now() + ls.datetime.timedelta(days=35)).isoformat()[:10])
+        self.assertIn("referred@example.com", self.db["referral_redeemed"])
+        self.assertGreater(referrer_exp, ls.datetime.datetime.now().isoformat()[:10])
+
+    def test_referral_cannot_be_redeemed_twice_by_the_same_buyer(self):
+        self.db["referral_codes"] = {"ABCD1234": {"email": "referrer@example.com", "redemptions": 0}}
+        self.db["referral_owner"] = {"referrer@example.com": "ABCD1234"}
+        self._checkout("web-newbuyer~ref~ABCD1234", "referred@example.com")
+        first_key = self.db["emails"]["referrer@example.com"]
+        self._checkout("web-newbuyer2~ref~ABCD1234", "referred@example.com")
+        self.assertEqual(self.db["emails"]["referrer@example.com"], first_key)
+        self.assertEqual(self.db["referral_codes"]["ABCD1234"]["redemptions"], 1)
+
+    def test_no_self_referral_reward(self):
+        self.db["referral_codes"] = {"ABCD1234": {"email": "same@example.com", "redemptions": 0}}
+        self.db["referral_owner"] = {"same@example.com": "ABCD1234"}
+        self._checkout("web-x~ref~ABCD1234", "same@example.com")
+        self.assertEqual(self.db["referral_codes"]["ABCD1234"]["redemptions"], 0)
+
+    def test_checkout_without_a_referral_code_behaves_as_before(self):
+        r = self._checkout("web-plainbuyer", "plain@example.com")
+        self.assertTrue(r.get_json()["ok"])
+        self.assertEqual(self.db["devices"].get("web-plainbuyer"),
+                          self.db["emails"].get("plain@example.com"))
+        self.assertNotIn("referral_redeemed", self.db)
+
+
 if __name__ == "__main__":
     unittest.main()
