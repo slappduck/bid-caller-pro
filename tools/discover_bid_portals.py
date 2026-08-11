@@ -110,43 +110,17 @@ def _looks_like_a_bid_page(html):
     return hits >= 2, ""
 
 
-_LINK_RE = re.compile(r'<a[^>]+href="([^"#][^"]*)"[^>]*>(.*?)</a>', re.I | re.S)
-_HOMEPAGE_LINK_HINTS = ("bid", "rfp", "rfq", "solicitation", "procurement",
-                        "purchasing", "vendor")
-# Cheap noise a bid-shaped word sometimes false-positives on -- a "bid" match
-# inside a cookie-consent or unrelated nav link isn't worth a fetch.
-_HOMEPAGE_LINK_NOISE = ("facebook.com", "twitter.com", "x.com", "instagram.com",
-                        "youtube.com", "linkedin.com", "mailto:", "tel:", "javascript:")
-
-
 def _homepage_bid_link_candidates(domain, max_candidates=3):
     """A handful of links off the homepage whose href or label suggest a bid
     page -- the fallback for sites where none of the guessed common paths
     hit. Bounded to a few candidates so a domain with no real bid page
-    doesn't cost more than one extra fetch beyond the homepage itself."""
+    doesn't cost more than one extra fetch beyond the homepage itself.
+    Extraction logic lives in bid_sources.extract_bid_link_candidates so the
+    live /scan path (license_server.py) and this offline crawl can't drift
+    apart on what counts as a bid-shaped link."""
     base = f"https://{domain}"
     html = _fetch(base)
-    if not html:
-        return []
-    seen, scored = set(), []
-    for m in _LINK_RE.finditer(html):
-        href, label = m.group(1), _plain_text(m.group(2))
-        blob = (href + " " + label).lower()
-        if any(n in blob for n in _HOMEPAGE_LINK_NOISE):
-            continue
-        hits = sum(1 for term in _HOMEPAGE_LINK_HINTS if term in blob)
-        if not hits:
-            continue
-        if href.startswith("/"):
-            href = base + href
-        elif not href.lower().startswith("http"):
-            href = base + "/" + href.lstrip("/")
-        if href in seen:
-            continue
-        seen.add(href)
-        scored.append((hits, href))
-    scored.sort(key=lambda t: -t[0])
-    return [href for _, href in scored[:max_candidates]]
+    return bid_sources.extract_bid_link_candidates(html, base, max_candidates=max_candidates)
 
 
 def _check_domain(entry, homepage_fallback=True):

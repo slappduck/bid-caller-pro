@@ -60,6 +60,30 @@ tuned against a saved fixture without waiting on a live site.
 - [x] `bid_sources.py`: platform recognition + CivicPlus reader (RSS and the
       `Bids.aspx` listing) + a relevance prefilter
 - [x] Wire `bid_sources` into `/scan` ahead of the search path
+- [x] **National bid-portal directory.** `tools/discover_bid_portals.py`
+      crawled all 12,711 domains in `data/gov_domains.csv` — 3,151 verified
+      bid pages found (24.8%: 2,251 cities, 740 counties, 155 special
+      districts, 5 school districts), across 52 states/territories. Wired
+      into `/scan` via `bid_portals.py`'s `_national_seeds()`, behind the
+      5 hand-seeded entries
+- [x] **Live homepage-link fallback for cities the crawl didn't cover.**
+      A city with no known portal and no hit on the guessed common paths
+      (`/Bids.aspx`, `/bids`, ...) used to fall straight through to a
+      generic web search — which has no way to tell a result ABOUT the
+      searched city apart from one that merely mentions it. A live Kansas
+      City, MO scan with no known portal came back with every single raw
+      result `out_of_radius`: real, geocodable bids, just from the wrong
+      place, because the search itself had nothing local to rank. Fixed:
+      `_run_known_portals` now also tries an actual bid-shaped link off
+      each entity's own homepage (`bid_sources.extract_bid_link_candidates`,
+      shared with the offline crawl) before giving up and falling to
+      search. Verified live against `kcmo.gov`: correctly finds
+      `/i-want-to/view-bid-opportunities`, its real "Bids and Solicitation
+      Information" page — which in turn reveals Kansas City's actual
+      listings live on **Bonfire**, not on kcmo.gov itself. This fix gets a
+      scan from "nothing" to "the right government page"; a Bonfire
+      adapter (below) is still needed to reach KC's actual listings from
+      there.
 - [~] Seed the portal directory: Springfield/Aurora/Joplin corrected to the
       Bids.aspx module and labelled `civicplus` (two were pointing at
       AgendaCenter, the council-meetings module, which never contains bids).
@@ -89,7 +113,10 @@ tuned against a saved fixture without waiting on a live site.
 - [ ] Bonfire, OpenGov, PlanetBids adapters — same platform-adapter pattern
       as DemandStar; worth checking each one's actual access model (free
       public listing vs. paid vendor tier) *before* investing in a reader,
-      given how DemandStar turned out
+      given how DemandStar turned out. **Kansas City, MO is a confirmed
+      real Bonfire user** (found via the live homepage-fallback above) —
+      a concrete, known-good target to verify Bonfire's access model
+      against, the same way Springfield anchored the CivicPlus work
 - [ ] MissouriBUYS, then the other state portals
 - [ ] Contractor-association bid calendars and plan rooms — the highest
       *density* source for this trade specifically, e.g. the Springfield

@@ -2094,13 +2094,41 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
     # and drainage work and were entirely absent before: none were seeded, and
     # a county name doesn't geocode, so any bid naming one was thrown away.
     if not portals:
+        lookups = gov_directory.lookup(city, state)[:2]
         probed = []
-        for entry in gov_directory.lookup(city, state)[:2]:
+        for entry in lookups:
             for candidate in bid_sources.candidate_bid_urls(entry["domain"], limit=2):
                 probed.append({"url": candidate, "probe": True,
                                "platform": "civicplus"
                                if candidate.lower().endswith("bids.aspx") else "custom"})
-        portals = probed[:4]
+
+        # The guessed common paths above only cover CivicPlus and a couple of
+        # others -- most platforms put their bid page at a path nothing here
+        # would guess. Before falling all the way through to a generic web
+        # search -- which has no way to tell a result ABOUT this city apart
+        # from one that merely mentions it, see _place_bid's out_of_radius
+        # counter, exactly what a city with no known portal and no lucky
+        # guess above degrades to -- try an actual bid-shaped link off each
+        # entity's own homepage. Same extraction tools/discover_bid_portals.py
+        # uses for the offline national crawl, just live and per-scan instead
+        # of pre-computed, so a city outside that crawl's coverage still gets
+        # a real shot at its own bid page. Fetched concurrently: this runs
+        # before the parallel probe stage below, so sequential homepage
+        # fetches would add their full latency on top of it for nothing.
+        def _homepage_links(entry):
+            home_url = f"https://{entry['domain']}"
+            html, outcome = _fetch_page(home_url, timeout=PROBE_TIMEOUT)
+            if outcome != "ok" or not html:
+                return []
+            return bid_sources.extract_bid_link_candidates(html, home_url, max_candidates=2)
+
+        if lookups:
+            with ThreadPoolExecutor(max_workers=len(lookups)) as ex:
+                for links in ex.map(_homepage_links, lookups):
+                    for link in links:
+                        probed.append({"url": link, "probe": True, "platform": "custom"})
+
+        portals = probed[:8]
     # Read every portal at once. This loop used to be sequential, which was
     # survivable when it only ever touched one or two known-good URLs. Adding
     # speculative .gov probes on top of it was not: a handful of dead guesses

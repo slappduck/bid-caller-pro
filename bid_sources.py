@@ -125,6 +125,52 @@ def candidate_bid_urls(domain, limit=None):
     return [base + p for p in paths]
 
 
+# When none of CANDIDATE_BID_PATHS hit, the next best guess is an actual
+# bid-shaped link off the homepage a real visitor would click — every
+# platform's bid page lives at a different path, but nearly all of them
+# link to it from the front page with obvious wording. This is what lets a
+# city with no pre-crawled entry (tools/discover_bid_portals.py can't reach
+# literally everywhere) and no CivicPlus-shaped URL still get a real shot at
+# its own bid page during a live scan, instead of falling straight to a
+# generic web search that has no idea which of its results are actually
+# nearby -- a search-engine result being ABOUT a real, geocodable city is not
+# the same as it being about the city that was searched for.
+_HOMEPAGE_LINK_RE = re.compile(r'<a[^>]+href="([^"#][^"]*)"[^>]*>(.*?)</a>', re.I | re.S)
+_HOMEPAGE_LINK_HINTS = ("bid", "rfp", "rfq", "solicitation", "procurement",
+                        "purchasing", "vendor")
+_HOMEPAGE_LINK_NOISE = ("facebook.com", "twitter.com", "x.com", "instagram.com",
+                        "youtube.com", "linkedin.com", "mailto:", "tel:", "javascript:")
+
+
+def extract_bid_link_candidates(html, base_url, max_candidates=3):
+    """Links off a homepage whose href or label suggest a bid page, best
+    first. Pure text-in/URLs-out, same discipline as the rest of this file --
+    the caller fetches the homepage and any candidate returned here."""
+    if not html or not base_url:
+        return []
+    base = base_url.rstrip("/")
+    seen, scored = set(), []
+    for m in _HOMEPAGE_LINK_RE.finditer(html):
+        href, label = m.group(1), _clean(m.group(2))
+        blob = (href + " " + label).lower()
+        if any(n in blob for n in _HOMEPAGE_LINK_NOISE):
+            continue
+        hits = sum(1 for term in _HOMEPAGE_LINK_HINTS if term in blob)
+        if not hits:
+            continue
+        url = _unescape(href)
+        if url.startswith("/"):
+            url = base + url
+        elif not url.lower().startswith("http"):
+            url = base + "/" + url.lstrip("/")
+        if url in seen:
+            continue
+        seen.add(url)
+        scored.append((hits, url))
+    scored.sort(key=lambda t: -t[0])
+    return [url for _, url in scored[:max_candidates]]
+
+
 # ── Relevance prefilter ─────────────────────────────────────────────────────
 # Deliberately generous. This runs BEFORE any AI call, so its job is only to
 # throw out listings that obviously have nothing to do with the trade —

@@ -214,5 +214,64 @@ class ScanBudgetTests(unittest.TestCase):
         self.assertLess(ls.PROBE_TIMEOUT, ls.FETCH_TIMEOUT)
 
 
+class HomepageLinkFallbackTests(unittest.TestCase):
+    """A city with no known portal and no hit on the guessed common paths
+    used to fall straight through to a generic web search -- which has no
+    way to tell a result ABOUT this city apart from one merely mentioning
+    it (see _place_bid's out_of_radius counter: a live Kansas City scan with
+    no known portal came back with every single raw result out of radius).
+    _run_known_portals should try an actual bid-shaped link off the town's
+    own homepage first, same as tools/discover_bid_portals.py's offline
+    crawl does."""
+
+    HOMEPAGE = '<a href="/procurement/opportunities">Bid Opportunities</a>'
+
+    def test_a_real_homepage_link_gets_tried_even_off_the_guessed_paths(self):
+        # _read_portal only calls _fetch_page for URLs it recognizes as
+        # CivicPlus (ends in Bids.aspx); everything else -- including the
+        # homepage-derived link, which is tagged "custom" -- is read via
+        # _fetch_text instead. Both need tracking to see everything that
+        # was actually tried.
+        fetched = []
+
+        def record_page(url, timeout=None):
+            fetched.append(url)
+            if url == "https://x.gov":
+                return (self.HOMEPAGE, "ok")
+            return ("", "ok")
+
+        def record_text(url, timeout=None):
+            fetched.append(url)
+            return ""
+
+        with patch.object(ls, "_fetch_page", side_effect=record_page), \
+             patch.object(ls, "_fetch_text", side_effect=record_text), \
+             patch.object(ls, "_geo_from_city", return_value=None), \
+             patch.object(ls.bid_portals, "get_portals", return_value=[]), \
+             patch.object(ls.bid_portals, "record_result"), \
+             patch.object(ls.gov_directory, "lookup",
+                          return_value=[{"domain": "x.gov", "type": "City",
+                                        "org": "City of X", "city": "X", "state": "MO"}]):
+            ls._run_known_portals("X", "MO", "X, MO", {}, CENTER, 25, {}, {},
+                                  threading.Lock(), {})
+
+        self.assertIn("https://x.gov", fetched, "the homepage itself was never fetched")
+        self.assertIn("https://x.gov/procurement/opportunities", fetched,
+                      "the bid-shaped link found on the homepage was never tried")
+
+    def test_a_dead_homepage_does_not_crash_the_scan(self):
+        with patch.object(ls, "_fetch_page", return_value=("", "http_500")), \
+             patch.object(ls, "_fetch_text", return_value=""), \
+             patch.object(ls, "_geo_from_city", return_value=None), \
+             patch.object(ls.bid_portals, "get_portals", return_value=[]), \
+             patch.object(ls.bid_portals, "record_result"), \
+             patch.object(ls.gov_directory, "lookup",
+                          return_value=[{"domain": "x.gov", "type": "City",
+                                        "org": "City of X", "city": "X", "state": "MO"}]):
+            got = ls._run_known_portals("X", "MO", "X, MO", {}, CENTER, 25, {}, {},
+                                        threading.Lock(), {})
+        self.assertEqual(got, 0)
+
+
 if __name__ == "__main__":
     unittest.main()
