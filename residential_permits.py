@@ -116,20 +116,23 @@ PARSERS = {
 
 # ── Lead classification ──
 # The single most important thing about one of these leads isn't the address,
-# it's whether calling it is even useful. Real data check (Austin): every
-# sampled permit had contractor_trade="General Contractor" and a homebuilder
-# name (Highland Homes, Trophy Signature Homes, ...) -- these are new-
-# subdivision construction permits where a GC already holds the job. That's
-# NOT an open "nobody's hired anyone yet" lead; a GC almost never pours their
-# own concrete, so the real play is pitching to become THEIR subcontractor,
-# not cold-calling for this one driveway. Without labeling that distinction,
-# a user could easily burn calls on already-assigned jobs thinking they're
-# fresh leads.
+# it's whether calling it is even useful. Real data check (Austin, live):
+# of 100 recent Driveway/Sidewalks permits, 67% had contractor_trade=
+# "General Contractor" and a homebuilder name (Highland Homes, Trophy
+# Signature Homes, ...) -- new-subdivision construction where a GC already
+# holds the job. That's NOT an open "nobody's hired anyone yet" lead, and the
+# original "pitch as a subcontractor" label oversold it as one: a production
+# homebuilder pouring dozens of driveways a year almost always already has a
+# standing concrete subcontractor across the whole subdivision by the time a
+# single lot's permit posts. Landing that work is a slow "get on their
+# approved-vendor list" sales motion, not a live opportunity a cold call
+# converts -- the label has to say that, not imply good odds on a call today.
 BUILDER_TRADE_KEYWORDS = ("general contractor", "builder", "homebuilder", "home builder")
 TAKEN_TRADE_KEYWORDS = ("concrete", "paving", "flatwork", "cement", "masonry")
 LEAD_TYPE_LABELS = {
     "open": "Open Lead — no contractor listed",
-    "builder": "Builder Lead — pitch as a subcontractor",
+    "builder": "Builder's Project — GC likely already has a concrete sub; "
+               "a cold call is a long shot without an existing relationship",
     "taken": "Concrete Sub Already Listed",
     "unknown": "Contact Listed",
 }

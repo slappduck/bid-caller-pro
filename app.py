@@ -2425,7 +2425,7 @@ class BidCaller:
 
     _LEAD_TYPE_STYLE = {
         "open": ("#0f3d24", GREEN, "\U0001F513  Open Lead"),
-        "builder": ("#0c2a4a", BLUE, "\U0001F3D7  Builder Lead"),
+        "builder": ("#0c2a4a", BLUE, "\U0001F3D7  Builder's Job"),
         "taken": ("#2a2a2a", TEXT3, "✓  Sub Already Listed"),
         "unknown": ("#2a2a2a", TEXT2, "Contact Listed"),
     }
