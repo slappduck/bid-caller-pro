@@ -176,3 +176,75 @@ class ForceRescanTests(unittest.TestCase):
                 calls.append(bool(body.get("cached")))
         # first populates, second is served from cache, third forces a re-run
         self.assertEqual(calls, [False, True, False])
+
+
+class ScanHistoryTests(unittest.TestCase):
+    """Only the single most recent scan was ever stored, overwritten each time,
+    so there was nothing to compare against and "is search getting better?"
+    could not be answered from the data at all."""
+
+    def setUp(self):
+        self.client = ls.app.test_client()
+        self.store = {}
+        self._p = [
+            patch.object(kv_backend, "get",
+                         side_effect=lambda k, d=None: self.store.get(k, d)),
+            patch.object(kv_backend, "set",
+                         side_effect=lambda k, v: self.store.__setitem__(k, v)),
+        ]
+        for p in self._p:
+            p.start()
+
+    def tearDown(self):
+        for p in self._p:
+            p.stop()
+
+    def _record(self, kept, at="2026-08-11T12:00:00"):
+        return {"at": at, "location": "Springfield, MO", "radius": 25,
+                "kept": kept, "raw_local": kept * 3, "anchor_towns": 0,
+                "funnel": {"kept": kept}, "sample": [{"title": "x" * 200}],
+                "statuses": {"Open": kept}}
+
+    def test_scans_accumulate_instead_of_overwriting(self):
+        for n in (1, 4, 9):
+            ls._append_scan_history(self._record(n))
+        self.assertEqual([r["kept"] for r in self.store[ls.SCAN_HISTORY_KEY]],
+                         [1, 4, 9])
+
+    def test_history_is_capped(self):
+        for n in range(ls.SCAN_HISTORY_MAX + 15):
+            ls._append_scan_history(self._record(n))
+        kept = self.store[ls.SCAN_HISTORY_KEY]
+        self.assertEqual(len(kept), ls.SCAN_HISTORY_MAX)
+        # The cap must drop the OLDEST, not the newest.
+        self.assertEqual(kept[-1]["kept"], ls.SCAN_HISTORY_MAX + 14)
+
+    def test_the_log_stays_compact(self):
+        # Twenty-five full scan records with samples would make /health
+        # unreadable, which is the one thing it must not be.
+        ls._append_scan_history(self._record(3))
+        row = self.store[ls.SCAN_HISTORY_KEY][0]
+        self.assertNotIn("sample", row)
+        self.assertNotIn("statuses", row)
+        self.assertEqual(row["kept"], 3)
+        self.assertIn("funnel", row)
+
+    def test_health_reports_newest_first(self):
+        for n in (1, 4, 9):
+            ls._append_scan_history(self._record(n))
+        with patch.multiple(ls, **FULLY_CONFIGURED):
+            body = self.client.get("/health").get_json()
+        self.assertEqual([r["kept"] for r in body["recent_scans"]], [9, 4, 1])
+
+    def test_corrupt_history_does_not_break_health_or_the_next_scan(self):
+        for junk in ("not a list", 42, {"nope": 1}):
+            with self.subTest(junk=junk):
+                self.store[ls.SCAN_HISTORY_KEY] = junk
+                self.assertEqual(ls._recent_scans(), [])
+                ls._append_scan_history(self._record(2))
+                self.assertEqual(
+                    [r["kept"] for r in self.store[ls.SCAN_HISTORY_KEY]], [2])
+
+    def test_health_answers_even_when_storage_is_the_broken_thing(self):
+        with patch.object(kv_backend, "get", side_effect=RuntimeError("down")):
+            self.assertEqual(ls._recent_scans(), [])

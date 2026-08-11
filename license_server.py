@@ -297,6 +297,17 @@ def health():
     return jsonify({"service": "Bid Caller Pro License Server", "status": "ok"})
 
 
+def _recent_scans():
+    """The scan history, newest first. Never raises — /health must answer even
+    when the storage backend is the thing that is broken."""
+    try:
+        history = kv_backend.get(SCAN_HISTORY_KEY, None) or []
+        return list(reversed(history))[:SCAN_HISTORY_MAX] \
+            if isinstance(history, list) else []
+    except Exception:
+        return []
+
+
 @app.route("/health", methods=["GET"])
 def health_detail():
     """Which backends are actually wired up, and is local search still working.
@@ -367,6 +378,9 @@ def health_detail():
         # The most recent scan's funnel. This is the fastest way to tell a
         # genuinely quiet area from a pipeline dropping everything it found.
         "last_scan": kv_backend.get("bidcaller:last_scan", None),
+        # ...and the ones before it, so a change in recall reads as a trend
+        # rather than a single number with nothing to compare it against.
+        "recent_scans": _recent_scans(),
         "tavily": {k: tav[k] for k in
                    ("ok", "failed", "last_status", "last_error",
                     "quota_or_auth_failure", "failing")},
@@ -2492,6 +2506,35 @@ def _place_bid(grouped, bid, center, radius, db, default_city="", city_coords=No
 
 ENRICH_MAX = int(os.environ.get("SCAN_ENRICH_MAX", "14"))
 
+SCAN_HISTORY_KEY = "bidcaller:scan_history"
+SCAN_HISTORY_MAX = int(os.environ.get("SCAN_HISTORY_MAX", "25"))
+
+
+def _append_scan_history(record):
+    """Keep a rolling log of recent scans.
+
+    Only the single most recent scan was ever stored, overwritten every time,
+    so there was nothing to compare against — "is search getting better?" could
+    not be answered from the data, only from whoever happened to be watching.
+    A short history makes a change in recall visible as a trend.
+
+    Deliberately compact: no sample, no per-bid detail. The point is to see
+    twenty scans at once, and the newest one is in last_scan in full.
+    """
+    slim = {k: record.get(k) for k in
+            ("at", "location", "radius", "kept", "raw_local", "anchor_towns")}
+    slim["funnel"] = record.get("funnel") or {}
+    try:
+        history = kv_backend.get(SCAN_HISTORY_KEY, None) or []
+        if not isinstance(history, list):
+            history = []
+    except Exception:
+        history = []
+    history.append(slim)
+    # Read-modify-write is not atomic here. Scans are infrequent enough that
+    # the worst case is one lost row in a log, which is not worth a lock.
+    kv_backend.set(SCAN_HISTORY_KEY, history[-SCAN_HISTORY_MAX:])
+
 
 def _count_kept_closed(grouped, stats):
     """Record how many kept bids are not open, so the funnel agrees with the
@@ -2721,22 +2764,24 @@ def _perform_scan(location, radius, force=False):
     # Kept so the last scan can be inspected from /health. Diagnosing recall
     # otherwise means asking someone to run a scan and relay numbers back,
     # which is slow and lossy; a URL anyone can open is not.
+    record = {
+        "at": datetime.datetime.now().isoformat(timespec="seconds"),
+        "location": f"{center['city']}, {center['state']}",
+        "radius": int(radius),
+        "kept": total,
+        "raw_local": local_raw,
+        "anchor_towns": len(anchors) if OPENAI_API_KEY else 0,
+        "funnel": drop_stats,
+        # Counts alone can't distinguish "found nothing" from "found real
+        # work and threw it away", which is exactly the question that
+        # matters. These two make the last scan legible without asking
+        # anyone to re-run it and read numbers back.
+        "statuses": _status_breakdown(grouped),
+        "sample": _scan_sample(grouped),
+    }
     try:
-        kv_backend.set("bidcaller:last_scan", {
-            "at": datetime.datetime.now().isoformat(timespec="seconds"),
-            "location": f"{center['city']}, {center['state']}",
-            "radius": int(radius),
-            "kept": total,
-            "raw_local": local_raw,
-            "anchor_towns": len(anchors) if OPENAI_API_KEY else 0,
-            "funnel": drop_stats,
-            # Counts alone can't distinguish "found nothing" from "found real
-            # work and threw it away", which is exactly the question that
-            # matters. These two make the last scan legible without asking
-            # anyone to re-run it and read numbers back.
-            "statuses": _status_breakdown(grouped),
-            "sample": _scan_sample(grouped),
-        })
+        kv_backend.set("bidcaller:last_scan", record)
+        _append_scan_history(record)
     except Exception:
         pass
 
