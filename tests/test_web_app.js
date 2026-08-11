@@ -638,6 +638,70 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── Account has to be reachable by tapping something ──
+  // The screen and renderAccount() existed, but nothing navigated to it except
+  // an automatic goTo("account") on a 403. Billing, the company profile and the
+  // diagnostics card all live there and none of it could be reached on purpose
+  // — the test below had to call goTo() directly, which was the tell.
+  console.log("\nAccount is reachable from the UI");
+  {
+    const ctx = await browser.newContext({ viewport: { width: 320, height: 640 } });
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const host = new URL(route.request().url()).hostname;
+      if (host.endsWith("supabase.co") || host.endsWith("onrender.com")) return route.abort();
+      return route.continue();
+    });
+    await page.addInitScript(seedSignedIn, { city: SEED_CITY, bid: SEED_BID });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(1200);
+
+    const navBtn = page.locator('.nav-btn[data-s="account"]');
+    check("there is an Account item in the bottom nav", await navBtn.count() === 1);
+    check("it is visible without scrolling", await navBtn.isVisible());
+
+    await navBtn.click();
+    await page.waitForTimeout(400);
+    check("tapping it opens the Account screen",
+      await page.locator("#screen-account").evaluate((el) => el.classList.contains("active")));
+    check("it shows as the active tab",
+      await navBtn.evaluate((el) => el.classList.contains("active")));
+
+    // Six items on the narrowest phone still in use — labels must not wrap.
+    const wrapped = await page.evaluate(() =>
+      [...document.querySelectorAll(".nav-btn .lb")]
+        .filter((el) => el.getBoundingClientRect().height > 20)
+        .map((el) => el.textContent));
+    check("no nav label wraps at 320px", wrapped.length === 0, wrapped.join(", "));
+
+    const overflow = await page.evaluate(() => {
+      const n = document.querySelector(".bottom-nav");
+      return n.scrollWidth - n.clientWidth;
+    });
+    check("the nav bar does not overflow at 320px", overflow <= 1, `${overflow}px over`);
+
+    // The topbar chip is the other way in; it has to look and behave like one.
+    await page.locator('.nav-btn[data-s="scan"]').click();
+    await page.waitForTimeout(200);
+    const chip = page.locator("#user-chip");
+    check("the topbar chip is a real button",
+      await chip.evaluate((el) => el.tagName === "BUTTON"));
+    const box = await chip.boundingBox();
+    check("the chip meets a 44px touch target", box && box.height >= 44,
+      box ? `${Math.round(box.height)}px` : "no box");
+    check("the chip shows a chevron so it reads as tappable",
+      await chip.locator(".chev").count() === 1);
+    await chip.click();
+    await page.waitForTimeout(400);
+    check("the chip also opens Account",
+      await page.locator("#screen-account").evaluate((el) => el.classList.contains("active")));
+
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   await browser.close();
   server.close();
   console.log(failures ? `\n${failures} check(s) FAILED` : "\nAll checks passed");

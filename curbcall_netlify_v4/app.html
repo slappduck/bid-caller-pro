@@ -70,7 +70,14 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .brand{display:flex;align-items:center;gap:0.5rem;}
 .brand-name{font-family:'Bebas Neue',sans-serif;font-size:1.25rem;letter-spacing:0.06em;}
 .brand-name span{color:var(--accent);}
-.user-chip{font-size:0.68rem;font-weight:700;color:var(--accent);background:rgba(245,166,35,0.12);padding:0.3rem 0.6rem;border-radius:20px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;gap:0.35rem;}
+/* Reads as a button, not a status badge: a border and a chevron give it an
+   affordance, and min-height meets the 44px touch target a gloved hand needs.
+   It used to be a bare 27px-tall pill showing an email address, which nobody
+   recognised as the way into Account. */
+.user-chip{font-family:var(--ui);font-size:0.68rem;font-weight:700;color:var(--accent);background:rgba(245,166,35,0.12);border:1px solid rgba(245,166,35,0.35);padding:0.3rem 0.6rem;border-radius:20px;min-height:44px;box-sizing:border-box;max-width:52vw;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;gap:0.35rem;}
+.user-chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+.user-chip .who{overflow:hidden;text-overflow:ellipsis;min-width:0;}
+.user-chip .chev{opacity:0.75;flex-shrink:0;font-size:0.95rem;line-height:1;}
 .user-chip img{width:18px;height:18px;border-radius:50%;object-fit:cover;flex-shrink:0;}
 .avatar-lg{width:56px;height:56px;border-radius:50%;object-fit:cover;flex-shrink:0;}
 .avatar-placeholder{width:56px;height:56px;border-radius:50%;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:1.4rem;flex-shrink:0;}
@@ -138,10 +145,18 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .account-status{font-size:0.82rem;color:var(--text2);}
 
 .bottom-nav{display:flex;background:var(--surface);border-top:1px solid var(--border);padding-bottom:env(safe-area-inset-bottom);flex-shrink:0;}
-.nav-btn{flex:1;background:none;border:none;padding:0.7rem 0.3rem 0.8rem;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:0.2rem;color:var(--text3);font-family:var(--ui);}
+/* min-width:0 lets six items share a 320px screen without the labels
+   overflowing; nowrap stops "Upcoming" and "Account" breaking onto two lines. */
+.nav-btn{flex:1;min-width:0;background:none;border:none;padding:0.7rem 0.15rem 0.8rem;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:0.2rem;color:var(--text2);font-family:var(--ui);}
 .nav-btn .ic{font-size:1.25rem;}
-.nav-btn .lb{font-size:0.62rem;font-weight:600;}
+.nav-btn .lb{font-size:0.62rem;font-weight:600;white-space:nowrap;}
+/* Inactive labels were --text3 (#475569), which is 2.4:1 against the nav bar —
+   well under the 4.5:1 floor, and this is a tool read outdoors in daylight.
+   --text2 is an existing token and measures ~7:1. */
 .nav-btn.active{color:var(--accent);}
+/* Active state must not rest on colour alone. */
+.nav-btn.active::after{content:"";position:absolute;left:50%;transform:translateX(-50%);bottom:0.25rem;width:1.1rem;height:2px;border-radius:2px;background:var(--accent);}
+@media (max-width:340px){.nav-btn .lb{font-size:0.56rem;}}
 
 .modal-back{position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:50;display:none;animation:fade 0.2s;}
 .modal-back.open{display:block;}
@@ -230,7 +245,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 <div id="app" style="display:none;">
   <div class="topbar">
     <div class="brand">&#x1F6A7;<span class="brand-name">Curb<span>Call</span></span></div>
-    <span class="user-chip" id="user-chip" onclick="goTo('account')">...</span>
+    <button type="button" class="user-chip" id="user-chip" aria-label="Account settings" onclick="goTo('account')">...</button>
   </div>
   <div id="offline-bar"></div>
   <div class="screens">
@@ -389,6 +404,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
     <button class="nav-btn" data-s="upcoming"><span class="ic">&#x1F4E1;</span><span class="lb">Upcoming</span></button>
     <button class="nav-btn" data-s="leads"><span class="ic">&#x1F3E0;</span><span class="lb">Leads</span></button>
     <button class="nav-btn" data-s="saved"><span class="ic">&#x2B50;</span><span class="lb">Active</span></button>
+    <button class="nav-btn" data-s="account"><span class="ic">&#x1F464;</span><span class="lb">Account</span></button>
   </div>
 </div>
 
@@ -856,7 +872,15 @@ function updateUserChip(){
   const email=currentUser?.email||"";
   const chip=document.getElementById("user-chip");
   const avatar=companyProfile.avatar_url;
-  chip.innerHTML=(avatar?`<img src="${esc(avatar)}" alt="">`:"")+esc(email||"\u{1F464} Account");
+  // The chevron is what tells anyone this pill goes somewhere. Without it an
+  // email address in the corner reads as a label, and Account — which holds
+  // billing, the company profile and the diagnostics card — looks unreachable.
+  // The email goes in its own element so IT truncates, not the chip: as a bare
+  // text node it was an anonymous flex item and the ellipsis ate the chevron,
+  // which is the one part that says this pill is a button.
+  chip.innerHTML=(avatar?`<img src="${esc(avatar)}" alt="">`:"\u{1F464} ")
+    +`<span class="who">${esc(email||"Account")}</span>`
+    +`<span class="chev" aria-hidden="true">›</span>`;
 }
 function showApp(){
   document.getElementById("auth-screen").style.display="none";
