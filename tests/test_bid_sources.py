@@ -213,6 +213,93 @@ class RealCivicPlusLayoutTests(unittest.TestCase):
         self.assertEqual(self.by_title["Concrete Flatwork Annual Contract"]["status"], "")
 
 
+DETAIL_PAGE = """
+<h1>2026 Sidewalk &amp; ADA Ramp Program</h1>
+<p>Bid Number: 2026-014</p>
+<p>Description: Removal and replacement of approximately 4,800 linear feet of
+   deteriorated sidewalk, installation of 22 ADA-compliant curb ramps, and
+   associated curb and gutter work at various locations citywide.</p>
+<p>Closing Date/Time: 12/1/2026 2:00 PM</p>
+<p>Contact Person: Marla Whitfield</p>
+<p>Email: <a href="mailto:mwhitfield@example-city.gov">mwhitfield@example-city.gov</a></p>
+<p>Phone: (417) 864-1districts</p>
+<p>Phone: 417-864-1976</p>
+<img src="/images/logo@2x.png">
+<a href="mailto:webmaster@example-city.gov">Report a problem</a>
+"""
+
+
+class ContactExtractionTests(unittest.TestCase):
+    """A bid with nobody to call is barely a lead. The listing page never has
+    this — it is why the detail page is fetched at all."""
+
+    def setUp(self):
+        self.got = bs.parse_contact(DETAIL_PAGE)
+
+    def test_finds_the_buyers_email(self):
+        self.assertEqual(self.got["email"], "mwhitfield@example-city.gov")
+
+    def test_skips_the_site_webmaster(self):
+        # First email on the page by position is the buyer's; webmaster@ is a
+        # site-furniture address and reaches nobody who can answer a question.
+        self.assertNotIn("webmaster", self.got["email"])
+
+    def test_finds_and_normalises_the_phone(self):
+        self.assertEqual(self.got["phone"], "(417) 864-1976")
+
+    def test_finds_the_contact_name(self):
+        self.assertEqual(self.got["contact"], "Marla Whitfield")
+
+    def test_a_label_is_not_mistaken_for_a_person(self):
+        for text in ("Contact: The City Clerk", "Contact: Purchasing Department",
+                     "Contact the City Of Springfield"):
+            with self.subTest(text=text):
+                self.assertEqual(bs.parse_contact(text)["contact"], "")
+
+    def test_a_partial_number_is_never_returned(self):
+        # Half a phone number is worse than none — it gets dialled.
+        for text in ("Call 417-864", "ext. 1976", "Phone: 864-1976"):
+            with self.subTest(text=text):
+                self.assertEqual(bs.parse_contact(text)["phone"], "")
+
+    def test_common_real_world_phone_shapes(self):
+        for text, want in (("(417) 864-1976", "(417) 864-1976"),
+                           ("417.864.1976", "(417) 864-1976"),
+                           ("+1 417 864 1976", "(417) 864-1976"),
+                           ("Tel: 417-864-1976 x22", "(417) 864-1976")):
+            with self.subTest(text=text):
+                self.assertEqual(bs.parse_contact(text)["phone"], want)
+
+    def test_missing_details_come_back_blank_not_absent(self):
+        got = bs.parse_contact("Sidewalk work. No contact given.")
+        self.assertEqual(got, {"contact": "", "email": "", "phone": ""})
+
+    def test_garbage_input_does_not_raise(self):
+        for bad in ("", None, 12345, "<<<>>>"):
+            with self.subTest(bad=bad):
+                bs.parse_contact(bad)
+
+
+class DetailScopeTests(unittest.TestCase):
+    def test_pulls_the_labelled_description(self):
+        scope = bs.detail_scope(DETAIL_PAGE)
+        self.assertIn("4,800 linear feet", scope)
+        self.assertIn("ADA-compliant curb ramps", scope)
+
+    def test_stops_before_the_next_field(self):
+        scope = bs.detail_scope(DETAIL_PAGE)
+        self.assertNotIn("Marla", scope)
+        self.assertNotIn("12/1/2026", scope)
+
+    def test_no_labelled_description_yields_nothing(self):
+        self.assertEqual(bs.detail_scope("<p>Just a title and a date.</p>"), "")
+
+    def test_garbage_input_does_not_raise(self):
+        for bad in ("", None, 12345):
+            with self.subTest(bad=bad):
+                self.assertEqual(bs.detail_scope(bad), "")
+
+
 class FeedDiscoveryTests(unittest.TestCase):
     def test_picks_the_bids_feed_out_of_the_index(self):
         feed = bs.find_bid_feed(RSS_INDEX, "https://www.springfieldmo.gov")

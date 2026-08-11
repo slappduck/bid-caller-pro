@@ -1592,6 +1592,11 @@ def _ddg_search(query, count=6):
 FETCH_TIMEOUT = int(os.environ.get("SCAN_FETCH_TIMEOUT", "18"))
 PROBE_TIMEOUT = int(os.environ.get("SCAN_PROBE_TIMEOUT", "6"))
 PORTAL_WORKERS = int(os.environ.get("SCAN_PORTAL_WORKERS", "6"))
+# Contact details live on each individual posting, so reading them costs one
+# fetch per bid. Bounded per portal, and given the shorter probe timeout: a
+# missing phone number degrades a lead, a blown request budget loses every one.
+DETAIL_PAGES_PER_PORTAL = int(os.environ.get("SCAN_DETAIL_PAGES", "10"))
+DETAIL_WORKERS = int(os.environ.get("SCAN_DETAIL_WORKERS", "6"))
 
 
 def _page_headers():
@@ -1938,6 +1943,60 @@ def draft_proposal():
 # ═══════════════════════════════════════════════════════════
 # /scan  —  LOCAL (Brave + AI) + FEDERAL (SAM), radius-filtered
 # ═══════════════════════════════════════════════════════════
+def _enrich_from_detail_pages(rows, stats=None, lock=None):
+    """Fill in contact / email / phone by reading each posting's own page.
+
+    A listing page carries titles and dates and nothing a contractor can act
+    on. Every bid coming out of the structured path used to arrive with blank
+    contact fields, so the app's Email and Call buttons had nothing to attach
+    to and the only way to reach the buyer was to go find the posting by hand.
+
+    Mutates `rows` in place. Failure is per-row and silent by design: a posting
+    that won't load costs its own contact details, never the bid itself.
+    """
+    targets = [r for r in (rows or []) if r.get("url")]
+    if not targets:
+        return
+
+    def _one(row):
+        try:
+            page, outcome = _fetch_page(row["url"], timeout=PROBE_TIMEOUT)
+            if outcome != "ok" or not page:
+                return False
+            found = bid_sources.parse_contact(page)
+        except Exception:
+            return False
+        got = False
+        for field in ("contact", "email", "phone"):
+            if found.get(field) and not row.get(field):
+                row[field] = found[field]
+                got = True
+        # The detail page also carries the real scope, where the listing only
+        # had a title. Worth taking: the relevance filter and the AI ranking
+        # both read scope, and an empty one makes a good bid look thin.
+        if not row.get("scope"):
+            body = bid_sources.detail_scope(page)
+            if body:
+                row["scope"] = body
+        return got
+
+    with ThreadPoolExecutor(max_workers=DETAIL_WORKERS) as ex:
+        results = list(ex.map(_one, targets))
+
+    if stats is not None:
+        hits = sum(1 for r in results if r)
+        def _bump():
+            stats["contacts_found"] = stats.get("contacts_found", 0) + hits
+            missed = len(targets) - hits
+            if missed:
+                stats["contacts_missing"] = stats.get("contacts_missing", 0) + missed
+        if lock is not None:
+            with lock:
+                _bump()
+        else:
+            _bump()
+
+
 def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
                         city_coords, lock, pdb, default_city="", town_coords=None,
                         stats=None):
@@ -1992,13 +2051,23 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
                     stats[k] = stats.get(k, 0) + 1
             rows = bid_sources.parse_civicplus_html(page, base_url=url)
             if rows:
+                keep = []
+                for row in rows:
+                    if not bid_sources.looks_relevant(row["title"], row.get("scope")):
+                        if stats is not None:
+                            with lock:
+                                stats["filtered_not_niche"] = stats.get("filtered_not_niche", 0) + 1
+                        continue
+                    keep.append(row)
+                # The listing page has no contact details — they live on each
+                # individual posting, which we already hold the URL for. A bid
+                # with nobody to call is barely a lead, so read them. Capped and
+                # concurrent: a sequential pass over a dozen postings is exactly
+                # what blew the request budget the last time.
+                _enrich_from_detail_pages(keep[:DETAIL_PAGES_PER_PORTAL], stats, lock)
                 with lock:
                     bid_portals.record_result(pdb, city, state, url, True)
-                    for row in rows:
-                        if not bid_sources.looks_relevant(row["title"], row.get("scope")):
-                            if stats is not None:
-                                stats["filtered_not_niche"] = stats.get("filtered_not_niche", 0) + 1
-                            continue
+                    for row in keep:
                         raw[0] += 1
                         _place_bid(grouped, {
                             "title": row["title"], "scope": row.get("scope", ""),
@@ -2007,7 +2076,10 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
                             # page is live.
                             "status": row.get("status") or "Open",
                             "deadline": row.get("deadline", ""),
-                            "contact": "", "email": "", "phone": "", "value": "",
+                            "contact": row.get("contact", ""),
+                            "email": row.get("email", ""),
+                            "phone": row.get("phone", ""),
+                            "value": "",
                             "url": row["url"], "city": default_city or city,
                         }, center, radius, cdb, default_city=default_city or city,
                             city_coords=city_coords, default_state=state,
@@ -2192,6 +2264,30 @@ def _bid_dupe_key(bid):
     return title, str((bid or {}).get("deadline") or "").strip().lower()
 
 
+# Bodies that let concrete work but are not places a gazetteer can find:
+# counties, road districts, school districts, transit and housing authorities.
+_AUTHORITY_RE = re.compile(
+    r"\b(count(?:y|ies)|parish|borough|township|twp|district|authority|"
+    r"commission|department|board|schools?|university|college|port|"
+    r"utilit(?:y|ies)|water|sewer|drainage|levee|transit|housing|airport|"
+    r"regional|council|association|consolidated|R-[IVX]+)\b", re.I)
+
+
+def _looks_like_authority(name):
+    """True if a name is an organisation rather than a town.
+
+    This is the dividing line for the search-town fallback in _place_bid. The
+    fallback exists because "Greene County" and "Ozark R-VI School District"
+    don't geocode and their bids were being thrown away. It must NOT catch an
+    ordinary city name that failed to resolve — a plain town that doesn't
+    exist in the state we searched is evidence the bid is somewhere else
+    entirely, and pinning it here presents a job a thousand miles away as
+    local. That is worse than missing it: the contractor drives, or bids, on a
+    job that was never theirs.
+    """
+    return bool(_AUTHORITY_RE.search(str(name or "")))
+
+
 def _split_city_state(raw):
     """'Bentonville, AR' -> ('Bentonville', 'AR'). Bare city -> ('Bentonville', '')."""
     parts = [p.strip() for p in str(raw or "").split(",")]
@@ -2258,7 +2354,16 @@ def _place_bid(grouped, bid, center, radius, db, default_city="", city_coords=No
         # there. Only safe when the text didn't name a different state — a bid
         # explicitly in another state must not be pinned to this one.
         search_state = (default_state or center["state"]).upper()
-        if fallback_coords and (not stated_state or stated_state == search_state):
+        # ...but only for names that are plausibly unmappable in the first
+        # place: an authority, or the very town we searched. A live 125mi scan
+        # of Russellville MO returned bids in Binghamton NY, Barrington IL and
+        # Aledo IL — ordinary cities that simply don't exist in Missouri, so
+        # they failed to geocode, got stamped with a Missouri anchor town's
+        # coordinates, and passed the radius check on borrowed location.
+        anchorable = (_looks_like_authority(city)
+                      or city.strip().lower() == str(default_city or "").strip().lower())
+        if fallback_coords and anchorable \
+                and (not stated_state or stated_state == search_state):
             coords, used_state = fallback_coords, search_state
             _count("placed_by_search_town")
         else:

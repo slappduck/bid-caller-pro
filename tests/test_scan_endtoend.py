@@ -143,6 +143,32 @@ class ScanBudgetTests(unittest.TestCase):
                            "at an 18s timeout each would blow the request budget")
         self.assertLess(elapsed, 0.7, f"took {elapsed:.2f}s for 6 portals")
 
+    def test_detail_page_reads_are_capped_per_portal(self):
+        """Contact details cost one fetch per bid. A listing with thirty
+        matching postings must not turn into thirty more requests."""
+        listing = "".join(
+            f'<a href="/Bids.aspx?bidID={i}">Sidewalk Project {i}</a>'
+            f'<span>Closing Date/Time: 12/1/2026</span>' for i in range(30))
+        fetched = []
+
+        def record(url, timeout=None):
+            fetched.append(url)
+            return (listing if url.endswith("/Bids.aspx") else "<p>x</p>"), "ok"
+
+        portals = [{"url": "https://x.gov/Bids.aspx", "platform": "civicplus"}]
+        with patch.object(ls, "_fetch_page", side_effect=record), \
+             patch.object(ls, "_fetch_text", return_value=""), \
+             patch.object(ls, "_geo_from_city", return_value=None), \
+             patch.object(ls.bid_portals, "get_portals", return_value=portals), \
+             patch.object(ls.bid_portals, "record_result"):
+            ls._run_known_portals("X", "MO", "X, MO", {}, CENTER, 25, {}, {},
+                                  threading.Lock(), {})
+
+        details = [u for u in fetched if "bidID=" in u]
+        self.assertLessEqual(len(details), ls.DETAIL_PAGES_PER_PORTAL,
+                             f"{len(details)} detail fetches")
+        self.assertGreater(len(details), 0, "no contact details were read at all")
+
     def test_a_guessed_url_gets_a_shorter_timeout_than_a_known_one(self):
         """Most speculative probes are dead. At the full timeout, a handful of
         them spends the whole request budget before search even starts."""

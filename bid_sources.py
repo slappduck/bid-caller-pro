@@ -286,6 +286,87 @@ def parse_civicplus_html(html, base_url=""):
     return rows
 
 
+# ── Contact details ─────────────────────────────────────────────────────────
+# A bid with nobody to call is barely a lead. The listing page never carries
+# this — it lives on the individual posting — so these run over a fetched
+# detail page. Plain regex on purpose: no AI call, no cost, and contact blocks
+# on procurement pages are formulaic.
+
+_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
+_PHONE_RE = re.compile(
+    r"(?<![\d\-])(?:\+?1[\s.\-]*)?\(?([2-9]\d{2})\)?[\s.\-]*(\d{3})[\s.\-]*(\d{4})(?![\d\-])")
+# "Contact: Jane Doe", "Contact Person - Jane Doe", "Questions to Jane Doe"
+# The label is matched case-insensitively; the name deliberately is NOT, so the
+# capital letters still have to be there. Without that, "contact us for details"
+# reads as a person called "Us For".
+_CONTACT_NAME_RE = re.compile(
+    r"(?i:contact(?:\s+person|\s+name)?|direct\s+questions\s+to|questions\s+to|"
+    r"submit(?:ted)?\s+to|attention|attn)\s*[:\-]?\s*"
+    # The trailing lookahead stops the name from swallowing the next field's
+    # label: "Contact: Marla Whitfield Email: ..." is a person and a label, not
+    # a three-word name.
+    # The first lookahead forces the last word to be whole — without it the
+    # regex just gives back letters ("...Emai") to satisfy the second. The
+    # second stops the name swallowing the next field's label: "Contact: Marla
+    # Whitfield Email: ..." is a person and a label, not a three-word name.
+    r"((?:[A-Z][A-Za-z.'\-]+\s+){1,2}[A-Z][A-Za-z.'\-]+)(?![A-Za-z.'\-])(?!\s*:)")
+
+# Addresses that belong to the website, not to a person who answers questions.
+_JUNK_EMAIL_PARTS = ("webmaster", "postmaster", "no-reply", "noreply", "donotreply",
+                     "example.com", "sentry.io", "@2x", "civicplus.com")
+
+
+def parse_contact(text):
+    """Pull a name / email / phone out of a bid posting. Missing parts are "".
+
+    Never returns a partially-parsed phone number: a match is either a full
+    10-digit US number or nothing, because a half-number on a bid card is worse
+    than a blank — the contractor dials it and loses the job to the wait.
+    """
+    blob = _clean(_unescape(text))
+    if not blob:
+        return {"contact": "", "email": "", "phone": ""}
+
+    email = ""
+    for candidate in _EMAIL_RE.findall(blob):
+        low = candidate.lower()
+        if any(junk in low for junk in _JUNK_EMAIL_PARTS):
+            continue
+        if low.endswith((".png", ".jpg", ".gif", ".css", ".js")):
+            continue
+        email = candidate
+        break
+
+    phone = ""
+    pm = _PHONE_RE.search(blob)
+    if pm:
+        phone = f"({pm.group(1)}) {pm.group(2)}-{pm.group(3)}"
+
+    contact = ""
+    nm = _CONTACT_NAME_RE.search(blob)
+    if nm:
+        name = nm.group(1).strip()
+        # "Contact The City Of" and friends are labels, not people.
+        if not re.search(r"\b(the|city|county|department|office|clerk's|purchasing)\b",
+                         name, re.I):
+            contact = name
+
+    return {"contact": contact, "email": email, "phone": phone}
+
+
+_SCOPE_LABEL_RE = re.compile(
+    r"(?:description|scope(?:\s+of\s+work)?|summary|project\s+description)\s*[:\-]\s*"
+    r"(.{40,600}?)(?:\s*(?:contact|closing|publication|bid\s+opening|attachment)\b|$)",
+    re.I | re.S)
+
+
+def detail_scope(html):
+    """The project description from a posting page, or "" if none is labelled."""
+    blob = _clean(_unescape(html))
+    m = _SCOPE_LABEL_RE.search(blob)
+    return m.group(1).strip() if m else ""
+
+
 _RSS_LINK_RE = re.compile(
     r'href="([^"]*(?:RSSFeed\.aspx|rss\.aspx)[^"]*)"[^>]*>([^<]*)', re.I)
 
