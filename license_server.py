@@ -1617,21 +1617,30 @@ def _ddg_search(query, count=6):
     return []
 
 
-def _fetch_raw(url):
+# A URL we know is real is worth waiting for. A guessed one is not: most
+# speculative probes are 404s or dead hosts, and at the full timeout a handful
+# of them will spend the entire request budget before the search path even
+# starts. That is not a hypothetical — it is what made every scan return zero.
+FETCH_TIMEOUT = int(os.environ.get("SCAN_FETCH_TIMEOUT", "18"))
+PROBE_TIMEOUT = int(os.environ.get("SCAN_PROBE_TIMEOUT", "6"))
+PORTAL_WORKERS = int(os.environ.get("SCAN_PORTAL_WORKERS", "6"))
+
+
+def _fetch_raw(url, timeout=None):
     """Page source, untouched. _fetch_text strips tags, which is right for
     feeding prose to the AI and useless for a parser that needs the markup."""
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 BidCallerPro"})
-        with urllib.request.urlopen(req, timeout=18) as resp:
+        with urllib.request.urlopen(req, timeout=timeout or FETCH_TIMEOUT) as resp:
             return resp.read(800000).decode("utf-8", "ignore")
     except Exception:
         return ""
 
 
-def _fetch_text(url):
+def _fetch_text(url, timeout=None):
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 BidCallerPro"})
-        with urllib.request.urlopen(req, timeout=18) as resp:
+        with urllib.request.urlopen(req, timeout=timeout or FETCH_TIMEOUT) as resp:
             raw = resp.read(800000).decode("utf-8", "ignore")
     except Exception:
         return ""
@@ -1954,27 +1963,30 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
         probed = []
         for entry in gov_directory.lookup(city, state)[:2]:
             for candidate in bid_sources.candidate_bid_urls(entry["domain"], limit=2):
-                probed.append({"url": candidate, "platform": "civicplus"
+                probed.append({"url": candidate, "probe": True,
+                               "platform": "civicplus"
                                if candidate.lower().endswith("bids.aspx") else "custom"})
         portals = probed[:4]
-    raw = 0
-    for entry in portals:
-        url = entry["url"]
+    # Read every portal at once. This loop used to be sequential, which was
+    # survivable when it only ever touched one or two known-good URLs. Adding
+    # speculative .gov probes on top of it was not: a handful of dead guesses
+    # at a full fetch timeout each consumed the entire request budget before
+    # the search path ran, the app aborted the request, and every scan came
+    # back empty. Fetching is pure I/O, so width costs nothing here.
+    raw = [0]
 
-        # A recognised procurement platform is read directly. Its listing is
-        # already structured — title, link, closing date — so there is nothing
-        # for an LLM to interpret, and skipping that call is what makes reading
-        # every known portal on every scan affordable. Search engines and AI
-        # extraction stay for pages we don't have a reader for.
+    def _read_portal(entry):
+        url = entry["url"]
+        timeout = PROBE_TIMEOUT if entry.get("probe") else None
+
         # Structured reading is an OPTIMISATION over the AI path, never a
-        # replacement for it. An earlier version skipped the AI path for every
-        # CivicPlus URL, so when this parser matched nothing — a markup variant,
-        # a redirect, a bot block — the portal produced nothing at all and the
-        # working fallback never ran. It also recorded a parser miss as a portal
-        # failure, which would have retired a perfectly good seeded URL after
-        # five scans. A parser gap is our problem, not the site's.
+        # replacement. If the parser matches nothing we fall through to the AI
+        # below rather than losing the portal entirely, and a live page counts
+        # as a success even when our regex didn't understand it — a parser gap
+        # is our problem, not a dead site.
         if bid_sources.identify_platform(url) == "civicplus":
-            rows = bid_sources.parse_civicplus_html(_fetch_raw(url), base_url=url)
+            rows = bid_sources.parse_civicplus_html(
+                _fetch_raw(url, timeout=timeout), base_url=url)
             if rows:
                 with lock:
                     bid_portals.record_result(pdb, city, state, url, True)
@@ -1983,7 +1995,7 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
                             if stats is not None:
                                 stats["filtered_not_niche"] = stats.get("filtered_not_niche", 0) + 1
                             continue
-                        raw += 1
+                        raw[0] += 1
                         _place_bid(grouped, {
                             "title": row["title"], "scope": row.get("scope", ""),
                             "status": "Open", "deadline": row.get("deadline", ""),
@@ -1992,29 +2004,33 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
                         }, center, radius, cdb, default_city=default_city or city,
                             city_coords=city_coords, default_state=state,
                             fallback_coords=town_coords, stats=stats)
-                continue
-            # Parsed nothing — fall through and let the AI read the page.
+                return
             if stats is not None:
-                stats["civicplus_parse_miss"] = stats.get("civicplus_parse_miss", 0) + 1
+                with lock:
+                    stats["civicplus_parse_miss"] = stats.get("civicplus_parse_miss", 0) + 1
 
-        text = _fetch_text(url)
+        text = _fetch_text(url, timeout=timeout)
         ok = len(text) >= 200
         with lock:
             bid_portals.record_result(pdb, city, state, url, ok)
         if not ok:
-            continue
+            return
         bids = _ai_extract(ai_label, text)
         if not bids:
-            continue
+            return
         with lock:
-            raw += len(bids)
+            raw[0] += len(bids)
             for b in bids:
                 if isinstance(b, dict):
                     b.setdefault("url", url)
                     _place_bid(grouped, b, center, radius, cdb, default_city=default_city,
                               city_coords=city_coords, default_state=state,
                               fallback_coords=town_coords, stats=stats)
-    return raw
+
+    if portals:
+        with ThreadPoolExecutor(max_workers=min(PORTAL_WORKERS, len(portals))) as ex:
+            list(ex.map(_read_portal, portals))
+    return raw[0]
 
 
 def _run_local_queries(queries, ai_label, max_pages, grouped, center, radius, cdb,
