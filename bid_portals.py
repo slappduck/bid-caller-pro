@@ -21,6 +21,7 @@ get_portals/learn_portal/record_result, and save once at the end — same
 pattern as license_server.py's `cdb = _cache()` / `_save_cache(cdb)`.
 """
 
+import csv
 import os
 import datetime
 import urllib.request
@@ -62,6 +63,38 @@ SEED_PORTALS = {
     ("ozark", "MO"): [{"url": "https://ozarkmissouri.com/Bids.aspx", "platform": "civicplus"}],
 }
 
+# tools/discover_bid_portals.py's national crawl -- thousands of verified bid
+# pages, one row per hit, city and county alike. Same trust level as
+# SEED_PORTALS (each was structurally verified, not just "the URL returned
+# 200" -- see that script's _looks_like_a_bid_page), just far too many to
+# write out by hand. Parsed once per process and cached: this file has
+# thousands of rows, and _seed() below runs on every load_directory() call.
+_NATIONAL_CSV = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             "data", "bid_portal_directory.csv")
+_national_seeds_cache = None
+
+
+def _national_seeds():
+    global _national_seeds_cache
+    if _national_seeds_cache is not None:
+        return _national_seeds_cache
+    seeds = {}
+    try:
+        with open(_NATIONAL_CSV, newline="", encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                if row.get("status") != "found" or not row.get("bid_url"):
+                    continue
+                key = ((row.get("city") or "").strip(), (row.get("state") or "").strip())
+                if not key[0] or not key[1]:
+                    continue
+                seeds.setdefault(key, []).append({
+                    "url": row["bid_url"], "platform": row.get("platform") or "custom",
+                })
+    except OSError:
+        pass  # missing file degrades to "no national seeds", never a crash
+    _national_seeds_cache = seeds
+    return seeds
+
 
 def load_directory():
     """Load the directory, seeded with known-good defaults for any key not
@@ -85,12 +118,22 @@ def _key(city, state):
 
 
 def _seed(directory):
+    today = datetime.date.today().isoformat()
     for (city, state), entries in SEED_PORTALS.items():
         k = _key(city, state)
         if k not in directory:
-            today = datetime.date.today().isoformat()
             directory[k] = [
                 {**e, "source": "seed", "added": today, "last_ok": None,
+                 "last_checked": None, "fail_count": 0}
+                for e in entries
+            ]
+    # Hand-verified SEED_PORTALS entries above always win for the same city --
+    # this only fills in cities the hardcoded list never covered.
+    for (city, state), entries in _national_seeds().items():
+        k = _key(city, state)
+        if k not in directory:
+            directory[k] = [
+                {**e, "source": "national_crawl", "added": today, "last_ok": None,
                  "last_checked": None, "fail_count": 0}
                 for e in entries
             ]

@@ -30,6 +30,16 @@ CIVICPLUS_PAGE = """
 class ScanEndToEndTests(unittest.TestCase):
     def setUp(self):
         self.cache = {}
+        # bid_portals.load_directory() (called for real below, not mocked --
+        # these tests want the actual SEED_PORTALS/national-crawl seeding
+        # logic) persists through kv_backend, which falls back to a real
+        # local JSON file when Upstash isn't configured. Without isolating
+        # that storage layer, a "learned" entry left behind by an earlier
+        # test run (in this file or another) silently changes how many bids
+        # this test finds -- it did, until this was added: the assertions
+        # were quietly passing because of leftover disk state, not because
+        # of what this test actually sets up.
+        self.pdb_store = {}
         self._patchers = [
             patch.object(ls, "_cache", side_effect=lambda: self.cache),
             patch.object(ls, "_save_cache"),
@@ -43,6 +53,10 @@ class ScanEndToEndTests(unittest.TestCase):
                          side_effect=lambda c, s: {"lat": 37.209, "lon": -93.29,
                                                    "city": c, "state": s}
                          if s == "MO" else None),
+            patch.object(ls.bid_portals.kv_backend, "get",
+                         side_effect=lambda key, default=None: self.pdb_store.get(key, default)),
+            patch.object(ls.bid_portals.kv_backend, "set",
+                         side_effect=lambda key, value: self.pdb_store.__setitem__(key, value)),
         ]
         for p in self._patchers:
             p.start()
@@ -67,8 +81,14 @@ class ScanEndToEndTests(unittest.TestCase):
 
     def test_the_search_path_alone_also_produces_bids(self):
         """Portal unreachable, search working — the other half must still run."""
+        # Real niche-relevant filler, not "x"*500 -- looks_relevant() (run
+        # before every search-result AI call, see license_server.py's
+        # _run_local_queries) would otherwise correctly skip this page before
+        # ever reaching the mocked _ai_extract below, for the same reason a
+        # real page about janitorial services gets skipped.
+        relevant_filler = "Sidewalk and ADA curb ramp replacement project. " + "x" * 450
         with patch.object(ls, "_fetch_page", return_value=("", "ok")), \
-             patch.object(ls, "_fetch_text", return_value="x" * 500), \
+             patch.object(ls, "_fetch_text", return_value=relevant_filler), \
              patch.object(ls, "_tavily_search",
                           return_value=[{"url": "https://x.gov/bid/1", "content": ""}]), \
              patch.object(ls, "_ddg_search", return_value=[]), \
@@ -82,8 +102,9 @@ class ScanEndToEndTests(unittest.TestCase):
         self.assertIn("Sidewalk repair", titles, out["debug"])
 
     def test_both_paths_together_do_not_cancel_each_other_out(self):
+        relevant_filler = "Sidewalk and ADA curb ramp replacement project. " + "x" * 450
         with patch.object(ls, "_fetch_page", return_value=(CIVICPLUS_PAGE, "ok")), \
-             patch.object(ls, "_fetch_text", return_value="x" * 500), \
+             patch.object(ls, "_fetch_text", return_value=relevant_filler), \
              patch.object(ls, "_tavily_search",
                           return_value=[{"url": "https://x.gov/bid/1", "content": ""}]), \
              patch.object(ls, "_ddg_search", return_value=[]), \
