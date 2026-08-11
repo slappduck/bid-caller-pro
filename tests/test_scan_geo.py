@@ -548,3 +548,56 @@ class StructuredReadNeverLosesBidsTests(unittest.TestCase):
         ai, _ = self._run(good, [])
         ai.assert_not_called()
         self.assertEqual(len([b for v in self.grouped.values() for b in v]), 1)
+
+
+class LocalQueryPrefilterTests(unittest.TestCase):
+    """_run_local_queries processes unverified search hits, unlike a known
+    portal's own listing -- there's no "a parser gap is our problem, not a
+    dead site" trust to lean on here, so looks_relevant() must run before
+    paying for an AI call. Deliberately does NOT touch _run_known_portals'
+    fallback path (see StructuredReadNeverLosesBidsTests above), which stays
+    ungated on purpose."""
+
+    def setUp(self):
+        import threading
+        self.grouped, self.coords, self.stats = {}, {}, {}
+        self.cdb, self.pdb = {}, {}
+        self.seen = set()
+        self.lock = threading.Lock()
+        self.center = {"lat": 37.209, "lon": -93.29, "city": "Springfield", "state": "MO"}
+
+    def _run(self, page_text, ai_returns=None):
+        with patch.object(ls, "TAVILY_API_KEY", "test-key"), \
+             patch.object(ls, "_tavily_search",
+                          return_value=[{"url": "https://x.gov/bid/1", "content": ""}]), \
+             patch.object(ls, "_ddg_search", return_value=[]), \
+             patch.object(ls, "_bidnet_direct_urls", return_value=[]), \
+             patch.object(ls, "_fetch_text", return_value=page_text), \
+             patch.object(ls, "_ai_extract", return_value=ai_returns or []) as ai, \
+             patch.object(ls, "_geo_from_city",
+                          side_effect=lambda c, s: {"lat": 37.2, "lon": -93.3, "city": c,
+                                                    "state": s} if s == "MO" else None):
+            raw = ls._run_local_queries(
+                ["sidewalk bid"], "Springfield, MO", 10, self.grouped, self.center, 25,
+                self.cdb, self.coords, self.seen, self.lock, self.pdb,
+                default_city="Springfield", state="MO", stats=self.stats)
+        return raw, ai
+
+    def test_a_page_with_no_niche_terms_never_reaches_the_ai_call(self):
+        raw, ai = self._run("x" * 500)
+        ai.assert_not_called()
+        self.assertEqual(raw, 0)
+
+    def test_the_skip_is_counted_in_the_funnel(self):
+        self._run("x" * 500)
+        self.assertEqual(self.stats.get("filtered_not_niche"), 1)
+
+    def test_a_page_that_actually_mentions_the_trade_still_gets_extracted(self):
+        raw, ai = self._run(
+            "Sidewalk and ADA curb ramp replacement project, bids due soon." + "x" * 400,
+            ai_returns=[{"title": "Sidewalk Repair", "scope": "s", "status": "Open",
+                        "city": "Springfield"}])
+        ai.assert_called_once()
+        self.assertEqual(raw, 1)
+        titles = [b["title"] for v in self.grouped.values() for b in v]
+        self.assertEqual(titles, ["Sidewalk Repair"])

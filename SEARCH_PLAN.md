@@ -65,8 +65,31 @@ tuned against a saved fixture without waiting on a live site.
       AgendaCenter, the council-meetings module, which never contains bids).
       Still to do: verify each URL against the live site and widen to the
       rest of the 50mi ring
-- [ ] DemandStar / Euna OpenBids adapter (Springfield posts here too)
-- [ ] Bonfire, OpenGov, PlanetBids adapters
+- [x] **DemandStar / Euna OpenBids — investigated, dropped.** Once
+      demandstar.com egress was unblocked and actually reachable: the old
+      `bid_list.asp` listing URL is dead, redirected into a JS single-page
+      app. Pulled the app's JS bundle apart to find the real API underneath
+      (`api.demandstar.com`) — `/bids/search`, the actual open-bid search,
+      returns 401 with no credentials, and a real account confirmed it sits
+      behind a *paid* vendor subscription, not just a free login. The only
+      unauthenticated endpoint found (`/agency/browsebids`) is a public
+      "Awarded Bids" directory for SEO, not live open solicitations —
+      confirmed Missouri/Springfield are in DemandStar's network via that
+      endpoint, but that's not actionable data.
+      **Decision: not building this adapter.** Scraping a paid subscription's
+      private API to redistribute inside Bid Caller Pro is a ToS problem, not
+      a parsing problem, and doesn't fit the free/public-source model every
+      other adapter here follows. It doesn't cost us the underlying bids
+      either — Springfield's own listing explicitly said it *also* takes
+      submissions through Euna OpenBids, meaning the same postings already
+      show up for free via the direct-agency read (CivicPlus/Bids.aspx).
+      Any city that dual-posts to DemandStar is presumably already covered
+      the same way. Don't re-attempt this without a real reason to believe a
+      free tier exists.
+- [ ] Bonfire, OpenGov, PlanetBids adapters — same platform-adapter pattern
+      as DemandStar; worth checking each one's actual access model (free
+      public listing vs. paid vendor tier) *before* investing in a reader,
+      given how DemandStar turned out
 - [ ] MissouriBUYS, then the other state portals
 - [ ] Contractor-association bid calendars and plan rooms — the highest
       *density* source for this trade specifically, e.g. the Springfield
@@ -94,9 +117,13 @@ tuned against a saved fixture without waiting on a live site.
 
 ## Phase 3 — Extraction quality and cost
 
-- [ ] Run `looks_relevant()` before every AI call — listings arrive already
-      structured, so most never need one, which is what makes a much bigger
-      page budget affordable
+- [x] Run `looks_relevant()` before the search-results AI call
+      (`_run_local_queries`) — a page a search query surfaced with none of
+      the niche terms anywhere in it now never reaches OpenAI. Deliberately
+      left `_run_known_portals`' AI fallback ungated: that path reads an
+      already-trusted, seeded portal, where a parser gap is our problem, not
+      evidence the page is irrelevant (`StructuredReadNeverLosesBidsTests`
+      locks that in)
 - [ ] Revisit the extraction prompt. It currently says "when in doubt, leave it
       out", which protects precision at recall's expense; a bid whose concrete
       work is one line of a larger scope is exactly what we must not miss

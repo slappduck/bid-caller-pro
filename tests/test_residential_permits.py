@@ -48,6 +48,9 @@ class HasSourceTests(unittest.TestCase):
     def test_second_known_city_covered(self):
         self.assertTrue(rp.has_source("Cambridge", "MA"))
 
+    def test_third_known_city_covered(self):
+        self.assertTrue(rp.has_source("Baton Rouge", "LA"))
+
     def test_case_and_whitespace_insensitive(self):
         self.assertTrue(rp.has_source("  austin ", "tx"))
 
@@ -81,6 +84,54 @@ class CambridgeParserTests(unittest.TestCase):
         # own configured "days" instead of sharing Austin's 45-day default.
         self.assertGreater(rp.SOURCES[("cambridge", "MA")]["days"],
                            rp.SOURCES[("austin", "TX")]["days"])
+
+
+class BatonRougeParserTests(unittest.TestCase):
+    # Real shape pulled live from data.brla.gov/resource/7fq7-8j7r.json --
+    # the homeowner listed as their own contractor (a self-permitted DIY/
+    # repair job, not a hired company).
+    _SELF_PERMIT = {
+        "permitid": "18223535",
+        "permittype": "Driveway Permit (R)",
+        "projectdescription": "took old driveway out because it broke up and put a new one in",
+        "issueddate": "2026-07-20T00:00:00.000",
+        "streetaddress": "4052 NORTH ST",
+        "zip": "70802",
+        "ownername": "Carla Duplantier",
+        "applicantname": "Carla Duplantier",
+        "contractorname": "Carla Duplantier",
+        "lat": "30.4536028282823",
+        "long": "-91.148150433639898",
+    }
+    _NO_CONTRACTOR = {**_SELF_PERMIT, "permitid": "18243417", "contractorname": "N/A"}
+    _NAMED_CONCRETE_CONTRACTOR = {**_SELF_PERMIT, "permitid": "18299001",
+                                  "ownername": "Ben Vogt", "applicantname": "Ben Vogt",
+                                  "contractorname": "ABC Concrete LLC"}
+
+    def test_a_self_permit_reads_as_open_not_a_contractor(self):
+        lead = rp._baton_rouge_parser(self._SELF_PERMIT)
+        self.assertEqual(lead["contractor_name"], "")
+        self.assertEqual(rp._classify_lead(lead["contractor_trade"], lead["contractor_name"]), "open")
+
+    def test_no_contractor_on_file_reads_as_open(self):
+        lead = rp._baton_rouge_parser(self._NO_CONTRACTOR)
+        self.assertEqual(lead["contractor_name"], "")
+
+    def test_a_named_concrete_company_is_recognized_without_a_trade_field(self):
+        # This source has no dedicated trade column -- _guess_trade_from_name
+        # is what stops "ABC Concrete LLC" from silently reading as an open
+        # lead just because there's no separate field to check.
+        lead = rp._baton_rouge_parser(self._NAMED_CONCRETE_CONTRACTOR)
+        self.assertEqual(lead["contractor_name"], "ABC Concrete LLC")
+        self.assertEqual(rp._classify_lead(lead["contractor_trade"], lead["contractor_name"]), "taken")
+
+    def test_parses_address_and_coordinates(self):
+        lead = rp._baton_rouge_parser(self._SELF_PERMIT)
+        self.assertEqual(lead["address"], "4052 NORTH ST")
+        self.assertEqual(lead["city"], "Baton Rouge")
+        self.assertEqual(lead["state"], "LA")
+        self.assertAlmostEqual(lead["lat"], 30.4536028282823)
+        self.assertAlmostEqual(lead["lon"], -91.148150433639898)
 
 
 class ClassifyLeadTests(unittest.TestCase):

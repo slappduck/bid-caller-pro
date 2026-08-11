@@ -406,6 +406,7 @@ def health_detail():
 # ═══════════════════════════════════════════════════════════
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
 SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
+STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 FROM_EMAIL = os.environ.get("FROM_EMAIL", "Bid Caller Pro <onboarding@resend.dev>")
 SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL", "Yumiwave1@gmail.com")
@@ -2255,6 +2256,19 @@ def _run_local_queries(queries, ai_label, max_pages, grouped, center, radius, cd
     def _process(it):
         text = it["content"] or _fetch_text(it["url"])
         if len(text) < 200:
+            return
+        # These pages are unverified search hits, unlike a known portal's own
+        # listing (see _run_known_portals, which deliberately does NOT gate
+        # on content -- a parser gap there is our problem, not evidence the
+        # page is irrelevant). Here there's no such trust to lean on, so a
+        # page with none of the niche terms anywhere in it is essentially
+        # never going to yield a bid -- skip the OpenAI call rather than pay
+        # for a page about janitorial services or a council-meeting agenda
+        # that happened to rank for the search query.
+        if not bid_sources.looks_relevant(text):
+            if stats is not None:
+                with lock:
+                    stats["filtered_not_niche"] = stats.get("filtered_not_niche", 0) + 1
             return
         bids = _ai_extract(ai_label, text)
         if not bids:

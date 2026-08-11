@@ -36,6 +36,25 @@ writing any of this:
     applicant names. Much lower volume than Austin (a small city, roughly
     1-2 permits/month) -- needs a longer lookback window (see "days" below)
     or a 45-day default would come back empty most of the time.
+  - Baton Rouge, LA's "EBR Building Permits" has a dedicated
+    permittype="Driveway Permit (R)" category, address, coordinates, and a
+    contractor name (sometimes the property owner themselves, self-
+    permitting a DIY/repair job -- treated as an open lead, not "taken",
+    since a name alone with no trade match isn't a company). Verified live
+    and current (latest permit issued within days of checking).
+  - tools/discover_permit_sources.py's Socrata-catalog search surfaced
+    several more candidates with plausible dedicated categories --
+    Seattle's "Curb Cut" (data through 2021 only), Gainesville's "Driveway
+    Apron" (through 2023), Dallas's "Paving (Sidewalk, Drive Approaches)"
+    (2018 only), Somerville MA's "Curb Cut and Driveway" (through 2019),
+    and Prince George's County MD's "RESIDENTIAL DRIVEWAY PERMIT" (portal
+    reports a 2026 "latest" date, but only 3 records in the trailing 365
+    days -- the feed has effectively stopped, that date is stale, not
+    live). All five have a real dedicated category (the hard part a naive
+    scrape usually gets wrong) but are dead or dying datasets -- checked by
+    hand, not included. A field having a clean category value is necessary
+    but not sufficient; recency has to be checked too, per-dataset, before
+    anything goes live.
 
 So: SOURCES is a per-city registry, each entry hand-verified against the
 niche (not "any Socrata URL with a permits-shaped name") before being added
@@ -46,7 +65,6 @@ a schema and hoping it holds.
 
 import datetime
 import json
-import re
 import urllib.parse
 import urllib.request
 
@@ -110,27 +128,79 @@ def _cambridge_parser(row):
     }
 
 
+def _guess_trade_from_name(name):
+    """Baton Rouge's dataset has no dedicated trade field, only a contractor
+    name -- this checks that name against the same keyword lists
+    _classify_lead uses for an explicit trade field, so "ABC Concrete LLC"
+    still correctly reads as taken rather than falling through to open just
+    because there's no separate trade column to check. A guess, never a
+    fact: an empty result here still falls through to _classify_lead's
+    existing "named but no trade" handling."""
+    low = (name or "").lower()
+    for kw in TAKEN_TRADE_KEYWORDS:
+        if kw in low:
+            return kw
+    for kw in BUILDER_TRADE_KEYWORDS:
+        if kw in low:
+            return kw
+    return ""
+
+
+def _baton_rouge_parser(row):
+    contractor = (row.get("contractorname") or "").strip()
+    owner = (row.get("ownername") or row.get("applicantname") or "").strip()
+    # A permit where the homeowner lists themselves as their own contractor
+    # (common for a DIY/self-permitted driveway repair) isn't "already has a
+    # contractor" in the sense the card's contact chip implies -- showing
+    # their own name back to them under a "Contractor" label reads as if
+    # someone's already been hired. Leave it blank so it reads as the open
+    # lead it actually is.
+    if not contractor or contractor.upper() in ("N/A", "NONE") or contractor.lower() == owner.lower():
+        contractor = ""
+    return {
+        "permit_id": row.get("permitid", ""),
+        "address": row.get("streetaddress") or row.get("address", ""),
+        "city": "Baton Rouge",
+        "state": "LA",
+        "zip": row.get("zip", ""),
+        "permit_type": row.get("permittype", ""),
+        "description": row.get("projectdescription", ""),
+        "issued_date": (row.get("issueddate") or "")[:10],
+        "status": "",
+        "contractor_name": contractor,
+        "contractor_trade": _guess_trade_from_name(contractor),
+        "contractor_phone": "",
+        "lat": _to_float(row.get("lat")),
+        "lon": _to_float(row.get("long")),
+        "url": "",
+    }
+
+
 PARSERS = {
     "austin": _austin_parser,
     "cambridge": _cambridge_parser,
+    "baton_rouge": _baton_rouge_parser,
 }
 
 # ── Lead classification ──
 # The single most important thing about one of these leads isn't the address,
-# it's whether calling it is even useful. Real data check (Austin): every
-# sampled permit had contractor_trade="General Contractor" and a homebuilder
-# name (Highland Homes, Trophy Signature Homes, ...) -- these are new-
-# subdivision construction permits where a GC already holds the job. That's
-# NOT an open "nobody's hired anyone yet" lead; a GC almost never pours their
-# own concrete, so the real play is pitching to become THEIR subcontractor,
-# not cold-calling for this one driveway. Without labeling that distinction,
-# a user could easily burn calls on already-assigned jobs thinking they're
-# fresh leads.
+# it's whether calling it is even useful. Real data check (Austin, live):
+# of 100 recent Driveway/Sidewalks permits, 67% had contractor_trade=
+# "General Contractor" and a homebuilder name (Highland Homes, Trophy
+# Signature Homes, ...) -- new-subdivision construction where a GC already
+# holds the job. That's NOT an open "nobody's hired anyone yet" lead, and the
+# original "pitch as a subcontractor" label oversold it as one: a production
+# homebuilder pouring dozens of driveways a year almost always already has a
+# standing concrete subcontractor across the whole subdivision by the time a
+# single lot's permit posts. Landing that work is a slow "get on their
+# approved-vendor list" sales motion, not a live opportunity a cold call
+# converts -- the label has to say that, not imply good odds on a call today.
 BUILDER_TRADE_KEYWORDS = ("general contractor", "builder", "homebuilder", "home builder")
 TAKEN_TRADE_KEYWORDS = ("concrete", "paving", "flatwork", "cement", "masonry")
 LEAD_TYPE_LABELS = {
     "open": "Open Lead — no contractor listed",
-    "builder": "Builder Lead — pitch as a subcontractor",
+    "builder": "Builder's Project — GC likely already has a concrete sub; "
+               "a cold call is a long shot without an existing relationship",
     "taken": "Concrete Sub Already Listed",
     "unknown": "Contact Listed",
 }
@@ -181,6 +251,18 @@ SOURCES = {
         "parser": "cambridge",
         "days": 270,
         "center": (42.3736, -71.1097),
+    },
+    ("baton rouge", "LA"): {
+        "domain": "data.brla.gov",
+        "dataset_id": "7fq7-8j7r",
+        "date_field": "issueddate",
+        "where_extra": "permittype='Driveway Permit (R)'",
+        "parser": "baton_rouge",
+        # ~4/month recently -- a 45-day default would often come back with
+        # 1-2 results or none; 90 days reliably returns several without
+        # being so wide it surfaces work that's plausibly already finished.
+        "days": 90,
+        "center": (30.4515, -91.1871),
     },
 }
 

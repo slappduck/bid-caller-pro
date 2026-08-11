@@ -188,6 +188,18 @@ def bid_id(city, bid):
     raw = (str(city) + bid.get("title", "") + bid.get("scope", "")).encode("utf-8")
     return hashlib.md5(raw).hexdigest()[:12]
 
+def saved_field(saved, key, field, bid):
+    """A field's value, preferring what the user manually edited over what
+    the raw bid says. Edits (Est. Value, notes, pipeline status) are written
+    only into `saved` -- self.bid_data (where `bid` comes from) is never
+    touched by an edit, only overwritten wholesale by the next scan -- so a
+    display that reads `bid` alone misses every edit until then, and looks
+    like saving silently failed."""
+    rec = saved.get(key)
+    if rec and rec.get(field):
+        return rec[field]
+    return bid.get(field, "")
+
 _DEADLINE_FORMATS = (
     "%Y-%m-%d", "%m/%d/%Y", "%m-%d-%Y", "%B %d, %Y", "%b %d, %Y",
     "%B %d %Y", "%b %d %Y", "%m/%d/%y",
@@ -565,6 +577,7 @@ class BidCaller:
         bid["_id"] = bid_id(city, bid)
         is_saved = bid["_id"] in self.saved
         note = self.saved.get(bid["_id"], {}).get("note", "") if is_saved else ""
+        value = saved_field(self.saved, bid["_id"], "value", bid)
 
         status_key = bid.get("status", "open").lower()
         pill_bg, pill_fg = STATUS_COLORS.get(status_key, ("#1c1917", TEXT3))
@@ -618,8 +631,8 @@ class BidCaller:
                 suffix = "  •  today" if dleft == 0 else f"  •  {dleft}d left"
             dl_color = RED if (dleft is not None and dleft <= 2) else ACCENT
             chip(f"📅  {bid['deadline']}{suffix}", dl_color)
-        if bid.get("value"):
-            chip(f"💲  {bid['value']}", GREEN)
+        if value:
+            chip(f"💲  {value}", GREEN)
         if bid.get("contact"):
             chip(f"👤  {bid['contact']}", TEXT2)
         pipeline = self.saved.get(bid["_id"], {}).get("pipeline", "") if is_saved else ""
@@ -644,7 +657,7 @@ class BidCaller:
         # contractor plug in their own estimate once they've actually
         # looked at the bid documents, instead of Est. Value just staying
         # blank forever.
-        value_btn = tk.Label(meta, text="💲  Add value" if not bid.get("value") else "💲  Edit value",
+        value_btn = tk.Label(meta, text="💲  Add value" if not value else "💲  Edit value",
                              font=F_SMALL, bg=SURFACE, fg=TEXT2,
                              padx=10, pady=4, cursor="hand2")
         value_btn.pack(side="right", padx=(0, 6))
@@ -666,6 +679,7 @@ class BidCaller:
         key = bid_id(city, bid)
         saved = key in self.saved
         note = self.saved.get(key, {}).get("note", "") if saved else ""
+        value = saved_field(self.saved, key, "value", bid)
 
         win = tk.Toplevel(self.root)
         _apply_icon(win)
@@ -725,7 +739,7 @@ class BidCaller:
                          anchor="w", wraplength=480, justify="left").pack(anchor="w")
 
         field("Scope of Work", bid.get("scope"))
-        field("Est. Value (if listed)", bid.get("value") or "Not listed")
+        field("Est. Value (if listed)", value or "Not listed")
         field("Deadline", bid.get("deadline") or "Not listed")
         field("Contact", bid.get("contact"))
         field("Email", bid.get("email"), link=True, link_type="email")
@@ -1176,7 +1190,8 @@ class BidCaller:
                 return d if d is not None else 9999
             rows.sort(key=_deadline_key)
         elif sort_by == "Est. Value":
-            rows.sort(key=lambda cb: -parse_value(cb[1].get("value")))
+            rows.sort(key=lambda cb: -parse_value(
+                saved_field(self.saved, bid_id(cb[0], cb[1]), "value", cb[1])))
         # "Best Match" (default): leave rows in the order /scan returned them --
         # the server already ranks each city's bids by fit (deadline urgency,
         # niche keyword strength, contact completeness).
@@ -2202,7 +2217,7 @@ class BidCaller:
         if item.get("email"):
             chip("✉  Email", GREEN, lambda: webbrowser.open(f"mailto:{item['email']}"))
         if item.get("phone"):
-            chip(f"☎  {item['phone']}", TEXT2)
+            chip(item["phone"], TEXT2)
         if item.get("url"):
             chip("🔗  Source", ACCENT, lambda: webbrowser.open(item["url"]))
 
@@ -2374,7 +2389,7 @@ class BidCaller:
                     self._leads_status.config(
                         text=f"Residential leads aren't set up for "
                              f"{resp.get('location') or location} yet — coverage is "
-                             f"growing city by city. (Currently: Austin, TX & Cambridge, MA.)",
+                             f"growing city by city. (Currently: Austin, TX; Cambridge, MA & Baton Rouge, LA.)",
                         fg=TEXT3)
                     self._set_leads_prog(0)
                     return
@@ -2410,7 +2425,7 @@ class BidCaller:
 
     _LEAD_TYPE_STYLE = {
         "open": ("#0f3d24", GREEN, "\U0001F513  Open Lead"),
-        "builder": ("#0c2a4a", BLUE, "\U0001F3D7  Builder Lead"),
+        "builder": ("#0c2a4a", BLUE, "\U0001F3D7  Builder's Job"),
         "taken": ("#2a2a2a", TEXT3, "✓  Sub Already Listed"),
         "unknown": ("#2a2a2a", TEXT2, "Contact Listed"),
     }
@@ -2456,9 +2471,22 @@ class BidCaller:
             trade = f" ({lead['contractor_trade']})" if lead.get("contractor_trade") else ""
             chip(f"👤  {lead['contractor_name']}{trade}", TEXT2)
         if lead.get("contractor_phone"):
-            chip(f"☎  {lead['contractor_phone']}", TEXT2)
+            chip(lead["contractor_phone"], TEXT2)
         if lead.get("url"):
             chip("🔗  Permit Record", ACCENT, lambda: webbrowser.open(lead["url"]))
+
+        # The "Builder's Job" chip alone doesn't explain itself -- a first-
+        # time user has no reason to already know that a listed general
+        # contractor means a slow "get on their vendor list" pitch, not a
+        # fresh lead. Say it plainly in the card, not just in a tooltip.
+        if lead.get("lead_type") == "builder":
+            nf = tk.Frame(body, bg="#0f1320")
+            nf.pack(fill="x", pady=(8, 0))
+            tk.Label(nf, text="  ℹ  A general contractor already holds this "
+                     "project. Worth a call only if you already have a "
+                     "relationship with them as a subcontractor.",
+                     font=F_SMALL, bg="#0f1320", fg=TEXT2, anchor="w",
+                     wraplength=800, justify="left", padx=8, pady=6).pack(fill="x")
 
         permit_id = lead.get("permit_id")
         if permit_id:
@@ -2528,7 +2556,7 @@ class BidCaller:
                      bg=BG, fg=TEXT).pack()
             tk.Label(self._leads_list_frame,
                      text="Search your area for fresh driveway & sidewalk permits.\n"
-                          "Coverage is growing city by city — currently: Austin, TX & Cambridge, MA.",
+                          "Coverage is growing city by city — currently: Austin, TX; Cambridge, MA & Baton Rouge, LA.",
                      font=F_SMALL, bg=BG, fg=TEXT3, justify="center").pack(pady=(4, 40))
             return
         self._leads_export_btn.pack(side="right")
@@ -3707,7 +3735,6 @@ def _dark_title_bar(window):
         return
     try:
         import ctypes
-        from ctypes import wintypes
         window.update_idletasks()
         hwnd = ctypes.windll.user32.GetParent(window.winfo_id())
         # DWMWA_USE_IMMERSIVE_DARK_MODE = 20 (or 19 on older builds)
