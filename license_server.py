@@ -1966,12 +1966,18 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
         # for an LLM to interpret, and skipping that call is what makes reading
         # every known portal on every scan affordable. Search engines and AI
         # extraction stay for pages we don't have a reader for.
+        # Structured reading is an OPTIMISATION over the AI path, never a
+        # replacement for it. An earlier version skipped the AI path for every
+        # CivicPlus URL, so when this parser matched nothing — a markup variant,
+        # a redirect, a bot block — the portal produced nothing at all and the
+        # working fallback never ran. It also recorded a parser miss as a portal
+        # failure, which would have retired a perfectly good seeded URL after
+        # five scans. A parser gap is our problem, not the site's.
         if bid_sources.identify_platform(url) == "civicplus":
             rows = bid_sources.parse_civicplus_html(_fetch_raw(url), base_url=url)
-            with lock:
-                bid_portals.record_result(pdb, city, state, url, bool(rows))
             if rows:
                 with lock:
+                    bid_portals.record_result(pdb, city, state, url, True)
                     for row in rows:
                         if not bid_sources.looks_relevant(row["title"], row.get("scope")):
                             if stats is not None:
@@ -1987,6 +1993,9 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
                             city_coords=city_coords, default_state=state,
                             fallback_coords=town_coords, stats=stats)
                 continue
+            # Parsed nothing — fall through and let the AI read the page.
+            if stats is not None:
+                stats["civicplus_parse_miss"] = stats.get("civicplus_parse_miss", 0) + 1
 
         text = _fetch_text(url)
         ok = len(text) >= 200

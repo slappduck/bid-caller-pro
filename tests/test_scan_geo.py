@@ -496,3 +496,55 @@ class CivicPlusPortalReadTests(unittest.TestCase):
         self.assertEqual(self.grouped, {})
         # Marked as a failure so MAX_FAIL eventually retires a dead entry.
         self.assertFalse(rec.call_args[0][-1])
+
+
+class StructuredReadNeverLosesBidsTests(unittest.TestCase):
+    """Structured reading is an optimisation over the AI path, never a
+    replacement. A parser that matches nothing must fall through, not silently
+    turn a working portal into zero bids — which is exactly what it did once.
+    """
+
+    def setUp(self):
+        self.grouped, self.coords, self.stats = {}, {}, {}
+        self.cdb, self.pdb = {}, {}
+
+    def _run(self, page_html, ai_returns):
+        import threading
+        rec = None
+        with patch.object(ls, "_fetch_raw", return_value=page_html), \
+             patch.object(ls, "_fetch_text", return_value="x" * 500), \
+             patch.object(ls, "_ai_extract", return_value=ai_returns) as ai, \
+             patch.object(ls, "_geo_from_city", side_effect=_fake_geo), \
+             patch.object(ls.bid_portals, "get_portals", return_value=[
+                 {"url": "https://www.springfieldmo.gov/Bids.aspx", "platform": "civicplus"}]), \
+             patch.object(ls.bid_portals, "record_result") as rec:
+            ls._run_known_portals(
+                "Springfield", "MO", "Springfield, MO", self.grouped, CENTER, 100,
+                self.cdb, self.coords, threading.Lock(), self.pdb,
+                default_city="Springfield", town_coords=(37.2, -93.3), stats=self.stats)
+        return ai, rec
+
+    def test_a_parser_miss_falls_through_to_the_ai_path(self):
+        # Markup the CivicPlus parser doesn't recognise, but a real page.
+        ai, _ = self._run("<html><body>Bids are listed below</body></html>",
+                          [{"title": "Sidewalk repair", "city": "Springfield",
+                            "status": "Open"}])
+        ai.assert_called_once()
+        titles = [b["title"] for v in self.grouped.values() for b in v]
+        self.assertEqual(titles, ["Sidewalk repair"])
+
+    def test_a_parser_miss_is_not_recorded_as_a_dead_portal(self):
+        # Recording it as a failure would retire a perfectly good seeded URL
+        # after MAX_FAIL scans.
+        _, rec = self._run("<html><body>Bids are listed below</body></html>", [])
+        self.assertTrue(rec.call_args[0][-1], "a live page was marked as failed")
+
+    def test_a_parser_miss_is_visible_in_the_funnel(self):
+        self._run("<html><body>nothing matchable</body></html>", [])
+        self.assertEqual(self.stats.get("civicplus_parse_miss"), 1)
+
+    def test_a_successful_parse_still_skips_the_ai_call(self):
+        good = '<a href="/Bids.aspx?bidID=1">Sidewalk Improvements</a>'
+        ai, _ = self._run(good, [])
+        ai.assert_not_called()
+        self.assertEqual(len([b for v in self.grouped.values() for b in v]), 1)
