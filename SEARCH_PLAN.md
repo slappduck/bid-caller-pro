@@ -117,9 +117,13 @@ tuned against a saved fixture without waiting on a live site.
 
 ## Phase 3 — Extraction quality and cost
 
-- [ ] Run `looks_relevant()` before every AI call — listings arrive already
-      structured, so most never need one, which is what makes a much bigger
-      page budget affordable
+- [x] Run `looks_relevant()` before the search-results AI call
+      (`_run_local_queries`) — a page a search query surfaced with none of
+      the niche terms anywhere in it now never reaches OpenAI. Deliberately
+      left `_run_known_portals`' AI fallback ungated: that path reads an
+      already-trusted, seeded portal, where a parser gap is our problem, not
+      evidence the page is irrelevant (`StructuredReadNeverLosesBidsTests`
+      locks that in)
 - [ ] Revisit the extraction prompt. It currently says "when in doubt, leave it
       out", which protects precision at recall's expense; a bid whose concrete
       work is one line of a larger scope is exactly what we must not miss
