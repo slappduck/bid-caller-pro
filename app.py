@@ -2217,7 +2217,7 @@ class BidCaller:
         if item.get("email"):
             chip("✉  Email", GREEN, lambda: webbrowser.open(f"mailto:{item['email']}"))
         if item.get("phone"):
-            chip(f"☎  {item['phone']}", TEXT2)
+            chip(item["phone"], TEXT2)
         if item.get("url"):
             chip("🔗  Source", ACCENT, lambda: webbrowser.open(item["url"]))
 
@@ -2471,7 +2471,7 @@ class BidCaller:
             trade = f" ({lead['contractor_trade']})" if lead.get("contractor_trade") else ""
             chip(f"👤  {lead['contractor_name']}{trade}", TEXT2)
         if lead.get("contractor_phone"):
-            chip(f"☎  {lead['contractor_phone']}", TEXT2)
+            chip(lead["contractor_phone"], TEXT2)
         if lead.get("url"):
             chip("🔗  Permit Record", ACCENT, lambda: webbrowser.open(lead["url"]))
 

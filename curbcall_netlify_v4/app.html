@@ -1922,7 +1922,7 @@ function upcomingCard(city,b){
       ${b.contact||b.email||b.phone?`<div class="bid-meta" style="margin-top:0.4rem;">
         ${b.contact?`<span class="chip">${esc(b.contact)}</span>`:""}
         ${safeUrl("mailto:"+b.email)?`<a class="chip" href="${esc(safeUrl("mailto:"+b.email))}">✉ Email</a>`:""}
-        ${safeUrl("tel:"+b.phone)?`<a class="chip" href="${esc(safeUrl("tel:"+b.phone))}">☎ ${esc(b.phone)}</a>`:""}
+        ${safeUrl("tel:"+b.phone)?`<a class="chip" href="${esc(safeUrl("tel:"+b.phone))}">${esc(b.phone)}</a>`:""}
       </div>`:""}
       ${safeUrl(b.url)?`<div class="bid-meta" style="margin-top:0.4rem;"><a class="chip" href="${esc(safeUrl(b.url))}" target="_blank" rel="noopener noreferrer">\u{1F517} Source</a></div>`:""}
     </div>
@@ -2045,7 +2045,7 @@ function leadCard(city,l){
       </div>
       ${l.contractor_name||l.contractor_phone?`<div class="bid-meta" style="margin-top:0.4rem;">
         ${l.contractor_name?`<span class="chip">${esc(l.contractor_name)}${l.contractor_trade?` (${esc(l.contractor_trade)})`:""}</span>`:""}
-        ${safeUrl("tel:"+l.contractor_phone)?`<a class="chip" href="${esc(safeUrl("tel:"+l.contractor_phone))}">☎ ${esc(l.contractor_phone)}</a>`:""}
+        ${safeUrl("tel:"+l.contractor_phone)?`<a class="chip" href="${esc(safeUrl("tel:"+l.contractor_phone))}">${esc(l.contractor_phone)}</a>`:""}
       </div>`:""}
       ${safeUrl(l.url)?`<div class="bid-meta" style="margin-top:0.4rem;"><a class="chip" href="${esc(safeUrl(l.url))}" target="_blank" rel="noopener noreferrer">\u{1F517} Permit Record</a></div>`:""}
       ${pid?`<div class="lead-pipeline-row">
