@@ -1213,6 +1213,40 @@ async function refreshFindTownMarkers(lat,lon){
     }
   }catch(e){/* best-effort — clicking blank map still works without town markers */}
 }
+// Civil divisions that are not places anyone lets a bid from. A rural point
+// reverse-geocodes to one of these constantly, and the provider writes them
+// with an "of" prefix ("Township of Rock Prairie").
+const NON_PLACE_RE=/\b(township|twp|unincorporated|unorganized|census[\s-]designated|CDP|precinct|ward|reservation)\b/i;
+
+// Turn a reverse-geocode response into a label a contractor recognises.
+//
+// This used to prefer the raw postcode, then fall back to `locality` — which
+// in rural areas is the civil township — and then to bare coordinates. So
+// hitting Use My Location outside a city showed "37.1043, -93.4021" or a
+// township nobody has heard of. The same text is what gets sent to /scan, and
+// a township has no procurement office and no registered domain, so the scan
+// searched for a buyer that does not exist.
+//
+// Prefers the municipality, then any locality that isn't a bare civil
+// division, then the county — which does let road and curb work. Postcode and
+// coordinates remain as last resorts so this can always return something.
+function placeLabel(d,lat,lon){
+  d=d||{};
+  const state=String(d.principalSubdivisionCode||"").split("-").pop();
+  const admin=((d.localityInfo||{}).administrative)||[];
+  const named=lvl=>admin
+    .filter(e=>e&&typeof e==="object"&&e.adminLevel===lvl&&e.name)
+    .map(e=>String(e.name).trim());
+  // adminLevel 8 is the municipality, 7 the civil township, 6 the county.
+  const candidates=[d.city,...named(8),d.locality,...named(7),...named(6)]
+    .map(s=>String(s||"").trim()).filter(Boolean);
+  for(const name of candidates){
+    if(!NON_PLACE_RE.test(name))return state?`${name}, ${state}`:name;
+  }
+  if(d.postcode)return String(d.postcode);
+  return `${Number(lat).toFixed(4)}, ${Number(lon).toFixed(4)}`;
+}
+
 async function pickFindLocation(lat,lon,label){
   const input=document.getElementById("loc-input");
   if(label){
@@ -1225,8 +1259,7 @@ async function pickFindLocation(lat,lon,label){
   try{
     const r=await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`);
     const d=await r.json();
-    const state=(d.principalSubdivisionCode||"").split("-").pop();
-    const val=d.postcode||[d.city||d.locality,state].filter(Boolean).join(", ")||`${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+    const val=placeLabel(d,lat,lon);
     if(input)input.value=val;
     updateFindMap(lat,lon,val);
   }catch(e){
@@ -1266,8 +1299,7 @@ function createLocationPicker(containerId,inputId){
     try{
       const r=await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`);
       const d=await r.json();
-      const st2=(d.principalSubdivisionCode||"").split("-").pop();
-      const val=d.postcode||[d.city||d.locality,st2].filter(Boolean).join(", ")||`${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+      const val=placeLabel(d,lat,lon);
       if(input)input.value=val;
       show(lat,lon,val);
     }catch(e){
@@ -1291,8 +1323,7 @@ async function detectLocation(fillInput){
       updateFindMap(latitude,longitude,"You are here");
       const r=await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`);
       const d=await r.json();
-      const state=(d.principalSubdivisionCode||"").split("-").pop();
-      const val=d.postcode||[d.city||d.locality,state].filter(Boolean).join(", ");
+      const val=placeLabel(d,latitude,longitude);
       if(val){
         updateFindMap(latitude,longitude,val);
         refreshFindTownMarkers(latitude,longitude);

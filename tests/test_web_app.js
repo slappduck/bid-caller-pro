@@ -702,6 +702,69 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── Use My Location must name a town, not a coordinate ──
+  console.log("\nAuto-locate shows the nearest town and state");
+  {
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const host = new URL(route.request().url()).hostname;
+      if (host.endsWith("supabase.co") || host.endsWith("onrender.com")) return route.abort();
+      return route.continue();
+    });
+    await page.addInitScript(seedSignedIn, { city: SEED_CITY, bid: SEED_BID });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(1200);
+
+    const label = (payload) =>
+      page.evaluate((d) => placeLabel(d, 37.1043, -93.4021), payload);
+
+    const inCity = {
+      principalSubdivisionCode: "US-MO", city: "Springfield",
+      postcode: "65803",
+      localityInfo: { administrative: [
+        { name: "Greene County", adminLevel: 6 },
+        { name: "Springfield", adminLevel: 8 }] },
+    };
+    check("a town beats the ZIP code",
+      (await label(inCity)) === "Springfield, MO", await label(inCity));
+
+    // The case that started this: a rural point outside any municipality.
+    const rural = {
+      principalSubdivisionCode: "US-MO", city: "", locality: "Township of Rock Prairie",
+      postcode: "65714",
+      localityInfo: { administrative: [
+        { name: "Greene County", adminLevel: 6 },
+        { name: "Township of Rock Prairie", adminLevel: 7 }] },
+    };
+    check("a township is never shown as your location",
+      !/township/i.test(await label(rural)), await label(rural));
+    check("it falls back to the county, which does let curb work",
+      (await label(rural)) === "Greene County, MO", await label(rural));
+
+    const smallTown = {
+      principalSubdivisionCode: "US-MO", city: "Fair Grove",
+      localityInfo: { administrative: [{ name: "Township of Franklin", adminLevel: 7 }] },
+    };
+    check("a small town still wins over the township it sits in",
+      (await label(smallTown)) === "Fair Grove, MO", await label(smallTown));
+
+    check("a ZIP is still better than coordinates when there is no place name",
+      (await label({ principalSubdivisionCode: "US-MO", postcode: "65714" })) === "65714");
+    check("coordinates remain the last resort, never the first",
+      (await label({})) === "37.1043, -93.4021", await label({}));
+
+    for (const bad of [null, { localityInfo: null }, { localityInfo: { administrative: [null, 7, "x"] } }]) {
+      check(`malformed payload does not throw: ${JSON.stringify(bad)}`,
+        typeof (await label(bad)) === "string");
+    }
+
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   await browser.close();
   server.close();
   console.log(failures ? `\n${failures} check(s) FAILED` : "\nAll checks passed");
