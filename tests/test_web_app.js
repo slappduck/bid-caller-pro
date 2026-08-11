@@ -753,8 +753,53 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
 
     check("a ZIP is still better than coordinates when there is no place name",
       (await label({ principalSubdivisionCode: "US-MO", postcode: "65714" })) === "65714");
-    check("coordinates remain the last resort, never the first",
-      (await label({})) === "37.1043, -93.4021", await label({}));
+    check("an unusable payload yields nothing, so the next provider is tried",
+      (await label({})) === "", JSON.stringify(await label({})));
+
+    // The live failure: BigDataCloud's free endpoint is rate-limited per IP and
+    // answers 200 with an error object, which reads as "this place has no name".
+    // A coordinate pair landed in the box because nothing else was consulted.
+    const RATE_LIMITED = { status: 429, description: "Too many requests" };
+    const NOMINATIM = {
+      address: { town: "Bolivar", county: "Polk County", state: "Missouri",
+                 postcode: "65613" },
+    };
+    async function withProviders(bdc, nom, overpass) {
+      return page.evaluate(async ({ bdc, nom, overpass }) => {
+        const real = window.fetchWithTimeout;
+        window.fetchWithTimeout = async (url) => {
+          const pick = url.includes("bigdatacloud") ? bdc
+            : url.includes("nominatim") ? nom : overpass;
+          if (pick === null) throw new Error("provider down");
+          return { json: async () => pick };
+        };
+        try { return await resolvePlaceLabel(37.5910, -93.4020); }
+        finally { window.fetchWithTimeout = real; }
+      }, { bdc, nom, overpass });
+    }
+
+    check("a rate-limited first provider falls through to the second",
+      (await withProviders(RATE_LIMITED, NOMINATIM, null)) === "Bolivar, MO",
+      await withProviders(RATE_LIMITED, NOMINATIM, null));
+
+    check("a first provider that throws does not end the chain",
+      (await withProviders(null, NOMINATIM, null)) === "Bolivar, MO");
+
+    const OVERPASS = { elements: [
+      { lat: 37.6103, lon: -93.4102, tags: { name: "Bolivar", "addr:state": "MO" } },
+      { lat: 37.9500, lon: -93.2900, tags: { name: "Wheatland", "addr:state": "MO" } },
+    ] };
+    check("with both geocoders dead it uses the nearest real town",
+      (await withProviders(RATE_LIMITED, {}, OVERPASS)) === "Bolivar, MO",
+      await withProviders(RATE_LIMITED, {}, OVERPASS));
+
+    check("the state carries over from the first provider when OSM omits it",
+      (await withProviders(
+        { principalSubdivisionCode: "US-MO" }, {},
+        { elements: [{ lat: 37.61, lon: -93.41, tags: { name: "Bolivar" } }] })) === "Bolivar, MO");
+
+    check("all three failing returns empty, so callers can say so",
+      (await withProviders(null, null, null)) === "");
 
     for (const bad of [null, { localityInfo: null }, { localityInfo: { administrative: [null, 7, "x"] } }]) {
       check(`malformed payload does not throw: ${JSON.stringify(bad)}`,

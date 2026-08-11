@@ -1230,9 +1230,12 @@ const NON_PLACE_RE=/\b(township|twp|unincorporated|unorganized|census[\s-]design
 // Prefers the municipality, then any locality that isn't a bare civil
 // division, then the county — which does let road and curb work. Postcode and
 // coordinates remain as last resorts so this can always return something.
+// Returns "" when the payload names no usable place. It must NOT fall back to
+// coordinates: callers guard on the empty string to decide whether to try the
+// next provider, and a coordinate string looks like success to that guard.
 function placeLabel(d,lat,lon){
   d=d||{};
-  const state=String(d.principalSubdivisionCode||"").split("-").pop();
+  const state=bdcState(d);
   const admin=((d.localityInfo||{}).administrative)||[];
   const named=lvl=>admin
     .filter(e=>e&&typeof e==="object"&&e.adminLevel===lvl&&e.name)
@@ -1244,7 +1247,90 @@ function placeLabel(d,lat,lon){
     if(!NON_PLACE_RE.test(name))return state?`${name}, ${state}`:name;
   }
   if(d.postcode)return String(d.postcode);
-  return `${Number(lat).toFixed(4)}, ${Number(lon).toFixed(4)}`;
+  return "";
+}
+function bdcState(d){
+  return String((d&&d.principalSubdivisionCode)||"").split("-").pop();
+}
+
+// Nominatim (OpenStreetMap) — free, keyless, and a completely separate dataset
+// from BigDataCloud. The free BigDataCloud endpoint is rate-limited per IP and
+// answers with an error object rather than an HTTP error, which reads as "this
+// place has no name" and is exactly how a coordinate pair ended up in the box.
+const US_STATE_ABBR={"alabama":"AL","alaska":"AK","arizona":"AZ","arkansas":"AR",
+ "california":"CA","colorado":"CO","connecticut":"CT","delaware":"DE","florida":"FL",
+ "georgia":"GA","hawaii":"HI","idaho":"ID","illinois":"IL","indiana":"IN","iowa":"IA",
+ "kansas":"KS","kentucky":"KY","louisiana":"LA","maine":"ME","maryland":"MD",
+ "massachusetts":"MA","michigan":"MI","minnesota":"MN","mississippi":"MS","missouri":"MO",
+ "montana":"MT","nebraska":"NE","nevada":"NV","new hampshire":"NH","new jersey":"NJ",
+ "new mexico":"NM","new york":"NY","north carolina":"NC","north dakota":"ND","ohio":"OH",
+ "oklahoma":"OK","oregon":"OR","pennsylvania":"PA","rhode island":"RI","south carolina":"SC",
+ "south dakota":"SD","tennessee":"TN","texas":"TX","utah":"UT","vermont":"VT","virginia":"VA",
+ "washington":"WA","west virginia":"WV","wisconsin":"WI","wyoming":"WY",
+ "district of columbia":"DC"};
+function nominatimLabel(d){
+  const a=(d&&d.address)||{};
+  const state=US_STATE_ABBR[String(a.state||"").toLowerCase()]||"";
+  const name=[a.city,a.town,a.village,a.hamlet,a.municipality,a.county]
+    .map(s=>String(s||"").trim())
+    .find(s=>s&&!NON_PLACE_RE.test(s));
+  if(!name)return a.postcode?String(a.postcode):"";
+  return state?`${name}, ${state}`:name;
+}
+
+function milesBetween(lat1,lon1,lat2,lon2){
+  const R=3958.8,r=Math.PI/180;
+  const dLat=(lat2-lat1)*r,dLon=(lon2-lon1)*r;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*r)*Math.cos(lat2*r)*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(a));
+}
+
+// Last resort before coordinates: the nearest real town from OpenStreetMap.
+// This is the same Overpass source the map already uses to draw nearby-city
+// markers, so it costs nothing new and is known to work from the field.
+async function nearestTownLabel(lat,lon,state){
+  const q=`[out:json][timeout:15];(node["place"~"city|town|village"](around:40000,${lat},${lon}););out body 40;`;
+  const r=await fetchWithTimeout("https://overpass-api.de/api/interpreter",
+    {method:"POST",headers:{"Content-Type":"text/plain"},body:q},12000);
+  const d=await r.json();
+  let best=null,bestD=Infinity;
+  for(const el of(d.elements||[])){
+    const name=el.tags&&el.tags.name;
+    if(!name||el.lat==null||el.lon==null||NON_PLACE_RE.test(name))continue;
+    const dist=milesBetween(lat,lon,el.lat,el.lon);
+    if(dist<bestD){bestD=dist;best={name,state:(el.tags["addr:state"]||"").trim()};}
+  }
+  if(!best)return "";
+  const st=best.state||state||"";
+  return st?`${best.name}, ${st}`:best.name;
+}
+
+// One reverse-geocode for the whole app: three independent sources, tried in
+// order, so a single provider being rate-limited no longer drops the user back
+// to raw coordinates. Returns "" only if all three come up empty.
+async function resolvePlaceLabel(lat,lon){
+  let state="";
+  try{
+    const r=await fetchWithTimeout(
+      `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`,{},9000);
+    const d=await r.json();
+    state=bdcState(d)||state;
+    const v=placeLabel(d,lat,lon);
+    if(v)return v;
+  }catch(e){}
+  try{
+    const r=await fetchWithTimeout(
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&addressdetails=1&lat=${lat}&lon=${lon}`,
+      {headers:{"Accept":"application/json"}},9000);
+    const d=await r.json();
+    const v=nominatimLabel(d);
+    if(v)return v;
+  }catch(e){}
+  try{
+    const v=await nearestTownLabel(lat,lon,state);
+    if(v)return v;
+  }catch(e){}
+  return "";
 }
 
 async function pickFindLocation(lat,lon,label){
@@ -1256,15 +1342,13 @@ async function pickFindLocation(lat,lon,label){
     return;
   }
   updateFindMap(lat,lon,"Locating...");
-  try{
-    const r=await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`);
-    const d=await r.json();
-    const val=placeLabel(d,lat,lon);
-    if(input)input.value=val;
-    updateFindMap(lat,lon,val);
-  }catch(e){
-    if(input)input.value=`${lat.toFixed(4)}, ${lon.toFixed(4)}`;
-  }
+  // Coordinates only if all three providers came up empty. The server accepts
+  // them, but it resolves them with the same reverse geocode that just failed,
+  // so a scan from a coordinate pair usually ends up with no city and no
+  // portals to read — it looks like it worked and quietly finds nothing.
+  const val=(await resolvePlaceLabel(lat,lon))||`${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+  if(input)input.value=val;
+  updateFindMap(lat,lon,val);
   refreshFindTownMarkers(lat,lon);
 }
 
@@ -1296,15 +1380,9 @@ function createLocationPicker(containerId,inputId){
   async function pick(lat,lon){
     const input=document.getElementById(inputId);
     show(lat,lon,"Locating...");
-    try{
-      const r=await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`);
-      const d=await r.json();
-      const val=placeLabel(d,lat,lon);
-      if(input)input.value=val;
-      show(lat,lon,val);
-    }catch(e){
-      if(input)input.value=`${lat.toFixed(4)}, ${lon.toFixed(4)}`;
-    }
+    const val=(await resolvePlaceLabel(lat,lon))||`${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+    if(input)input.value=val;
+    show(lat,lon,val);
   }
   return {show, invalidateSize:()=>{if(st.map)st.map.invalidateSize();}};
 }
@@ -1321,17 +1399,19 @@ async function detectLocation(fillInput){
     try{
       const{latitude,longitude}=pos.coords;
       updateFindMap(latitude,longitude,"You are here");
-      const r=await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`);
-      const d=await r.json();
-      const val=placeLabel(d,latitude,longitude);
+      const val=await resolvePlaceLabel(latitude,longitude);
       if(val){
         updateFindMap(latitude,longitude,val);
         refreshFindTownMarkers(latitude,longitude);
         const input=document.getElementById("loc-input");
         if(input&&(fillInput||!input.value.trim()))input.value=val;
         if(fillInput)toast("\u{1F4CD} "+val);
+      }else if(fillInput){
+        // Never silently drop a coordinate pair in the box here. The user asked
+        // for their town; a number they can't check is worse than being told.
+        toast("Couldn't name your location — type a town or ZIP.");
       }
-    }catch(e){}
+    }catch(e){if(fillInput)toast("Couldn't detect your location — enter a ZIP instead.");}
   },()=>{if(fillInput)toast("Couldn't detect your location — enter a ZIP instead.");},
   {timeout:10000,maximumAge:600000});
 }
