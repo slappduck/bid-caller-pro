@@ -8,8 +8,12 @@ Covers three holes:
   * /mykey resolved by device id only, so a purchase made from the marketing
     site (whose Stripe links carry no device id) never unlocked the app.
 """
+import hashlib
+import hmac
+import json
 import os
 import sys
+import time
 import unittest
 from unittest.mock import patch
 
@@ -130,6 +134,51 @@ class MyKeyTests(unittest.TestCase):
              patch.object(ls, "verify_key", return_value=(True, "monthly", "2027-01-01", None)):
             r = self.client.post("/mykey", json={"device_id": "web-abc", "supabase_token": "t"})
         self.assertEqual(r.get_json()["reason"], "inactive")
+
+
+class StripeWebhookTests(unittest.TestCase):
+    """STRIPE_WEBHOOK_SECRET was read in _stripe_verify() but never assigned
+    anywhere, so every real webhook POST raised NameError (500) instead of
+    verifying or rejecting the signature -- purchases stopped auto-issuing
+    keys. These pin the fixed behaviour: a real signature is accepted, a bad
+    one is rejected, and neither case raises."""
+
+    def setUp(self):
+        self.client = ls.app.test_client()
+
+    def _signed(self, body, secret):
+        payload = json.dumps(body).encode("utf-8")
+        t = str(int(time.time()))
+        signed = f"{t}.{payload.decode('utf-8')}".encode("utf-8")
+        v1 = hmac.new(secret.encode(), signed, hashlib.sha256).hexdigest()
+        return payload, f"t={t},v1={v1}"
+
+    def test_unconfigured_secret_rejects_without_crashing(self):
+        with patch.object(ls, "STRIPE_WEBHOOK_SECRET", ""):
+            r = self.client.post("/stripe/webhook", data=b"{}",
+                                  headers={"Stripe-Signature": "t=1,v1=deadbeef"})
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.get_json()["reason"], "bad_signature")
+
+    def test_wrong_signature_is_rejected(self):
+        payload, _ = self._signed({"type": "checkout.session.completed"}, "right-secret")
+        with patch.object(ls, "STRIPE_WEBHOOK_SECRET", "right-secret"):
+            r = self.client.post("/stripe/webhook", data=payload,
+                                  headers={"Stripe-Signature": "t=1,v1=deadbeef"})
+        self.assertEqual(r.status_code, 400)
+
+    def test_correct_signature_issues_a_key(self):
+        body = {"type": "checkout.session.completed",
+                 "data": {"object": {"customer_email": BUYER, "amount_total": 5000}}}
+        payload, sig = self._signed(body, "right-secret")
+        with patch.object(ls, "STRIPE_WEBHOOK_SECRET", "right-secret"), \
+             patch.object(ls, "_db", return_value={}), \
+             patch.object(ls, "_save_db"), \
+             patch.object(ls, "_send_key_email"):
+            r = self.client.post("/stripe/webhook", data=payload,
+                                  headers={"Stripe-Signature": sig})
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.get_json()["ok"])
 
 
 if __name__ == "__main__":
