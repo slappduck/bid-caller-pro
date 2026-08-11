@@ -2684,12 +2684,11 @@ def _perform_scan(location, radius, force=False):
         c, s = center["city"], center["state"]
         seen_urls = set()
         lock = threading.Lock()
-        center_queries = [
-            f"{c} {s} sidewalk replacement concrete construction bid invitation",
-            f"{c} {s} ADA ramp curb gutter concrete bid opportunities",
-            f"{c} {s} concrete flatwork sidewalk public works solicitation",
-            f"{c} {s} city county sidewalk curb concrete RFP",
-            f"{s} concrete sidewalk ADA curb bids near {c}",
+        # Queries that check something a direct read of the city's own bid
+        # page structurally cannot: a different entity entirely (school
+        # district, county, state portal) or a platform aggregator. Always
+        # worth running, known-portal hit or not.
+        center_queries_always = [
             f"{c} {s} school district sidewalk ADA concrete project bid",
             f"{c} {s} sidewalk ADA curb bid site:bidnetdirect.com OR site:demandstar.com",
             f"{c} {s} sidewalk ADA curb bid site:planetbids.com OR site:publicpurchase.com",
@@ -2697,14 +2696,27 @@ def _perform_scan(location, radius, force=False):
             f"{c} {s} sidewalk ADA curb bid site:bonfirehub.com",
             f"{c} {s} sidewalk ADA curb bid site:civicplus.com OR site:municode.com",
             f"{c} {s} sidewalk ADA curb bid site:bidexpress.com",
-            f"{c} {s} invitation to bid concrete sidewalk 2026",
             f"{c} {s} county road department concrete curb bid notice",
             f"{c} {s} Safe Routes to School OR ADA transition plan sidewalk bid",
             f"{c} {s} CDBG sidewalk curb ramp bid notice to contractors",
             f"{c} {s} sidewalk ADA curb bid site:bidsearch.com",
         ]
         if center["state"] == "MO":
-            center_queries.append(f"{c} {s} sidewalk ADA curb bid site:missouribuys.mo.gov")
+            center_queries_always.append(f"{c} {s} sidewalk ADA curb bid site:missouribuys.mo.gov")
+        # Generic re-phrasings of "does this city have a sidewalk bid" --
+        # redundant once _run_known_portals already read the city's own bid
+        # page directly and found something real there, since a working
+        # direct source is the authoritative answer to that exact question.
+        # Only worth the Tavily-credit cost when there's no working direct
+        # source to trust instead.
+        center_queries_generic = [
+            f"{c} {s} sidewalk replacement concrete construction bid invitation",
+            f"{c} {s} ADA ramp curb gutter concrete bid opportunities",
+            f"{c} {s} concrete flatwork sidewalk public works solicitation",
+            f"{c} {s} city county sidewalk curb concrete RFP",
+            f"{s} concrete sidewalk ADA curb bids near {c}",
+            f"{c} {s} invitation to bid concrete sidewalk 2026",
+        ]
 
         anchors = _nearby_anchor_towns(center, radius)
 
@@ -2723,7 +2735,12 @@ def _perform_scan(location, radius, force=False):
             got = _run_known_portals(c, s, f"{c}, {s}", grouped, center, radius,
                                       cdb, city_coords, lock, pdb, default_city=c,
                                       town_coords=center_coords, stats=drop_stats)
-            got += _run_local_queries(center_queries, f"{c}, {s}", MAX_PAGES,
+            # A hit here (got > 0) means the city's own bid page was read
+            # directly and had something real on it -- the generic queries
+            # would only be re-asking a question that page already answered.
+            queries = (center_queries_always if got > 0
+                      else center_queries_always + center_queries_generic)
+            got += _run_local_queries(queries, f"{c}, {s}", MAX_PAGES,
                                       grouped, center, radius, cdb, city_coords,
                                       seen_urls, lock, pdb, default_city="", state=s,
                                       town_coords=center_coords, stats=drop_stats)
@@ -2732,20 +2749,24 @@ def _perform_scan(location, radius, force=False):
 
         def _run_anchor(anchor):
             ac, ast, alat, alon = anchor
-            anchor_queries = [
-                f"{ac} {ast} sidewalk ADA curb concrete bid invitation",
+            anchor_queries_always = [
                 f"{ac} {ast} sidewalk ADA curb bid site:bidnetdirect.com OR site:demandstar.com",
                 f"{ac} {ast} sidewalk ADA curb bid site:planetbids.com OR site:publicpurchase.com",
                 f"{ac} {ast} concrete curb gutter bid Bonfire OpenGov CivicPlus procurement",
-                f"{ac} {ast} invitation to bid concrete sidewalk ADA ramp 2026",
                 f"{ac} {ast} sidewalk ADA curb bid site:bidsearch.com",
             ]
             if ast == "MO":
-                anchor_queries.append(f"{ac} {ast} sidewalk ADA curb bid site:missouribuys.mo.gov")
+                anchor_queries_always.append(f"{ac} {ast} sidewalk ADA curb bid site:missouribuys.mo.gov")
+            anchor_queries_generic = [
+                f"{ac} {ast} sidewalk ADA curb concrete bid invitation",
+                f"{ac} {ast} invitation to bid concrete sidewalk ADA ramp 2026",
+            ]
             got = _run_known_portals(ac, ast, f"{ac}, {ast}", grouped, center, radius,
                                       cdb, city_coords, lock, pdb, default_city=ac,
                                       town_coords=(alat, alon), stats=drop_stats)
-            got += _run_local_queries(anchor_queries, f"{ac}, {ast}", 5,
+            queries = (anchor_queries_always if got > 0
+                      else anchor_queries_always + anchor_queries_generic)
+            got += _run_local_queries(queries, f"{ac}, {ast}", 5,
                                       grouped, center, radius, cdb, city_coords,
                                       seen_urls, lock, pdb, default_city=ac, state=ast,
                                       town_coords=(alat, alon), stats=drop_stats)
