@@ -11,6 +11,7 @@ This is the single most expensive class of bug in the product: it costs a bid
 that was already found and paid for, and it looks from the outside exactly like
 "there is no work in your area".
 """
+import datetime
 import os
 import sys
 import threading
@@ -72,6 +73,9 @@ class KeptAndTotalAgreeTests(unittest.TestCase):
             ls._place_bid(grouped, dict(b), self.CENTER, 25, cdb,
                           default_city="Springfield", default_state="MO",
                           fallback_coords=(37.209, -93.292), stats=stats)
+        # Same closing step the scan runs, so the funnel here means what it
+        # means in production rather than drifting from it.
+        ls._count_kept_closed(grouped, stats)
         total = sum(1 for v in grouped.values() for b in v if ls._is_open_bid(b))
         return grouped, stats, total
 
@@ -187,6 +191,127 @@ class SearchTownFallbackTests(unittest.TestCase):
         grouped, stats = self._place("Greene County, NY")
         self.assertEqual(grouped, {})
         self.assertEqual(stats.get("unresolvable_place"), 1)
+
+
+class StaleYearTests(unittest.TestCase):
+    """A live Springfield scan reported four open bids in August 2026, all of
+    them "2025 Sidewalk Program - Scope of Work SW-1..4" with no deadline. An
+    undated bid is assumed open, which is right for a new posting and wrong for
+    last year's programme still sitting on a portal."""
+
+    def test_last_years_programme_is_not_open(self):
+        for title in ("2025 Sidewalk Program – Scope of Work SW - 1",
+                      "2024 ADA Curb Ramp Project",
+                      "FY2023 Concrete Flatwork Contract"):
+            with self.subTest(title=title):
+                bid = {"title": title, "status": "Open", "deadline": ""}
+                ls._apply_stale_year(bid)
+                self.assertFalse(ls._is_open_bid(bid), title)
+
+    def test_this_year_and_next_are_left_open(self):
+        year = datetime.datetime.now().year
+        for title in (f"{year} Sidewalk Program", f"{year + 1} ADA Improvements"):
+            with self.subTest(title=title):
+                bid = {"title": title, "status": "Open", "deadline": ""}
+                ls._apply_stale_year(bid)
+                self.assertTrue(ls._is_open_bid(bid), title)
+
+    def test_a_multi_year_programme_is_left_alone(self):
+        # "2025-2026" names a past year but is still current.
+        bid = {"title": "2025-2026 Sidewalk Replacement Program",
+               "status": "Open", "deadline": ""}
+        ls._apply_stale_year(bid)
+        self.assertTrue(ls._is_open_bid(bid))
+
+    def test_a_stated_deadline_always_wins_over_the_title(self):
+        # An old programme number with a live deadline is a real open bid.
+        future = f"12/1/{datetime.datetime.now().year + 1}"
+        bid = {"title": "2019PW0028 Sidewalk Repair", "status": "Open",
+               "deadline": future}
+        ls._apply_stale_year(bid)
+        self.assertTrue(ls._is_open_bid(bid))
+
+    def test_a_title_with_no_year_is_untouched(self):
+        bid = {"title": "Sidewalk Replacement Program", "status": "Open",
+               "deadline": ""}
+        ls._apply_stale_year(bid)
+        self.assertTrue(ls._is_open_bid(bid))
+
+    def test_garbage_input_does_not_raise(self):
+        for bad in (None, {}, {"title": None}, "not a bid"):
+            with self.subTest(bad=bad):
+                ls._apply_stale_year(bad)
+
+
+class EnrichEveryPlacedBidTests(unittest.TestCase):
+    """Enrichment used to live inside the structured CivicPlus reader only, so
+    a bid that arrived via search kept its blank contact fields. A live scan
+    placed eleven bids and reported no contacts_found at all."""
+
+    PAGE = ("<p>Description: Replace 900 LF of sidewalk.</p>"
+            "<p>Contact Person: Dale Prentice</p>"
+            "<p>dprentice@example-city.gov</p><p>(417) 555-0143</p>"
+            "<p>Closing Date/Time: 12/1/2026 2:00 PM</p>")
+
+    def test_a_search_path_bid_gets_its_contacts(self):
+        grouped = {"Springfield": [
+            {"title": "2026 Sidewalk Program", "url": "https://x.gov/bid/9",
+             "status": "Open", "deadline": ""}]}
+        stats = {}
+        with patch.object(ls, "_fetch_page", return_value=(self.PAGE, "ok")):
+            ls._enrich_placed_bids(grouped, stats)
+        bid = grouped["Springfield"][0]
+        self.assertEqual(bid["email"], "dprentice@example-city.gov")
+        self.assertEqual(bid["phone"], "(417) 555-0143")
+        self.assertEqual(stats.get("contacts_found"), 1, stats)
+
+    def test_a_bid_that_already_has_contacts_is_not_refetched(self):
+        grouped = {"X": [{"title": "A", "url": "https://x.gov/1",
+                          "email": "known@city.gov"}]}
+        with patch.object(ls, "_fetch_page", side_effect=AssertionError("fetched!")):
+            ls._enrich_placed_bids(grouped, {})
+
+    def test_undated_bids_are_enriched_first(self):
+        # A missing deadline is worse than a missing phone number: it also
+        # stops an expired listing being recognised as expired.
+        order = []
+
+        def record(url, timeout=None):
+            order.append(url)
+            return "", "ok"
+
+        grouped = {"X": [
+            {"title": "dated", "url": "https://x.gov/dated", "deadline": "12/1/2026"},
+            {"title": "undated", "url": "https://x.gov/undated", "deadline": ""}]}
+        with patch.object(ls, "_fetch_page", side_effect=record), \
+             patch.object(ls, "ENRICH_MAX", 1):
+            ls._enrich_placed_bids(grouped, {})
+        self.assertEqual(order, ["https://x.gov/undated"], order)
+
+    def test_a_deadline_found_late_still_closes_the_bid(self):
+        page = "<p>Closing Date/Time: 3/1/2019 2:00 PM</p><p>x@city.gov</p>"
+        grouped = {"X": [{"title": "Sidewalk", "url": "https://x.gov/1",
+                          "status": "Open", "deadline": ""}]}
+        stats = {}
+        with patch.object(ls, "_fetch_page", return_value=(page, "ok")):
+            ls._enrich_placed_bids(grouped, stats)
+        ls._count_kept_closed(grouped, stats)
+        self.assertFalse(ls._is_open_bid(grouped["X"][0]))
+        self.assertEqual(stats.get("kept_but_closed"), 1, stats)
+
+    def test_the_work_is_bounded(self):
+        fetched = []
+        grouped = {"X": [{"title": f"J{i}", "url": f"https://x.gov/{i}"}
+                         for i in range(40)]}
+        with patch.object(ls, "_fetch_page",
+                          side_effect=lambda u, timeout=None: (fetched.append(u), ("", "ok"))[1]):
+            ls._enrich_placed_bids(grouped, {})
+        self.assertLessEqual(len(fetched), ls.ENRICH_MAX, len(fetched))
+
+    def test_empty_input_is_handled(self):
+        for bad in (None, {}, {"X": []}):
+            with self.subTest(bad=bad):
+                ls._enrich_placed_bids(bad, {})
 
 
 class OutOfStateAuthorityTests(unittest.TestCase):

@@ -360,6 +360,17 @@ _SCOPE_LABEL_RE = re.compile(
     re.I | re.S)
 
 
+def detail_deadline(html):
+    """The closing date stated on a posting page, or "" if none is given.
+
+    Worth as much as the contact details: a bid with no deadline gets no
+    urgency ranking, and — more expensively — cannot be recognised as expired,
+    so last year's listing shows as open indefinitely.
+    """
+    m = _CLOSE_RE.search(_clean(_unescape(html)))
+    return m.group(1).strip() if m else ""
+
+
 def detail_scope(html):
     """The project description from a posting page, or "" if none is labelled."""
     blob = _clean(_unescape(html))

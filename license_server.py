@@ -2025,9 +2025,15 @@ def _enrich_from_detail_pages(rows, stats=None, lock=None):
             if found.get(field) and not row.get(field):
                 row[field] = found[field]
                 got = True
-        # The detail page also carries the real scope, where the listing only
-        # had a title. Worth taking: the relevance filter and the AI ranking
-        # both read scope, and an empty one makes a good bid look thin.
+        # The posting also carries the closing date and the real scope, where
+        # a listing row had only a title. The deadline matters most: without
+        # one a bid gets no urgency ranking and cannot be recognised as
+        # expired, so last year's programme shows as open indefinitely.
+        if not str(row.get("deadline") or "").strip():
+            due = bid_sources.detail_deadline(page)
+            if due:
+                row["deadline"] = due
+                got = True
         if not row.get("scope"):
             body = bid_sources.detail_scope(page)
             if body:
@@ -2476,14 +2482,74 @@ def _place_bid(grouped, bid, center, radius, db, default_city="", city_coords=No
     bucket.append(bid)
     _count("kept")
     # "kept" counts bids that made it into the result; the reported total counts
-    # only the OPEN ones. When those two disagree the difference is invisible,
-    # and a scan that placed seven bids and reported zero looked like a bug in
-    # the geography rather than what it was — everything found had been ruled
-    # expired. Count the gap so the funnel explains itself.
-    if not _is_open_bid(bid):
-        _count("kept_but_closed")
+    # only the OPEN ones. That gap used to be invisible, and a scan that placed
+    # seven bids and reported zero looked like a bug in the geography rather
+    # than what it was — everything found had been ruled expired. The closed
+    # count is taken at the end of the scan, once enrichment has had its say.
     if city_coords is not None:
         city_coords[label] = {"lat": coords[0], "lon": coords[1]}
+
+
+ENRICH_MAX = int(os.environ.get("SCAN_ENRICH_MAX", "14"))
+
+
+def _count_kept_closed(grouped, stats):
+    """Record how many kept bids are not open, so the funnel agrees with the
+    reported total. Taken at the end of a scan rather than during placement,
+    because enrichment can turn up a deadline that closes a bid after the fact.
+    """
+    if stats is None:
+        return
+    stats.pop("kept_but_closed", None)
+    closed = sum(1 for v in (grouped or {}).values()
+                 for b in v if not _is_open_bid(b))
+    if closed:
+        stats["kept_but_closed"] = closed
+
+
+def _enrich_placed_bids(grouped, stats=None):
+    """Fill in contacts and deadlines for bids that survived the radius filter.
+
+    Runs against every source, not just the structured reader, and only on
+    bids that actually made it into the result — so the cost is a dozen fetches
+    at most, rather than one per thing the search turned up.
+    """
+    todo = [b for bids in (grouped or {}).values() for b in bids
+            if isinstance(b, dict) and b.get("url")
+            and not (b.get("email") or b.get("phone") or b.get("contact"))]
+    # Undated bids first: a missing deadline is worse than a missing phone
+    # number, because it also stops an expired listing being recognised.
+    todo.sort(key=lambda b: bool(str(b.get("deadline") or "").strip()))
+    _enrich_from_detail_pages(todo[:ENRICH_MAX], stats=stats)
+    for bid in todo[:ENRICH_MAX]:
+        _apply_deadline_status(bid)
+    for bids in (grouped or {}).values():
+        for bid in bids:
+            _apply_stale_year(bid)
+
+
+_YEAR_RE = re.compile(r"(?<!\d)(20\d{2})(?!\d)")
+
+
+def _apply_stale_year(bid):
+    """Close an undated bid whose own title is from a past year.
+
+    A live scan returned four rows titled "2025 Sidewalk Program - Scope of
+    Work SW-1..4" as open, in August 2026. They carried no deadline, and with
+    nothing to check against, an undated bid is assumed open — which is right
+    for a genuinely new posting and wrong for last year's programme still
+    sitting on a portal. Only fires when the deadline is empty AND every year
+    named is in the past, so "2025-2026 Programme" is left alone.
+    """
+    if not isinstance(bid, dict) or str(bid.get("deadline") or "").strip():
+        return bid
+    if not _is_open_bid(bid):
+        return bid
+    years = [int(y) for y in _YEAR_RE.findall(
+        f"{bid.get('title') or ''} {bid.get('scope') or ''}")]
+    if years and max(years) < datetime.datetime.now().year:
+        bid["status"] = "Closed"
+    return bid
 
 
 def _perform_scan(location, radius, force=False):
@@ -2630,8 +2696,18 @@ def _perform_scan(location, radius, force=False):
                       city_coords=city_coords, default_state=perf_state,
                       stats=drop_stats)
 
+    # Read the posting behind every bid that still has no contact and no
+    # deadline. Enrichment used to happen only inside the structured CivicPlus
+    # reader, so a bid that arrived via search — which is most of them — kept
+    # its blank fields: a live Springfield scan placed eleven bids and reported
+    # no contacts_found at all, because that branch never ran. Doing it here
+    # instead covers every source, and it runs on the handful of bids that
+    # survived the radius rather than everything the search turned up.
+    _enrich_placed_bids(grouped, drop_stats)
+
     for city_bids in grouped.values():
         city_bids.sort(key=_score_bid, reverse=True)
+    _count_kept_closed(grouped, drop_stats)
 
     # Open bids only. Closed ones are still returned (ranked last) but counting
     # them made the reported total disagree with what the app shows: a scan

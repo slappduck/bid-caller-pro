@@ -422,3 +422,33 @@ class CandidateUrlTests(unittest.TestCase):
         for bad in ("", None, "   "):
             with self.subTest(bad=bad):
                 self.assertEqual(bs.candidate_bid_urls(bad), [])
+
+
+class DetailDeadlineTests(unittest.TestCase):
+    """A bid with no deadline gets no urgency ranking and cannot be recognised
+    as expired — which is how four 2025 listings showed as open in 2026."""
+
+    def test_pulls_the_closing_date_from_a_posting(self):
+        self.assertEqual(bs.detail_deadline(DETAIL_PAGE), "12/1/2026")
+
+    def test_handles_the_label_shapes_real_sites_use(self):
+        for html, want in (
+            ("<p>Bid Opening Date/Time: March 3, 2026 10:00 AM</p>", "March 3, 2026"),
+            ("<p>Due Date and Time: 2026-11-20</p>", "2026-11-20"),
+            ("<p>Bids due by 12/15/2026 at 2:00 p.m.</p>", "12/15/2026"),
+            ("<p>Proposals due January 8, 2027</p>", "January 8, 2027"),
+        ):
+            with self.subTest(html=html):
+                self.assertEqual(bs.detail_deadline(html), want)
+
+    def test_a_publication_date_is_not_a_deadline(self):
+        self.assertEqual(
+            bs.detail_deadline("<p>Publication Date/Time: 7/1/2026 8:00 AM</p>"), "")
+
+    def test_no_date_yields_nothing(self):
+        self.assertEqual(bs.detail_deadline("<p>Sidewalk work citywide.</p>"), "")
+
+    def test_garbage_input_does_not_raise(self):
+        for bad in ("", None, 12345):
+            with self.subTest(bad=bad):
+                self.assertEqual(bs.detail_deadline(bad), "")
