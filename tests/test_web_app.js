@@ -718,8 +718,8 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
     await page.waitForTimeout(1200);
 
-    const label = (payload) =>
-      page.evaluate((d) => placeLabel(d, 37.1043, -93.4021), payload);
+    const label = (payload) => page.evaluate((d) => placeLabel(d), payload);
+    const coarse = (payload) => page.evaluate((d) => coarseLabel(d), payload);
 
     const inCity = {
       principalSubdivisionCode: "US-MO", city: "Springfield",
@@ -741,8 +741,13 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     };
     check("a township is never shown as your location",
       !/township/i.test(await label(rural)), await label(rural));
-    check("it falls back to the county, which does let curb work",
-      (await label(rural)) === "Greene County, MO", await label(rural));
+    // A county must NOT satisfy the first provider. Standing outside Bolivar,
+    // BigDataCloud has no municipality and would answer "Polk County", which
+    // stopped the chain before the two providers that can say "Bolivar".
+    check("a county does not count as naming a town",
+      (await label(rural)) === "", await label(rural));
+    check("the county is still kept in reserve",
+      (await coarse(rural)) === "Greene County, MO", await coarse(rural));
 
     const smallTown = {
       principalSubdivisionCode: "US-MO", city: "Fair Grove",
@@ -752,7 +757,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
       (await label(smallTown)) === "Fair Grove, MO", await label(smallTown));
 
     check("a ZIP is still better than coordinates when there is no place name",
-      (await label({ principalSubdivisionCode: "US-MO", postcode: "65714" })) === "65714");
+      (await coarse({ principalSubdivisionCode: "US-MO", postcode: "65714" })) === "65714");
     check("an unusable payload yields nothing, so the next provider is tried",
       (await label({})) === "", JSON.stringify(await label({})));
 
@@ -800,6 +805,26 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
 
     check("all three failing returns empty, so callers can say so",
       (await withProviders(null, null, null)) === "");
+
+    // Standing just outside Bolivar: the first provider knows only the county.
+    // It must not win while a provider that can name the town is untried.
+    const COUNTY_ONLY = {
+      principalSubdivisionCode: "US-MO", city: "", locality: "Polk County",
+      postcode: "65613",
+      localityInfo: { administrative: [{ name: "Polk County", adminLevel: 6 }] },
+    };
+    check("a county from the first provider does not beat a town from the second",
+      (await withProviders(COUNTY_ONLY, NOMINATIM, null)) === "Bolivar, MO",
+      await withProviders(COUNTY_ONLY, NOMINATIM, null));
+    check("nor does it beat the nearest town from OpenStreetMap",
+      (await withProviders(COUNTY_ONLY, {}, OVERPASS)) === "Bolivar, MO",
+      await withProviders(COUNTY_ONLY, {}, OVERPASS));
+    check("the county is used once no provider can name a town",
+      (await withProviders(COUNTY_ONLY, {}, { elements: [] })) === "Polk County, MO",
+      await withProviders(COUNTY_ONLY, {}, { elements: [] }));
+    check("a ZIP beats nothing when there is not even a county",
+      (await withProviders({ principalSubdivisionCode: "US-MO", postcode: "65613" },
+        {}, { elements: [] })) === "65613");
 
     for (const bad of [null, { localityInfo: null }, { localityInfo: { administrative: [null, 7, "x"] } }]) {
       check(`malformed payload does not throw: ${JSON.stringify(bad)}`,

@@ -1218,36 +1218,48 @@ async function refreshFindTownMarkers(lat,lon){
 // with an "of" prefix ("Township of Rock Prairie").
 const NON_PLACE_RE=/\b(township|twp|unincorporated|unorganized|census[\s-]designated|CDP|precinct|ward|reservation)\b/i;
 
-// Turn a reverse-geocode response into a label a contractor recognises.
+// Name the TOWN in a reverse-geocode response, or "" if it names none.
 //
-// This used to prefer the raw postcode, then fall back to `locality` — which
-// in rural areas is the civil township — and then to bare coordinates. So
-// hitting Use My Location outside a city showed "37.1043, -93.4021" or a
-// township nobody has heard of. The same text is what gets sent to /scan, and
-// a township has no procurement office and no registered domain, so the scan
-// searched for a buyer that does not exist.
+// A county is deliberately not accepted here. Standing just outside Bolivar,
+// BigDataCloud has no municipality to give and would happily answer "Polk
+// County" — so the chain stopped at the first provider and never reached the
+// two that can actually say "Bolivar". A county is a real fallback, but only
+// after every provider has failed to name a town, which is why it is collected
+// separately by resolvePlaceLabel rather than returned from here.
 //
-// Prefers the municipality, then any locality that isn't a bare civil
-// division, then the county — which does let road and curb work. Postcode and
-// coordinates remain as last resorts so this can always return something.
-// Returns "" when the payload names no usable place. It must NOT fall back to
-// coordinates: callers guard on the empty string to decide whether to try the
-// next provider, and a coordinate string looks like success to that guard.
-function placeLabel(d,lat,lon){
+// Also excluded: the civil township `locality` reports in rural areas
+// ("Township of Rock Prairie"), which is not a place anyone lets a bid from.
+function placeLabel(d){
   d=d||{};
   const state=bdcState(d);
   const admin=((d.localityInfo||{}).administrative)||[];
   const named=lvl=>admin
     .filter(e=>e&&typeof e==="object"&&e.adminLevel===lvl&&e.name)
     .map(e=>String(e.name).trim());
-  // adminLevel 8 is the municipality, 7 the civil township, 6 the county.
-  const candidates=[d.city,...named(8),d.locality,...named(7),...named(6)]
+  // adminLevel 8 is the municipality; 7 is the civil township, 6 the county.
+  const candidates=[d.city,...named(8),d.locality]
     .map(s=>String(s||"").trim()).filter(Boolean);
   for(const name of candidates){
-    if(!NON_PLACE_RE.test(name))return state?`${name}, ${state}`:name;
+    if(!NON_PLACE_RE.test(name)&&!COUNTY_RE.test(name))
+      return state?`${name}, ${state}`:name;
   }
-  if(d.postcode)return String(d.postcode);
   return "";
+}
+
+const COUNTY_RE=/\b(count(?:y|ies)|parish|borough)\b/i;
+
+// The county, or failing that the ZIP — held in reserve by resolvePlaceLabel
+// and used only when no provider could name a town.
+function coarseLabel(d){
+  d=d||{};
+  const state=bdcState(d);
+  const admin=((d.localityInfo||{}).administrative)||[];
+  const county=admin
+    .filter(e=>e&&typeof e==="object"&&e.adminLevel===6&&e.name)
+    .map(e=>String(e.name).trim())[0]
+    ||(COUNTY_RE.test(String(d.locality||""))?String(d.locality).trim():"");
+  if(county)return state?`${county}, ${state}`:county;
+  return d.postcode?String(d.postcode):"";
 }
 function bdcState(d){
   return String((d&&d.principalSubdivisionCode)||"").split("-").pop();
@@ -1271,11 +1283,18 @@ const US_STATE_ABBR={"alabama":"AL","alaska":"AK","arizona":"AZ","arkansas":"AR"
 function nominatimLabel(d){
   const a=(d&&d.address)||{};
   const state=US_STATE_ABBR[String(a.state||"").toLowerCase()]||"";
-  const name=[a.city,a.town,a.village,a.hamlet,a.municipality,a.county]
+  // Towns only, same reasoning as placeLabel — county is held in reserve.
+  const name=[a.city,a.town,a.village,a.hamlet,a.municipality]
     .map(s=>String(s||"").trim())
-    .find(s=>s&&!NON_PLACE_RE.test(s));
-  if(!name)return a.postcode?String(a.postcode):"";
-  return state?`${name}, ${state}`:name;
+    .find(s=>s&&!NON_PLACE_RE.test(s)&&!COUNTY_RE.test(s));
+  return name?(state?`${name}, ${state}`:name):"";
+}
+function nominatimCoarse(d){
+  const a=(d&&d.address)||{};
+  const state=US_STATE_ABBR[String(a.state||"").toLowerCase()]||"";
+  const county=String(a.county||"").trim();
+  if(county)return state?`${county}, ${state}`:county;
+  return a.postcode?String(a.postcode):"";
 }
 
 function milesBetween(lat1,lon1,lat2,lon2){
@@ -1309,14 +1328,15 @@ async function nearestTownLabel(lat,lon,state){
 // order, so a single provider being rate-limited no longer drops the user back
 // to raw coordinates. Returns "" only if all three come up empty.
 async function resolvePlaceLabel(lat,lon){
-  let state="";
+  let state="",coarse="";
   try{
     const r=await fetchWithTimeout(
       `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`,{},9000);
     const d=await r.json();
     state=bdcState(d)||state;
-    const v=placeLabel(d,lat,lon);
+    const v=placeLabel(d);
     if(v)return v;
+    coarse=coarse||coarseLabel(d);
   }catch(e){}
   try{
     const r=await fetchWithTimeout(
@@ -1325,12 +1345,14 @@ async function resolvePlaceLabel(lat,lon){
     const d=await r.json();
     const v=nominatimLabel(d);
     if(v)return v;
+    coarse=coarse||nominatimCoarse(d);
   }catch(e){}
   try{
     const v=await nearestTownLabel(lat,lon,state);
     if(v)return v;
   }catch(e){}
-  return "";
+  // Only now: the county, or a ZIP. Both are scannable; neither is a town.
+  return coarse;
 }
 
 async function pickFindLocation(lat,lon,label){
