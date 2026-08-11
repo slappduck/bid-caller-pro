@@ -47,10 +47,16 @@ Nothing else can be judged until we can see what's happening.
 - [x] Per-scan funnel in `/scan`'s debug and in the Render log
 - [ ] **Confirm the Tavily allowance** — check `/health` and the Tavily
       dashboard. If it's spent, that alone explains the current result
-- [ ] **Recall benchmark.** A fixed list of real bids known to be open near
-      Springfield and Aurora, and a script that reports what fraction the
-      scanner finds. This is the number that has to go up; without it every
-      change after this is guesswork
+- [~] **Recall benchmark.** `tools/recall_benchmark.py` exists and runs
+      against real, verified Springfield markup (see Ground truth section
+      below): every currently-open posting found, plus a trade-relevance
+      check against the two real (now-closed) FY25 sidewalk bids. Aurora
+      can't be added yet — the sandbox's network policy currently rejects
+      every host except `springfieldmo.gov`; the benchmark script is written
+      to take more `{city, state, url}` entries as soon as that's widened or
+      it's run somewhere unrestricted. No currently-open concrete bid exists
+      anywhere in the ring right now to give a real live-recall percentage
+      against — that's the next thing to catch, by hand, the moment one posts
 
 ## Phase 1 — Read the platforms directly
 
@@ -129,25 +135,53 @@ caps how much ground a scan can cover.
 
 ## Ground truth for Springfield, MO
 
-Known-good sources, found by hand in about a minute:
+**Correction (Aug 2026):** the two bids previously listed here — "Springfield
+ADA Improvement Project" and "Mt. Vernon & Miller Sidewalks" — do not exist
+anywhere on `springfieldmo.gov`, including its closed/awarded archive. A live
+fetch of `Bids.aspx?showAllBids=on` (231 postings, every status, back through
+2025) was searched for "ADA Improvement", "Mt Vernon", and "Miller" and found
+none. They were not "found by hand" as previously claimed here — they were
+fabricated. Every fixture in `tests/test_bid_sources.py` built from this same
+unverified pass had the same problem: the parsers were checked against
+markup shapes nobody had actually looked at (see the commits that replaced
+`CIVICPLUS_REAL_HTML` and `DETAIL_PAGE` with real captures).
 
-| Source | What it is |
-|---|---|
-| `springfieldmo.gov/Bids.aspx` | CivicPlus listing — every open city solicitation |
-| `springfieldmo.gov/5375/Current-Bid-Notices` | Human-readable index |
-| DemandStar / Euna OpenBids | Where the city takes submissions |
-| `springfieldcontractors.org/category/bid-calendar/` | Association calendar — dense in this exact trade |
-| `sgfcitizen.org/public-notices/` | Statutory public notices |
+What a live fetch on 2026-08-11 actually shows:
 
-Two bids that were open and that the scanner missed:
+- **Currently open, all of Springfield:** 3 bids — ice machine rental, an
+  airport PA system, and a skate/pro shop concession. None involve concrete.
+  This is real, not a scanner bug: the city simply has no open sidewalk/curb
+  work right now.
+- **Real, but closed:** two genuine sidewalk jobs exist in the archive —
+  **FY25 Sidewalk Improvements (2025PW0001)**, awarded 7/16/2025, and **FY25
+  Sidewalk Improvements Zone 4 (2025PW0048)**, awarded 11/4/2025. These are
+  the closest real analog to the old ground truth, and are useful as a
+  parsing-correctness fixture (`tools/recall_benchmark.py` checks them) even
+  though they can't test live recall.
 
-- **Springfield ADA Improvement Project** — ~5,000 SY concrete ramps, 3,000 SY
-  ADA sidewalk (Sunshine, Battlefield, National)
-- **Mt. Vernon & Miller Sidewalks** — ~13,500 SF sidewalk, 1,000 SF ADA ramp,
-  ~1,000 LF curb & gutter
+| Source | What it is | Verified? |
+|---|---|---|
+| `springfieldmo.gov/Bids.aspx` | CivicPlus listing — every open city solicitation | Yes — live fetch, 2026-08-11 |
+| `springfieldmo.gov/5375/Current-Bid-Notices` | Human-readable index | Not yet checked |
+| DemandStar / Euna OpenBids | Where the city takes submissions | Named on real postings; not yet read directly |
+| `springfieldcontractors.org/category/bid-calendar/` | Association calendar | Not yet checked — non-`.gov`, currently network-blocked in this sandbox (see below) |
+| `sgfcitizen.org/public-notices/` | Statutory public notices | Not yet checked — same block |
 
-These two are the first acceptance test: when a Springfield scan returns both,
-Phase 1 is working.
+**Network constraint found while doing this:** the sandbox's egress policy
+allows `springfieldmo.gov` but rejected every other host tried — Aurora
+(`aurora-cityhall.org`), Joplin, Republic, Ozark, and even other `.gov` hosts
+(`greenecountymo.gov`, `nixamo.gov`, `christiancountymo.gov`) all came back
+`403` at the proxy (`policy denial`, per `/__agentproxy/status`). "Opened to
+.gov and the geocoders" turned out to mean this one host, not the TLD
+generally. Nothing beyond Springfield can be verified from here until that's
+widened — which blocks the Aurora side of Phase 0 entirely, and blocks
+Phase 2's `.org`/`.com` discovery work too.
+
+The acceptance test this section used to describe — "a Springfield scan
+returns both [fabricated bids]" — is retired. There is currently no
+currently-open, verifiably-real concrete bid anywhere in the 50mi ring to
+replace it with; the next one that appears should be captured here the
+moment it's found, by hand, from the live site.
 
 ---
 

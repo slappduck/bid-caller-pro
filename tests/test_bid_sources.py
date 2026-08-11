@@ -46,27 +46,47 @@ CIVICPLUS_HTML = """
   <a href="/SomethingElse.aspx">Not a bid link</a>
 </div>"""
 
-# How a real CivicPlus listing is actually laid out: the closing date is a
-# labelled column ("Closing Date/Time"), not "Closes: <date>", and each row
-# states its own status. Parsing only the tight form meant every bid read off a
-# live site arrived with no deadline and an assumed status.
+# Trimmed from a live fetch of springfieldmo.gov/Bids.aspx (Aug 2026). The
+# fixture this replaced was reconstructed from memory and got the layout
+# wrong in two ways a live site actually does: (1) a row lists both labels
+# ("Status:", "Closes:") together, THEN both values ("Open", the date)
+# together — never "Status: Open" adjacent; (2) the teaser text between the
+# title link and that status block runs well past 600 characters, and often
+# repeats a *different*, misleading date in prose ("THE REVISED DUE DATE IS
+# ... AUGUST 18") before the real one ever appears.
 CIVICPLUS_REAL_HTML = """
-<div class="bidItem">
-  <h3><a href="/bids.aspx?bidID=501">2026 Sidewalk &amp; ADA Ramp Program</a></h3>
-  <div class="bidStatus">Status: Open</div>
-  <div>Publication Date/Time: 7/1/2026 8:00 AM</div>
-  <div>Closing Date/Time: 12/1/2026 2:00 PM</div>
+<div class="listItemsRow bid">
+	<div class="bidTitle" style="vertical-align: top">
+		<span><a href="bids.aspx?bidID=1643">SKATE AND PRO SHOP CONCESSIONAIRE</a></span><br>
+<span style="font-size:0.75em;"><strong>Bid No.</strong> 009-2027RFP</span><br>						<span>ADDENDUM 1 ISSUED ON MONDAY, AUGUST 10, 2026.     THE REVISED DUE DATE IS TUESDAY, AUGUST 18, 2026.     LEGAL NOTICE:     REQUEST FOR PROPOSAL #009-2027   The City of Springfield will electronically accept submitted proposals through its e-bidding service provider, Euna OpenBids (formerly DemandStar) from qualified persons or firms interested in providing the following: SKATE AND PRO SHOP CONCESSIONAIRE at the Jordan Valley Ice Park. Proposal documents and any addendums are available via the Division of Purchases webpage. ... [<a href="bids.aspx?bidID=1643" style="font-style: normal; text-decoration: underline; font-family: arial">Read&nbsp;on<span class="visuallyHidden">: SKATE AND PRO SHOP CONCESSIONAIRE</span></a>]</span>
+	</div>
+	<div class="bidStatus">
+	<div>						<span id="BidStatus164337">Status:</span><br>						<span id="BidCloses164337">Closes:</span>
+	</div>					<div>						<span>Open</span><br>						<span>8/20/2026 3:00 PM</span>
+	</div>
+	</div>
+</div>				<div class="listItemsRow bid alt">
+	<div class="bidTitle" style="vertical-align: top">
+		<span><a href="bids.aspx?bidID=1644">REPLACEMENT OF PUBLIC ADDRESS AND TERMINAL PAGING SYSTEM</a></span><br>
+<span style="font-size:0.75em;"><strong>Bid No.</strong> 014-2027RFP</span><br>						<span>LEGAL NOTICE:     REQUEST FOR PROPOSAL #014-2027   The City of Springfield will electronically accept submitted proposals through its e-bidding service provider, Euna OpenBids... [<a href="bids.aspx?bidID=1644" style="font-style: normal; text-decoration: underline; font-family: arial">Read&nbsp;on<span class="visuallyHidden">: REPLACEMENT OF PUBLIC ADDRESS AND TERMINAL PAGING SYSTEM</span></a>]</span>
+	</div>
+	<div class="bidStatus">
+	<div>						<span id="BidStatus164437">Status:</span><br>						<span id="BidCloses164437">Closes:</span>
+	</div>					<div>						<span>Open</span><br>						<span>9/1/2026 3:00 PM</span>
+	</div>
+	</div>
+</div>				<div class="listItemsRow bid">
+	<div class="bidTitle" style="vertical-align: top">
+		<span><a href="bids.aspx?bidID=1622">HOT ASPHALT MIX</a></span><br>
+<span style="font-size:0.75em;"><strong>Bid No.</strong> 066-2026IFIB</span><br>						<span>LEGAL NOTICE: INVITATION FOR INFORMAL BID #066-2026 ... [<a href="bids.aspx?bidID=1622" style="font-style: normal; text-decoration: underline; font-family: arial">Read&nbsp;on<span class="visuallyHidden">: HOT ASPHALT MIX</span></a>]</span>
+	</div>
+	<div class="bidStatus">
+	<div>						<span id="BidStatus162245">Status:</span><br>						<span id="BidCloses162245">Closes:</span>
+	</div>					<div>						<span>Closed</span><br>						<span>5/5/2026 3:00 PM</span>
+	</div>
+	</div>
 </div>
-<div class="bidItem">
-  <h3><a href="/bids.aspx?bidID=502">Curb and Gutter Replacement - Grant Ave</a></h3>
-  <div class="bidStatus">Status: Closed</div>
-  <div>Publication Date/Time: 1/5/2026 8:00 AM</div>
-  <div>Bid Opening Date/Time: March 3, 2026 10:00 AM</div>
-</div>
-<div class="bidItem">
-  <h3><a href="/bids.aspx?bidID=503">Concrete Flatwork Annual Contract</a></h3>
-  <div>Due Date and Time: 2026-11-20 2:00 PM</div>
-</div>"""
+"""
 
 RSS_INDEX = """
 <ul>
@@ -176,7 +196,8 @@ class HtmlParsingTests(unittest.TestCase):
 
 
 class RealCivicPlusLayoutTests(unittest.TestCase):
-    """The labelled-column layout a live CivicPlus site actually serves."""
+    """The paired-label, paired-value layout a live CivicPlus site actually
+    serves, and the oversized teaser text real rows carry."""
 
     def setUp(self):
         self.rows = bs.parse_civicplus_html(CIVICPLUS_REAL_HTML, "https://x.gov")
@@ -185,32 +206,30 @@ class RealCivicPlusLayoutTests(unittest.TestCase):
     def test_every_posting_is_found(self):
         self.assertEqual(len(self.rows), 3, [r["title"] for r in self.rows])
 
-    def test_a_labelled_closing_column_yields_a_deadline(self):
-        # "Closing Date/Time: 12/1/2026" — words between keyword and date.
+    def test_a_far_off_structured_closing_block_still_yields_a_deadline(self):
+        # The status/closing block sits well past where a 600-char window
+        # used to cut off, and behind a duplicate "Read on" link to the same
+        # URL — both used to leave this blank.
         self.assertEqual(
-            self.by_title["2026 Sidewalk & ADA Ramp Program"]["deadline"], "12/1/2026")
+            self.by_title["REPLACEMENT OF PUBLIC ADDRESS AND TERMINAL PAGING SYSTEM"]
+            ["deadline"], "9/1/2026")
 
-    def test_bid_opening_and_due_date_labels_work_too(self):
-        self.assertEqual(
-            self.by_title["Curb and Gutter Replacement - Grant Ave"]["deadline"],
-            "March 3, 2026")
-        self.assertEqual(
-            self.by_title["Concrete Flatwork Annual Contract"]["deadline"], "2026-11-20")
-
-    def test_the_publication_date_is_never_mistaken_for_the_deadline(self):
-        for row in self.rows:
-            with self.subTest(title=row["title"]):
-                self.assertNotIn("7/1/2026", row["deadline"])
-                self.assertNotIn("1/5/2026", row["deadline"])
+    def test_the_structured_field_wins_over_a_misleading_date_in_prose(self):
+        # This row's teaser text says "THE REVISED DUE DATE IS ... AUGUST 18"
+        # — a different date than the row's real "Closes:" field (8/20). The
+        # structured field must win; picking whichever date appears first in
+        # the text would silently return the wrong one.
+        row = self.by_title["SKATE AND PRO SHOP CONCESSIONAIRE"]
+        self.assertEqual(row["deadline"], "8/20/2026")
+        self.assertNotEqual(row["deadline"], "8/18/2026")
 
     def test_the_listing_status_is_carried_through(self):
-        self.assertEqual(self.by_title["2026 Sidewalk & ADA Ramp Program"]["status"],
+        self.assertEqual(self.by_title["SKATE AND PRO SHOP CONCESSIONAIRE"]["status"],
                          "Open")
-        self.assertEqual(
-            self.by_title["Curb and Gutter Replacement - Grant Ave"]["status"], "Closed")
+        self.assertEqual(self.by_title["HOT ASPHALT MIX"]["status"], "Closed")
 
-    def test_no_stated_status_is_left_blank_rather_than_guessed(self):
-        self.assertEqual(self.by_title["Concrete Flatwork Annual Contract"]["status"], "")
+    def test_a_closed_postings_own_deadline_is_not_lost(self):
+        self.assertEqual(self.by_title["HOT ASPHALT MIX"]["deadline"], "5/5/2026")
 
 
 DETAIL_PAGE = """
@@ -298,6 +317,80 @@ class DetailScopeTests(unittest.TestCase):
         for bad in ("", None, 12345):
             with self.subTest(bad=bad):
                 self.assertEqual(bs.detail_scope(bad), "")
+
+
+# Trimmed from a live fetch of a springfieldmo.gov bid detail page (Aug 2026).
+# DETAIL_PAGE above was reconstructed from memory and, checked against the
+# real page, got several things wrong at once: labels and values sit in
+# separate table rows rather than "Label: value" inline; the site's
+# Cloudflare email protection replaces a mailto with an obfuscated
+# data-cfemail attribute and a literal "[email protected]" placeholder, so
+# plain-text scanning finds nothing; and the free-text body mentions a
+# different phone number and a different "contact" well before the actual
+# labelled Contact Person and Closing Date fields. The buyer's real address
+# was swapped for a synthetic one re-encoded with the same Cloudflare cipher.
+LIVE_DETAIL_HTML = """
+<table summary="Bid Details">
+<tr><td style="background-color:#fafafa"><span class="BidListHeader">Description:</span></td></tr>
+<tr><td><span class="BidDetail">ADDENDUM 1 ISSUED ON MONDAY, AUGUST 10, 2026. THE REVISED DUE DATE IS
+TUESDAY, AUGUST 18, 2026. LEGAL NOTICE: REQUEST FOR PROPOSAL #009-2027 The City
+of Springfield will electronically accept submitted proposals through its
+e-bidding service provider, Euna OpenBids (formerly DemandStar), from
+qualified persons or firms interested in providing the following: SKATE AND
+PRO SHOP CONCESSIONAIRE at the Jordan Valley Ice Park. VENDOR NOTE 1: To
+register with Euna OpenBids go to https://www.demandstar.com/registration.
+VENDOR NOTE 2: For information on how to navigate Euna OpenBids go to
+https://network.demandstar.com/agency-support-2/. VENDOR NOTE 3: If you have
+issues registering or uploading a proposal, please contact Euna OpenBids
+toll-free at (866) 273-1863. Euna OpenBids office hours are 8:00 A.M. to 7:00
+P.M. Central Time, Monday through Friday. You can also contact the Division
+of Purchases at (417) 864-1620 or the Buyer stated on the Title-Signature
+Page of this solicitation between 8:00 A.M. and 5:00 P.M. Central Time,
+Monday through Friday. It is strongly recommended that Offerors register as
+soon as possible to ensure your ability to respond by the due date and
+time.</span></td></tr>
+<tr><td style="background-color:#fafafa"><span class="BidListHeader">Publication Date/Time:</span></td></tr>
+<tr><td><span class="BidDetail">7/16/2026 10:30 AM</span></td></tr>
+<tr><td style="background-color:#fafafa"><span class="BidListHeader">Closing Date/Time:</span></td></tr>
+<tr><td><span class="BidDetail">8/20/2026 3:00 PM</span></td></tr>
+<tr><td style="background-color:#fafafa"><span class="BidListHeader">Contact Person:</span></td></tr>
+<tr><td><span class="BidDetail">Jordan Reyes <BR><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="4220373b273002273a232f322e276f212b363b6c252d34">[email&#160;protected]</a> Phone: (417) 864-1955</span></td></tr>
+</table>
+"""
+
+
+class RealDetailPageTests(unittest.TestCase):
+    """The structural quirks a live CivicPlus detail page actually has, none
+    of which the hand-reconstructed DETAIL_PAGE fixture above exhibited."""
+
+    def test_decodes_a_cloudflare_obfuscated_email(self):
+        # The visible text is literally the string "[email protected]" — a
+        # plain-text scan of it can never find a real address.
+        self.assertNotIn("@", "[email protected]")
+        self.assertEqual(
+            bs.parse_contact(LIVE_DETAIL_HTML)["email"], "buyer@example-city.gov")
+
+    def test_the_labelled_contact_wins_over_a_prose_mention(self):
+        # "please contact Euna OpenBids toll-free at ..." appears earlier in
+        # the document than the real "Contact Person:" field.
+        self.assertEqual(bs.parse_contact(LIVE_DETAIL_HTML)["contact"], "Jordan Reyes")
+
+    def test_the_phone_near_the_contact_wins_over_ones_in_the_prose(self):
+        # Two other phone numbers (Euna OpenBids, the Division of Purchases)
+        # sit earlier in the description than the one printed right next to
+        # the named contact.
+        self.assertEqual(bs.parse_contact(LIVE_DETAIL_HTML)["phone"], "(417) 864-1955")
+
+    def test_the_labelled_closing_date_wins_over_a_different_date_in_prose(self):
+        # The description opens with "THE REVISED DUE DATE IS ... AUGUST 18"
+        # — a different date than the real "Closing Date/Time:" field below.
+        self.assertEqual(bs.detail_deadline(LIVE_DETAIL_HTML), "8/20/2026")
+
+    def test_a_description_longer_than_600_characters_is_still_captured(self):
+        scope = bs.detail_scope(LIVE_DETAIL_HTML)
+        self.assertGreater(len(scope), 600)
+        self.assertIn("SKATE AND PRO SHOP CONCESSIONAIRE", scope)
+        self.assertNotIn("Publication Date", scope)
 
 
 class FeedDiscoveryTests(unittest.TestCase):
