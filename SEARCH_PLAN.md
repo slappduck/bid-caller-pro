@@ -71,7 +71,23 @@ tuned against a saved fixture without waiting on a live site.
       AgendaCenter, the council-meetings module, which never contains bids).
       Still to do: verify each URL against the live site and widen to the
       rest of the 50mi ring
-- [ ] DemandStar / Euna OpenBids adapter (Springfield posts here too)
+- [ ] DemandStar / Euna OpenBids adapter (Springfield posts here too — its
+      own detail pages say "will electronically accept submitted proposals
+      through its e-bidding service provider, Euna OpenBids (formerly
+      DemandStar)", confirmed live 2026-08-11). This is the highest-value
+      next adapter: it's real, evidenced volume the direct-read path
+      currently misses entirely — `identify_platform()` already recognises
+      `demandstar.com` URLs, but nothing reads them structurally, so they
+      fall back to the slower, less reliable AI-extraction path (and only if
+      search happens to surface them at all — there's no `Bids.aspx`-style
+      guessable URL to probe for an agency's DemandStar listing).
+      **Blocked:** building it requires real DemandStar/Euna markup the same
+      way the CivicPlus fixtures were finally corrected against a live page
+      — guessing from memory would repeat that exact mistake. This sandbox's
+      network policy rejects `demandstar.com` and `network.demandstar.com`
+      outright (confirmed 2026-08-11, same 403 as every non-springfieldmo.gov
+      host). Needs either the policy widened to those two hosts, or a few
+      real DemandStar/Euna bid-listing and detail pages supplied directly.
 - [ ] Bonfire, OpenGov, PlanetBids adapters
 - [ ] MissouriBUYS, then the other state portals
 - [ ] Contractor-association bid calendars and plan rooms — the highest
