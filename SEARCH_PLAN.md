@@ -121,6 +121,34 @@ tuned against a saved fixture without waiting on a live site.
 - [ ] Contractor-association bid calendars and plan rooms — the highest
       *density* source for this trade specifically, e.g. the Springfield
       Contractors Association calendar carries sidewalk and ADA jobs directly
+- [~] **State statutory public-notice sites — the real answer to rural
+      coverage.** Most small towns never appear in the .gov registry at all
+      (only 194 of Missouri's ~950 incorporated places own one), so the
+      national crawl and the live homepage-fallback both structurally can't
+      reach them — there's no site to read. But most states legally require
+      bid notices to be published somewhere official, and several state
+      press associations run a public, keyless, per-town/per-county
+      searchable notice site for exactly that purpose, with a
+      "Construction / engineering" category already built in.
+      **9 states confirmed live, same underlying platform** (identical
+      ASP.NET control IDs and category structure — one reader should work
+      across all of them): Missouri (`mopublicnotices.com`), Georgia, Michigan,
+      Montana, New Jersey, South Carolina, South Dakota, Nebraska, Washington
+      (`{state-abbr}publicnotices.com`). Checked ~40 more state-abbreviation
+      guesses; most came back unreachable (that state likely doesn't use this
+      exact platform/naming), a few looked like parked domains (Arizona,
+      Connecticut redirect to `/lander`) — worth another look with a
+      different naming guess, not concluded dead.
+      **Not yet built:** it's ASP.NET WebForms (`__doPostBack`, `__VIEWSTATE`,
+      session-cookie-dependent), not a simple GET — a real search requires a
+      stateful GET-then-POST sequence, which live probing got partway through
+      (extracted the token, held cookies) before hitting connection resets,
+      likely bot-defense reacting to rapid requests. Needs a careful, paced
+      implementation (proper cookie jar, one deliberate request at a time),
+      not more rapid live probing.
+      `usalegalnotice.com` (linked from Missouri's site) is NOT a national
+      aggregator — turned out to be an unrelated small print-media company's
+      marketing site. Don't re-check it.
 
 ## Phase 2 — Every city in the country
 
