@@ -578,6 +578,66 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     check("a stale check does re-scan", stale.calls === 1, `${stale.calls} scan call(s)`);
   }
 
+  // ── A bid whose status isn't the literal word "Open" ──
+  // The server found seven of these, kept them, and reported zero; app.html
+  // had the same exact-match bug in its own copy of the rule, so even once the
+  // server counted them the feed would still have hidden them.
+  console.log("\nBids whose status is phrased differently still show up");
+  {
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const host = new URL(route.request().url()).hostname;
+      if (host.endsWith("supabase.co") || host.endsWith("onrender.com")) return route.abort();
+      return route.continue();
+    });
+
+    const LIVE = ["Open", "open", " Open ", "Accepting Bids", "Active", "Advertised",
+                  "Open - Bids Due 12/1/2026", "Currently Open", "Bidding",
+                  "Open for Bids", "Issued", "Posted", "", null, undefined];
+    const DEAD = ["Closed", "closed", "Bid Closed", "Awarded", "Award to Acme",
+                  "Cancelled", "Canceled", "Expired", "Withdrawn", "Archived",
+                  "No Longer Accepting", "Not Accepting Bids", "Complete",
+                  "Planned", "Upcoming", "Anticipated"];
+
+    const feed = {};
+    feed[SEED_CITY] = LIVE.map((s, i) => ({
+      ...SEED_BID, title: `Live job ${i}`, status: s,
+    }));
+    await page.addInitScript(seedSignedIn, { city: SEED_CITY, bid: SEED_BID });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(1200);
+
+    const verdicts = await page.evaluate(({ live, dead }) => ({
+      live: live.map((s) => isOpen({ status: s, deadline: "2026-12-01" })),
+      dead: dead.map((s) => isOpen({ status: s, deadline: "2026-12-01" })),
+    }), { live: LIVE, dead: DEAD });
+
+    const liveMissed = LIVE.filter((_, i) => !verdicts.live[i]);
+    const deadShown = DEAD.filter((_, i) => verdicts.dead[i]);
+    check("every way of writing a live bid counts as open",
+      liveMissed.length === 0, `hidden: ${JSON.stringify(liveMissed)}`);
+    check("every way of writing a dead bid counts as closed",
+      deadShown.length === 0, `shown: ${JSON.stringify(deadShown)}`);
+
+    check("a past deadline still closes a bid",
+      (await page.evaluate(() =>
+        isOpen({ status: "Accepting Bids", deadline: "2019-03-01" }))) === false);
+
+    // The rule has to survive the render path, not just the predicate.
+    const shown = await page.evaluate((f) => {
+      bidData = f; renderFeed();
+      return document.querySelectorAll("#feed-list .bid").length;
+    }, feed);
+    check("variant-status bids actually render in the feed",
+      shown === LIVE.length, `rendered ${shown} of ${LIVE.length}`);
+
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   await browser.close();
   server.close();
   console.log(failures ? `\n${failures} check(s) FAILED` : "\nAll checks passed");
