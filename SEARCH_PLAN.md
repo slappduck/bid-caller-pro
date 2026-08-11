@@ -130,22 +130,47 @@ tuned against a saved fixture without waiting on a live site.
       press associations run a public, keyless, per-town/per-county
       searchable notice site for exactly that purpose, with a
       "Construction / engineering" category already built in.
-      **9 states confirmed live, same underlying platform** (identical
+      **10 states confirmed live, same underlying platform** (identical
       ASP.NET control IDs and category structure — one reader should work
       across all of them): Missouri (`mopublicnotices.com`), Georgia, Michigan,
-      Montana, New Jersey, South Carolina, South Dakota, Nebraska, Washington
-      (`{state-abbr}publicnotices.com`). Checked ~40 more state-abbreviation
-      guesses; most came back unreachable (that state likely doesn't use this
-      exact platform/naming), a few looked like parked domains (Arizona,
-      Connecticut redirect to `/lander`) — worth another look with a
-      different naming guess, not concluded dead.
+      Montana, New Jersey, South Carolina, South Dakota, Nebraska, Washington,
+      **Alabama** (`{state-abbr}publicnotices.com`, confirmed via
+      "Alabama Press Association" branding on the site itself).
+      Checked ~40 more state-abbreviation guesses plus 18 full-state-name
+      guesses (`illinoispublicnotices.com` etc. — some states use the long
+      form instead of the 2-letter code); most of both batches came back
+      unreachable, meaning that state most likely runs a different vendor
+      entirely, not that the naming guess was wrong. Two look like real hits
+      my automated "does the page look right" filter missed and need a human
+      glance before being added to the confirmed list: `iowapublicnotices.com`
+      (titled "Iowa Newspaper Association") and `arizonapublicnotices.com`
+      (titled "Arizona Media Association") — both plausible state
+      press-association notice sites, just not on the exact template the
+      filter was matching. One is genuinely ambiguous and worth a closer
+      look before ruling either way: `connecticutpublicnotices.com`'s page
+      title lists a long run of state abbreviations (AK AL AR AZ CA CO CT DE
+      FL GA HI IA ID IL IN KS KY LA MA MD...), which reads more like a
+      *different*, broader multi-state notice network than a
+      Connecticut-only site — if real, it could be a bigger find than any
+      single state. `kentuckypublicnotices.com` came back with the same
+      generic placeholder-looking title seen on a couple of clearly-dead
+      domains earlier, so it's probably not real.
+      `indianapublicnotices.com` returned 403 (site exists, blocking
+      non-browser requests) — unknown either way without a browser-shaped
+      request.
       **Not yet built:** it's ASP.NET WebForms (`__doPostBack`, `__VIEWSTATE`,
       session-cookie-dependent), not a simple GET — a real search requires a
-      stateful GET-then-POST sequence, which live probing got partway through
-      (extracted the token, held cookies) before hitting connection resets,
-      likely bot-defense reacting to rapid requests. Needs a careful, paced
-      implementation (proper cookie jar, one deliberate request at a time),
-      not more rapid live probing.
+      stateful GET-then-POST sequence. Live probing against
+      `mopublicnotices.com` got partway through (extracted the token, held
+      cookies, one attempt got a normal response) but then hit
+      `ConnectionResetError` twice in a row, including once right after
+      guessing at an UpdatePanel async-postback field. Read that as
+      bot-defense reacting to repeated rapid requests at the same host and
+      deliberately stopped rather than keep guessing against it — more blind
+      attempts at the same site risks looking like abuse. Needs a careful,
+      paced implementation next time (proper cookie jar, realistic browser
+      headers, one deliberate request at a time, real delay between them),
+      not another burst of live probing.
       `usalegalnotice.com` (linked from Missouri's site) is NOT a national
       aggregator — turned out to be an unrelated small print-media company's
       marketing site. Don't re-check it.
