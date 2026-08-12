@@ -75,3 +75,28 @@ drop policy if exists "Users manage their own avatar" on storage.objects;
 create policy "Users manage their own avatar" on storage.objects
   for all using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text)
   with check (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- The three scan feeds, so they follow the account instead of the browser.
+-- Starred bids, the company profile and saved searches already synced; the
+-- feeds did not, so signing in from a different browser showed an empty Bids
+-- tab on the same account.
+--
+-- One row per user with each feed as jsonb, rather than a row per bid: a feed
+-- is read and replaced wholesale on every scan and never queried
+-- field-by-field, so per-bid rows would add churn and joins and buy nothing.
+-- (saved_bids above stays per-row precisely because those ARE addressed
+-- individually — starred, given a pipeline status, annotated.)
+-- lead_status is here too: a Leads feed without the statuses set on it is
+-- half the information.
+create table if not exists user_feeds (
+  user_id uuid primary key default auth.uid() references auth.users(id) on delete cascade,
+  bids jsonb default '{}'::jsonb,
+  upcoming jsonb default '{}'::jsonb,
+  leads jsonb default '{}'::jsonb,
+  lead_status jsonb default '{}'::jsonb,
+  updated_at timestamptz default now()
+);
+alter table user_feeds enable row level security;
+drop policy if exists "Users manage their own feeds" on user_feeds;
+create policy "Users manage their own feeds" on user_feeds
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
