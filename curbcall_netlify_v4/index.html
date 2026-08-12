@@ -80,11 +80,15 @@ section{padding:4rem 0;}
 .step h3{font-size:1rem;margin:0.5rem 0 0.35rem;}
 .step p{color:var(--text2);font-size:0.86rem;}
 
+/* icon set (see <symbol> defs right after <body>) */
+.icon-svg{width:1em;height:1em;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;vertical-align:-0.15em;}
+
 /* features */
 .feat{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;}
 .fcard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:1.3rem;}
-.fcard .ic{font-size:1.5rem;}
-.fcard h3{font-size:1rem;margin:0.6rem 0 0.3rem;}
+.fcard .ic{width:2rem;height:2rem;border-radius:9px;background:rgba(245,158,11,0.12);color:var(--amber);display:flex;align-items:center;justify-content:center;}
+.fcard .ic .icon-svg{width:1.15rem;height:1.15rem;stroke-width:2;}
+.fcard h3{font-size:1rem;margin:0.7rem 0 0.3rem;}
 .fcard p{color:var(--text2);font-size:0.86rem;}
 
 /* pricing */
@@ -137,6 +141,21 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
 </style>
 </head>
 <body>
+<!-- Shared icon set, matching app.html's -- hand-drawn Lucide/Feather-style
+     strokes (24x24, 2px round-cap, no fill) instead of emoji. -->
+<svg style="display:none" aria-hidden="true">
+  <defs>
+    <symbol id="i-map-pin" viewBox="0 0 24 24"><path d="M12 22s7-6.5 7-12a7 7 0 1 0-14 0c0 5.5 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/></symbol>
+    <symbol id="i-dollar" viewBox="0 0 24 24"><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 6.5c0-1.9-2.2-3-5-3s-5 1.2-5 3 2.2 3 5 3 5 1.1 5 3-2.2 3-5 3-5-1.1-5-3"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><line x1="5" y1="4" x2="5" y2="20"/><circle cx="5" cy="10" r="2"/><line x1="12" y1="4" x2="12" y2="20"/><circle cx="12" cy="16" r="2"/><line x1="19" y1="4" x2="19" y2="20"/><circle cx="19" cy="7" r="2"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3l2.6 5.6 6.1.6-4.6 4.1 1.3 6-5.4-3.1-5.4 3.1 1.3-6L3.3 9.2l6.1-.6z"/></symbol>
+    <symbol id="i-mail" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M3 6l9 7 9-7"/></symbol>
+    <symbol id="i-landmark" viewBox="0 0 24 24"><path d="M3 10 12 3l9 7"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="7" y1="10" x2="7" y2="19"/><line x1="12" y1="10" x2="12" y2="19"/><line x1="17" y1="10" x2="17" y2="19"/><line x1="3" y1="19" x2="21" y2="19"/><line x1="3" y1="22" x2="21" y2="22"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v13"/><path d="M7 11l5 5 5-5"/><path d="M4 21h16"/></symbol>
+  </defs>
+</svg>
 <div class="hazard"></div>
 <nav>
   <div class="wrap nav-in">
@@ -162,7 +181,7 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
         <a class="btn btn-line btn-lg" href="#how">See how it works</a>
       </div>
       <div class="cta-row" style="margin-top:0.6rem;">
-        <a class="btn btn-line btn-lg" href="https://github.com/slappduck/bid-caller-pro/releases/download/v1.0.0/CurbCallProSetup.exe">Download for Windows (desktop app)</a>
+        <a class="btn btn-line btn-lg" href="https://github.com/slappduck/bid-caller-pro/releases/download/v1.0.0/CurbCallProSetup.exe"><svg class="icon-svg"><use href="#i-download"/></svg> Download for Windows (desktop app)</a>
       </div>
       <div class="trust"><span class="dot"></span><b>Free 7-day trial</b> · no card required · works on phone or desktop</div>
     </div>
@@ -170,9 +189,9 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
     <div class="stack" aria-hidden="true">
       <div class="feedcard">
         <div class="head"><span class="t">Concrete bids near you</span><span class="live"><span class="dot"></span>Live</span></div>
-        <div class="bid"><div class="bar"></div><div><div class="title">Citywide ADA Ramp Upgrades</div><div class="meta"><span class="chip">Springfield, MO</span><span class="chip">Due Jul 9</span><span class="chip g">OPEN</span></div></div></div>
-        <div class="bid"><div class="bar"></div><div><div class="title">Sidewalk Replacement Program</div><div class="meta"><span class="chip">Nixa, MO</span><span class="chip g">$310k</span><span class="chip g">OPEN</span></div></div></div>
-        <div class="bid"><div class="bar"></div><div><div class="title">Curb &amp; Gutter Repair — 5th St</div><div class="meta"><span class="chip">Ozark, MO</span><span class="chip">Due Jul 22</span><span class="chip g">OPEN</span></div></div></div>
+        <div class="bid"><div class="bar"></div><div><div class="title">Citywide ADA Ramp Upgrades</div><div class="meta"><span class="chip"><svg class="icon-svg"><use href="#i-map-pin"/></svg> Springfield, MO</span><span class="chip"><svg class="icon-svg"><use href="#i-calendar"/></svg> Due Jul 9</span><span class="chip g">OPEN</span></div></div></div>
+        <div class="bid"><div class="bar"></div><div><div class="title">Sidewalk Replacement Program</div><div class="meta"><span class="chip"><svg class="icon-svg"><use href="#i-map-pin"/></svg> Nixa, MO</span><span class="chip g"><svg class="icon-svg"><use href="#i-dollar"/></svg> $310k</span><span class="chip g">OPEN</span></div></div></div>
+        <div class="bid"><div class="bar"></div><div><div class="title">Curb &amp; Gutter Repair — 5th St</div><div class="meta"><span class="chip"><svg class="icon-svg"><use href="#i-map-pin"/></svg> Ozark, MO</span><span class="chip"><svg class="icon-svg"><use href="#i-calendar"/></svg> Due Jul 22</span><span class="chip g">OPEN</span></div></div></div>
       </div>
     </div>
   </div>
@@ -204,12 +223,12 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
       <p>No spreadsheets, no endless tabs, no missed deadlines. Just the sidewalk, ADA, and curb jobs near you.</p>
     </div>
     <div class="feat">
-      <div class="fcard"><h3>Location-based search</h3><p>Works anywhere in the country. Enter your ZIP or auto-detect, set a radius, and scan every town nearby.</p></div>
-      <div class="fcard"><h3>Tuned for concrete</h3><p>The AI is pointed at sidewalk replacement, ADA ramp, and curb &amp; gutter work — not a generic pile of every trade.</p></div>
-      <div class="fcard"><h3>Open-bid feed</h3><p>Only open bids show, and every new scan adds to your list — so leads build up instead of disappearing.</p></div>
-      <div class="fcard"><h3>Save &amp; track jobs</h3><p>Star the bids that matter so the work you mean to chase is always one tap away.</p></div>
-      <div class="fcard"><h3>One-tap contact</h3><p>Email the bid contact or open the original posting straight from the card. No copying, no hunting.</p></div>
-      <div class="fcard"><h3>Federal + local</h3><p>Pulls SAM.gov federal solicitations alongside local municipal bids, all filtered to your radius.</p></div>
+      <div class="fcard"><div class="ic"><svg class="icon-svg"><use href="#i-map-pin"/></svg></div><h3>Location-based search</h3><p>Works anywhere in the country. Enter your ZIP or auto-detect, set a radius, and scan every town nearby.</p></div>
+      <div class="fcard"><div class="ic"><svg class="icon-svg"><use href="#i-sliders"/></svg></div><h3>Tuned for concrete</h3><p>The AI is pointed at sidewalk replacement, ADA ramp, and curb &amp; gutter work — not a generic pile of every trade.</p></div>
+      <div class="fcard"><div class="ic"><svg class="icon-svg"><use href="#i-list"/></svg></div><h3>Open-bid feed</h3><p>Only open bids show, and every new scan adds to your list — so leads build up instead of disappearing.</p></div>
+      <div class="fcard"><div class="ic"><svg class="icon-svg"><use href="#i-star"/></svg></div><h3>Save &amp; track jobs</h3><p>Star the bids that matter so the work you mean to chase is always one tap away.</p></div>
+      <div class="fcard"><div class="ic"><svg class="icon-svg"><use href="#i-mail"/></svg></div><h3>One-tap contact</h3><p>Email the bid contact or open the original posting straight from the card. No copying, no hunting.</p></div>
+      <div class="fcard"><div class="ic"><svg class="icon-svg"><use href="#i-landmark"/></svg></div><h3>Federal + local</h3><p>Pulls SAM.gov federal solicitations alongside local municipal bids, all filtered to your radius.</p></div>
     </div>
   </div>
 </section>

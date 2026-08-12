@@ -144,19 +144,26 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .account-email{font-weight:700;margin-bottom:0.3rem;word-break:break-all;}
 .account-status{font-size:0.82rem;color:var(--text2);}
 
+/* Shared icon set (see the <symbol> defs right after <body>). Sized off
+   font-size so an icon dropped into any text context scales with it; nav
+   and headers override to their own fixed size below. */
+.icon-svg{width:1em;height:1em;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;vertical-align:-0.15em;}
+/* Section-header icon + label pairing, used across Account and Diagnostics. */
+.hdr-ic{display:inline-flex;align-items:center;gap:0.45rem;}
+.hdr-ic .icon-svg{color:var(--accent);}
+
 .bottom-nav{display:flex;background:var(--surface);border-top:1px solid var(--border);padding-bottom:env(safe-area-inset-bottom);flex-shrink:0;}
 /* min-width:0 lets six items share a 320px screen without the labels
    overflowing; nowrap stops "Upcoming" and "Account" breaking onto two lines. */
-.nav-btn{flex:1;min-width:0;background:none;border:none;padding:0.95rem 0.15rem;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text2);font-family:var(--ui);}
-.nav-btn .lb{font-size:0.78rem;font-weight:600;white-space:nowrap;letter-spacing:0.01em;}
+.nav-btn{flex:1;min-width:0;background:none;border:none;padding:0.6rem 0.15rem 0.7rem;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:0.25rem;color:var(--text2);font-family:var(--ui);}
+.nav-btn .icon-svg{width:1.3rem;height:1.3rem;stroke-width:1.8;vertical-align:0;}
+.nav-btn .lb{font-size:0.66rem;font-weight:600;white-space:nowrap;letter-spacing:0.01em;}
 /* Inactive labels were --text3 (#475569), which is 2.4:1 against the nav bar —
    well under the 4.5:1 floor, and this is a tool read outdoors in daylight.
    --text2 is an existing token and measures ~7:1. */
 .nav-btn.active{color:var(--accent);}
-/* Active state must not rest on colour alone. No icon anymore to carry it
-   either, so the underline is the only signal — keep it a bit more visible
-   than when it was a secondary cue under an icon. */
-.nav-btn.active::after{content:"";position:absolute;left:50%;transform:translateX(-50%);bottom:0.3rem;width:1.4rem;height:2px;border-radius:2px;background:var(--accent);}
+/* Active state must not rest on colour alone. */
+.nav-btn.active::after{content:"";position:absolute;left:50%;transform:translateX(-50%);bottom:0.2rem;width:1.1rem;height:2px;border-radius:2px;background:var(--accent);}
 @media (max-width:340px){.nav-btn .lb{font-size:0.68rem;}}
 
 .modal-back{position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:50;display:none;animation:fade 0.2s;}
@@ -243,6 +250,43 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 </style>
 </head>
 <body>
+<!-- Shared icon set. Hand-drawn to match a Lucide/Feather-style stroke system
+     (24x24, 2px round-cap stroke, no fill) instead of emoji -- consistent
+     across OS/browser, colorable with CSS, and no CDN dependency. Referenced
+     via <svg class="icon-svg"><use href="#i-name"/></svg>. -->
+<svg style="display:none" aria-hidden="true">
+  <defs>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></symbol>
+    <symbol id="i-radar" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" style="fill:currentColor;stroke:none"/><line x1="12" y1="12" x2="18" y2="6"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11 12 3l9 8"/><path d="M5 10v11h14V10"/><path d="M10 21v-6h4v6"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3l2.6 5.6 6.1.6-4.6 4.1 1.3 6-5.4-3.1-5.4 3.1 1.3-6L3.3 9.2l6.1-.6z"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></symbol>
+    <symbol id="i-bar-chart" viewBox="0 0 24 24"><line x1="4" y1="20" x2="20" y2="20"/><rect x="5" y="12" width="4" height="8"/><rect x="10.5" y="7" width="4" height="13"/><rect x="16" y="3" width="4" height="17"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 9a6 6 0 1 1 12 0c0 6 2.5 8 2.5 8h-17S6 15 6 9z"/><path d="M10 21a2 2 0 0 0 4 0"/></symbol>
+    <symbol id="i-briefcase" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="3" y1="13" x2="21" y2="13"/></symbol>
+    <symbol id="i-life-buoy" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><line x1="6.3" y1="6.3" x2="9.2" y2="9.2"/><line x1="17.7" y1="6.3" x2="14.8" y2="9.2"/><line x1="6.3" y1="17.7" x2="9.2" y2="14.8"/><line x1="17.7" y1="17.7" x2="14.8" y2="14.8"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 21c0-3.8 2.9-6 6.5-6s6.5 2.2 6.5 6"/><path d="M16 8.2a3 3 0 1 1 0 5.9"/><path d="M17 15.3c2.6.5 4.5 2.2 4.5 5.7"/></symbol>
+    <symbol id="i-activity" viewBox="0 0 24 24"><path d="M2 12h4l2-7 4 14 3-9 2 4h5"/></symbol>
+    <symbol id="i-credit-card" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></symbol>
+    <symbol id="i-map-pin" viewBox="0 0 24 24"><path d="M12 22s7-6.5 7-12a7 7 0 1 0-14 0c0 5.5 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></symbol>
+    <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4z"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><path d="M6 7V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2"/><path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/></symbol>
+    <symbol id="i-map" viewBox="0 0 24 24"><path d="M9 3 3 5v16l6-2 6 2 6-2V3l-6 2-6-2z"/><line x1="9" y1="3" x2="9" y2="19"/><line x1="15" y1="5" x2="15" y2="21"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v13"/><path d="M7 11l5 5 5-5"/><path d="M4 21h16"/></symbol>
+    <symbol id="i-mail" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M3 6l9 7 9-7"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+    <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M4 20l1-4.5L15.5 5 19 8.5 8.5 19z"/><line x1="13.5" y1="6.5" x2="17.5" y2="10.5"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M4 12l6 6L20 6"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M5 16H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h11a1 1 0 0 1 1 1v1"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M9 15l6-6"/><path d="M8 13l-2.5 2.5a3.5 3.5 0 0 0 5 5L13 18"/><path d="M16 11l2.5-2.5a3.5 3.5 0 0 0-5-5L11 6"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/></symbol>
+    <symbol id="i-dollar" viewBox="0 0 24 24"><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 6.5c0-1.9-2.2-3-5-3s-5 1.2-5 3 2.2 3 5 3 5 1.1 5 3-2.2 3-5 3-5-1.1-5-3"/></symbol>
+    <symbol id="i-share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><line x1="8.3" y1="10.7" x2="15.7" y2="6.3"/><line x1="8.3" y1="13.3" x2="15.7" y2="17.7"/></symbol>
+  </defs>
+</svg>
 <div id="app" style="display:none;">
   <div class="topbar">
     <div class="brand"><span class="brand-name">Curb<span>Call</span></span></div>
@@ -400,12 +444,12 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
   </div>
 
   <div class="bottom-nav">
-    <button class="nav-btn active" data-s="scan"><span class="lb">Find</span></button>
-    <button class="nav-btn" data-s="feed"><span class="nav-badge" id="feed-badge" style="display:none;"></span><span class="lb">Bids</span></button>
-    <button class="nav-btn" data-s="upcoming"><span class="lb">Upcoming</span></button>
-    <button class="nav-btn" data-s="leads"><span class="lb">Leads</span></button>
-    <button class="nav-btn" data-s="saved"><span class="lb">Active</span></button>
-    <button class="nav-btn" data-s="account"><span class="lb">Account</span></button>
+    <button class="nav-btn active" data-s="scan"><svg class="icon-svg"><use href="#i-search"/></svg><span class="lb">Find</span></button>
+    <button class="nav-btn" data-s="feed"><svg class="icon-svg"><use href="#i-list"/></svg><span class="nav-badge" id="feed-badge" style="display:none;"></span><span class="lb">Bids</span></button>
+    <button class="nav-btn" data-s="upcoming"><svg class="icon-svg"><use href="#i-radar"/></svg><span class="lb">Upcoming</span></button>
+    <button class="nav-btn" data-s="leads"><svg class="icon-svg"><use href="#i-home"/></svg><span class="lb">Leads</span></button>
+    <button class="nav-btn" data-s="saved"><svg class="icon-svg"><use href="#i-star"/></svg><span class="lb">Active</span></button>
+    <button class="nav-btn" data-s="account"><svg class="icon-svg"><use href="#i-user"/></svg><span class="lb">Account</span></button>
   </div>
 </div>
 
@@ -1528,7 +1572,7 @@ function renderDiagnostics(){
                       .reduce((n,k)=>n+f[k],0);
   return `
     <div class="account-card">
-      <div class="account-email" style="font-size:0.85rem;">Diagnostics</div>
+      <div class="account-email hdr-ic" style="font-size:0.85rem;"><svg class="icon-svg"><use href="#i-activity"/></svg>Diagnostics</div>
       <div class="account-status" style="margin-bottom:0.7rem;">
         What the last search actually did, and whether the server has everything it needs.
         Handy when a search returns less than you expected.
@@ -1551,8 +1595,8 @@ function renderDiagnostics(){
           </div></div>`:""}
       `:`<div class="account-status">No search recorded on this device yet.</div>`}
       <div style="display:flex;gap:0.6rem;margin-top:0.8rem;">
-        <button class="btn-ghost" id="diag-copy" style="margin-top:0;">Copy</button>
-        <button class="btn-ghost" id="diag-refresh" style="margin-top:0;">Recheck</button>
+        <button class="btn-ghost hdr-ic" id="diag-copy" style="margin-top:0;justify-content:center;"><svg class="icon-svg"><use href="#i-copy"/></svg>Copy</button>
+        <button class="btn-ghost hdr-ic" id="diag-refresh" style="margin-top:0;justify-content:center;"><svg class="icon-svg"><use href="#i-refresh"/></svg>Recheck</button>
       </div>
     </div>`;
 }
@@ -2648,7 +2692,7 @@ function renderAccount(){
       </div>
     </div>
     <div class="account-card">
-      <div class="account-email" style="font-size:0.85rem;margin-bottom:0.6rem;">Your Stats</div>
+      <div class="account-email hdr-ic" style="font-size:0.85rem;margin-bottom:0.6rem;"><svg class="icon-svg"><use href="#i-bar-chart"/></svg>Your Stats</div>
       <div class="stats-grid">
         <div class="stat-box"><div class="n">${stats.count}</div><div class="l">Active Bids</div></div>
         <div class="stat-box"><div class="n">${stats.winRate}</div><div class="l">Win Rate</div></div>
@@ -2662,13 +2706,13 @@ function renderAccount(){
     </div>
     ${renderDiagnostics()}
     <div class="account-card" id="notif-card" style="cursor:pointer;">
-      <div class="account-email" style="font-size:0.85rem;">Bid Alerts</div>
+      <div class="account-email hdr-ic" style="font-size:0.85rem;"><svg class="icon-svg"><use href="#i-bell"/></svg>Bid Alerts</div>
       <div class="account-status" id="notif-status">${esc(notifPermissionLabel())}</div>
     </div>
     <div class="account-card">
       <div style="font-size:0.85rem;font-weight:700;display:flex;flex-wrap:wrap;gap:0.5rem;justify-content:space-between;align-items:center;">
-        <span style="white-space:nowrap;">Company Info</span>
-        ${companyEditMode?"":`<button class="btn-ghost" id="co-edit-btn" style="padding:0.35rem 0.8rem;font-size:0.78rem;flex-shrink:0;">Edit</button>`}
+        <span class="hdr-ic" style="white-space:nowrap;"><svg class="icon-svg"><use href="#i-briefcase"/></svg>Company Info</span>
+        ${companyEditMode?"":`<button class="btn-ghost hdr-ic" id="co-edit-btn" style="padding:0.35rem 0.8rem;font-size:0.78rem;flex-shrink:0;justify-content:center;"><svg class="icon-svg"><use href="#i-pencil"/></svg>Edit</button>`}
       </div>
       <div class="account-status" style="margin-bottom:0.7rem;">Used to personalize AI-drafted bid proposals. Nothing here is shared beyond that.</div>
       ${companyEditMode?`
@@ -2683,7 +2727,7 @@ function renderAccount(){
       <div class="field-label">Specialty (optional)</div>
       <input class="input co-field" id="co-specialty" data-k="specialty" placeholder="sidewalk, ADA ramp &amp; curb concrete work" value="${esc(companyProfile.specialty||"")}" style="margin-bottom:0.8rem;" />
       <div style="display:flex;gap:0.6rem;">
-        <button class="btn-primary" id="co-confirm-btn" style="margin-top:0;">Confirm</button>
+        <button class="btn-primary hdr-ic" id="co-confirm-btn" style="margin-top:0;justify-content:center;"><svg class="icon-svg"><use href="#i-check"/></svg>Confirm</button>
         <button class="btn-ghost" id="co-cancel-btn">Cancel</button>
       </div>
       `:`
@@ -2695,20 +2739,20 @@ function renderAccount(){
       `}
     </div>
     <div class="account-card">
-      <div class="account-email" style="font-size:0.85rem;">Support</div>
+      <div class="account-email hdr-ic" style="font-size:0.85rem;"><svg class="icon-svg"><use href="#i-life-buoy"/></svg>Support</div>
       <div class="account-status" style="margin-bottom:0.7rem;">Send us a message and we'll get back to you, or email <a href="mailto:${SUPPORT_EMAIL}" style="color:var(--amber);">${SUPPORT_EMAIL}</a> directly.</div>
       <textarea class="input" id="support-msg" rows="4" placeholder="What's going on?" style="resize:vertical;margin-bottom:0.6rem;"></textarea>
       <button class="btn-ghost" id="support-send-btn">Send Message</button>
       <div class="account-status" id="support-status" style="margin-top:0.5rem;"></div>
     </div>
     <div class="account-card" id="referral-card">
-      <div class="account-email" style="font-size:0.85rem;">Refer a Contractor</div>
+      <div class="account-email hdr-ic" style="font-size:0.85rem;"><svg class="icon-svg"><use href="#i-users"/></svg>Refer a Contractor</div>
       <div class="account-status" style="margin-bottom:0.7rem;">Give a free month, get a free month — when someone you refer subscribes, you both get bonus time added automatically.</div>
       <div id="referral-body" class="account-status">Loading your link&hellip;</div>
     </div>
-    <div class="account-email" style="font-size:0.85rem;margin:0.4rem 0 0.5rem;">Billing</div>
+    <div class="account-email hdr-ic" style="font-size:0.85rem;margin:0.4rem 0 0.5rem;"><svg class="icon-svg"><use href="#i-credit-card"/></svg>Billing</div>
     <div class="plan" id="status-card"><div class="plan-name" style="display:flex;align-items:center;gap:0.5rem;"><span class="spin" style="border-top-color:var(--accent);border-color:rgba(245,158,11,0.25);"></span> Checking your plan...</div></div>
-    <a class="btn-ghost" style="text-decoration:none;display:block;text-align:center;box-sizing:border-box;" href="${PORTAL_URL}" target="_blank">Manage Billing on Stripe &rarr;</a>
+    <a class="btn-ghost" style="text-decoration:none;display:flex;align-items:center;justify-content:center;gap:0.45rem;box-sizing:border-box;" href="${PORTAL_URL}" target="_blank"><svg class="icon-svg"><use href="#i-credit-card"/></svg>Manage Billing on Stripe &rarr;</a>
     <div id="upgrade-section">
       <div class="plan featured">
         <div class="plan-name">Pro Monthly</div>
