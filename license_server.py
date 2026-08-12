@@ -63,6 +63,7 @@ import hashlib
 import datetime
 import time
 import random
+import secrets
 import threading
 import urllib.request
 import urllib.parse
@@ -176,6 +177,15 @@ def make_key(plan="monthly", months=1):
     date_short = exp.strftime("%Y%m%d")
     sig = _sign(plan, date_short)
     return f"BCP-{plan[:3].upper()}-{date_short}-{sig}", exp.isoformat()
+
+
+def _make_key_with_expiry(plan, exp_dt):
+    """Same signing scheme as make_key, but for an explicit expiry date
+    rather than a relative month count -- used to stack bonus days onto
+    whatever a user's plan already is, instead of overwriting it."""
+    date_short = exp_dt.strftime("%Y%m%d")
+    sig = _sign(plan, date_short)
+    return f"BCP-{plan[:3].upper()}-{date_short}-{sig}", exp_dt.isoformat()
 
 
 def verify_key(key):
@@ -707,6 +717,126 @@ def _issue_for(db, email, device, plan):
     return key
 
 
+# ── Referrals: give-a-month-get-a-month ──
+# client_reference_id already carries the buyer's device id (see index.html /
+# app.html's checkout-link tagging); a pending referral is appended after
+# this separator rather than sent as a second Stripe field, so no Stripe-side
+# configuration changes were needed to add this. Keep this string identical
+# to REFERRAL_SEP in app.html/index.html.
+_REFERRAL_SEP = "~ref~"
+REFERRAL_BONUS_DAYS_REFERRER = 30
+REFERRAL_BONUS_DAYS_REFERRED = 14
+
+
+def _referral_code_for(db, email):
+    """Get-or-create this email's referral code. One code per email, so
+    sharing the link twice doesn't mint two codes."""
+    email = (email or "").strip().lower()
+    if not email:
+        return None
+    owner_idx = db.setdefault("referral_owner", {})
+    codes = db.setdefault("referral_codes", {})
+    existing = owner_idx.get(email)
+    if existing in codes:
+        return existing
+    code = secrets.token_hex(4).upper()
+    while code in codes:
+        code = secrets.token_hex(4).upper()
+    codes[code] = {"email": email, "redemptions": 0}
+    owner_idx[email] = code
+    return code
+
+
+def _grant_bonus_days(db, email, device, days):
+    """Extend a user's plan by `days`, stacking on top of their current
+    expiration (or from now, if they have none) rather than overwriting it
+    -- an active subscriber shouldn't lose paid time to a bonus."""
+    base = datetime.datetime.now()
+    plan = "monthly"
+    existing_key = (db.get("emails", {}).get((email or "").lower()) if email else None) \
+        or (db.get("devices", {}).get(device) if device else None)
+    if existing_key:
+        info = db.get("issued", {}).get(existing_key)
+        if info:
+            plan = info.get("plan") or plan
+            try:
+                cur_exp = datetime.datetime.fromisoformat(info["expires"])
+                if cur_exp > base:
+                    base = cur_exp
+            except (KeyError, ValueError):
+                pass
+    key, exp = _make_key_with_expiry(plan, base + datetime.timedelta(days=days))
+    db.setdefault("issued", {})[key] = {
+        "plan": plan, "expires": exp[:10], "email": email or "", "device": device or "",
+        "updated": datetime.datetime.now().isoformat()[:10],
+    }
+    if email:
+        db.setdefault("emails", {})[email.lower()] = key
+    if device:
+        db.setdefault("devices", {})[device] = key
+    return key
+
+
+def _apply_referral_reward(db, ref_code, referred_email, referred_device):
+    """Both sides get bonus days once, the first time a referred signup
+    completes checkout. Redemption is keyed by the REFERRED person's own
+    identity, not the code, so the same new customer can't re-claim by
+    reusing a link (or their own) more than once."""
+    redeemed = db.setdefault("referral_redeemed", [])
+    ident = (referred_email or "").lower() or referred_device
+    if not ident or ident in redeemed:
+        return
+    info = db.get("referral_codes", {}).get(ref_code)
+    if not info:
+        return
+    referrer_email = info.get("email", "")
+    if referrer_email and referrer_email == (referred_email or "").lower():
+        return  # no self-referral
+    redeemed.append(ident)
+    info["redemptions"] = info.get("redemptions", 0) + 1
+    _grant_bonus_days(db, referrer_email, "", REFERRAL_BONUS_DAYS_REFERRER)
+    _grant_bonus_days(db, referred_email, referred_device, REFERRAL_BONUS_DAYS_REFERRED)
+    if referrer_email:
+        _send_referral_email(referrer_email, REFERRAL_BONUS_DAYS_REFERRER)
+    print(f"[referral] {ref_code} redeemed by {ident}", flush=True)
+
+
+def _send_referral_email(email, days):
+    if not (RESEND_API_KEY and email):
+        return
+    body = json.dumps({
+        "from": FROM_EMAIL,
+        "to": [email],
+        "subject": "You earned a free month on Bid Caller Pro",
+        "text": ("Someone you referred just subscribed to Bid Caller Pro -- "
+                 f"we've added {days} free days to your plan. Thanks for "
+                 "spreading the word!"),
+    }).encode("utf-8")
+    req = urllib.request.Request("https://api.resend.com/emails", data=body,
+        method="POST", headers={"Authorization": f"Bearer {RESEND_API_KEY}",
+                                "Content-Type": "application/json"})
+    try:
+        urllib.request.urlopen(req, timeout=15)
+        print(f"[email] sent referral bonus notice to {email}", flush=True)
+    except Exception as ex:
+        print(f"[email] referral email failed: {ex}", flush=True)
+
+
+@app.route("/referral/code", methods=["POST"])
+def referral_code():
+    """Signed-in users only -- a referral link is tied to an email so the
+    reward has somewhere to land, and Account/Settings (where this is
+    surfaced) already requires being signed in."""
+    data = request.get_json(force=True, silent=True) or {}
+    email = _verify_supabase_token(data.get("supabase_token", ""))
+    if not email:
+        return jsonify({"ok": False, "reason": "sign_in_required"}), 401
+    db = _db()
+    code = _referral_code_for(db, email)
+    _save_db(db)
+    return jsonify({"ok": True, "code": code})
+
+
 @app.route("/stripe/webhook", methods=["POST"])
 def stripe_webhook():
     payload = request.get_data()
@@ -724,7 +854,8 @@ def stripe_webhook():
     if etype == "checkout.session.completed":
         email = ((obj.get("customer_details") or {}).get("email")
                  or obj.get("customer_email") or "")
-        device = obj.get("client_reference_id") or ""
+        raw_ref = obj.get("client_reference_id") or ""
+        device, _, ref_code = raw_ref.partition(_REFERRAL_SEP)
         cust = obj.get("customer") or ""
         amount = obj.get("amount_total") or 0
         plan = "annual" if amount and amount >= 10000 else "monthly"
@@ -732,6 +863,8 @@ def stripe_webhook():
         if cust:
             db.setdefault("customers", {})[cust] = {
                 "email": email, "device": device, "plan": plan}
+        if ref_code:
+            _apply_referral_reward(db, ref_code, email, device)
         _save_db(db)
         _send_key_email(email, key)
         print(f"[stripe] issued {plan} key for {email or device}", flush=True)
@@ -2684,12 +2817,11 @@ def _perform_scan(location, radius, force=False):
         c, s = center["city"], center["state"]
         seen_urls = set()
         lock = threading.Lock()
-        center_queries = [
-            f"{c} {s} sidewalk replacement concrete construction bid invitation",
-            f"{c} {s} ADA ramp curb gutter concrete bid opportunities",
-            f"{c} {s} concrete flatwork sidewalk public works solicitation",
-            f"{c} {s} city county sidewalk curb concrete RFP",
-            f"{s} concrete sidewalk ADA curb bids near {c}",
+        # Queries that check something a direct read of the city's own bid
+        # page structurally cannot: a different entity entirely (school
+        # district, county, state portal) or a platform aggregator. Always
+        # worth running, known-portal hit or not.
+        center_queries_always = [
             f"{c} {s} school district sidewalk ADA concrete project bid",
             f"{c} {s} sidewalk ADA curb bid site:bidnetdirect.com OR site:demandstar.com",
             f"{c} {s} sidewalk ADA curb bid site:planetbids.com OR site:publicpurchase.com",
@@ -2697,14 +2829,27 @@ def _perform_scan(location, radius, force=False):
             f"{c} {s} sidewalk ADA curb bid site:bonfirehub.com",
             f"{c} {s} sidewalk ADA curb bid site:civicplus.com OR site:municode.com",
             f"{c} {s} sidewalk ADA curb bid site:bidexpress.com",
-            f"{c} {s} invitation to bid concrete sidewalk 2026",
             f"{c} {s} county road department concrete curb bid notice",
             f"{c} {s} Safe Routes to School OR ADA transition plan sidewalk bid",
             f"{c} {s} CDBG sidewalk curb ramp bid notice to contractors",
             f"{c} {s} sidewalk ADA curb bid site:bidsearch.com",
         ]
         if center["state"] == "MO":
-            center_queries.append(f"{c} {s} sidewalk ADA curb bid site:missouribuys.mo.gov")
+            center_queries_always.append(f"{c} {s} sidewalk ADA curb bid site:missouribuys.mo.gov")
+        # Generic re-phrasings of "does this city have a sidewalk bid" --
+        # redundant once _run_known_portals already read the city's own bid
+        # page directly and found something real there, since a working
+        # direct source is the authoritative answer to that exact question.
+        # Only worth the Tavily-credit cost when there's no working direct
+        # source to trust instead.
+        center_queries_generic = [
+            f"{c} {s} sidewalk replacement concrete construction bid invitation",
+            f"{c} {s} ADA ramp curb gutter concrete bid opportunities",
+            f"{c} {s} concrete flatwork sidewalk public works solicitation",
+            f"{c} {s} city county sidewalk curb concrete RFP",
+            f"{s} concrete sidewalk ADA curb bids near {c}",
+            f"{c} {s} invitation to bid concrete sidewalk 2026",
+        ]
 
         anchors = _nearby_anchor_towns(center, radius)
 
@@ -2723,7 +2868,12 @@ def _perform_scan(location, radius, force=False):
             got = _run_known_portals(c, s, f"{c}, {s}", grouped, center, radius,
                                       cdb, city_coords, lock, pdb, default_city=c,
                                       town_coords=center_coords, stats=drop_stats)
-            got += _run_local_queries(center_queries, f"{c}, {s}", MAX_PAGES,
+            # A hit here (got > 0) means the city's own bid page was read
+            # directly and had something real on it -- the generic queries
+            # would only be re-asking a question that page already answered.
+            queries = (center_queries_always if got > 0
+                      else center_queries_always + center_queries_generic)
+            got += _run_local_queries(queries, f"{c}, {s}", MAX_PAGES,
                                       grouped, center, radius, cdb, city_coords,
                                       seen_urls, lock, pdb, default_city="", state=s,
                                       town_coords=center_coords, stats=drop_stats)
@@ -2732,20 +2882,24 @@ def _perform_scan(location, radius, force=False):
 
         def _run_anchor(anchor):
             ac, ast, alat, alon = anchor
-            anchor_queries = [
-                f"{ac} {ast} sidewalk ADA curb concrete bid invitation",
+            anchor_queries_always = [
                 f"{ac} {ast} sidewalk ADA curb bid site:bidnetdirect.com OR site:demandstar.com",
                 f"{ac} {ast} sidewalk ADA curb bid site:planetbids.com OR site:publicpurchase.com",
                 f"{ac} {ast} concrete curb gutter bid Bonfire OpenGov CivicPlus procurement",
-                f"{ac} {ast} invitation to bid concrete sidewalk ADA ramp 2026",
                 f"{ac} {ast} sidewalk ADA curb bid site:bidsearch.com",
             ]
             if ast == "MO":
-                anchor_queries.append(f"{ac} {ast} sidewalk ADA curb bid site:missouribuys.mo.gov")
+                anchor_queries_always.append(f"{ac} {ast} sidewalk ADA curb bid site:missouribuys.mo.gov")
+            anchor_queries_generic = [
+                f"{ac} {ast} sidewalk ADA curb concrete bid invitation",
+                f"{ac} {ast} invitation to bid concrete sidewalk ADA ramp 2026",
+            ]
             got = _run_known_portals(ac, ast, f"{ac}, {ast}", grouped, center, radius,
                                       cdb, city_coords, lock, pdb, default_city=ac,
                                       town_coords=(alat, alon), stats=drop_stats)
-            got += _run_local_queries(anchor_queries, f"{ac}, {ast}", 5,
+            queries = (anchor_queries_always if got > 0
+                      else anchor_queries_always + anchor_queries_generic)
+            got += _run_local_queries(queries, f"{ac}, {ast}", 5,
                                       grouped, center, radius, cdb, city_coords,
                                       seen_urls, lock, pdb, default_city=ac, state=ast,
                                       town_coords=(alat, alon), stats=drop_stats)

@@ -79,6 +79,52 @@ class ScanEndToEndTests(unittest.TestCase):
         self.assertIn("Curb & Gutter Replacement - Phase 2", titles)
         self.assertEqual(out["total_bids"], 2, out["debug"])
 
+    def test_generic_queries_are_skipped_when_the_known_portal_already_hit(self):
+        """A working direct read of the city's own bid page already answers
+        "does this city have a sidewalk bid" -- the generic re-phrasings of
+        that exact question are then pure Tavily-credit waste, not a recall
+        gain. Aggregator/distinct-entity queries (school district, county,
+        BidNet, ...) still run regardless, since a direct read of the CITY's
+        page can't answer those."""
+        queries_seen = []
+
+        def record_search(q, max_results=6):
+            queries_seen.append(q)
+            return []
+
+        with patch.object(ls, "_fetch_page", return_value=(CIVICPLUS_PAGE, "ok")), \
+             patch.object(ls, "_tavily_search", side_effect=record_search), \
+             patch.object(ls, "_ddg_search", return_value=[]), \
+             patch.object(ls, "_ai_extract", return_value=[]):
+            ls._perform_scan("Springfield, MO", 25)
+
+        self.assertTrue(queries_seen, "no search ran at all")
+        self.assertTrue(any("bidnetdirect.com" in q for q in queries_seen),
+                        "an aggregator-targeted query should still run")
+        self.assertFalse(any("ADA ramp curb gutter concrete bid opportunities" in q
+                             for q in queries_seen),
+                         "a generic re-phrasing should have been skipped")
+
+    def test_generic_queries_still_run_when_no_known_portal_hits(self):
+        """No working direct source -- search is the only signal available,
+        so nothing gets trimmed."""
+        queries_seen = []
+
+        def record_search(q, max_results=6):
+            queries_seen.append(q)
+            return []
+
+        with patch.object(ls, "_fetch_page", return_value=("", "ok")), \
+             patch.object(ls, "_fetch_text", return_value=""), \
+             patch.object(ls, "_tavily_search", side_effect=record_search), \
+             patch.object(ls, "_ddg_search", return_value=[]), \
+             patch.object(ls, "_ai_extract", return_value=[]):
+            ls._perform_scan("Springfield, MO", 25)
+
+        self.assertTrue(any("ADA ramp curb gutter concrete bid opportunities" in q
+                            for q in queries_seen),
+                        "with no working direct source, the generic queries are needed")
+
     def test_the_search_path_alone_also_produces_bids(self):
         """Portal unreachable, search working — the other half must still run."""
         # Real niche-relevant filler, not "x"*500 -- looks_relevant() (run
