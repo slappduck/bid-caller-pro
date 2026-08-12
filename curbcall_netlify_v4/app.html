@@ -245,7 +245,9 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 
 /* ── Offline banner ── */
 #offline-bar{display:none;background:#3a2a08;color:var(--accent);font-size:0.78rem;font-weight:600;text-align:center;padding:0.5rem 1rem;border-bottom:1px solid var(--border);flex-shrink:0;}
-#offline-bar.show{display:block;}
+#offline-bar.show{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:0.5rem;}
+#offline-reconnect{background:none;border:1px solid var(--accent);color:var(--accent);border-radius:6px;padding:0.15rem 0.6rem;font-size:0.72rem;font-weight:700;font-family:var(--ui);cursor:pointer;flex-shrink:0;}
+#offline-reconnect:disabled{opacity:0.6;cursor:default;}
 .map-card.offline{display:none !important;}
 </style>
 </head>
@@ -724,20 +726,59 @@ function safeUrl(u){
 // just can't scan, sync, or sign in. Track that state explicitly so the UI can
 // say so instead of failing with generic "couldn't reach the server" errors.
 let offlineMode=!HAS_SB; // libraries missing entirely — hard offline
+// offlineMode is set once, from whatever happened to be true the instant the
+// page loaded (did supabase-js's CDN script load in time?). It used to just
+// stay however it started for the rest of the session — a single slow CDN
+// load on a flaky moment of connection left someone parked on "Offline —
+// showing your saved bids" for the whole session even after their signal
+// came back fully, with nothing on screen but static text explaining why.
+// reconnecting is the actual fix: a real request to our own server, not a
+// re-read of the same stale flag, so "am I offline" only ever answers with
+// live information.
+let reconnecting=false;
 function isOffline(){return offlineMode||!navigator.onLine;}
+async function tryReconnect(){
+  if(reconnecting)return;
+  reconnecting=true;
+  const btn=document.getElementById("offline-reconnect");
+  if(btn){btn.disabled=true;btn.textContent="Checking…";}
+  try{
+    await fetchWithTimeout(SERVER+"/health",{},8000);
+    offlineMode=false;
+    updateOfflineBar();
+    toast("Back online");
+    // These all early-return under isOffline(), so a stuck offlineMode meant
+    // they silently never ran even once real signal came back — kick them
+    // off now instead of waiting for the next natural trigger.
+    autoFillZip();autoUnlock();checkSavedSearches();
+    syncPullSavedBids();syncPullCompanyProfile();
+  }catch(e){
+    toast("Still can't reach the server");
+  }finally{
+    reconnecting=false;
+    if(btn){btn.disabled=false;btn.textContent="Reconnect";}
+  }
+}
 function updateOfflineBar(){
   const bar=document.getElementById("offline-bar");
   if(!bar)return;
   const off=isOffline();
   bar.classList.toggle("show",off);
-  bar.textContent=offlineMode
+  const msg=offlineMode
     ?"Offline — showing your saved bids. Scanning and sync need a connection."
     :"You're offline — saved bids still work. Scans will resume when you're back.";
+  bar.innerHTML=`<span>${esc(msg)}</span> <button id="offline-reconnect" type="button">Reconnect</button>`;
+  const btn=document.getElementById("offline-reconnect");
+  if(btn)btn.onclick=tryReconnect;
   // Map tiles come from a CDN that isn't cached, so an offline map is just a
   // grey box promising something it can't deliver — hide it rather than show it.
   document.querySelectorAll(".map-card").forEach(c=>c.classList.toggle("offline",off));
 }
-window.addEventListener("online",()=>{updateOfflineBar();toast("Back online");});
+// The browser's own signal is a real, useful trigger to re-check -- but it
+// only means a network interface exists, not that our server is actually
+// reachable, so this attempts the same real reconnect check rather than
+// trusting the event alone.
+window.addEventListener("online",tryReconnect);
 window.addEventListener("offline",updateOfflineBar);
 // Sign-in has two different failure modes and they need different advice:
 // no connection, or the auth library never loaded (usually a bad cached copy).
@@ -924,6 +965,11 @@ function bootOffline(){
 
 function updateUserChip(){
   const email=currentUser?.email||"";
+  // Company Info's "Contact Person" is the closest thing this app already
+  // has to a display name -- reused here rather than adding a second,
+  // near-duplicate name field, so the chip shows a real name instead of a
+  // raw email address once one's been set (Account -> Company Info -> Edit).
+  const displayName=(companyProfile.contact||"").trim();
   const chip=document.getElementById("user-chip");
   const avatar=companyProfile.avatar_url;
   // The chevron is what tells anyone this pill goes somewhere. Without it an
@@ -933,7 +979,7 @@ function updateUserChip(){
   // text node it was an anonymous flex item and the ellipsis ate the chevron,
   // which is the one part that says this pill is a button.
   chip.innerHTML=(avatar?`<img src="${esc(avatar)}" alt="">`:"")
-    +`<span class="who">${esc(email||"Account")}</span>`
+    +`<span class="who">${esc(displayName||email||"Account")}</span>`
     +`<span class="chev" aria-hidden="true">›</span>`;
 }
 function showApp(){
@@ -963,6 +1009,22 @@ function showApp(){
   syncPullSavedSearches();
 }
 
+// Leaflet computes its tile grid from the container's size at the moment
+// invalidateSize() runs. A flat setTimeout mostly works, but on a throttled
+// device (Low Power Mode, a busy tab) the browser can still be mid-layout
+// when it fires, leaving Leaflet with a stale, too-narrow tile grid: tiles
+// render for the width it *thought* it had when hidden, and the newly-
+// revealed rest of the map stays a blank grey box (the bid map, both
+// halves not overlapping any actual city, is exactly this). Double rAF
+// guarantees the browser has actually finished laying out a frame before
+// asking; the delayed call after it is a safety net for slower devices
+// where even that isn't quite enough.
+function mapSettle(obj){
+  if(!obj)return;
+  requestAnimationFrame(()=>requestAnimationFrame(()=>obj.invalidateSize()));
+  setTimeout(()=>obj.invalidateSize(),300);
+}
+
 // ── Nav ──
 // A named function instead of "find the nav-btn and simulate a click on it"
 // -- Account no longer has a bottom-nav button (reached via the top-right
@@ -986,9 +1048,9 @@ function switchScreen(s){
   // it here, now that the tab has actually just become visible, is what
   // was previously only happening by accident when a user clicked the
   // map (which incidentally re-ran show() -> invalidateSize()).
-  if(s==="scan"&&findMap)setTimeout(()=>findMap.invalidateSize(),50);
-  if(s==="upcoming")setTimeout(()=>upPicker.invalidateSize(),50);
-  if(s==="leads")setTimeout(()=>leadsPicker.invalidateSize(),50);
+  if(s==="scan")mapSettle(findMap);
+  if(s==="upcoming")mapSettle(upPicker);
+  if(s==="leads")mapSettle(leadsPicker);
 }
 document.querySelectorAll(".nav-btn").forEach(b=>{
   b.onclick=()=>switchScreen(b.dataset.s);
@@ -1229,7 +1291,7 @@ function updateFindMap(lat,lon,label){
   findMarker=L.circleMarker([lat,lon],CENTER_PIN)
     .addTo(findMap).bindPopup(esc(label||"You are here"));
   drawFindRadiusCircle();
-  setTimeout(()=>findMap.invalidateSize(),50);
+  mapSettle(findMap);
 }
 function drawFindRadiusCircle(){
   if(!findMap||!findCenter)return;
@@ -1451,7 +1513,7 @@ function createLocationPicker(containerId,inputId){
     if(st.marker)st.map.removeLayer(st.marker);
     st.marker=L.circleMarker([lat,lon],CENTER_PIN)
       .addTo(st.map).bindPopup(esc(label||"Selected location"));
-    setTimeout(()=>st.map.invalidateSize(),50);
+    mapSettle(st.map);
   }
   async function pick(lat,lon){
     const input=document.getElementById(inputId);
@@ -1827,7 +1889,7 @@ function renderMap(){
     });
   }
   if(bounds.length>1)leafletMap.fitBounds(bounds,{padding:[30,30]});
-  setTimeout(()=>leafletMap.invalidateSize(),50);
+  mapSettle(leafletMap);
 }
 function showMapCard(show){
   mapVisible=show;store.set("map_visible",show);
@@ -2714,7 +2776,7 @@ function renderAccount(){
         <span class="hdr-ic" style="white-space:nowrap;"><svg class="icon-svg"><use href="#i-briefcase"/></svg>Company Info</span>
         ${companyEditMode?"":`<button class="btn-ghost hdr-ic" id="co-edit-btn" style="padding:0.35rem 0.8rem;font-size:0.78rem;flex-shrink:0;justify-content:center;"><svg class="icon-svg"><use href="#i-pencil"/></svg>Edit</button>`}
       </div>
-      <div class="account-status" style="margin-bottom:0.7rem;">Used to personalize AI-drafted bid proposals. Nothing here is shared beyond that.</div>
+      <div class="account-status" style="margin-bottom:0.7rem;">Used to personalize AI-drafted bid proposals, and Contact Person is shown in the corner up top instead of your email. Nothing here is shared beyond that.</div>
       ${companyEditMode?`
       <div class="field-label">Company Name</div>
       <input class="input co-field" id="co-name" data-k="name" placeholder="Acme Concrete LLC" value="${esc(companyProfile.name||"")}" style="margin-bottom:0.6rem;" />
@@ -2860,6 +2922,7 @@ function renderAccount(){
     pushCompanyProfile();
     companyEditMode=false;
     renderAccount();
+    updateUserChip(); // Contact Person doubles as the chip's display name
     toast("Company info saved");
   };
   const coCancelBtn=document.getElementById("co-cancel-btn");
