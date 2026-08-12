@@ -486,7 +486,19 @@ def _send_email(to, subject, text, reply_to=None):
     req = urllib.request.Request(
         "https://api.resend.com/emails", data=json.dumps(payload).encode("utf-8"),
         method="POST", headers={"Authorization": f"Bearer {RESEND_API_KEY}",
-                                "Content-Type": "application/json"})
+                                "Content-Type": "application/json",
+                                # Resend's API sits behind Cloudflare, which was
+                                # answering 403 "error code: 1010" -- its
+                                # ban-by-browser-signature response -- to
+                                # urllib's default Python-urllib/3.x agent. That
+                                # is what actually broke /support in production
+                                # (NOT an unverified sending domain, the first
+                                # theory). Same lesson this codebase already
+                                # learned for DuckDuckGo and BidNet Direct: an
+                                # honest, identifiable agent string gets through
+                                # where the bare library default does not.
+                                "User-Agent": "BidCallerPro/1.0 (+https://curbcallpro.netlify.app)",
+                                "Accept": "application/json"})
     try:
         urllib.request.urlopen(req, timeout=15)
         _email_note(True)

@@ -1299,6 +1299,22 @@ function drawFindRadiusCircle(){
   findRadiusCircle=L.circle([findCenter.lat,findCenter.lon],{
     radius:radius*1609.34,color:"#b45309",weight:2,fillOpacity:0.08,fillColor:"#f59e0b",
   }).addTo(findMap);
+  // The map is created at a fixed zoom 11 and nothing ever changed it, so the
+  // circle was the only thing that grew when you picked a bigger radius. At
+  // zoom 11 a phone-sized map shows roughly ten miles across -- so a 50 or
+  // 125mi selection drew a circle several times wider than the viewport and
+  // all you saw was a fragment of its arc, with your own search center
+  // scrolled off-screen entirely. Fit the view to the circle so the area you
+  // actually chose is the thing on screen.
+  // invalidateSize() first for the same reason mapSettle exists: fitBounds
+  // computes zoom from the container size Leaflet currently believes in, and
+  // a stale one gives the wrong zoom. Double rAF so the browser has really
+  // finished laying the frame out before either call.
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    if(!findMap||!findRadiusCircle)return;
+    findMap.invalidateSize();
+    findMap.fitBounds(findRadiusCircle.getBounds(),{padding:[16,16]});
+  }));
 }
 function clearFindTownMarkers(){
   findTownMarkers.forEach(m=>findMap.removeLayer(m));

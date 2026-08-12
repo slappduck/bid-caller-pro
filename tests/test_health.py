@@ -233,6 +233,26 @@ class SendEmailTests(unittest.TestCase):
         self.assertEqual(ls._email_state["last_status"], 403)
         self.assertIn("domain is not verified", ls._email_state["last_error"])
 
+    def test_a_real_user_agent_is_sent(self):
+        """Resend's API is behind Cloudflare, which answered every send with
+        403 'error code: 1010' -- its ban-by-browser-signature response -- to
+        urllib's default Python-urllib/3.x agent. Verified against the live
+        API: default agent gets 1010, a real one gets through to normal auth.
+        That single missing header was the whole production outage."""
+        captured = {}
+
+        def fake_urlopen(req, timeout=None):
+            captured["headers"] = dict(req.headers)
+
+        with patch.object(ls, "RESEND_API_KEY", SECRET), \
+             patch.object(ls.urllib.request, "urlopen", side_effect=fake_urlopen):
+            ls._send_email("a@example.com", "subj", "body")
+
+        # urllib title-cases header names on the Request object.
+        ua = captured["headers"].get("User-agent", "")
+        self.assertTrue(ua, "no User-Agent sent — Cloudflare will answer 1010")
+        self.assertNotIn("urllib", ua.lower())
+
     def test_reply_to_is_only_set_when_given(self):
         captured = {}
 
