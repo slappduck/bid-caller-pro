@@ -112,5 +112,88 @@ class BidPortalsTests(unittest.TestCase):
         self.assertFalse(bp.is_aggregator_url("https://www.springfieldmo.gov/bids.aspx"))
 
 
+class TownsWithinRadiusTests(unittest.TestCase):
+    """A wide-radius scan used to only ever search the exact town typed plus
+    a handful of geographically-guessed anchor points. towns_within_radius
+    is the fix: answer "which towns we already have a real bid page for
+    fall inside this radius" directly against pre-geocoded coordinates,
+    instead of guessing points and hoping one lands near a known town."""
+
+    def setUp(self):
+        self._orig_url = bp.UPSTASH_URL
+        self._orig_token = bp.UPSTASH_TOKEN
+        self._store = {}
+        self._kv_get = kv_backend.get
+        self._kv_set = kv_backend.set
+        kv_backend.get = lambda key, default=None: self._store.get(key, default)
+        kv_backend.set = lambda key, value: (self._store.__setitem__(key, value), True)[1]
+        self._orig_coords_cache = bp._coords_cache
+
+    def tearDown(self):
+        kv_backend.get = self._kv_get
+        kv_backend.set = self._kv_set
+        bp._coords_cache = self._orig_coords_cache
+
+    # Springfield, MO is ~0mi from itself; Nixa, MO is ~11mi north;
+    # Kansas City, MO is ~160mi northwest -- real coordinates, so distance
+    # checks below exercise the real haversine math, not a stub.
+    SPRINGFIELD = (37.2090, -93.2923)
+    NIXA = (37.0428, -93.2926)
+    KANSAS_CITY = (39.0997, -94.5786)
+
+    def _directory_with(self, *towns):
+        d = bp.load_directory()
+        for city, state in towns:
+            bp.learn_portal(d, city, state, f"https://www.{city.lower()}.gov/bids.aspx")
+        return d
+
+    def test_a_nearby_known_town_is_found(self):
+        bp._coords_cache = {("Nixa", "MO"): self.NIXA}
+        d = self._directory_with(("Nixa", "MO"))
+        got = bp.towns_within_radius(d, *self.SPRINGFIELD, radius=25)
+        self.assertEqual([(c, s) for c, s, _, _ in got], [("Nixa", "MO")])
+
+    def test_a_town_outside_the_radius_is_not_found(self):
+        bp._coords_cache = {("Kansas City", "MO"): self.KANSAS_CITY}
+        d = self._directory_with(("Kansas City", "MO"))
+        got = bp.towns_within_radius(d, *self.SPRINGFIELD, radius=25)
+        self.assertEqual(got, [])
+        # ...but it IS found once the radius is actually wide enough to reach it.
+        got_wide = bp.towns_within_radius(d, *self.SPRINGFIELD, radius=200)
+        self.assertEqual([(c, s) for c, s, _, _ in got_wide], [("Kansas City", "MO")])
+
+    def test_excluded_towns_are_skipped_even_if_in_radius(self):
+        bp._coords_cache = {("Nixa", "MO"): self.NIXA}
+        d = self._directory_with(("Nixa", "MO"))
+        got = bp.towns_within_radius(d, *self.SPRINGFIELD, radius=25,
+                                     exclude={("nixa", "MO")})
+        self.assertEqual(got, [])
+
+    def test_a_town_with_coords_but_no_trusted_portal_is_skipped(self):
+        # Geocoded, but never actually learned/seeded as a real bid page --
+        # coordinates alone aren't enough to justify fetching it.
+        bp._coords_cache = {("Ghost Town", "MO"): self.NIXA}
+        d = bp.load_directory()
+        got = bp.towns_within_radius(d, *self.SPRINGFIELD, radius=25)
+        self.assertEqual(got, [])
+
+    def test_a_town_that_aged_out_is_no_longer_returned(self):
+        bp._coords_cache = {("Flakyville", "MO"): self.NIXA}
+        d = self._directory_with(("Flakyville", "MO"))
+        url = "https://www.flakyville.gov/bids.aspx"
+        for _ in range(bp.MAX_FAIL):
+            bp.record_result(d, "Flakyville", "MO", url, False)
+        got = bp.towns_within_radius(d, *self.SPRINGFIELD, radius=25)
+        self.assertEqual(got, [])
+
+    def test_a_town_with_no_geocoded_coordinates_is_silently_skipped(self):
+        # Real, trusted portal, just not geocoded yet -- degrades to "not
+        # included this scan", never a crash.
+        bp._coords_cache = {}
+        d = self._directory_with(("Nixa", "MO"))
+        got = bp.towns_within_radius(d, *self.SPRINGFIELD, radius=25)
+        self.assertEqual(got, [])
+
+
 if __name__ == "__main__":
     unittest.main()

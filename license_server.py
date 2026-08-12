@@ -344,6 +344,7 @@ def health_detail():
         "saved_search_alerts": bool(SUPABASE_SERVICE_ROLE_KEY and CRON_SECRET and RESEND_API_KEY),
     }
     tav = _tavily_health()
+    email_health = _email_health()
     with _ddg_lock:
         ddg_streak = _ddg_fail_streak
     # DuckDuckGo is scraped, so it can be blocked outright. That only threatens
@@ -363,6 +364,19 @@ def health_detail():
             "scraping DuckDuckGo and scans will look almost empty until this clears.")
     elif backends["tavily"] and tav["failing"]:
         problems.append("Every Tavily search this run has failed — local bid search is degraded.")
+    # Same "configured but rejected is worse than absent" shape as Tavily
+    # above: an API key being present tells you nothing about whether Resend
+    # will actually accept a send (their sandbox from-address, the default,
+    # can only deliver to the account's own verified email) -- this is what
+    # actually caught /support silently 500ing in production.
+    if backends["resend_email"] and email_health["failing"]:
+        problems.append(
+            f"Every email send this run has failed (HTTP {email_health['last_status']}: "
+            f"{email_health['last_error']}) — support messages, license-key delivery, "
+            "referral notices and admin alerts are all silently not arriving. If "
+            "FROM_EMAIL is still the onboarding@resend.dev default, Resend's sandbox "
+            "address can only send to the account's own verified email — verify a "
+            "real domain or point SUPPORT_EMAIL at that verified address.")
     if not backends["openai"]:
         problems.append("OPENAI_API_KEY unset — /scan and /upcoming return no local bids at all")
     if not backends["tavily"] and ddg["degraded"]:
@@ -394,6 +408,8 @@ def health_detail():
         "tavily": {k: tav[k] for k in
                    ("ok", "failed", "last_status", "last_error",
                     "quota_or_auth_failure", "failing")},
+        "email": {k: email_health[k] for k in
+                  ("ok", "failed", "last_status", "last_error", "failing")},
         "search_depth": TAVILY_DEPTH,
         # The recall knobs, so what's actually running is visible without
         # reading Render's env-var screen. All are env-tunable; raising them
@@ -403,6 +419,7 @@ def health_detail():
             "page_workers": PAGE_WORKERS,             # SCAN_PAGE_WORKERS
             "max_pages_per_domain": MAX_PAGES_PER_DOMAIN,  # SCAN_MAX_PAGES_PER_DOMAIN
             "max_anchor_towns": MAX_ANCHOR_TOWNS,     # SCAN_MAX_ANCHORS
+            "max_known_towns": MAX_KNOWN_TOWNS,       # SCAN_MAX_KNOWN_TOWNS
             "federal_window_days": SCAN_WINDOW_DAYS,  # SCAN_WINDOW_DAYS
             "geo_miss_retry_hours": GEO_MISS_RETRY_HOURS,
             "model": OPENAI_MODEL,                    # OPENAI_MODEL
@@ -420,6 +437,72 @@ STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 FROM_EMAIL = os.environ.get("FROM_EMAIL", "Bid Caller Pro <onboarding@resend.dev>")
 SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL", "Yumiwave1@gmail.com")
+
+# ── Email delivery tracking ──
+# Resend accepting the request doesn't mean the send worked. FROM_EMAIL's
+# default, onboarding@resend.dev, is Resend's own sandbox address -- it can
+# only deliver to the account's own verified email, so a domain that was
+# never verified fails every real send while /health's "resend_email: true"
+# (an API key is merely present) says everything's fine. That failure was
+# invisible from every caller's side: /support just told the customer
+# "couldn't send", key delivery silently never arrived, and _alert_admin --
+# the thing meant to notice problems -- failed the exact same way with
+# nobody watching. Tracked the same way _tavily_note/_tavily_health already
+# track search failures, through the one function that actually calls
+# Resend, so a systematic failure shows up in /health instead of needing a
+# live test against production to find (see tests/test_licensing_gate.py).
+_email_lock = threading.Lock()
+_email_state = {"ok": 0, "failed": 0, "last_error": "", "last_status": 0}
+
+
+def _email_note(ok, status=0, detail=""):
+    with _email_lock:
+        if ok:
+            _email_state["ok"] += 1
+        else:
+            _email_state["failed"] += 1
+            _email_state["last_status"] = status
+            _email_state["last_error"] = (detail or "")[:200]
+
+
+def _email_health():
+    with _email_lock:
+        st = dict(_email_state)
+    total = st["ok"] + st["failed"]
+    st["failing"] = total > 0 and st["ok"] == 0 and st["failed"] > 0
+    return st
+
+
+def _send_email(to, subject, text, reply_to=None):
+    """The one place that actually calls Resend. Every caller below is
+    best-effort (a support message, a key delivery, an admin alert, a
+    referral notice), so this never raises -- it reports through
+    _email_note/_email_health instead."""
+    if not RESEND_API_KEY:
+        return False
+    payload = {"from": FROM_EMAIL, "to": [to], "subject": subject, "text": text}
+    if reply_to:
+        payload["reply_to"] = reply_to
+    req = urllib.request.Request(
+        "https://api.resend.com/emails", data=json.dumps(payload).encode("utf-8"),
+        method="POST", headers={"Authorization": f"Bearer {RESEND_API_KEY}",
+                                "Content-Type": "application/json"})
+    try:
+        urllib.request.urlopen(req, timeout=15)
+        _email_note(True)
+        return True
+    except urllib.error.HTTPError as ex:
+        try:
+            detail = ex.read().decode("utf-8", "ignore")
+        except Exception:
+            detail = ""
+        _email_note(False, ex.code, detail or str(ex))
+        print(f"[email] send to {to} failed: {ex.code} {detail}", flush=True)
+        return False
+    except Exception as ex:
+        _email_note(False, 0, str(ex))
+        print(f"[email] send to {to} failed: {ex}", flush=True)
+        return False
 
 # Saved-search email alerts (/run-saved-search-alerts, see below). Both are
 # OPTIONAL and the feature is inert (returns "not_configured") until both are
@@ -470,25 +553,13 @@ def _stripe_verify(payload, sig_header):
 
 def _send_key_email(email, key):
     """Email the license key to the buyer (only if Resend is configured)."""
-    if not (RESEND_API_KEY and email):
+    if not email:
         return
-    body = json.dumps({
-        "from": FROM_EMAIL,
-        "to": [email],
-        "subject": "Your Bid Caller Pro license key",
-        "text": ("Thanks for subscribing to Bid Caller Pro!\n\n"
-                 f"Your license key:\n\n    {key}\n\n"
-                 "If the app didn't unlock automatically, open it, go to the Plan "
-                 "tab, paste the key under 'Have a license key?', and tap Activate."),
-    }).encode("utf-8")
-    req = urllib.request.Request("https://api.resend.com/emails", data=body,
-        method="POST", headers={"Authorization": f"Bearer {RESEND_API_KEY}",
-                                "Content-Type": "application/json"})
-    try:
-        urllib.request.urlopen(req, timeout=15)
-        print(f"[email] sent key to {email}", flush=True)
-    except Exception as ex:
-        print(f"[email] failed: {ex}", flush=True)
+    _send_email(email, "Your Bid Caller Pro license key",
+                "Thanks for subscribing to Bid Caller Pro!\n\n"
+                f"Your license key:\n\n    {key}\n\n"
+                "If the app didn't unlock automatically, open it, go to the Plan "
+                "tab, paste the key under 'Have a license key?', and tap Activate.")
 
 
 # ── Admin error alerts: know about a crash before a customer reports it ──
@@ -500,7 +571,7 @@ ALERT_COOLDOWN_SEC = 1800  # don't re-alert the same error more than every 30 mi
 def _alert_admin(subject, detail):
     """Email SUPPORT_EMAIL on server errors (best-effort, never raises).
     Rate-limited per distinct subject so a flapping error doesn't spam."""
-    if not (RESEND_API_KEY and SUPPORT_EMAIL):
+    if not SUPPORT_EMAIL:
         return
     now = time.time()
     with _alert_lock:
@@ -508,19 +579,7 @@ def _alert_admin(subject, detail):
         if now - last < ALERT_COOLDOWN_SEC:
             return
         _alert_last_sent[subject] = now
-    body = json.dumps({
-        "from": FROM_EMAIL,
-        "to": [SUPPORT_EMAIL],
-        "subject": f"[CurbCall Pro] {subject}",
-        "text": detail[:4000],
-    }).encode("utf-8")
-    req = urllib.request.Request("https://api.resend.com/emails", data=body,
-        method="POST", headers={"Authorization": f"Bearer {RESEND_API_KEY}",
-                                "Content-Type": "application/json"})
-    try:
-        urllib.request.urlopen(req, timeout=15)
-    except Exception as ex:
-        print(f"[alert] failed to send alert email: {ex}", flush=True)
+    _send_email(SUPPORT_EMAIL, f"[CurbCall Pro] {subject}", detail[:4000])
 
 
 # ── Saved-search alerts: Supabase admin access + new-bid emails ──
@@ -802,24 +861,12 @@ def _apply_referral_reward(db, ref_code, referred_email, referred_device):
 
 
 def _send_referral_email(email, days):
-    if not (RESEND_API_KEY and email):
+    if not email:
         return
-    body = json.dumps({
-        "from": FROM_EMAIL,
-        "to": [email],
-        "subject": "You earned a free month on Bid Caller Pro",
-        "text": ("Someone you referred just subscribed to Bid Caller Pro -- "
-                 f"we've added {days} free days to your plan. Thanks for "
-                 "spreading the word!"),
-    }).encode("utf-8")
-    req = urllib.request.Request("https://api.resend.com/emails", data=body,
-        method="POST", headers={"Authorization": f"Bearer {RESEND_API_KEY}",
-                                "Content-Type": "application/json"})
-    try:
-        urllib.request.urlopen(req, timeout=15)
-        print(f"[email] sent referral bonus notice to {email}", flush=True)
-    except Exception as ex:
-        print(f"[email] referral email failed: {ex}", flush=True)
+    _send_email(email, "You earned a free month on Bid Caller Pro",
+                "Someone you referred just subscribed to Bid Caller Pro -- "
+                f"we've added {days} free days to your plan. Thanks for "
+                "spreading the word!")
 
 
 @app.route("/referral/code", methods=["POST"])
@@ -929,8 +976,9 @@ def mykey():
 @app.route("/support", methods=["POST"])
 def support():
     """Emails a customer's in-app support message to SUPPORT_EMAIL via
-    Resend — reuses the same email setup as license-key delivery, no new
-    service or secret needed."""
+    Resend — reuses the same shared, tracked send path as license-key
+    delivery, referral notices and admin alerts (_send_email), so a
+    systematic failure here also shows up in /health's email stats."""
     data = request.get_json(force=True, silent=True) or {}
     email = (data.get("email") or "").strip()
     message = (data.get("message") or "").strip()
@@ -938,24 +986,12 @@ def support():
         return jsonify({"ok": False, "reason": "no_message"})
     if not RESEND_API_KEY:
         return jsonify({"ok": False, "reason": "email_unavailable"})
-    payload = {
-        "from": FROM_EMAIL,
-        "to": [SUPPORT_EMAIL],
-        "subject": f"Bid Caller Pro support request{f' from {email}' if email else ''}",
-        "text": message,
-    }
-    if email:
-        payload["reply_to"] = email
-    req = urllib.request.Request(
-        "https://api.resend.com/emails", data=json.dumps(payload).encode("utf-8"),
-        method="POST", headers={"Authorization": f"Bearer {RESEND_API_KEY}",
-                                "Content-Type": "application/json"})
-    try:
-        urllib.request.urlopen(req, timeout=15)
+    ok = _send_email(SUPPORT_EMAIL,
+                     f"Bid Caller Pro support request{f' from {email}' if email else ''}",
+                     message, reply_to=email or None)
+    if ok:
         return jsonify({"ok": True})
-    except Exception as ex:
-        print(f"[support] email failed: {ex}", flush=True)
-        return jsonify({"ok": False, "reason": "send_failed"}), 500
+    return jsonify({"ok": False, "reason": "send_failed"}), 500
 
 
 @app.route("/claim", methods=["POST"])
@@ -1563,6 +1599,11 @@ MAX_PAGES_PER_DOMAIN = int(os.environ.get("SCAN_MAX_PAGES_PER_DOMAIN", "4"))
 # Towns searched around the radius, on top of the centre. More towns means
 # more of a wide radius is actually looked at, at the cost of scan time.
 MAX_ANCHOR_TOWNS = int(os.environ.get("SCAN_MAX_ANCHORS", "6"))
+# Known-portal towns within radius are a direct fetch each, not a search
+# query, so this can be far more generous than MAX_ANCHOR_TOWNS without a
+# proportional cost increase -- capped so a scan centered in a very
+# densely-covered metro doesn't try to fetch every known town in the state.
+MAX_KNOWN_TOWNS = int(os.environ.get("SCAN_MAX_KNOWN_TOWNS", "40"))
 
 # Primary sources: the agency actually letting the work, rather than a site
 # re-listing it. Preferred when the budget is tight.
@@ -2853,11 +2894,31 @@ def _perform_scan(location, radius, force=False):
 
         anchors = _nearby_anchor_towns(center, radius)
 
-        # Each "town job" (center + every anchor) is fully independent work,
-        # so they run concurrently instead of one after another — this is
-        # the biggest lever on wall-clock scan time. Capped at 4 workers so
-        # we don't fire too many simultaneous search-engine requests at once
-        # (DuckDuckGo in particular will start blocking if hammered).
+        # _nearby_anchor_towns samples at most a handful of geographically-
+        # guessed points regardless of how large the radius is -- a 125mi
+        # scan covers ~49,000 sq mi, and 6 sample points leaves most of that
+        # area unsearched. Separately from that guessing, we already have a
+        # real, verified bid page for 3,151 towns nationally (the offline
+        # crawl) -- this asks a cheaper, more direct question: of the towns
+        # we ALREADY trust, which ones are actually inside this radius. No
+        # search credits involved, just reading pages we already know about.
+        # Sorted closest-first and capped so a scan centered in a
+        # well-covered metro doesn't try to fetch every known town in the
+        # state at once.
+        known_exclude = {(c.lower(), s)} | {(a[0].lower(), a[1]) for a in anchors}
+        known_towns = bid_portals.towns_within_radius(
+            pdb, center["lat"], center["lon"], radius, exclude=known_exclude)
+        known_towns.sort(key=lambda t: _miles_between(center["lat"], center["lon"], t[2], t[3]))
+        known_towns = known_towns[:MAX_KNOWN_TOWNS]
+
+        # Each "town job" (center + every anchor + every known-portal town)
+        # is fully independent work, so they run concurrently instead of one
+        # after another — this is the biggest lever on wall-clock scan time.
+        # Search-driven jobs (center/anchor) stay capped at 4 workers so we
+        # don't fire too many simultaneous search-engine requests at once
+        # (DuckDuckGo in particular will start blocking if hammered); the
+        # known-town jobs below are just a direct page fetch each (no search
+        # queries), so they get their own, more generous pool.
         center_coords = (center["lat"], center["lon"])
 
         def _run_center():
@@ -2906,13 +2967,35 @@ def _perform_scan(location, radius, force=False):
             print(f"[scan] {got} raw bids from {ac}, {ast} (anchor)", flush=True)
             return got
 
+        def _run_known_town(town):
+            # No search queries here at all -- this town wasn't picked by
+            # guessing, it's one we already have a verified real bid page
+            # for. Reading it directly is the entire job.
+            kc, kst, klat, klon = town
+            got = _run_known_portals(kc, kst, f"{kc}, {kst}", grouped, center, radius,
+                                      cdb, city_coords, lock, pdb, default_city=kc,
+                                      town_coords=(klat, klon), stats=drop_stats)
+            print(f"[scan] {got} raw bids from {kc}, {kst} (known portal)", flush=True)
+            return got
+
         with ThreadPoolExecutor(max_workers=4) as ex:
             futures = [ex.submit(_run_center)] + [ex.submit(_run_anchor, a) for a in anchors]
             for f in as_completed(futures):
                 local_raw += f.result()
 
+        # Separate pool from the search-driven jobs above: these are a direct
+        # fetch each against a different domain, not a search-engine query,
+        # so there's no shared backend to overwhelm the way DuckDuckGo/Tavily
+        # would be by running many at once.
+        if known_towns:
+            with ThreadPoolExecutor(max_workers=10) as ex:
+                futures = [ex.submit(_run_known_town, t) for t in known_towns]
+                for f in as_completed(futures):
+                    local_raw += f.result()
+
         print(f"[scan] {local_raw} raw local bids extracted total "
-              f"({len(anchors)} anchor town(s) searched)", flush=True)
+              f"({len(anchors)} anchor town(s), {len(known_towns)} known-portal "
+              f"town(s) searched)", flush=True)
 
         if not TAVILY_API_KEY and _ddg_is_degraded():
             _alert_admin(

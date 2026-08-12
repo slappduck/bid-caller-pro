@@ -47,8 +47,15 @@ class ScanEndToEndTests(unittest.TestCase):
             patch.object(ls, "OPENAI_API_KEY", "test-key"),
             patch.object(ls, "SAM_API_KEY", ""),
             patch.object(ls, "TAVILY_API_KEY", "test-key"),
-            # Keep the geography small and deterministic.
+            # Keep the geography small and deterministic. Without this,
+            # data/bid_portal_coords.csv having a real nearby MO town (e.g.
+            # Nixa/Republic/Ozark, all real SEED_PORTALS entries a short
+            # drive from Springfield) would make towns_within_radius pull
+            # one in — the mocked _fetch_page/_ai_extract below answer for
+            # ANY url, so that town would silently double bid counts and
+            # break the exact-count assertions in this class.
             patch.object(ls, "_nearby_anchor_towns", return_value=[]),
+            patch.object(ls.bid_portals, "towns_within_radius", return_value=[]),
             patch.object(ls, "_geo_from_city",
                          side_effect=lambda c, s: {"lat": 37.209, "lon": -93.29,
                                                    "city": c, "state": s}
@@ -317,6 +324,104 @@ class HomepageLinkFallbackTests(unittest.TestCase):
             got = ls._run_known_portals("X", "MO", "X, MO", {}, CENTER, 25, {}, {},
                                         threading.Lock(), {})
         self.assertEqual(got, 0)
+
+
+class KnownPortalRadiusExpansionTests(unittest.TestCase):
+    """A wide-radius scan used to only ever search the exact town typed plus
+    a handful of geographically-guessed anchor points, capped at 6 no
+    matter how large the radius actually was. This is the fix: every town
+    within radius that we already have a real, verified bid page for (the
+    national crawl -- see bid_portals.towns_within_radius) gets read
+    directly too, at no search-credit cost. This exercises that path
+    through the full _perform_scan pipeline, not just the unit in
+    isolation (see tests/test_bid_portals.py for that)."""
+
+    def setUp(self):
+        self.cache = {}
+        self.pdb_store = {}
+        self._patchers = [
+            patch.object(ls, "_cache", side_effect=lambda: self.cache),
+            patch.object(ls, "_save_cache"),
+            patch.object(ls, "_resolve_center", return_value=CENTER),
+            patch.object(ls, "OPENAI_API_KEY", "test-key"),
+            patch.object(ls, "SAM_API_KEY", ""),
+            patch.object(ls, "TAVILY_API_KEY", "test-key"),
+            patch.object(ls, "_nearby_anchor_towns", return_value=[]),
+            patch.object(ls, "_tavily_search", return_value=[]),
+            patch.object(ls, "_ddg_search", return_value=[]),
+            patch.object(ls, "_ai_extract", return_value=[]),
+            patch.object(ls, "_bidnet_direct_urls", return_value=[]),
+            # The center town has no known portal in these tests, so it runs
+            # the full query list and hits the real DDG_QUERY_PAUSE between
+            # each one (production pacing for the free scraped backend,
+            # correctly exercised by test_portal_reads_do_not_run_one_after_
+            # another elsewhere) -- not what these tests are checking, and it
+            # turns 2 fast tests into an 18s pair for no assertion-relevant
+            # reason.
+            patch.object(ls, "DDG_QUERY_PAUSE", 0),
+            # Real coordinates for every city these tests touch, not a live
+            # network call — _place_bid geocodes a bid's default_city to
+            # apply the radius check, same reason ScanEndToEndTests mocks
+            # this. Missing "Springfield" here (the center itself) was the
+            # actual bug: _geo_from_city returning None for it didn't error,
+            # it silently fell through to a real, slow network geocode.
+            patch.object(ls, "_geo_from_city", side_effect=lambda c, s: {
+                "Springfield": {"lat": 37.2090, "lon": -93.2923, "city": c, "state": s},
+                "Nixa": {"lat": 37.0428, "lon": -93.2926, "city": c, "state": s},
+                "Kansas City": {"lat": 39.0997, "lon": -94.5786, "city": c, "state": s},
+            }.get(c)),
+            patch.object(ls.bid_portals.kv_backend, "get",
+                         side_effect=lambda key, default=None: self.pdb_store.get(key, default)),
+            patch.object(ls.bid_portals.kv_backend, "set",
+                         side_effect=lambda key, value: self.pdb_store.__setitem__(key, value)),
+        ]
+        for p in self._patchers:
+            p.start()
+
+    def tearDown(self):
+        for p in self._patchers:
+            p.stop()
+
+    def test_a_known_town_within_radius_contributes_bids_with_no_search(self):
+        nearby_town = ("Nixa", "MO", 37.0428, -93.2926)  # ~11mi from CENTER
+
+        def fetch(url, timeout=None):
+            if "nixa" in url:
+                return (CIVICPLUS_PAGE, "ok")
+            return ("", "ok")
+
+        with patch.object(ls.bid_portals, "towns_within_radius", return_value=[nearby_town]), \
+             patch.object(ls.bid_portals, "get_portals",
+                          side_effect=lambda d, city, state: (
+                              [{"url": "https://www.nixa.gov/Bids.aspx", "platform": "civicplus"}]
+                              if city == "Nixa" else [])), \
+             patch.object(ls, "_fetch_page", side_effect=fetch):
+            out = ls._perform_scan("Springfield, MO", 25)
+
+        titles = [b["title"] for v in out["bids"].values() for b in v]
+        self.assertIn("FY26 Sidewalk Improvements & ADA Ramps", titles, out["debug"])
+
+    def test_a_known_town_outside_the_result_radius_is_excluded_by_the_per_bid_filter(self):
+        """towns_within_radius already filters by radius, but this pins the
+        belt-and-suspenders behavior: even if a known town somehow slipped
+        through too far away, individual bids from it still can't bypass
+        the existing out_of_radius check on the final result."""
+        far_town = ("Kansas City", "MO", 39.0997, -94.5786)  # ~160mi from CENTER
+
+        def fetch(url, timeout=None):
+            if "kansascity" in url:
+                return (CIVICPLUS_PAGE, "ok")
+            return ("", "ok")
+
+        with patch.object(ls.bid_portals, "towns_within_radius", return_value=[far_town]), \
+             patch.object(ls.bid_portals, "get_portals",
+                          side_effect=lambda d, city, state: (
+                              [{"url": "https://www.kansascity.gov/Bids.aspx", "platform": "civicplus"}]
+                              if city == "Kansas City" else [])), \
+             patch.object(ls, "_fetch_page", side_effect=fetch):
+            out = ls._perform_scan("Springfield, MO", 25)
+
+        self.assertEqual(out["total_bids"], 0, out["debug"])
 
 
 if __name__ == "__main__":

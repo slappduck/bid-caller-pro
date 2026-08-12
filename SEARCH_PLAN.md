@@ -264,6 +264,29 @@ tuned against a saved fixture without waiting on a live site.
 - [x] Counties are reachable at all for the first time — they let a lot of
       curb, road and drainage work and were previously invisible
 - [ ] Widen `CANDIDATE_BID_PATHS` once real hit rates are known
+- [x] **A wide radius actually searches a wide radius.** Reported by Josh as
+      "too few results even on a wide radius" — traced to
+      `_nearby_anchor_towns`: it samples at most `MAX_ANCHOR_TOWNS` (6)
+      geographically-guessed points regardless of how large the radius
+      actually is, and returns nothing at all below 40mi. A 125mi radius
+      covers ~49,000 sq mi; 6 sample points is a real recall gap, and below
+      40mi the scan only ever searched the exact town typed. The actual fix
+      needed no new search credits: `tools/discover_bid_portals.py` already
+      found 3,151 real bid pages nationally, but `/scan` never asked "which
+      of the towns I already trust fall inside this radius" — it only asked
+      about the handful of sampled/typed towns. `tools/geocode_bid_portals.py`
+      pre-geocodes every "found" row in `data/bid_portal_directory.csv`
+      offline into `data/bid_portal_coords.csv` (kept separate so
+      `discover_bid_portals.py` re-runs can't silently wipe it), and
+      `bid_portals.towns_within_radius()` turns that into cheap arithmetic
+      at scan time — real haversine distance against already-known
+      coordinates, no live geocode call per candidate. Wired into
+      `_perform_scan` as a third, separate worker pool (capped at
+      `MAX_KNOWN_TOWNS`=40, closest-first): each hit is a direct page fetch
+      only, no search queries, so it's far cheaper per-town than an anchor.
+      Full national geocode run in progress (~2,750 towns, ~15-20min,
+      zippopotam-then-Nominatim same as everywhere else this codebase
+      geocodes).
 - [ ] Cities on `.org`/`.com`/`.us` domains — the registry only covers `.gov`,
       so places like Aurora MO (`aurora-cityhall.org`) still need discovery.
       Wikidata's official-website property is the likely second source

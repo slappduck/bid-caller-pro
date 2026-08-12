@@ -5,6 +5,8 @@ backend is unset or DuckDuckGo starts getting blocked, /scan still returns 200
 with a thinner set of bids and nothing says why. These check it actually says
 so, and that it never echoes a secret's value.
 """
+import io
+import json
 import os
 import sys
 import unittest
@@ -141,6 +143,145 @@ class TavilyVisibilityTests(unittest.TestCase):
     def test_some_failures_alongside_successes_is_not_an_outage(self):
         ls._tavily_state.update({"ok": 10, "failed": 2, "last_status": 500})
         self.assertFalse(self._health()["tavily"]["failing"])
+
+
+class EmailVisibilityTests(unittest.TestCase):
+    """An API key being present (backends.resend_email) says nothing about
+    whether Resend will actually accept a send -- their sandbox from-address
+    (onboarding@resend.dev, the default FROM_EMAIL) can only deliver to the
+    account's own verified email. That's what let /support 500 silently in
+    production while /health reported everything as configured. Same shape
+    as TavilyVisibilityTests above, applied to _email_state/_email_health."""
+
+    def setUp(self):
+        self.client = ls.app.test_client()
+        ls._email_state.update({"ok": 0, "failed": 0, "last_error": "", "last_status": 0})
+
+    def tearDown(self):
+        ls._email_state.update({"ok": 0, "failed": 0, "last_error": "", "last_status": 0})
+
+    def _health(self):
+        with patch.multiple(ls, **FULLY_CONFIGURED), \
+             patch.multiple(kv_backend,
+                            UPSTASH_URL="https://example.upstash.io",
+                            UPSTASH_TOKEN=SECRET):
+            return self.client.get("/health").get_json()
+
+    def test_every_send_failing_is_reported_as_a_problem(self):
+        ls._email_state.update({"ok": 0, "failed": 3, "last_status": 403,
+                                "last_error": "domain not verified"})
+        body = self._health()
+        self.assertEqual(body["status"], "degraded")
+        self.assertTrue(body["email"]["failing"])
+        self.assertTrue(any("Every email send this run has failed" in p
+                            for p in body["problems"]))
+        self.assertTrue(any("domain not verified" in p for p in body["problems"]))
+
+    def test_healthy_email_raises_nothing(self):
+        ls._email_state.update({"ok": 5, "failed": 0, "last_status": 0})
+        body = self._health()
+        self.assertEqual(body["problems"], [])
+        self.assertFalse(body["email"]["failing"])
+
+    def test_some_failures_alongside_successes_is_not_an_outage(self):
+        ls._email_state.update({"ok": 8, "failed": 1, "last_status": 500})
+        self.assertFalse(self._health()["email"]["failing"])
+
+    def test_no_sends_attempted_yet_is_not_an_outage(self):
+        # Distinguishes "never tried" from "tried and failed" -- a server
+        # that just booted must not immediately report email as broken.
+        body = self._health()
+        self.assertFalse(body["email"]["failing"])
+        self.assertEqual(body["problems"], [])
+
+
+class SendEmailTests(unittest.TestCase):
+    """_send_email is the one place that actually calls Resend -- used by
+    /support, license-key delivery, referral notices and admin alerts, so a
+    bug here silently breaks all four at once (which is exactly what the
+    live production 500 on /support turned out to be)."""
+
+    def setUp(self):
+        ls._email_state.update({"ok": 0, "failed": 0, "last_error": "", "last_status": 0})
+
+    def tearDown(self):
+        ls._email_state.update({"ok": 0, "failed": 0, "last_error": "", "last_status": 0})
+
+    def test_no_api_key_fails_without_a_network_call(self):
+        with patch.object(ls, "RESEND_API_KEY", ""), \
+             patch.object(ls.urllib.request, "urlopen") as urlopen:
+            ok = ls._send_email("a@example.com", "subj", "body")
+        self.assertFalse(ok)
+        urlopen.assert_not_called()
+
+    def test_success_is_tracked(self):
+        with patch.object(ls, "RESEND_API_KEY", SECRET), \
+             patch.object(ls.urllib.request, "urlopen"):
+            ok = ls._send_email("a@example.com", "subj", "body")
+        self.assertTrue(ok)
+        self.assertEqual(ls._email_state["ok"], 1)
+
+    def test_an_http_error_from_resend_is_tracked_with_its_status_and_body(self):
+        import urllib.error
+        err = urllib.error.HTTPError(
+            "https://api.resend.com/emails", 403, "Forbidden", {},
+            io.BytesIO(b'{"message":"domain is not verified"}'))
+        with patch.object(ls, "RESEND_API_KEY", SECRET), \
+             patch.object(ls.urllib.request, "urlopen", side_effect=err):
+            ok = ls._send_email("a@example.com", "subj", "body")
+        self.assertFalse(ok)
+        self.assertEqual(ls._email_state["last_status"], 403)
+        self.assertIn("domain is not verified", ls._email_state["last_error"])
+
+    def test_reply_to_is_only_set_when_given(self):
+        captured = {}
+
+        def fake_urlopen(req, timeout=None):
+            captured["body"] = json.loads(req.data)
+
+        with patch.object(ls, "RESEND_API_KEY", SECRET), \
+             patch.object(ls.urllib.request, "urlopen", side_effect=fake_urlopen):
+            ls._send_email("a@example.com", "subj", "body")
+        self.assertNotIn("reply_to", captured["body"])
+
+        with patch.object(ls, "RESEND_API_KEY", SECRET), \
+             patch.object(ls.urllib.request, "urlopen", side_effect=fake_urlopen):
+            ls._send_email("a@example.com", "subj", "body", reply_to="buyer@example.com")
+        self.assertEqual(captured["body"]["reply_to"], "buyer@example.com")
+
+
+class SupportRouteTests(unittest.TestCase):
+    def setUp(self):
+        self.client = ls.app.test_client()
+
+    def test_empty_message_is_rejected_without_calling_resend(self):
+        with patch.object(ls, "_send_email") as send:
+            r = self.client.post("/support", json={"email": "a@example.com", "message": "  "})
+        self.assertEqual(r.get_json(), {"ok": False, "reason": "no_message"})
+        send.assert_not_called()
+
+    def test_unconfigured_resend_reports_email_unavailable(self):
+        with patch.object(ls, "RESEND_API_KEY", ""):
+            r = self.client.post("/support", json={"message": "help"})
+        self.assertEqual(r.get_json(), {"ok": False, "reason": "email_unavailable"})
+
+    def test_a_successful_send_reports_ok(self):
+        with patch.object(ls, "RESEND_API_KEY", SECRET), \
+             patch.object(ls, "_send_email", return_value=True) as send:
+            r = self.client.post("/support",
+                                 json={"email": "buyer@example.com", "message": "help me"})
+        self.assertEqual(r.get_json(), {"ok": True})
+        send.assert_called_once()
+        args, kwargs = send.call_args
+        self.assertEqual(kwargs.get("reply_to"), "buyer@example.com")
+        self.assertIn("help me", args[2])
+
+    def test_a_failed_send_reports_send_failed_with_a_500(self):
+        with patch.object(ls, "RESEND_API_KEY", SECRET), \
+             patch.object(ls, "_send_email", return_value=False):
+            r = self.client.post("/support", json={"message": "help"})
+        self.assertEqual(r.status_code, 500)
+        self.assertEqual(r.get_json(), {"ok": False, "reason": "send_failed"})
 
 
 class ForceRescanTests(unittest.TestCase):
