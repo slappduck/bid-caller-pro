@@ -4,12 +4,13 @@ its own throwaway local file, so these are safe to run anywhere, anytime."""
 
 import os
 import sys
-import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import bid_portals as bp
 import kv_backend
+import license_server as ls
 
 
 class BidPortalsTests(unittest.TestCase):
@@ -193,6 +194,102 @@ class TownsWithinRadiusTests(unittest.TestCase):
         d = self._directory_with(("Nixa", "MO"))
         got = bp.towns_within_radius(d, *self.SPRINGFIELD, radius=25)
         self.assertEqual(got, [])
+
+
+class AnchorTownSelectionTests(unittest.TestCase):
+    """Anchors are the only towns besides the centre that get SEARCH
+    queries, and that is what actually finds work -- a town's own portal
+    lists only its own solicitations, while the queries reach the county
+    road department, school district and state portal around it.
+
+    Reported: a 50mi scan from Aurora, MO returned nothing even though
+    Springfield is 28mi away and a Springfield-centred scan finds a dozen
+    open bids. Two causes, both pinned here: anchors were reverse-geocoded
+    guesses rather than towns known to have procurement, and round(radius/20)
+    allowed a 50mi scan only two of them."""
+
+    AURORA = {"lat": 36.9709, "lon": -93.7183, "city": "Aurora", "state": "MO"}
+    # Real coordinates, so the distance sort below is the real thing.
+    NEARBY = [("Monett", "MO", 36.9289, -93.9277),
+              ("Republic", "MO", 37.1231, -93.4800),
+              ("Springfield", "MO", 37.2090, -93.2923),
+              ("Branson", "MO", 36.6437, -93.2185),
+              ("Joplin", "MO", 37.0842, -94.5133)]
+
+    def test_anchors_come_from_towns_with_a_known_bid_page(self):
+        with patch.object(ls.bid_portals, "towns_within_radius",
+                          return_value=list(self.NEARBY)), \
+             patch.object(ls, "_reverse_geocode_city") as guess:
+            anchors = ls._nearby_anchor_towns(self.AURORA, 50, {})
+        names = [c for c, s, _, _ in anchors]
+        self.assertIn("Springfield", names,
+                      "the most productive town in range must get search queries")
+        guess.assert_not_called()  # no reverse-geocoded guessing when we know real towns
+
+    def test_a_fifty_mile_scan_gets_more_than_two_anchors(self):
+        with patch.object(ls.bid_portals, "towns_within_radius",
+                          return_value=list(self.NEARBY)):
+            anchors = ls._nearby_anchor_towns(self.AURORA, 50, {})
+        self.assertGreater(len(anchors), 2)
+        self.assertLessEqual(len(anchors), ls.MAX_ANCHOR_TOWNS)
+
+    def test_anchors_are_nearest_first(self):
+        with patch.object(ls.bid_portals, "towns_within_radius",
+                          return_value=list(self.NEARBY)):
+            anchors = ls._nearby_anchor_towns(self.AURORA, 50, {})
+        dists = [ls._miles_between(self.AURORA["lat"], self.AURORA["lon"], la, lo)
+                 for _, _, la, lo in anchors]
+        self.assertEqual(dists, sorted(dists))
+
+    def test_it_falls_back_to_guessing_when_no_town_is_known(self):
+        with patch.object(ls.bid_portals, "towns_within_radius", return_value=[]), \
+             patch.object(ls, "_reverse_geocode_city", return_value=("Guessville", "MO")):
+            anchors = ls._nearby_anchor_towns(self.AURORA, 50, {})
+        self.assertTrue(anchors, "an area with no known portals still needs anchors")
+        self.assertEqual(anchors[0][0], "Guessville")
+
+    def test_a_broken_lookup_never_takes_the_scan_down_with_it(self):
+        with patch.object(ls.bid_portals, "towns_within_radius",
+                          side_effect=RuntimeError("coords file corrupt")), \
+             patch.object(ls, "_reverse_geocode_city", return_value=("Guessville", "MO")):
+            anchors = ls._nearby_anchor_towns(self.AURORA, 50, {})
+        self.assertTrue(anchors)  # degraded to guessing, not an exception
+
+    def test_tight_radii_still_skip_anchors_entirely(self):
+        with patch.object(ls.bid_portals, "towns_within_radius",
+                          return_value=list(self.NEARBY)):
+            self.assertEqual(ls._nearby_anchor_towns(self.AURORA, 25, {}), [])
+
+
+class CoordsDedupeTests(unittest.TestCase):
+    """SEED_PORTALS keys are lowercase while the national crawl carries the
+    registry's own casing, so "Springfield" and "springfield" both reached
+    the coords file -- two rows for one town, which would have the scanner
+    fetch and search it twice."""
+
+    def setUp(self):
+        self._orig = bp._coords_cache
+        bp._coords_cache = None
+
+    def tearDown(self):
+        bp._coords_cache = self._orig
+
+    def test_the_shipped_coords_file_has_no_case_duplicates(self):
+        seen, dupes = set(), []
+        for city, state in bp._coords():
+            key = (city.lower(), state)
+            if key in seen:
+                dupes.append(key)
+            seen.add(key)
+        self.assertEqual(dupes, [])
+
+    def test_every_seeded_city_has_coordinates(self):
+        # A seeded town with no coordinates is invisible to
+        # towns_within_radius -- Joplin and Ozark were, so a 50mi Aurora
+        # scan skipped them despite both having a working seeded bid page.
+        have = {(c.lower(), s) for c, s in bp._coords()}
+        missing = [(c, s) for c, s in bp.SEED_PORTALS if (c.lower(), s) not in have]
+        self.assertEqual(missing, [])
 
 
 if __name__ == "__main__":

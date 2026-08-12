@@ -43,6 +43,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import bid_portals  # noqa: E402
 import license_server as ls  # noqa: E402
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -52,21 +53,46 @@ FIELDS = ["city", "state", "lat", "lon"]
 
 
 def _load_towns(state_filter=None, limit=None):
+    """Every town the scanner has a trusted bid page for.
+
+    Two sources, not one. The national crawl CSV is the bulk of it, but
+    bid_portals.SEED_PORTALS is a separate, hand-verified list that the crawl
+    does not necessarily reproduce -- Joplin and Ozark, MO both have working
+    seeded Bids.aspx pages the crawler never recorded a "found" row for.
+    Reading only the CSV left those towns with a real portal and no
+    coordinates, which makes them invisible to towns_within_radius: a 50mi
+    scan from Aurora, MO silently skipped Joplin entirely.
+    """
     seen, towns = set(), []
+
+    def _add(city, state):
+        city, state = (city or "").strip(), (state or "").strip().upper()
+        if not city or not state:
+            return
+        if state_filter and state != state_filter.upper():
+            return
+        # Dedupe case-insensitively. SEED_PORTALS keys are lowercase by
+        # convention while the crawl CSV carries the registry's own casing,
+        # so an exact-match check let "Springfield" and "springfield" both
+        # through -- two rows for one town, and the scanner would read and
+        # search it twice.
+        if (city.lower(), state) in seen:
+            return
+        seen.add((city.lower(), state))
+        towns.append((city, state))
+
     with open(SOURCE_CSV, newline="", encoding="utf-8") as f:
         for row in csv.DictReader(f):
             if row.get("status") != "found":
                 continue
-            city, state = (row.get("city") or "").strip(), (row.get("state") or "").strip().upper()
-            if not city or not state:
-                continue
-            if state_filter and state != state_filter.upper():
-                continue
-            key = (city, state)
-            if key in seen:
-                continue
-            seen.add(key)
-            towns.append(key)
+            _add(row.get("city"), row.get("state"))
+
+    # Added after the crawl rows so the registry's casing wins on any overlap;
+    # .title() because these keys are lowercase and the name is user-visible
+    # (it becomes a bid's city label and the text of every search query).
+    for city, state in bid_portals.SEED_PORTALS:
+        _add(city.title(), state)
+
     if limit:
         towns = towns[:limit]
     return towns

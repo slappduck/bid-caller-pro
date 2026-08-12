@@ -486,7 +486,19 @@ def _send_email(to, subject, text, reply_to=None):
     req = urllib.request.Request(
         "https://api.resend.com/emails", data=json.dumps(payload).encode("utf-8"),
         method="POST", headers={"Authorization": f"Bearer {RESEND_API_KEY}",
-                                "Content-Type": "application/json"})
+                                "Content-Type": "application/json",
+                                # Resend's API sits behind Cloudflare, which was
+                                # answering 403 "error code: 1010" -- its
+                                # ban-by-browser-signature response -- to
+                                # urllib's default Python-urllib/3.x agent. That
+                                # is what actually broke /support in production
+                                # (NOT an unverified sending domain, the first
+                                # theory). Same lesson this codebase already
+                                # learned for DuckDuckGo and BidNet Direct: an
+                                # honest, identifiable agent string gets through
+                                # where the bare library default does not.
+                                "User-Agent": "BidCallerPro/1.0 (+https://curbcallpro.netlify.app)",
+                                "Accept": "application/json"})
     try:
         urllib.request.urlopen(req, timeout=15)
         _email_note(True)
@@ -1336,20 +1348,60 @@ def _reverse_geocode_city(lat, lon):
     return None
 
 
-def _nearby_anchor_towns(center, radius):
+def _nearby_anchor_towns(center, radius, pdb=None):
     """Pick a handful of towns scattered around the search radius (not just
     the center city) so a wide-radius scan actually looks in more places
     instead of only searching near the one city the user typed. Skipped for
     tight radii where the center-only search already covers the area well."""
     if radius < 40:
         return []
-    n = max(2, min(MAX_ANCHOR_TOWNS, round(radius / 20)))
+    # Guessed points are worth rationing by area -- most of them land on
+    # nothing, so more of them only helps when there is more empty ground to
+    # cover. A verified town is not the same trade: every one is a real
+    # procurement office, so the budget (MAX_ANCHOR_TOWNS, env-tunable) is
+    # worth spending in full rather than scaling it down for a mid-size
+    # radius. round(radius/20) gave a 50mi scan just two anchors, which is
+    # what left Springfield -- the single most productive source in the area
+    # -- out of an Aurora scan entirely.
+    n_guessed = max(2, min(MAX_ANCHOR_TOWNS, round(radius / 20)))
+    n = MAX_ANCHOR_TOWNS
+
+    # Prefer towns we already know have a real bid page over points guessed
+    # off a compass bearing. Anchors are the only towns besides the centre
+    # that get SEARCH queries, and that is what actually finds work: a town's
+    # own portal lists only its own solicitations, while the queries reach the
+    # county road department, the school district and the state portal around
+    # it. A 50mi scan from Aurora, MO reaches Springfield (28mi) -- but
+    # Springfield only ever got its portal read, which today holds an ice
+    # machine rental, a PA system and a skate-shop concession and nothing in
+    # this trade, so it contributed nothing, while the query budget went to
+    # reverse-geocoded guesses that can land on a township with no
+    # procurement office at all (see _reverse_geocode_city's own notes).
+    # Same budget, verified targets.
+    if pdb is not None:
+        try:
+            known = bid_portals.towns_within_radius(
+                pdb, center["lat"], center["lon"], radius,
+                exclude={(center["city"].lower(), center["state"])})
+        except Exception as ex:  # never let anchor selection break a scan
+            print(f"[scan] known-town anchor lookup failed: {ex}", flush=True)
+            known = []
+        if known:
+            # Nearest first: the closest verified towns are both the most
+            # likely to be worth driving to and, for someone in a small town
+            # next to a metro, the way the metro itself gets reached. The
+            # farther known towns in the radius are not dropped -- they still
+            # get their portal read by the known-towns pass in _perform_scan,
+            # they just don't get search queries too.
+            known.sort(key=lambda t: _miles_between(
+                center["lat"], center["lon"], t[2], t[3]))
+            return known[:n]
     # One ring of towns at a single distance leaves the ground between it and
     # the centre unsearched, which on a 125mi scan is most of the area. Wide
     # radii get two rings, with the outer ring's bearings offset so the towns
     # interleave rather than lining up along the same spokes.
     rings = [0.7] if radius < 80 else [0.5, 0.85]
-    per_ring = max(1, n // len(rings))
+    per_ring = max(1, n_guessed // len(rings))
     seen = {(center["city"].lower(), center["state"])}
     towns = []
     for ring_i, frac in enumerate(rings):
@@ -2773,9 +2825,18 @@ def _enrich_placed_bids(grouped, stats=None):
     bids that actually made it into the result — so the cost is a dozen fetches
     at most, rather than one per thing the search turned up.
     """
+    # A name is not a way to reach anybody. The AI extractor returns a
+    # "contact" field and routinely fills it with something like "Purchasing
+    # Department" while leaving email and phone blank -- and treating that as
+    # already-enriched meant the posting behind it was never read for the
+    # actual phone number. On a live Springfield 75mi scan that left 24 kept
+    # bids with exactly ONE eligible for enrichment and contacts_found: 0.
+    # Only a phone or an email makes a bid callable, so only those count as
+    # done; a name already present is preserved either way, since
+    # _enrich_from_detail_pages only fills fields that are empty.
     todo = [b for bids in (grouped or {}).values() for b in bids
             if isinstance(b, dict) and b.get("url")
-            and not (b.get("email") or b.get("phone") or b.get("contact"))]
+            and not (b.get("email") or b.get("phone"))]
     # Undated bids first: a missing deadline is worse than a missing phone
     # number, because it also stops an expired listing being recognised.
     todo.sort(key=lambda b: bool(str(b.get("deadline") or "").strip()))
@@ -2892,7 +2953,7 @@ def _perform_scan(location, radius, force=False):
             f"{c} {s} invitation to bid concrete sidewalk 2026",
         ]
 
-        anchors = _nearby_anchor_towns(center, radius)
+        anchors = _nearby_anchor_towns(center, radius, pdb)
 
         # _nearby_anchor_towns samples at most a handful of geographically-
         # guessed points regardless of how large the radius is -- a 125mi
