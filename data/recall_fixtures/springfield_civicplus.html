@@ -1,0 +1,64 @@
+<!--
+Real CivicPlus Bids.aspx markup structure, captured live from
+springfieldmo.gov/Bids.aspx on 2026-08-12 and trimmed to just the listing
+rows. Two rows are the actual live postings that day (ICE MACHINES,
+CONCESSIONAIRE) -- kept as true negatives, since neither is concrete/ADA
+work and a working reader should filter both out. The other two
+(ADA IMPROVEMENT PROJECT, MT. VERNON & MILLER SIDEWALKS) are reconstructed
+from SEARCH_PLAN.md's documented ground truth using this exact template --
+real bids this scanner needed to find when they were open, kept here so the
+regression test doesn't depend on either one still being open. See
+tools/recall_check.py and tests/test_recall_fixtures.py.
+-->
+<div class="pageStyles" style="margin: 3px;">
+  <div class="bidItems listItems">
+    <div class="bidsHeader listHeader">
+      <span>All Notifications – Division of Purchases</span>
+      <span>4 Bids</span>
+    </div>
+    <div class="listItemsRow bid">
+      <div class="bidTitle" style="vertical-align: top">
+        <span><a href="bids.aspx?bidID=1645">RENTAL OF ICE MACHINES WITH STORAGE BINS AND MAINTENANCE</a></span><br>
+        <span style="font-size:0.75em;"><strong>Bid No.</strong> 015-2027IFIB</span><br>
+        <span>INVITATION FOR INFORMAL BID (IFIB) #015-2027 RENTAL OF ICE MACHINES WITH STORAGE BINS AND MAINTENANCE ... [<a href="bids.aspx?bidID=1645">Read on</a>]</span>
+      </div>
+      <div class="bidStatus">
+        <div><span>Status:</span><br><span>Closes:</span></div>
+        <div><span>Open</span><br><span>8/19/2026 3:00 PM</span></div>
+      </div>
+    </div>
+    <div class="listItemsRow bid alt">
+      <div class="bidTitle" style="vertical-align: top">
+        <span><a href="bids.aspx?bidID=1701">ADA IMPROVEMENT PROJECT - SUNSHINE, BATTLEFIELD &amp; NATIONAL</a></span><br>
+        <span style="font-size:0.75em;"><strong>Bid No.</strong> 021-2027IFB</span><br>
+        <span>INVITATION FOR BID #021-2027 ADA IMPROVEMENT PROJECT. Approximately 5,000 SY of concrete ADA curb ramps and 3,000 SY of ADA sidewalk replacement along Sunshine, Battlefield and National. ... [<a href="bids.aspx?bidID=1701">Read on</a>]</span>
+      </div>
+      <div class="bidStatus">
+        <div><span>Status:</span><br><span>Closes:</span></div>
+        <div><span>Open</span><br><span>9/10/2026 3:00 PM</span></div>
+      </div>
+    </div>
+    <div class="listItemsRow bid">
+      <div class="bidTitle" style="vertical-align: top">
+        <span><a href="bids.aspx?bidID=1702">MT. VERNON &amp; MILLER SIDEWALKS</a></span><br>
+        <span style="font-size:0.75em;"><strong>Bid No.</strong> 022-2027IFB</span><br>
+        <span>INVITATION FOR BID #022-2027 MT. VERNON &amp; MILLER SIDEWALKS. Approximately 13,500 SF of sidewalk, 1,000 SF ADA ramp, and 1,000 LF of curb &amp; gutter replacement. ... [<a href="bids.aspx?bidID=1702">Read on</a>]</span>
+      </div>
+      <div class="bidStatus">
+        <div><span>Status:</span><br><span>Closes:</span></div>
+        <div><span>Open</span><br><span>9/12/2026 3:00 PM</span></div>
+      </div>
+    </div>
+    <div class="listItemsRow bid alt">
+      <div class="bidTitle" style="vertical-align: top">
+        <span><a href="bids.aspx?bidID=1643">SKATE AND PRO SHOP CONCESSIONAIRE</a></span><br>
+        <span style="font-size:0.75em;"><strong>Bid No.</strong> 009-2027RFP</span><br>
+        <span>ADDENDUM 1 ISSUED ON MONDAY, AUGUST 10, 2026. THE REVISED DUE DATE IS THURSDAY, AUGUST 20, 2026. ... [<a href="bids.aspx?bidID=1643">Read on</a>]</span>
+      </div>
+      <div class="bidStatus">
+        <div><span>Status:</span><br><span>Closes:</span></div>
+        <div><span>Open</span><br><span>8/20/2026 3:00 PM</span></div>
+      </div>
+    </div>
+  </div>
+</div>

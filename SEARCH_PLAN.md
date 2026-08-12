@@ -47,10 +47,39 @@ Nothing else can be judged until we can see what's happening.
 - [x] Per-scan funnel in `/scan`'s debug and in the Render log
 - [ ] **Confirm the Tavily allowance** — check `/health` and the Tavily
       dashboard. If it's spent, that alone explains the current result
-- [ ] **Recall benchmark.** A fixed list of real bids known to be open near
-      Springfield and Aurora, and a script that reports what fraction the
-      scanner finds. This is the number that has to go up; without it every
-      change after this is guesswork
+- [x] **Recall benchmark — built, but not as originally planned.** The
+      original idea here was a fixed list of real bids known to be open right
+      now near Springfield and Aurora. Checked live against
+      springfieldmo.gov/Bids.aspx while building this: the two bids this
+      file itself had documented as ground truth (ADA Improvement Project,
+      Mt. Vernon & Miller Sidewalks) had both already closed, and nothing
+      currently posted there is concrete/sidewalk/ADA work at all — a real,
+      normal outcome (a city this size lets a handful of these a year), but
+      it means a fixed "must find these live bids" list goes stale within
+      weeks and starts reporting 0% for reasons that have nothing to do with
+      whether the scanner works.
+      **What got built instead:** `tools/recall_check.py`, a standalone CLI
+      that runs the exact real funnel (`bid_sources.parse_civicplus_html` →
+      `looks_relevant()` → optionally the real `_ai_extract` prompt if
+      `OPENAI_API_KEY` is set) against either a live URL or a saved fixture,
+      and reports what was parsed, what passed the relevance filter, and
+      (given `--expect`) whether specific known titles were found — usable
+      on demand any time a real bid is noticed missing, to see exactly which
+      stage dropped it. `data/recall_fixtures/springfield_civicplus.html` is
+      real captured markup from the live page with the two originally
+      documented bids reconstructed in that exact template alongside real
+      current unrelated postings, so there's a permanent, stable acceptance
+      test (`tests/test_recall_fixtures.py`, runs in the normal suite, no
+      network) instead of one that silently breaks when bids close. This is
+      the first acceptance test from the "Ground truth for Springfield, MO"
+      section below, finally actually locked in — just as a fixture instead
+      of a live check.
+      **Still open:** this only benchmarks the direct-read/CivicPlus path.
+      The search-fallback path (Tavily + DDG) has no equivalent check yet,
+      and doing one live against Springfield/Aurora right now would hit the
+      same "nothing currently open" problem — needs either a fixture built
+      from saved real search results, or picking it back up whenever a real
+      concrete bid is next known to be open somewhere in the coverage area.
 
 ## Phase 1 — Read the platforms directly
 
@@ -300,8 +329,13 @@ Two bids that were open and that the scanner missed:
 - **Mt. Vernon & Miller Sidewalks** — ~13,500 SF sidewalk, 1,000 SF ADA ramp,
   ~1,000 LF curb & gutter
 
-These two are the first acceptance test: when a Springfield scan returns both,
-Phase 1 is working.
+These two were the first acceptance test. Both have since closed — confirmed
+live on 2026-08-12 while building the recall benchmark (Phase 0) — so
+"when a Springfield scan returns both" is no longer something a live scan
+can pass. They're preserved as a fixture instead:
+`data/recall_fixtures/springfield_civicplus.html` +
+`tests/test_recall_fixtures.py` lock in that the reader still recognizes
+both, permanently, regardless of what's actually posted today.
 
 ---
 
