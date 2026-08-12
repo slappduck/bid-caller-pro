@@ -147,16 +147,17 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .bottom-nav{display:flex;background:var(--surface);border-top:1px solid var(--border);padding-bottom:env(safe-area-inset-bottom);flex-shrink:0;}
 /* min-width:0 lets six items share a 320px screen without the labels
    overflowing; nowrap stops "Upcoming" and "Account" breaking onto two lines. */
-.nav-btn{flex:1;min-width:0;background:none;border:none;padding:0.7rem 0.15rem 0.8rem;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:0.2rem;color:var(--text2);font-family:var(--ui);}
-.nav-btn .ic{font-size:1.25rem;}
-.nav-btn .lb{font-size:0.62rem;font-weight:600;white-space:nowrap;}
+.nav-btn{flex:1;min-width:0;background:none;border:none;padding:0.95rem 0.15rem;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text2);font-family:var(--ui);}
+.nav-btn .lb{font-size:0.78rem;font-weight:600;white-space:nowrap;letter-spacing:0.01em;}
 /* Inactive labels were --text3 (#475569), which is 2.4:1 against the nav bar —
    well under the 4.5:1 floor, and this is a tool read outdoors in daylight.
    --text2 is an existing token and measures ~7:1. */
 .nav-btn.active{color:var(--accent);}
-/* Active state must not rest on colour alone. */
-.nav-btn.active::after{content:"";position:absolute;left:50%;transform:translateX(-50%);bottom:0.25rem;width:1.1rem;height:2px;border-radius:2px;background:var(--accent);}
-@media (max-width:340px){.nav-btn .lb{font-size:0.56rem;}}
+/* Active state must not rest on colour alone. No icon anymore to carry it
+   either, so the underline is the only signal — keep it a bit more visible
+   than when it was a secondary cue under an icon. */
+.nav-btn.active::after{content:"";position:absolute;left:50%;transform:translateX(-50%);bottom:0.3rem;width:1.4rem;height:2px;border-radius:2px;background:var(--accent);}
+@media (max-width:340px){.nav-btn .lb{font-size:0.68rem;}}
 
 .modal-back{position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:50;display:none;animation:fade 0.2s;}
 .modal-back.open{display:block;}
@@ -244,7 +245,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 <body>
 <div id="app" style="display:none;">
   <div class="topbar">
-    <div class="brand">&#x1F6A7;<span class="brand-name">Curb<span>Call</span></span></div>
+    <div class="brand"><span class="brand-name">Curb<span>Call</span></span></div>
     <button type="button" class="user-chip" id="user-chip" aria-label="Account settings" onclick="goTo('account')">...</button>
   </div>
   <div id="offline-bar"></div>
@@ -255,13 +256,13 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
       <div class="screen-title">Find Concrete Bids Near You</div>
       <div class="screen-sub">Enter your area — we'll find sidewalk, ADA &amp; curb bids.</div>
       <div class="map-card show" id="find-map-card">
-        <div class="map-card-head"><span class="t">&#x1F4CD; You Are Here</span></div>
+        <div class="map-card-head"><span class="t">You Are Here</span></div>
         <div id="find-map-view"></div>
         <div class="map-legend"><span>Click the map — or a nearby city — to set your search location</span></div>
       </div>
       <div class="field-label">Your Location</div>
       <input class="input" id="loc-input" placeholder="ZIP code or City, State" inputmode="text" />
-      <button class="btn-ghost" id="detect-btn" style="margin-top:0.5rem;">&#x1F4CD; Use My Location</button>
+      <button class="btn-ghost" id="detect-btn" style="margin-top:0.5rem;">Use My Location</button>
       <div class="field-label" style="margin-top:1rem;">Search Radius</div>
       <div class="radius-row" id="radius-row">
         <div class="radius-btn" data-r="10">10 mi</div>
@@ -270,11 +271,11 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
         <div class="radius-btn" data-r="75">75 mi</div>
         <div class="radius-btn" data-r="125">125 mi</div>
       </div>
-      <button class="btn-primary" id="scan-btn">&#x1F50D; Scan for Bids</button>
+      <button class="btn-primary" id="scan-btn">Scan for Bids</button>
       <div class="scan-status" id="scan-status"></div>
       <div class="progress" id="progress-wrap" style="display:none;"><div class="progress-bar" id="progress-bar"></div></div>
-      <button class="btn-ghost" id="force-scan-btn" style="margin-top:0.6rem;font-size:0.8rem;">&#x21BB; Force a fresh scan (ignore today&#39;s cached result)</button>
-      <button class="btn-ghost" id="save-search-btn" style="margin-top:1.2rem;">&#x1F4CC; Save this search for auto-alerts</button>
+      <button class="btn-ghost" id="force-scan-btn" style="margin-top:0.6rem;font-size:0.8rem;">Force a fresh scan (ignore today&#39;s cached result)</button>
+      <button class="btn-ghost" id="save-search-btn" style="margin-top:1.2rem;">Save this search for auto-alerts</button>
       <div id="saved-searches-wrap"></div>
     </div>
 
@@ -283,9 +284,9 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
       <div class="screen-title">Live Bids</div>
       <div class="screen-sub" id="feed-sub">Bids you've found. New scans add to this list.</div>
       <div class="feed-toolbar">
-        <button class="btn-ghost" id="clear-feed" style="display:none;">&#x1F5D1; Clear all bids</button>
-        <button class="btn-ghost" id="map-toggle" style="display:none;">&#x1F4CD; Hide Map</button>
-        <button class="btn-ghost" id="export-feed-btn" style="display:none;">&#x2B07; Export</button>
+        <button class="btn-ghost" id="clear-feed" style="display:none;">Clear all bids</button>
+        <button class="btn-ghost" id="map-toggle" style="display:none;">Hide Map</button>
+        <button class="btn-ghost" id="export-feed-btn" style="display:none;">Export</button>
       </div>
       <div class="filter-row" id="filter-row" style="display:none;">
         <input id="feed-search" placeholder="Search title or scope..." />
@@ -298,7 +299,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
       </div>
       <div class="map-card" id="map-card">
         <div class="map-card-head">
-          <span class="t">&#x1F5FA; Bid Map</span>
+          <span class="t">Bid Map</span>
           <button class="x" id="map-close">&#x2715;</button>
         </div>
         <div id="map-view"></div>
@@ -319,7 +320,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
       <div class="screen-title">Upcoming Work</div>
       <div class="screen-sub">Concrete projects spotted in council agendas, budgets &amp; plans &mdash; before they hit the bid boards.</div>
       <div class="map-card show" id="up-map-card">
-        <div class="map-card-head"><span class="t">&#x1F4CD; You Are Here</span></div>
+        <div class="map-card-head"><span class="t">You Are Here</span></div>
         <div id="up-map-view"></div>
         <div class="map-legend"><span>Click the map — or type below — to set your search location</span></div>
       </div>
@@ -333,7 +334,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
         <div class="radius-btn" data-r="75">75 mi</div>
         <div class="radius-btn" data-r="125">125 mi</div>
       </div>
-      <button class="btn-primary" id="upcoming-btn">&#x1F4E1; Find Upcoming Projects</button>
+      <button class="btn-primary" id="upcoming-btn">Find Upcoming Projects</button>
       <div class="scan-status" id="upcoming-status"></div>
       <div class="progress" id="up-progress-wrap" style="display:none;"><div class="progress-bar" id="up-progress-bar"></div></div>
       <div class="filter-row" id="up-filter-row" style="display:none;margin-top:1rem;">
@@ -347,7 +348,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
       <div class="screen-title">Residential Leads</div>
       <div class="screen-sub">Fresh driveway &amp; sidewalk permits pulled straight from city permit records &mdash; homeowners and builders who just started this exact work.</div>
       <div class="map-card show" id="leads-map-card">
-        <div class="map-card-head"><span class="t">&#x1F4CD; You Are Here</span></div>
+        <div class="map-card-head"><span class="t">You Are Here</span></div>
         <div id="leads-map-view"></div>
         <div class="map-legend"><span>Click the map — or type below — to set your search location</span></div>
       </div>
@@ -361,11 +362,11 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
         <div class="radius-btn" data-r="75">75 mi</div>
         <div class="radius-btn" data-r="125">125 mi</div>
       </div>
-      <button class="btn-primary" id="leads-btn">&#x1F3E0; Find Residential Leads</button>
+      <button class="btn-primary" id="leads-btn">Find Residential Leads</button>
       <div class="scan-status" id="leads-status"></div>
       <div class="progress" id="leads-progress-wrap" style="display:none;"><div class="progress-bar" id="leads-progress-bar"></div></div>
       <div class="feed-toolbar" id="leads-toolbar" style="display:none;margin-top:1rem;">
-        <button class="btn-ghost" id="export-leads-btn">&#x2B07; Export</button>
+        <button class="btn-ghost" id="export-leads-btn">Export</button>
       </div>
       <div id="leads-tiles"></div>
       <div class="filter-row" id="leads-filter-row" style="display:none;">
@@ -383,7 +384,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
       <div class="screen-title">Active Bids</div>
       <div class="screen-sub">Bids you're pursuing — track status, add notes, and follow them through to won or lost.</div>
       <div class="feed-toolbar">
-        <button class="btn-ghost" id="export-saved-btn" style="display:none;">&#x2B07; Export</button>
+        <button class="btn-ghost" id="export-saved-btn" style="display:none;">Export</button>
       </div>
       <div id="pipeline-stats"></div>
       <div class="tiles" id="pipeline-tiles"></div>
@@ -399,18 +400,18 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
   </div>
 
   <div class="bottom-nav">
-    <button class="nav-btn active" data-s="scan"><span class="ic">&#x1F50D;</span><span class="lb">Find</span></button>
-    <button class="nav-btn" data-s="feed"><span class="ic">&#x1F4CB;</span><span class="nav-badge" id="feed-badge" style="display:none;"></span><span class="lb">Bids</span></button>
-    <button class="nav-btn" data-s="upcoming"><span class="ic">&#x1F4E1;</span><span class="lb">Upcoming</span></button>
-    <button class="nav-btn" data-s="leads"><span class="ic">&#x1F3E0;</span><span class="lb">Leads</span></button>
-    <button class="nav-btn" data-s="saved"><span class="ic">&#x2B50;</span><span class="lb">Active</span></button>
-    <button class="nav-btn" data-s="account"><span class="ic">&#x1F464;</span><span class="lb">Account</span></button>
+    <button class="nav-btn active" data-s="scan"><span class="lb">Find</span></button>
+    <button class="nav-btn" data-s="feed"><span class="nav-badge" id="feed-badge" style="display:none;"></span><span class="lb">Bids</span></button>
+    <button class="nav-btn" data-s="upcoming"><span class="lb">Upcoming</span></button>
+    <button class="nav-btn" data-s="leads"><span class="lb">Leads</span></button>
+    <button class="nav-btn" data-s="saved"><span class="lb">Active</span></button>
+    <button class="nav-btn" data-s="account"><span class="lb">Account</span></button>
   </div>
 </div>
 
 <!-- AUTH SCREEN -->
 <div id="auth-screen">
-  <div class="auth-logo">&#x1F6A7; Curb<span>Call</span></div>
+  <div class="auth-logo">Curb<span>Call</span></div>
   <div class="auth-tagline">Sidewalk, ADA &amp; curb bids near you</div>
 
   <div class="auth-card" id="auth-card">
@@ -432,14 +433,14 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
         <input class="input" id="auth-password" type="password" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" />
       </div>
       <button class="btn-primary" id="email-btn">Create Account</button>
-      <button class="btn-ghost" id="magic-btn">&#x2709; Send magic link instead</button>
+      <button class="btn-ghost" id="magic-btn">Send magic link instead</button>
     </div>
 
     <div class="auth-msg" id="auth-msg"></div>
     <div class="auth-toggle" id="auth-toggle">Already have an account? <a id="toggle-link">Sign in</a></div>
     <div class="auth-toggle" id="forgot-wrap" style="display:none;margin-top:0.4rem;"><a id="forgot-link">Forgot password?</a></div>
   </div>
-  <div class="auth-trial-note">&#x1F512; Free for 7 days &nbsp;&middot;&nbsp; No credit card &nbsp;&middot;&nbsp; Cancel anytime</div>
+  <div class="auth-trial-note">Free for 7 days &nbsp;&middot;&nbsp; No credit card &nbsp;&middot;&nbsp; Cancel anytime</div>
   <div class="auth-trial-note" style="margin-top:0.5rem;"><a href="terms.html" style="color:var(--text3);">Terms</a> &nbsp;&middot;&nbsp; <a href="privacy.html" style="color:var(--text3);">Privacy</a></div>
 </div>
 
@@ -686,13 +687,13 @@ function updateOfflineBar(){
   const off=isOffline();
   bar.classList.toggle("show",off);
   bar.textContent=offlineMode
-    ?"\u{1F4F4} Offline — showing your saved bids. Scanning and sync need a connection."
-    :"\u{1F4F4} You're offline — saved bids still work. Scans will resume when you're back.";
+    ?"Offline — showing your saved bids. Scanning and sync need a connection."
+    :"You're offline — saved bids still work. Scans will resume when you're back.";
   // Map tiles come from a CDN that isn't cached, so an offline map is just a
   // grey box promising something it can't deliver — hide it rather than show it.
   document.querySelectorAll(".map-card").forEach(c=>c.classList.toggle("offline",off));
 }
-window.addEventListener("online",()=>{updateOfflineBar();toast("\u{1F4F6} Back online");});
+window.addEventListener("online",()=>{updateOfflineBar();toast("Back online");});
 window.addEventListener("offline",updateOfflineBar);
 // Sign-in has two different failure modes and they need different advice:
 // no connection, or the auth library never loaded (usually a bad cached copy).
@@ -754,7 +755,7 @@ document.getElementById("forgot-link").onclick=async()=>{
   setMsg("Sending reset link...","");
   const{error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:window.location.href});
   if(error){setMsg(error.message,"err");return;}
-  setMsg("✉ Check your email for a password reset link.","ok");
+  setMsg("Check your email for a password reset link.","ok");
 };
 // Supabase redirects back with a recovery session — catch that and let the
 // user set a new password instead of dropping them straight into the app.
@@ -778,7 +779,7 @@ function showPasswordReset(){
     setMsg("...","");
     const{error}=await sb.auth.updateUser({password});
     if(error){setMsg(error.message,"err");return;}
-    setMsg("✅ Password updated! Redirecting...","ok");
+    setMsg("Password updated! Redirecting...","ok");
     setTimeout(()=>window.location.href=window.location.pathname,1200);
   };
 }
@@ -808,7 +809,7 @@ document.getElementById("email-btn").onclick=async()=>{
   }
   if(res.error){setMsg(res.error.message,"err");return;}
   if(authMode==="signup"&&!res.data.session){
-    setMsg("\u2709 Check your email to confirm your account, then come back to sign in.","ok");
+    setMsg("Check your email to confirm your account, then come back to sign in.","ok");
     setAuthMode("signin");
     return;
   }
@@ -822,7 +823,7 @@ document.getElementById("magic-btn").onclick=async()=>{
   setMsg("Sending...","");
   const{error}=await sb.auth.signInWithOtp({email,options:{emailRedirectTo:window.location.href}});
   if(error){setMsg(error.message,"err");return;}
-  setMsg("\u2709 Magic link sent! Check your email.","ok");
+  setMsg("Magic link sent! Check your email.","ok");
 };
 
 function setMsg(msg,cls){
@@ -863,7 +864,7 @@ function bootOffline(){
     showAuth();
     const card=document.getElementById("auth-card");
     if(card)card.innerHTML=`
-      <div class="auth-title">\u{1F4F4} You're offline</div>
+      <div class="auth-title">You're offline</div>
       <div class="auth-sub">Signing in needs a connection. Reconnect and reopen CurbCall Pro to get started.</div>
       <button class="btn-primary" onclick="location.reload()">Try again</button>`;
     return;
@@ -874,7 +875,7 @@ function bootOffline(){
   updateUserChip();
   updateOfflineBar();
   renderFeed();
-  toast("\u{1F4F4} Offline — showing your saved bids");
+  toast("Offline — showing your saved bids");
 }
 
 function updateUserChip(){
@@ -887,7 +888,7 @@ function updateUserChip(){
   // The email goes in its own element so IT truncates, not the chip: as a bare
   // text node it was an anonymous flex item and the ellipsis ate the chevron,
   // which is the one part that says this pill is a button.
-  chip.innerHTML=(avatar?`<img src="${esc(avatar)}" alt="">`:"\u{1F464} ")
+  chip.innerHTML=(avatar?`<img src="${esc(avatar)}" alt="">`:"")
     +`<span class="who">${esc(email||"Account")}</span>`
     +`<span class="chev" aria-hidden="true">›</span>`;
 }
@@ -1053,8 +1054,8 @@ function showFeedBadge(show){
 // — this browser-notification code doesn't need to (and can't) cover it.
 function notifPermissionLabel(){
   if(!("Notification"in window))return"Not supported in this browser";
-  if(Notification.permission==="granted")return"✅ Enabled — you'll be notified when a saved search finds new bids (while CurbCall Pro is open)";
-  if(Notification.permission==="denied")return"\u{1F515} Blocked — turn back on in your browser's site settings";
+  if(Notification.permission==="granted")return"Enabled — you'll be notified when a saved search finds new bids (while CurbCall Pro is open)";
+  if(Notification.permission==="denied")return"Blocked — turn back on in your browser's site settings";
   return"Tap to enable — get notified when a saved search finds new bids";
 }
 async function toggleNotifPermission(){
@@ -1065,7 +1066,7 @@ async function toggleNotifPermission(){
   const el=document.getElementById("notif-status");
   if(el)el.textContent=notifPermissionLabel();
   if(perm==="granted"){
-    toast("\u{1F514} Bid alerts enabled!");
+    toast("Bid alerts enabled!");
     fireNotification("CurbCall Pro","You'll be notified here when a saved search finds new bids.");
   }
 }
@@ -1114,7 +1115,7 @@ async function checkSavedSearches(){
     }catch(e){}
   }
   if(newTotal>0){
-    toast(`\u{1F4E1} ${newTotal} new bid(s) from your saved searches!`);
+    toast(`${newTotal} new bid(s) from your saved searches!`);
     showFeedBadge(true);
     fireNotification("CurbCall Pro — New Bids",`${newTotal} new bid(s) from your saved searches.`);
     if(document.getElementById("screen-feed").classList.contains("active"))renderFeed();
@@ -1436,7 +1437,7 @@ async function detectLocation(fillInput){
         refreshFindTownMarkers(latitude,longitude);
         const input=document.getElementById("loc-input");
         if(input&&(fillInput||!input.value.trim()))input.value=val;
-        if(fillInput)toast("\u{1F4CD} "+val);
+        if(fillInput)toast(val);
       }else if(fillInput){
         // Never silently drop a coordinate pair in the box here. The user asked
         // for their town; a number they can't check is worse than being told.
@@ -1510,7 +1511,7 @@ async function loadHealth(){
                     :'<span style="color:var(--red);">●</span>';
   box.innerHTML=
     `<div style="margin-bottom:0.4rem;font-weight:700;color:${problems.length?"var(--accent)":"var(--green)"};">`
-    +`${problems.length?"⚠ Degraded":"✅ All systems configured"}</div>`
+    +`${problems.length?"Degraded":"All systems configured"}</div>`
     +Object.keys(b).sort().map(k=>
       `<div>${dot(b[k])} ${esc(k.replace(/_/g," "))}</div>`).join("")
     +(problems.length?`<div style="margin-top:0.5rem;">`
@@ -1527,7 +1528,7 @@ function renderDiagnostics(){
                       .reduce((n,k)=>n+f[k],0);
   return `
     <div class="account-card">
-      <div class="account-email" style="font-size:0.85rem;">&#x1FA7A; Diagnostics</div>
+      <div class="account-email" style="font-size:0.85rem;">Diagnostics</div>
       <div class="account-status" style="margin-bottom:0.7rem;">
         What the last search actually did, and whether the server has everything it needs.
         Handy when a search returns less than you expected.
@@ -1550,8 +1551,8 @@ function renderDiagnostics(){
           </div></div>`:""}
       `:`<div class="account-status">No search recorded on this device yet.</div>`}
       <div style="display:flex;gap:0.6rem;margin-top:0.8rem;">
-        <button class="btn-ghost" id="diag-copy" style="margin-top:0;">&#x1F4CB; Copy</button>
-        <button class="btn-ghost" id="diag-refresh" style="margin-top:0;">&#x21BB; Recheck</button>
+        <button class="btn-ghost" id="diag-copy" style="margin-top:0;">Copy</button>
+        <button class="btn-ghost" id="diag-refresh" style="margin-top:0;">Recheck</button>
       </div>
     </div>`;
 }
@@ -1787,7 +1788,7 @@ function renderMap(){
 function showMapCard(show){
   mapVisible=show;store.set("map_visible",show);
   document.getElementById("map-card").classList.toggle("show",show);
-  document.getElementById("map-toggle").textContent=show?"\u{1F4CD} Hide Map":"\u{1F4CD} View Map";
+  document.getElementById("map-toggle").textContent=show?"Hide Map":"View Map";
   if(show)renderMap();
 }
 document.getElementById("map-toggle").onclick=()=>showMapCard(!mapVisible);
@@ -1848,7 +1849,7 @@ async function runScan(force){
     toast("Connection problem");
   }finally{
     scanBtn.disabled=false;
-    scanBtn.innerHTML="&#x1F50D; Scan for Bids";
+    scanBtn.innerHTML="Scan for Bids";
     setTimeout(()=>{pw.style.display="none";pb.style.width="0";},800);
   }
 }
@@ -1912,7 +1913,7 @@ async function runUpcoming(){
     toast("Connection problem");
   }finally{
     upcomingBtn.disabled=false;
-    upcomingBtn.innerHTML="&#x1F4E1; Find Upcoming Projects";
+    upcomingBtn.innerHTML="Find Upcoming Projects";
     setTimeout(()=>{pw.style.display="none";pb.style.width="0";},800);
   }
 }
@@ -1924,16 +1925,16 @@ function upcomingCard(city,b){
       <div class="bid-top"><span class="bid-title">${esc(b.title||"Untitled Project")}</span></div>
       ${b.scope?`<div class="bid-scope">${esc(b.scope)}</div>`:""}
       <div class="bid-meta">
-        <span class="chip">\u{1F4CD} ${esc(city)}</span>
-        ${b.timeframe?`<span class="chip">\u{1F5D3} ${esc(b.timeframe)}</span>`:""}
+        <span class="chip">${esc(city)}</span>
+        ${b.timeframe?`<span class="chip">${esc(b.timeframe)}</span>`:""}
         <span class="chip">PLANNED</span>
       </div>
       ${b.contact||b.email||b.phone?`<div class="bid-meta" style="margin-top:0.4rem;">
         ${b.contact?`<span class="chip">${esc(b.contact)}</span>`:""}
-        ${safeUrl("mailto:"+b.email)?`<a class="chip" href="${esc(safeUrl("mailto:"+b.email))}">✉ Email</a>`:""}
+        ${safeUrl("mailto:"+b.email)?`<a class="chip" href="${esc(safeUrl("mailto:"+b.email))}">Email</a>`:""}
         ${safeUrl("tel:"+b.phone)?`<a class="chip" href="${esc(safeUrl("tel:"+b.phone))}">${esc(b.phone)}</a>`:""}
       </div>`:""}
-      ${safeUrl(b.url)?`<div class="bid-meta" style="margin-top:0.4rem;"><a class="chip" href="${esc(safeUrl(b.url))}" target="_blank" rel="noopener noreferrer">\u{1F517} Source</a></div>`:""}
+      ${safeUrl(b.url)?`<div class="bid-meta" style="margin-top:0.4rem;"><a class="chip" href="${esc(safeUrl(b.url))}" target="_blank" rel="noopener noreferrer">Source</a></div>`:""}
     </div>
   </div>`;
 }
@@ -1944,7 +1945,7 @@ function renderUpcoming(){
   const cities=Object.keys(upcomingData).filter(c=>(upcomingData[c]||[]).length);
   if(!cities.length){
     filterRow.style.display="none";
-    list.innerHTML=`<div class="empty"><div class="icon">&#x1F4E1;</div><h3>Nothing yet</h3><p>Search your area to spot planned work before it's a bid.</p></div>`;
+    list.innerHTML=`<div class="empty"><h3>Nothing yet</h3><p>Search your area to spot planned work before it's a bid.</p></div>`;
     return;
   }
   filterRow.style.display="flex";
@@ -1953,7 +1954,7 @@ function renderUpcoming(){
   const term=(document.getElementById("up-search").value||"").trim().toLowerCase();
   if(term)rows=rows.filter(([c,b])=>(b.title||"").toLowerCase().includes(term)||(b.scope||"").toLowerCase().includes(term)||c.toLowerCase().includes(term));
   list.innerHTML=`<div class="feed-label">PLANNED PROJECTS</div>`+rows.map(([c,b])=>upcomingCard(c,b)).join("");
-  if(!rows.length)list.innerHTML=`<div class="empty"><div class="icon">&#x1F50D;</div><h3>No matches</h3><p>Try a different search term.</p></div>`;
+  if(!rows.length)list.innerHTML=`<div class="empty"><h3>No matches</h3><p>Try a different search term.</p></div>`;
 }
 document.getElementById("up-search").oninput=()=>renderUpcoming();
 
@@ -2025,15 +2026,15 @@ async function runLeads(){
     toast("Connection problem");
   }finally{
     leadsBtn.disabled=false;
-    leadsBtn.innerHTML="&#x1F3E0; Find Residential Leads";
+    leadsBtn.innerHTML="Find Residential Leads";
     setTimeout(()=>{pw.style.display="none";pb.style.width="0";},800);
   }
 }
 
 const LEAD_TYPE_STYLE={
-  open:{bg:"#0f3d24",fg:"var(--green)",label:"\u{1F513} Open Lead"},
-  builder:{bg:"#0c2a4a",fg:"var(--blue)",label:"\u{1F3D7} Builder's Job"},
-  taken:{bg:"#2a2a2a",fg:"var(--text3)",label:"✓ Sub Already Listed"},
+  open:{bg:"#0f3d24",fg:"var(--green)",label:"Open Lead"},
+  builder:{bg:"#0c2a4a",fg:"var(--blue)",label:"Builder's Job"},
+  taken:{bg:"#2a2a2a",fg:"var(--text3)",label:"Sub Already Listed"},
   unknown:{bg:"#2a2a2a",fg:"var(--text2)",label:"Contact Listed"},
 };
 const LEAD_STATUSES=[["called","Called"],["quoted","Quoted"],["won","Won"],["lost","Lost"]];
@@ -2048,15 +2049,15 @@ function leadCard(city,l){
       ${l.description?`<div class="bid-scope">${esc(l.description)}</div>`:""}
       <div class="bid-meta">
         <span class="chip" style="background:${t.bg};color:${t.fg};" title="${esc(l.lead_type_label||'')}">${t.label}</span>
-        <span class="chip">\u{1F4CD} ${esc(city)}</span>
-        ${l.issued_date?`<span class="chip">\u{1F5D3} Permitted ${esc(l.issued_date)}</span>`:""}
+        <span class="chip">${esc(city)}</span>
+        ${l.issued_date?`<span class="chip">Permitted ${esc(l.issued_date)}</span>`:""}
         <span class="chip">${esc(l.permit_type||"Residential Permit")}</span>
       </div>
       ${l.contractor_name||l.contractor_phone?`<div class="bid-meta" style="margin-top:0.4rem;">
         ${l.contractor_name?`<span class="chip">${esc(l.contractor_name)}${l.contractor_trade?` (${esc(l.contractor_trade)})`:""}</span>`:""}
         ${safeUrl("tel:"+l.contractor_phone)?`<a class="chip" href="${esc(safeUrl("tel:"+l.contractor_phone))}">${esc(l.contractor_phone)}</a>`:""}
       </div>`:""}
-      ${safeUrl(l.url)?`<div class="bid-meta" style="margin-top:0.4rem;"><a class="chip" href="${esc(safeUrl(l.url))}" target="_blank" rel="noopener noreferrer">\u{1F517} Permit Record</a></div>`:""}
+      ${safeUrl(l.url)?`<div class="bid-meta" style="margin-top:0.4rem;"><a class="chip" href="${esc(safeUrl(l.url))}" target="_blank" rel="noopener noreferrer">Permit Record</a></div>`:""}
       ${l.lead_type==="builder"?`<div style="background:var(--surface);color:var(--text2);font-size:0.78rem;line-height:1.4;padding:0.5rem 0.6rem;border-radius:8px;margin-top:0.5rem;">ℹ️ A general contractor already holds this project. Worth a call only if you already have a relationship with them as a subcontractor.</div>`:""}
       ${pid?`<div class="lead-pipeline-row">
         ${LEAD_STATUSES.map(([k,label])=>`<button class="pchip ${curStatus===k?"active-"+k:""}" data-lead-id="${esc(pid)}" data-lead-status="${esc(curStatus===k?"":k)}">${label}</button>`).join("")}
@@ -2076,7 +2077,7 @@ function renderLeads(){
     filterRow.style.display="none";
     toolbar.style.display="none";
     tilesWrap.innerHTML="";
-    list.innerHTML=`<div class="empty"><div class="icon">&#x1F3E0;</div><h3>Nothing yet</h3><p>Search your area for fresh driveway &amp; sidewalk permits. Coverage is growing city by city — currently: Austin, TX; Cambridge, MA & Baton Rouge, LA.</p></div>`;
+    list.innerHTML=`<div class="empty"><h3>Nothing yet</h3><p>Search your area for fresh driveway &amp; sidewalk permits. Coverage is growing city by city — currently: Austin, TX; Cambridge, MA & Baton Rouge, LA.</p></div>`;
     return;
   }
   filterRow.style.display="flex";
@@ -2107,7 +2108,7 @@ function renderLeads(){
   // returned them -- already sorted open-lead-first, freshest within type.
   lastLeadsRows=rows;
   list.innerHTML=`<div class="feed-label">RESIDENTIAL LEADS</div>`+rows.map(([c,l])=>leadCard(c,l)).join("");
-  if(!rows.length)list.innerHTML=`<div class="empty"><div class="icon">&#x1F50D;</div><h3>No matches</h3><p>Try a different search term.</p></div>`;
+  if(!rows.length)list.innerHTML=`<div class="empty"><h3>No matches</h3><p>Try a different search term.</p></div>`;
   // Real listeners, not interpolated onclick — a permit id containing a quote
   // would otherwise break the status buttons on that lead.
   list.querySelectorAll("[data-lead-id]").forEach(btn=>{
@@ -2223,7 +2224,7 @@ function renderFeed(){
   exportBtn.style.display=total?"inline-flex":"none";
   if(!total){
     tiles.innerHTML="";
-    list.innerHTML=`<div class="empty"><div class="icon">&#x1F3D7;</div><h3>No bids yet</h3><p>Tap Find to scan your area.</p></div>`;
+    list.innerHTML=`<div class="empty"><h3>No bids yet</h3><p>Tap Find to scan your area.</p></div>`;
     lastFeedRows=[];
     return;
   }
@@ -2254,7 +2255,7 @@ function renderFeed(){
   // re-sort what the server already ranked."
   lastFeedRows=rows;
   list.innerHTML=`<div class="feed-label">OPEN BIDS</div>`+rows.map(([c,b])=>bidCard(c,b)).join("");
-  if(!rows.length)list.innerHTML=`<div class="empty"><div class="icon">&#x1F50D;</div><h3>No matches</h3><p>Try a different search term.</p></div>`;
+  if(!rows.length)list.innerHTML=`<div class="empty"><h3>No matches</h3><p>Try a different search term.</p></div>`;
   attachBidEvents(list);
 }
 document.getElementById("feed-search").oninput=()=>renderFeed();
@@ -2288,7 +2289,7 @@ function bidCard(city,b){
   // that are just labels (city, "OPEN").
   const urgent=dleft!=null&&dleft<=7;
   const deadlineChip=b.deadline
-    ?`<span class="chip" style="${dleft!=null&&dleft<=2?'color:var(--red);':dleft!=null&&dleft<=7?'color:var(--accent);':''}${urgent?'font-weight:800;font-size:0.72rem;':''}">\u{1F4C5} ${esc(b.deadline)}${dleft!=null&&dleft>=0?` \u2022 ${dleft===0?"today":dleft+"d left"}`:""}</span>`
+    ?`<span class="chip" style="${dleft!=null&&dleft<=2?'color:var(--red);':dleft!=null&&dleft<=7?'color:var(--accent);':''}${urgent?'font-weight:800;font-size:0.72rem;':''}">${esc(b.deadline)}${dleft!=null&&dleft>=0?` \u2022 ${dleft===0?"today":dleft+"d left"}`:""}</span>`
     :"";
   return `<div class="bid" data-id="${esc(id)}" data-city="${esc(city)}">
     <div class="bid-bar ${barClass}" style="${barClass?"":"background:var(--green)"}"></div>
@@ -2299,11 +2300,11 @@ function bidCard(city,b){
       </div>
       ${b.scope?`<div class="bid-scope">${esc(b.scope)}</div>`:""}
       <div class="bid-meta">
-        <span class="chip">\u{1F4CD} ${esc(city)}</span>
-        ${b.value?`<span class="chip value">\u{1F4B2} ${esc(b.value)}</span>`:""}
+        <span class="chip">${esc(city)}</span>
+        ${b.value?`<span class="chip value">${esc(b.value)}</span>`:""}
         ${deadlineChip}
         ${pipeline[id]?`<span class="chip status-${esc(pipeline[id])}">${esc(String(pipeline[id]).toUpperCase())}</span>`:""}
-        ${notes[id]?`<span class="chip">\u{1F4DD} Note</span>`:""}
+        ${notes[id]?`<span class="chip">Note</span>`:""}
       </div>
     </div>
   </div>`;
@@ -2341,7 +2342,7 @@ function openDetail(city,b){
   }
   const statuses=[["submitted","Submitted"],["won","Won"],["lost","Lost"],["passed","Passed"]];
   mc.innerHTML=`<h2>${esc(b.title||"Untitled Project")}</h2>
-    <div class="bid-meta"><span class="chip">\u{1F4CD} ${esc(city)}</span><span class="chip">OPEN</span></div>
+    <div class="bid-meta"><span class="chip">${esc(city)}</span><span class="chip">OPEN</span></div>
     ${row("Scope of Work",b.scope)}
     <div class="detail-row">
       <div class="detail-label">Est. Value</div>
@@ -2361,12 +2362,12 @@ function openDetail(city,b){
       <textarea id="bid-notes" class="input" style="min-height:70px;resize:vertical;margin-top:0.3rem;font-family:inherit;" placeholder="Estimate, who you talked to, next steps...">${esc(notes[id]||"")}</textarea>
     </div>
     <div class="modal-actions">
-      ${safeUrl("mailto:"+b.email)?`<a class="ma-gold" href="${esc(safeUrl("mailto:"+b.email))}">\u2709 Email</a>`:""}
-      ${safeUrl(b.url)?`<a class="ma-ghost" href="${esc(safeUrl(b.url))}" target="_blank" rel="noopener noreferrer">\u{1F517} Open</a>`:""}
-      <button class="ma-ghost" data-act="share">\u{1F4E4} Share</button>
+      ${safeUrl("mailto:"+b.email)?`<a class="ma-gold" href="${esc(safeUrl("mailto:"+b.email))}">Email</a>`:""}
+      ${safeUrl(b.url)?`<a class="ma-ghost" href="${esc(safeUrl(b.url))}" target="_blank" rel="noopener noreferrer">Open</a>`:""}
+      <button class="ma-ghost" data-act="share">Share</button>
       <button class="ma-ghost" data-act="save">${saved[bidId(city,b)]?"\u2605 Saved":"\u2606 Save"}</button>
-      ${b.deadline?`<button class="ma-ghost" data-act="calendar">\u{1F4C5} Add to Calendar</button>`:""}
-      <button class="ma-ghost" data-act="draft">✍️ Draft Proposal</button>
+      ${b.deadline?`<button class="ma-ghost" data-act="calendar">Add to Calendar</button>`:""}
+      <button class="ma-ghost" data-act="draft">Draft Proposal</button>
     </div>`;
   // Wired as real listeners instead of onclick="fn('${id}')" attributes. A bid
   // id is built from its city + title text, so a bid anywhere like O'Fallon
@@ -2480,7 +2481,7 @@ document.getElementById("modal-back").onclick=closeModal;
 window.draftProposal=async function(city,id){
   const b=findBid(id);if(!b)return;
   if(!requireOnline("Drafting a proposal"))return;
-  toast("✍️ Drafting proposal...");
+  toast("Drafting proposal...");
   try{
     const token=await getSupabaseToken();
     const r=await fetchWithTimeout(SERVER+"/draft-proposal",{
@@ -2505,11 +2506,11 @@ window.draftProposal=async function(city,id){
 };
 function showProposalModal(b,draft){
   const mc=document.getElementById("modal-content");
-  mc.innerHTML=`<h2>✍️ Proposal Draft</h2>
+  mc.innerHTML=`<h2>Proposal Draft</h2>
     <div class="account-status" style="margin-bottom:0.8rem;">${esc(b.title||"")} — AI-generated starting point. Review before sending.</div>
     <textarea id="proposal-text" class="input" style="min-height:280px;resize:vertical;font-family:inherit;">${esc(draft)}</textarea>
     <div class="modal-actions">
-      <button class="ma-gold" onclick="copyProposal();">\u{1F4CB} Copy</button>
+      <button class="ma-gold" onclick="copyProposal();">Copy</button>
       <button class="ma-ghost" onclick="closeModal();">Close</button>
     </div>`;
   document.getElementById("modal-back").classList.add("open");
@@ -2550,7 +2551,7 @@ function renderSaved(){
   if(!keys.length){
     ptiles.innerHTML="";exportBtn.style.display="none";
     document.getElementById("pipeline-stats").innerHTML="";
-    list.innerHTML=`<div class="empty"><div class="icon">&#x2B50;</div><h3>No active bids</h3><p>Tap the &#x2606; on any bid to start tracking it here.</p></div>`;
+    list.innerHTML=`<div class="empty"><h3>No active bids</h3><p>Tap the &#x2606; on any bid to start tracking it here.</p></div>`;
     return;
   }
   exportBtn.style.display="inline-flex";
@@ -2563,7 +2564,7 @@ function renderSaved(){
   ptiles.querySelectorAll(".tile").forEach(t=>t.onclick=()=>{pipelineFilter=t.dataset.k;renderSaved();});
   const filteredKeys=keys.filter(id=>pipelineFilter==="All"||(pipelineFilter==="none"?!pipeline[id]:pipeline[id]===pipelineFilter));
   if(!filteredKeys.length){
-    list.innerHTML=`<div class="empty"><div class="icon">&#x2B50;</div><h3>Nothing here</h3><p>No active bids with this status.</p></div>`;
+    list.innerHTML=`<div class="empty"><h3>Nothing here</h3><p>No active bids with this status.</p></div>`;
     return;
   }
   list.innerHTML=filteredKeys.map(id=>{const b=saved[id];return bidCard(b._city||"",b);}).join("");
@@ -2638,7 +2639,7 @@ function renderAccount(){
   body.innerHTML=`
     <div class="account-card" style="display:flex;align-items:center;gap:0.9rem;">
       ${companyProfile.avatar_url?`<img class="avatar-lg" src="${esc(companyProfile.avatar_url)}" alt="">`
-        :`<div class="avatar-placeholder">&#x1F464;</div>`}
+        :`<div class="avatar-placeholder"></div>`}
       <div style="flex:1;min-width:0;">
         <div class="account-email">${esc(email)}</div>
         <div class="account-status">Signed in with ${currentUser?.app_metadata?.provider||"email"}${created?` &middot; Member since ${esc(created)}`:""}</div>
@@ -2647,7 +2648,7 @@ function renderAccount(){
       </div>
     </div>
     <div class="account-card">
-      <div class="account-email" style="font-size:0.85rem;margin-bottom:0.6rem;">&#x1F4CA; Your Stats</div>
+      <div class="account-email" style="font-size:0.85rem;margin-bottom:0.6rem;">Your Stats</div>
       <div class="stats-grid">
         <div class="stat-box"><div class="n">${stats.count}</div><div class="l">Active Bids</div></div>
         <div class="stat-box"><div class="n">${stats.winRate}</div><div class="l">Win Rate</div></div>
@@ -2655,19 +2656,19 @@ function renderAccount(){
         <div class="stat-box"><div class="n">${formatMoney(stats.trackedValue)}</div><div class="l">Tracked</div></div>
       </div>
       <div class="account-status" style="margin-top:0.7rem;display:flex;align-items:center;justify-content:space-between;">
-        <span>&#x1F504; ${esc(syncText)}</span>
+        <span>${esc(syncText)}</span>
         <a href="#" id="sync-now-link" style="color:var(--amber);">Sync now</a>
       </div>
     </div>
     ${renderDiagnostics()}
     <div class="account-card" id="notif-card" style="cursor:pointer;">
-      <div class="account-email" style="font-size:0.85rem;">&#x1F514; Bid Alerts</div>
+      <div class="account-email" style="font-size:0.85rem;">Bid Alerts</div>
       <div class="account-status" id="notif-status">${esc(notifPermissionLabel())}</div>
     </div>
     <div class="account-card">
       <div style="font-size:0.85rem;font-weight:700;display:flex;flex-wrap:wrap;gap:0.5rem;justify-content:space-between;align-items:center;">
-        <span style="white-space:nowrap;">&#x1F4BC; Company Info</span>
-        ${companyEditMode?"":`<button class="btn-ghost" id="co-edit-btn" style="padding:0.35rem 0.8rem;font-size:0.78rem;flex-shrink:0;">&#x270F; Edit</button>`}
+        <span style="white-space:nowrap;">Company Info</span>
+        ${companyEditMode?"":`<button class="btn-ghost" id="co-edit-btn" style="padding:0.35rem 0.8rem;font-size:0.78rem;flex-shrink:0;">Edit</button>`}
       </div>
       <div class="account-status" style="margin-bottom:0.7rem;">Used to personalize AI-drafted bid proposals. Nothing here is shared beyond that.</div>
       ${companyEditMode?`
@@ -2682,7 +2683,7 @@ function renderAccount(){
       <div class="field-label">Specialty (optional)</div>
       <input class="input co-field" id="co-specialty" data-k="specialty" placeholder="sidewalk, ADA ramp &amp; curb concrete work" value="${esc(companyProfile.specialty||"")}" style="margin-bottom:0.8rem;" />
       <div style="display:flex;gap:0.6rem;">
-        <button class="btn-primary" id="co-confirm-btn" style="margin-top:0;">&#x2713; Confirm</button>
+        <button class="btn-primary" id="co-confirm-btn" style="margin-top:0;">Confirm</button>
         <button class="btn-ghost" id="co-cancel-btn">Cancel</button>
       </div>
       `:`
@@ -2694,20 +2695,20 @@ function renderAccount(){
       `}
     </div>
     <div class="account-card">
-      <div class="account-email" style="font-size:0.85rem;">&#x1F6DF; Support</div>
+      <div class="account-email" style="font-size:0.85rem;">Support</div>
       <div class="account-status" style="margin-bottom:0.7rem;">Send us a message and we'll get back to you, or email <a href="mailto:${SUPPORT_EMAIL}" style="color:var(--amber);">${SUPPORT_EMAIL}</a> directly.</div>
       <textarea class="input" id="support-msg" rows="4" placeholder="What's going on?" style="resize:vertical;margin-bottom:0.6rem;"></textarea>
       <button class="btn-ghost" id="support-send-btn">Send Message</button>
       <div class="account-status" id="support-status" style="margin-top:0.5rem;"></div>
     </div>
     <div class="account-card" id="referral-card">
-      <div class="account-email" style="font-size:0.85rem;">&#x1F91D; Refer a Contractor</div>
+      <div class="account-email" style="font-size:0.85rem;">Refer a Contractor</div>
       <div class="account-status" style="margin-bottom:0.7rem;">Give a free month, get a free month — when someone you refer subscribes, you both get bonus time added automatically.</div>
       <div id="referral-body" class="account-status">Loading your link&hellip;</div>
     </div>
-    <div class="account-email" style="font-size:0.85rem;margin:0.4rem 0 0.5rem;">&#x1F4B3; Billing</div>
+    <div class="account-email" style="font-size:0.85rem;margin:0.4rem 0 0.5rem;">Billing</div>
     <div class="plan" id="status-card"><div class="plan-name" style="display:flex;align-items:center;gap:0.5rem;"><span class="spin" style="border-top-color:var(--accent);border-color:rgba(245,158,11,0.25);"></span> Checking your plan...</div></div>
-    <a class="btn-ghost" style="text-decoration:none;display:block;text-align:center;box-sizing:border-box;" href="${PORTAL_URL}" target="_blank">&#x1F4B3; Manage Billing on Stripe &rarr;</a>
+    <a class="btn-ghost" style="text-decoration:none;display:block;text-align:center;box-sizing:border-box;" href="${PORTAL_URL}" target="_blank">Manage Billing on Stripe &rarr;</a>
     <div id="upgrade-section">
       <div class="plan featured">
         <div class="plan-name">Pro Monthly</div>
@@ -2861,7 +2862,7 @@ async function loadAccountStatus(){
     try{
       const r=await fetchWithTimeout(SERVER+"/validate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({key,device_id:deviceId()})},60000);
       const d=await r.json();
-      if(d.valid){html=`<div class="plan-name">✅ Active subscription</div><div class="plan-price" style="font-size:1.4rem;">${esc(d.plan||"Pro")}</div><p style="color:var(--text2);font-size:0.82rem;margin-top:0.4rem;">Expires ${esc(d.expires||"")}</p>`;featured=true;activePaid=true;}
+      if(d.valid){html=`<div class="plan-name">Active subscription</div><div class="plan-price" style="font-size:1.4rem;">${esc(d.plan||"Pro")}</div><p style="color:var(--text2);font-size:0.82rem;margin-top:0.4rem;">Expires ${esc(d.expires||"")}</p>`;featured=true;activePaid=true;}
     }catch{}
   }
   if(upgradeSection)upgradeSection.style.display=activePaid?"none":"";
@@ -2873,11 +2874,11 @@ async function loadAccountStatus(){
       if(d.active){
         trialExpiresAt=d.expires_at||null;
         const countdown=timeLeftLabel(trialExpiresAt)||`${d.days_left||""} days left`;
-        html=`<div class="plan-name">\u{1F381} Free Trial Active</div><div class="plan-price"><span id="trial-countdown">${esc(countdown)}</span></div><p style="color:var(--text2);font-size:0.82rem;">Full access. Subscribe to keep going after trial.</p>`;featured=true;
+        html=`<div class="plan-name">Free Trial Active</div><div class="plan-price"><span id="trial-countdown">${esc(countdown)}</span></div><p style="color:var(--text2);font-size:0.82rem;">Full access. Subscribe to keep going after trial.</p>`;featured=true;
       }
-      else html=`<div class="plan-name" style="color:var(--red);">⚠ Trial expired</div><p style="color:var(--text2);font-size:0.82rem;margin-top:0.5rem;">Subscribe below to keep scanning.</p>`;
+      else html=`<div class="plan-name" style="color:var(--red);">Trial expired</div><p style="color:var(--text2);font-size:0.82rem;margin-top:0.5rem;">Subscribe below to keep scanning.</p>`;
     }catch{
-      html=`<div class="plan-name" style="color:var(--text2);">⚠ Couldn't reach the server</div><p style="color:var(--text3);font-size:0.82rem;margin-top:0.5rem;">Your plan status will show once the connection's back. Try again in a bit.</p>`;
+      html=`<div class="plan-name" style="color:var(--text2);">Couldn't reach the server</div><p style="color:var(--text3);font-size:0.82rem;margin-top:0.5rem;">Your plan status will show once the connection's back. Try again in a bit.</p>`;
     }
   }
   card.innerHTML=html;
