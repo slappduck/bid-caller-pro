@@ -2825,9 +2825,18 @@ def _enrich_placed_bids(grouped, stats=None):
     bids that actually made it into the result — so the cost is a dozen fetches
     at most, rather than one per thing the search turned up.
     """
+    # A name is not a way to reach anybody. The AI extractor returns a
+    # "contact" field and routinely fills it with something like "Purchasing
+    # Department" while leaving email and phone blank -- and treating that as
+    # already-enriched meant the posting behind it was never read for the
+    # actual phone number. On a live Springfield 75mi scan that left 24 kept
+    # bids with exactly ONE eligible for enrichment and contacts_found: 0.
+    # Only a phone or an email makes a bid callable, so only those count as
+    # done; a name already present is preserved either way, since
+    # _enrich_from_detail_pages only fills fields that are empty.
     todo = [b for bids in (grouped or {}).values() for b in bids
             if isinstance(b, dict) and b.get("url")
-            and not (b.get("email") or b.get("phone") or b.get("contact"))]
+            and not (b.get("email") or b.get("phone"))]
     # Undated bids first: a missing deadline is worse than a missing phone
     # number, because it also stops an expired listing being recognised.
     todo.sort(key=lambda b: bool(str(b.get("deadline") or "").strip()))

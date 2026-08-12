@@ -271,6 +271,29 @@ class EnrichEveryPlacedBidTests(unittest.TestCase):
         with patch.object(ls, "_fetch_page", side_effect=AssertionError("fetched!")):
             ls._enrich_placed_bids(grouped, {})
 
+    def test_a_contact_name_alone_does_not_count_as_reachable(self):
+        """The AI extractor fills "contact" with things like "Purchasing
+        Department" and leaves email and phone blank. Treating that as
+        already-enriched meant the posting was never read for the actual
+        number -- a live Springfield 75mi scan kept 24 bids and had exactly
+        one eligible for enrichment, reporting contacts_found: 0. You cannot
+        call a name."""
+        grouped = {"X": [{"title": "Sidewalk Program", "url": "https://x.gov/1",
+                          "contact": "Purchasing Department"}]}
+        with patch.object(ls, "_fetch_page", return_value=(self.PAGE, "ok")):
+            ls._enrich_placed_bids(grouped, {})
+        bid = grouped["X"][0]
+        self.assertEqual(bid["phone"], "(417) 555-0143")
+        self.assertEqual(bid["email"], "dprentice@example-city.gov")
+        # ...and the name the extractor already had is not overwritten.
+        self.assertEqual(bid["contact"], "Purchasing Department")
+
+    def test_a_phone_alone_is_enough_to_skip(self):
+        grouped = {"X": [{"title": "A", "url": "https://x.gov/1",
+                          "phone": "(417) 555-0000"}]}
+        with patch.object(ls, "_fetch_page", side_effect=AssertionError("fetched!")):
+            ls._enrich_placed_bids(grouped, {})
+
     def test_undated_bids_are_enriched_first(self):
         # A missing deadline is worse than a missing phone number: it also
         # stops an expired listing being recognised as expired.
