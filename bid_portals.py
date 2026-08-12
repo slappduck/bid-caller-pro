@@ -96,6 +96,73 @@ def _national_seeds():
     return seeds
 
 
+# ── Coordinates, for radius-based lookup ──
+# A wide-radius scan used to only ever search the exact town typed plus a
+# handful of geographically-guessed "anchor" points (license_server.py's
+# _nearby_anchor_towns), capped at 6 regardless of how large the radius
+# actually was -- a 125mi scan covers ~49,000 sq mi, and 7 sample points is a
+# real recall gap. This is the fix: tools/geocode_bid_portals.py pre-geocodes
+# every known-portal town offline (so /scan does arithmetic against already-
+# known coordinates instead of a live geocode call per candidate on every
+# request), and towns_within_radius below answers "which of the towns I
+# already have a real bid page for fall inside this radius" -- cheaply,
+# reusing pages this codebase already found for free, not new search credits.
+_COORDS_CSV = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           "data", "bid_portal_coords.csv")
+_coords_cache = None
+
+
+def _coords():
+    global _coords_cache
+    if _coords_cache is not None:
+        return _coords_cache
+    coords = {}
+    try:
+        with open(_COORDS_CSV, newline="", encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                city, state = (row.get("city") or "").strip(), (row.get("state") or "").strip().upper()
+                try:
+                    lat, lon = float(row["lat"]), float(row["lon"])
+                except (KeyError, ValueError, TypeError):
+                    continue
+                if city and state:
+                    coords[(city, state)] = (lat, lon)
+    except OSError:
+        pass  # not geocoded yet -- towns_within_radius just finds nothing, not a crash
+    _coords_cache = coords
+    return coords
+
+
+def towns_within_radius(directory, center_lat, center_lon, radius, exclude=()):
+    """Every town in the known-portal directory (seed + national crawl +
+    learned) with a real bid page AND known coordinates, within `radius`
+    miles of (center_lat, center_lon). `exclude` is a set of (city_lower,
+    state) tuples already covered elsewhere (the center town itself, the
+    sampled anchor towns) so this only adds NEW coverage.
+
+    Returns (city, state, lat, lon) tuples, same shape as
+    license_server._nearby_anchor_towns, so the caller can treat them
+    identically -- just read the known page directly, no search queries."""
+    from math import asin, cos, radians, sin, sqrt
+    R = 3958.8
+
+    def miles(lat1, lon1, lat2, lon2):
+        p1, p2 = radians(lat1), radians(lat2)
+        dlat, dlon = radians(lat2 - lat1), radians(lon2 - lon1)
+        a = sin(dlat / 2) ** 2 + cos(p1) * cos(p2) * sin(dlon / 2) ** 2
+        return 2 * R * asin(sqrt(a))
+
+    out = []
+    for (city, state), (lat, lon) in _coords().items():
+        if (city.lower(), state) in exclude:
+            continue
+        if not get_portals(directory, city, state):
+            continue  # geocoded but no longer a trusted entry (aged out via MAX_FAIL)
+        if miles(center_lat, center_lon, lat, lon) <= radius:
+            out.append((city, state, lat, lon))
+    return out
+
+
 def load_directory():
     """Load the directory, seeded with known-good defaults for any key not
     already present. Storage lives in kv_backend — this is the data that makes

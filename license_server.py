@@ -403,6 +403,7 @@ def health_detail():
             "page_workers": PAGE_WORKERS,             # SCAN_PAGE_WORKERS
             "max_pages_per_domain": MAX_PAGES_PER_DOMAIN,  # SCAN_MAX_PAGES_PER_DOMAIN
             "max_anchor_towns": MAX_ANCHOR_TOWNS,     # SCAN_MAX_ANCHORS
+            "max_known_towns": MAX_KNOWN_TOWNS,       # SCAN_MAX_KNOWN_TOWNS
             "federal_window_days": SCAN_WINDOW_DAYS,  # SCAN_WINDOW_DAYS
             "geo_miss_retry_hours": GEO_MISS_RETRY_HOURS,
             "model": OPENAI_MODEL,                    # OPENAI_MODEL
@@ -1563,6 +1564,11 @@ MAX_PAGES_PER_DOMAIN = int(os.environ.get("SCAN_MAX_PAGES_PER_DOMAIN", "4"))
 # Towns searched around the radius, on top of the centre. More towns means
 # more of a wide radius is actually looked at, at the cost of scan time.
 MAX_ANCHOR_TOWNS = int(os.environ.get("SCAN_MAX_ANCHORS", "6"))
+# Known-portal towns within radius are a direct fetch each, not a search
+# query, so this can be far more generous than MAX_ANCHOR_TOWNS without a
+# proportional cost increase -- capped so a scan centered in a very
+# densely-covered metro doesn't try to fetch every known town in the state.
+MAX_KNOWN_TOWNS = int(os.environ.get("SCAN_MAX_KNOWN_TOWNS", "40"))
 
 # Primary sources: the agency actually letting the work, rather than a site
 # re-listing it. Preferred when the budget is tight.
@@ -2853,11 +2859,31 @@ def _perform_scan(location, radius, force=False):
 
         anchors = _nearby_anchor_towns(center, radius)
 
-        # Each "town job" (center + every anchor) is fully independent work,
-        # so they run concurrently instead of one after another — this is
-        # the biggest lever on wall-clock scan time. Capped at 4 workers so
-        # we don't fire too many simultaneous search-engine requests at once
-        # (DuckDuckGo in particular will start blocking if hammered).
+        # _nearby_anchor_towns samples at most a handful of geographically-
+        # guessed points regardless of how large the radius is -- a 125mi
+        # scan covers ~49,000 sq mi, and 6 sample points leaves most of that
+        # area unsearched. Separately from that guessing, we already have a
+        # real, verified bid page for 3,151 towns nationally (the offline
+        # crawl) -- this asks a cheaper, more direct question: of the towns
+        # we ALREADY trust, which ones are actually inside this radius. No
+        # search credits involved, just reading pages we already know about.
+        # Sorted closest-first and capped so a scan centered in a
+        # well-covered metro doesn't try to fetch every known town in the
+        # state at once.
+        known_exclude = {(c.lower(), s)} | {(a[0].lower(), a[1]) for a in anchors}
+        known_towns = bid_portals.towns_within_radius(
+            pdb, center["lat"], center["lon"], radius, exclude=known_exclude)
+        known_towns.sort(key=lambda t: _miles_between(center["lat"], center["lon"], t[2], t[3]))
+        known_towns = known_towns[:MAX_KNOWN_TOWNS]
+
+        # Each "town job" (center + every anchor + every known-portal town)
+        # is fully independent work, so they run concurrently instead of one
+        # after another — this is the biggest lever on wall-clock scan time.
+        # Search-driven jobs (center/anchor) stay capped at 4 workers so we
+        # don't fire too many simultaneous search-engine requests at once
+        # (DuckDuckGo in particular will start blocking if hammered); the
+        # known-town jobs below are just a direct page fetch each (no search
+        # queries), so they get their own, more generous pool.
         center_coords = (center["lat"], center["lon"])
 
         def _run_center():
@@ -2906,13 +2932,35 @@ def _perform_scan(location, radius, force=False):
             print(f"[scan] {got} raw bids from {ac}, {ast} (anchor)", flush=True)
             return got
 
+        def _run_known_town(town):
+            # No search queries here at all -- this town wasn't picked by
+            # guessing, it's one we already have a verified real bid page
+            # for. Reading it directly is the entire job.
+            kc, kst, klat, klon = town
+            got = _run_known_portals(kc, kst, f"{kc}, {kst}", grouped, center, radius,
+                                      cdb, city_coords, lock, pdb, default_city=kc,
+                                      town_coords=(klat, klon), stats=drop_stats)
+            print(f"[scan] {got} raw bids from {kc}, {kst} (known portal)", flush=True)
+            return got
+
         with ThreadPoolExecutor(max_workers=4) as ex:
             futures = [ex.submit(_run_center)] + [ex.submit(_run_anchor, a) for a in anchors]
             for f in as_completed(futures):
                 local_raw += f.result()
 
+        # Separate pool from the search-driven jobs above: these are a direct
+        # fetch each against a different domain, not a search-engine query,
+        # so there's no shared backend to overwhelm the way DuckDuckGo/Tavily
+        # would be by running many at once.
+        if known_towns:
+            with ThreadPoolExecutor(max_workers=10) as ex:
+                futures = [ex.submit(_run_known_town, t) for t in known_towns]
+                for f in as_completed(futures):
+                    local_raw += f.result()
+
         print(f"[scan] {local_raw} raw local bids extracted total "
-              f"({len(anchors)} anchor town(s) searched)", flush=True)
+              f"({len(anchors)} anchor town(s), {len(known_towns)} known-portal "
+              f"town(s) searched)", flush=True)
 
         if not TAVILY_API_KEY and _ddg_is_degraded():
             _alert_admin(
