@@ -678,6 +678,75 @@ async function syncPullCompanyProfile(){
   }
 }
 
+// ── Feed sync ──
+// Starred bids, the company profile and saved searches already follow the
+// account. The three FEEDS did not: they lived only in this browser's
+// localStorage, so opening the app in a different browser showed an empty
+// Bids tab even though the account was the same. One row per user, each feed
+// a jsonb blob -- a feed is read and replaced wholesale, never queried
+// field-by-field, so a row per bid would buy nothing and cost a lot.
+// lead_status rides along because a Leads feed without the statuses set on
+// it is half the information.
+const FEED_TABLE="user_feeds";
+let feedsUpdatedAt=store.get("feeds_updated_at","");
+let feedPushTimer=null;
+
+// A single scan writes several of these keys in quick succession; debounce so
+// that lands as one upload rather than three.
+function queueFeedPush(){
+  feedsUpdatedAt=new Date().toISOString();
+  store.set("feeds_updated_at",feedsUpdatedAt);
+  if(!sb||!currentUser)return;
+  clearTimeout(feedPushTimer);
+  feedPushTimer=setTimeout(pushFeeds,1500);
+}
+
+async function pushFeeds(){
+  if(!sb||!currentUser)return;
+  try{
+    await sb.from(FEED_TABLE).upsert({
+      bids:bidData,upcoming:upcomingData,leads:leadsData,
+      lead_status:leadStatus,updated_at:feedsUpdatedAt||new Date().toISOString(),
+    },{onConflict:"user_id"});
+  }catch(e){/* a failed feed upload costs nothing local — try again next scan */}
+}
+
+async function syncPullFeeds(){
+  if(!sb||!currentUser)return;
+  let data;
+  try{
+    const res=await sb.from(FEED_TABLE).select("*").maybeSingle();
+    if(res.error)return;  // table not created yet -> feature is simply inert
+    data=res.data;
+  }catch(e){return;}
+  if(!data){
+    // Nothing stored yet: seed the account from whatever this browser has,
+    // so the first device to sign in doesn't lose its feed to an empty cloud.
+    if(Object.keys(bidData).length||Object.keys(upcomingData).length
+       ||Object.keys(leadsData).length)pushFeeds();
+    return;
+  }
+  // Last writer wins, by the timestamp the writing device recorded. Only
+  // adopt a strictly newer copy, so a stale browser opening later can't
+  // overwrite the scan you just ran somewhere else.
+  if(feedsUpdatedAt&&data.updated_at&&data.updated_at<=feedsUpdatedAt)return;
+  bidData=data.bids||{};
+  upcomingData=data.upcoming||{};
+  leadsData=data.leads||{};
+  leadStatus=data.lead_status||{};
+  store.set("last_feed",bidData);
+  store.set("upcoming_feed",upcomingData);
+  store.set("leads_feed",leadsData);
+  store.set("lead_status",leadStatus);
+  feedsUpdatedAt=data.updated_at||new Date().toISOString();
+  store.set("feeds_updated_at",feedsUpdatedAt);
+  const active=(id)=>document.getElementById(id).classList.contains("active");
+  if(active("screen-feed"))renderFeed();
+  if(active("screen-upcoming"))renderUpcoming();
+  if(active("screen-leads"))renderLeads();
+  showFeedBadge(Object.keys(bidData).length>0);
+}
+
 window.setPipelineStatus=function(id,status){
   if(status)pipeline[id]=status;else delete pipeline[id];
   store.set("pipeline",pipeline);
@@ -1007,6 +1076,7 @@ function showApp(){
   syncPullSavedBids();
   syncPullCompanyProfile();
   syncPullSavedSearches();
+  syncPullFeeds();
 }
 
 // Leaflet computes its tile grid from the container's size at the moment
@@ -1083,7 +1153,7 @@ document.querySelectorAll("#leads-radius-row .radius-btn").forEach(b=>{
 
 document.getElementById("clear-feed").onclick=()=>{
   if(confirm("Clear all bids? (Saved bids are not affected.)"))
-  {bidData={};store.set("last_feed",bidData);cityFilter="All";renderFeed();}
+  {bidData={};store.set("last_feed",bidData);queueFeedPush();cityFilter="All";renderFeed();}
 };
 
 // ── Saved searches (auto-alerts) ──
@@ -1829,7 +1899,7 @@ function mergeOpenBids(incoming,scannedCities){
     if(merged.length)bidData[city]=merged;
     else delete bidData[city];
   }
-  store.set("last_feed",bidData);
+  store.set("last_feed",bidData);queueFeedPush();
   return added;
 }
 
@@ -2021,7 +2091,7 @@ async function runUpcoming(){
       (d.items[city]||[]).forEach(b=>{const id=upcomingId(city,b);if(!ids.has(id)){have.push(b);ids.add(id);added++;}});
       upcomingData[city]=have;
     }
-    store.set("upcoming_feed",upcomingData);
+    store.set("upcoming_feed",upcomingData);queueFeedPush();
     status.textContent=(d.total||0)>0
       ?`Done — found ${d.total} planned project(s) near ${d.location||location}.`
       :"Nothing planned turned up yet. Try a wider radius.";
@@ -2090,7 +2160,7 @@ let leadsData=store.get("leads_feed",{});
 let leadStatus=store.get("lead_status",{});
 function setLeadStatus(permitId,status){
   if(status)leadStatus[permitId]=status;else delete leadStatus[permitId];
-  store.set("lead_status",leadStatus);
+  store.set("lead_status",leadStatus);queueFeedPush();
   renderLeads();
 }
 const leadsBtn=document.getElementById("leads-btn");
@@ -2134,7 +2204,7 @@ async function runLeads(){
     let added=0;
     (d.leads||[]).forEach(l=>{if(!ids.has(l.permit_id)){have.push(l);ids.add(l.permit_id);added++;}});
     leadsData[city]=have;
-    store.set("leads_feed",leadsData);
+    store.set("leads_feed",leadsData);queueFeedPush();
     status.textContent=(d.total||0)>0
       ?`Done — found ${d.total} residential lead(s) near ${d.location||location}.`
       :"No recent driveway/sidewalk permits in this area. Try a wider radius.";
@@ -2520,7 +2590,7 @@ function openDetail(city,b){
     // that isn't saved yet starts tracking it.
     const val=document.getElementById("bid-value").value.trim();
     b.value=val;
-    store.set("last_feed",bidData);
+    store.set("last_feed",bidData);queueFeedPush();
     if(val&&!saved[id]){
       const[c,bb]=findBidWithCity(id);
       if(bb){saved[id]={...bb,_city:c||city};store.set("saved",saved);}
@@ -2981,7 +3051,7 @@ function renderAccount(){
   document.getElementById("sync-now-link").onclick=(e)=>{
     e.preventDefault();
     lastSyncAt=new Date();
-    syncPullSavedBids();syncPullCompanyProfile();syncPullSavedSearches();
+    syncPullSavedBids();syncPullCompanyProfile();syncPullSavedSearches();syncPullFeeds();
     renderAccount();
   };
   document.getElementById("avatar-input").addEventListener("change",(e)=>{
