@@ -117,6 +117,7 @@ def _coords():
     if _coords_cache is not None:
         return _coords_cache
     coords = {}
+    seen = set()
     try:
         with open(_COORDS_CSV, newline="", encoding="utf-8") as f:
             for row in csv.DictReader(f):
@@ -125,8 +126,17 @@ def _coords():
                     lat, lon = float(row["lat"]), float(row["lon"])
                 except (KeyError, ValueError, TypeError):
                     continue
-                if city and state:
-                    coords[(city, state)] = (lat, lon)
+                if not (city and state):
+                    continue
+                # Keyed case-insensitively: portal lookups already normalise
+                # case (_key), so "Springfield" and "springfield" are one
+                # town -- letting both in would have the scanner fetch and
+                # search it twice. First row wins, and the tool writes the
+                # registry's own casing before any lowercase seed name.
+                if (city.lower(), state) in seen:
+                    continue
+                seen.add((city.lower(), state))
+                coords[(city, state)] = (lat, lon)
     except OSError:
         pass  # not geocoded yet -- towns_within_radius just finds nothing, not a crash
     _coords_cache = coords

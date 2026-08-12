@@ -2589,6 +2589,83 @@ window.addToCalendar=function(city,id){
   setTimeout(()=>URL.revokeObjectURL(url),1000);
   toast("Calendar event downloaded");
 };
+// A photo is displayed in a circle at 56px with object-fit:cover, so a wide
+// or tall shot gets centre-cropped -- previously you only discovered what
+// survived that crop after the upload had already replaced your old photo.
+// This shows the real thing first, at the same aspect and crop rule the
+// account card uses, and only uploads once you accept it.
+function confirmAvatarFraming(file){
+  const url=URL.createObjectURL(file);
+  const mc=document.getElementById("modal-content");
+  mc.innerHTML=`<h2>Use this photo?</h2>
+    <p class="account-status" style="margin-bottom:1rem;">This is exactly how it will
+      appear — photos are cropped to a circle from the centre.</p>
+    <div style="display:flex;align-items:center;gap:1.2rem;margin-bottom:1.2rem;">
+      <img id="avatar-preview-lg" src="${esc(url)}" alt=""
+           style="width:120px;height:120px;border-radius:50%;object-fit:cover;
+                  flex-shrink:0;border:1px solid var(--border);" />
+      <div>
+        <img id="avatar-preview-sm" src="${esc(url)}" alt="" class="avatar-lg" />
+        <div class="account-status" style="margin-top:0.4rem;">Actual size</div>
+      </div>
+    </div>
+    <div id="avatar-preview-err" class="account-status" style="color:var(--red);margin-bottom:0.8rem;"></div>
+    <button class="btn-primary" id="avatar-confirm" style="margin-top:0;">Use this photo</button>
+    <button class="btn-ghost" id="avatar-cancel">Cancel</button>`;
+  document.getElementById("modal-back").classList.add("open");
+  document.getElementById("modal").classList.add("open");
+
+  const done=()=>{URL.revokeObjectURL(url);closeModal();};
+  // A file the browser can't decode (a renamed .heic, a corrupt download)
+  // would otherwise upload happily and land as a blank circle.
+  document.getElementById("avatar-preview-lg").onerror=()=>{
+    document.getElementById("avatar-preview-err").textContent=
+      "This file isn't an image the browser can display — try a JPG or PNG.";
+    const btn=document.getElementById("avatar-confirm");
+    btn.disabled=true;btn.textContent="Can't use this file";
+  };
+  document.getElementById("avatar-cancel").onclick=done;
+  document.getElementById("avatar-confirm").onclick=async()=>{
+    const btn=document.getElementById("avatar-confirm");
+    btn.disabled=true;btn.textContent="Uploading…";
+    const ok=await uploadAvatar(file);
+    done();
+    if(ok)toast("Photo updated!");
+  };
+}
+
+async function uploadAvatar(file){
+  const ext=(file.name.split(".").pop()||"png").toLowerCase();
+  const path=`${currentUser.id}/avatar.${ext}`;
+  try{
+    const{error}=await sb.storage.from("avatars").upload(path,file,{upsert:true,contentType:file.type});
+    if(error){toast("Couldn't upload photo — "+error.message);return false;}
+    const{data}=sb.storage.from("avatars").getPublicUrl(path);
+    const url=data.publicUrl+"?t="+Date.now();
+    // Confirm the uploaded file is actually readable back before storing it.
+    // The upload can report success while the bucket stays private, and the
+    // only symptom used to be a permanently blank circle with no error
+    // anywhere -- the app believed it had a photo, the <img> just failed.
+    const reachable=await new Promise(res=>{
+      const probe=new Image();
+      probe.onload=()=>res(true);
+      probe.onerror=()=>res(false);
+      probe.src=url;
+      setTimeout(()=>res(false),8000);
+    });
+    if(!reachable){
+      toast("Photo uploaded but can't be loaded back — the avatars bucket may not be public.");
+      return false;
+    }
+    companyProfile.avatar_url=url;
+    store.set("company_profile",companyProfile);
+    pushCompanyProfile();
+    updateUserChip();
+    renderAccount();
+    return true;
+  }catch(err){toast("Couldn't upload photo — check your connection.");return false;}
+}
+
 function closeModal(){
   document.getElementById("modal-back").classList.remove("open");
   document.getElementById("modal").classList.remove("open");
@@ -2760,7 +2837,8 @@ function renderAccount(){
 
   body.innerHTML=`
     <div class="account-card" style="display:flex;align-items:center;gap:0.9rem;">
-      ${companyProfile.avatar_url?`<img class="avatar-lg" src="${esc(companyProfile.avatar_url)}" alt="">`
+      ${companyProfile.avatar_url?`<img class="avatar-lg" src="${esc(companyProfile.avatar_url)}" alt=""
+           onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'avatar-placeholder'}))">`
         :`<div class="avatar-placeholder"></div>`}
       <div style="flex:1;min-width:0;">
         <div class="account-email">${esc(email)}</div>
@@ -2906,25 +2984,16 @@ function renderAccount(){
     syncPullSavedBids();syncPullCompanyProfile();syncPullSavedSearches();
     renderAccount();
   };
-  document.getElementById("avatar-input").addEventListener("change",async(e)=>{
+  document.getElementById("avatar-input").addEventListener("change",(e)=>{
     const file=e.target.files[0];
+    // Reset the input straight away, so picking the SAME file again still
+    // fires a change event (it otherwise doesn't, which reads as the app
+    // ignoring you when a first attempt didn't take).
+    e.target.value="";
     if(!file)return;
     if(!currentUser){toast("Sign in first");return;}
     if(!sb||!requireOnline("Uploading a photo"))return;
-    toast("Uploading photo...");
-    const ext=(file.name.split(".").pop()||"png").toLowerCase();
-    const path=`${currentUser.id}/avatar.${ext}`;
-    try{
-      const{error}=await sb.storage.from("avatars").upload(path,file,{upsert:true,contentType:file.type});
-      if(error){toast("Couldn't upload photo — "+error.message);return;}
-      const{data}=sb.storage.from("avatars").getPublicUrl(path);
-      companyProfile.avatar_url=data.publicUrl+"?t="+Date.now();
-      store.set("company_profile",companyProfile);
-      pushCompanyProfile();
-      updateUserChip();
-      renderAccount();
-      toast("Photo updated!");
-    }catch(err){toast("Couldn't upload photo — check your connection.");}
+    confirmAvatarFraming(file);
   });
   // Company Info now needs an explicit Edit -> Confirm action instead of
   // silently auto-saving on blur -- so a value never changes just because
