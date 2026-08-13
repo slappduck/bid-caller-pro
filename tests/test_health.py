@@ -304,6 +304,72 @@ class SupportRouteTests(unittest.TestCase):
         self.assertEqual(r.get_json(), {"ok": False, "reason": "send_failed"})
 
 
+class CoverageEndpointTests(unittest.TestCase):
+    """Public, unauthenticated on purpose: it's what lets someone check
+    their own area before paying. Coverage really is uneven -- ~149 verified
+    agencies within 50mi of Boston against ~9 around Springfield, MO -- and
+    a contractor who finds that out after subscribing is a refund and a bad
+    review."""
+
+    SPRINGFIELD = {"lat": 37.2090, "lon": -93.2923, "city": "Springfield", "state": "MO"}
+
+    def setUp(self):
+        self.client = ls.app.test_client()
+
+    def _get(self, body, center=None):
+        with patch.object(ls, "_resolve_center",
+                          return_value=self.SPRINGFIELD if center is None else center):
+            return self.client.post("/coverage", json=body)
+
+    def test_it_needs_no_licence_or_login(self):
+        # The whole point is that a prospect can run it before paying.
+        r = self._get({"location": "65806", "radius": 50})
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.get_json()["ok"])
+
+    def test_a_wider_radius_never_reports_fewer_agencies(self):
+        counts = [self._get({"location": "65806", "radius": r}).get_json()["agencies"]
+                  for r in (25, 50, 125)]
+        self.assertEqual(counts, sorted(counts), counts)
+
+    def test_a_missing_location_is_a_400_not_a_crash(self):
+        self.assertEqual(self.client.post("/coverage", json={}).status_code, 400)
+
+    def test_an_unresolvable_location_says_so(self):
+        with patch.object(ls, "_resolve_center", return_value=None):
+            r = self.client.post("/coverage", json={"location": "zzzz"})
+        self.assertEqual(r.status_code, 404)
+        self.assertEqual(r.get_json()["reason"], "unresolved_location")
+
+    def test_the_radius_is_clamped(self):
+        # Nobody gets to ask for a 10,000-mile radius and walk the whole file.
+        r = self._get({"location": "65806", "radius": 99999}).get_json()
+        self.assertLessEqual(r["radius"], 250)
+        r2 = self._get({"location": "65806", "radius": -5}).get_json()
+        self.assertGreaterEqual(r2["radius"], 5)
+
+    def test_a_junk_radius_falls_back_instead_of_erroring(self):
+        r = self._get({"location": "65806", "radius": "abc"})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.get_json()["radius"], 50)
+
+    def test_a_broken_lookup_is_a_500_not_an_exception(self):
+        with patch.object(ls.bid_portals, "towns_within_radius",
+                          side_effect=RuntimeError("coords file corrupt")):
+            r = self._get({"location": "65806", "radius": 50})
+        self.assertEqual(r.status_code, 500)
+        self.assertFalse(r.get_json()["ok"])
+
+    def test_it_costs_no_search_credits_or_ai_calls(self):
+        # A public endpoint that spent money per request would be a way to
+        # run up the bill from outside.
+        with patch.object(ls, "_tavily_search", side_effect=AssertionError("searched!")), \
+             patch.object(ls, "_ddg_search", side_effect=AssertionError("searched!")), \
+             patch.object(ls, "_ai_extract", side_effect=AssertionError("AI call!")):
+            r = self._get({"location": "65806", "radius": 125})
+        self.assertEqual(r.status_code, 200)
+
+
 class ForceRescanTests(unittest.TestCase):
     """The scan cache is per area per day, so one bad scan used to decide what
     the user saw until midnight."""

@@ -318,6 +318,52 @@ def _recent_scans():
         return []
 
 
+@app.route("/coverage", methods=["POST"])
+def coverage():
+    """How many verified bid pages we hold within a radius of somewhere.
+
+    Public and unauthenticated on purpose: this is what lets someone check
+    their own area BEFORE paying. Coverage is genuinely uneven -- a 50mi
+    radius around Boston reaches ~149 verified agencies and one around
+    Springfield, MO reaches ~9 -- and a contractor who finds that out after
+    subscribing is a refund and a bad review. Better they see it first.
+
+    Cheap by construction: a geocode (cached) plus arithmetic against
+    coordinates already on disk. No search credits, no AI call, nothing that
+    scales with cost -- so leaving it open costs essentially nothing.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    location = (data.get("location") or "").strip()
+    try:
+        radius = float(data.get("radius") or 50)
+    except (TypeError, ValueError):
+        radius = 50.0
+    radius = max(5.0, min(radius, 250.0))
+    if not location:
+        return jsonify({"ok": False, "reason": "no_location"}), 400
+    center = _resolve_center(location)
+    if not center:
+        return jsonify({"ok": False, "reason": "unresolved_location"}), 404
+    try:
+        towns = bid_portals.towns_within_radius(
+            bid_portals.load_directory(), center["lat"], center["lon"], radius)
+    except Exception as ex:
+        print(f"[coverage] lookup failed: {ex}", flush=True)
+        return jsonify({"ok": False, "reason": "lookup_failed"}), 500
+    towns.sort(key=lambda t: _miles_between(center["lat"], center["lon"], t[2], t[3]))
+    return jsonify({
+        "ok": True,
+        "location": f"{center['city']}, {center['state']}".strip(", "),
+        "radius": int(radius),
+        # Direct-read coverage only. The scan ALSO searches for county,
+        # school-district and state-portal work that has no entry here, so
+        # this is a floor on what a scan reaches, not a ceiling -- said
+        # plainly in the UI rather than quietly inflating the number.
+        "agencies": len(towns),
+        "nearest": [f"{c}, {s}" for c, s, _, _ in towns[:8]],
+    })
+
+
 @app.route("/health", methods=["GET"])
 def health_detail():
     """Which backends are actually wired up, and is local search still working.

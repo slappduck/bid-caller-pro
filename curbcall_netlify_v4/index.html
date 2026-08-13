@@ -233,6 +233,50 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
   </div>
 </section>
 
+<!-- Coverage, stated plainly and checkable before paying. Coverage is
+     genuinely uneven (roughly 149 verified agencies within 50mi of Boston
+     against 9 around Springfield, MO) and a contractor who discovers that
+     after subscribing is a refund and a bad review. -->
+<section id="coverage">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Coverage</span>
+      <h2>Check your area first</h2>
+      <p>We hold <b>3,151 verified city and county bid pages</b> across 52 states and
+         territories. Coverage is not even everywhere &mdash; see exactly what's near
+         you before you pay a cent.</p>
+    </div>
+    <div class="fcard" style="max-width:34rem;">
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+        <input id="cov-zip" inputmode="numeric" placeholder="ZIP code or City, State"
+               style="flex:1;min-width:11rem;background:var(--bg);border:1px solid var(--line);
+                      border-radius:10px;padding:0.75rem 0.9rem;color:var(--text);
+                      font-family:var(--ui);font-size:1rem;" />
+        <select id="cov-radius"
+                style="background:var(--bg);border:1px solid var(--line);border-radius:10px;
+                       padding:0.75rem 0.6rem;color:var(--text);font-family:var(--ui);">
+          <option value="25">25 mi</option>
+          <option value="50" selected>50 mi</option>
+          <option value="125">125 mi</option>
+        </select>
+        <button class="btn btn-amber" id="cov-go" type="button">Check</button>
+      </div>
+      <div id="cov-out" style="margin-top:0.9rem;color:var(--text2);font-size:0.9rem;"></div>
+    </div>
+    <p style="color:var(--text3);font-size:0.82rem;margin-top:1.1rem;max-width:44rem;">
+      <b>What that number is.</b> Government bid pages we've verified and read directly
+      every scan. On top of these, each scan also searches for county, school-district
+      and state-portal work that has no fixed page, and pulls federal solicitations from
+      SAM.gov &mdash; so it's a floor, not a ceiling.
+      <b>What it isn't.</b> A promise of open work. Concrete jobs are posted when they're
+      posted; in a sampling of live city bid pages, about 8% had sidewalk, ADA or concrete
+      work open at that moment. Denser areas surface more, rural areas fewer, and a wider
+      radius helps a lot. That's why the trial is free for 7 days with no card &mdash;
+      check your own area before deciding.
+    </p>
+  </div>
+</section>
+
 <!-- Testimonials. Hidden by default and only revealed once at least one
      approved review comes back — an empty "what contractors say" heading is
      worse than no section at all. -->
@@ -350,6 +394,53 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
       a.setAttribute("href", u + (u.indexOf("?") === -1 ? "?" : "&")
         + "client_reference_id=" + encodeURIComponent(refId));
     });
+  })();
+
+  // Coverage checker. Hits our own /coverage endpoint, which is public and
+  // cheap (a cached geocode plus arithmetic — no search credits, no AI).
+  (function coverageChecker(){
+    var SERVER="https://bid-caller-pro.onrender.com";
+    var btn=document.getElementById("cov-go");
+    var out=document.getElementById("cov-out");
+    var zip=document.getElementById("cov-zip");
+    function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+      return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
+    function check(){
+      var loc=(zip.value||"").trim();
+      if(!loc){out.textContent="Enter a ZIP code or city first.";return;}
+      var radius=document.getElementById("cov-radius").value;
+      btn.disabled=true;
+      // The backend sleeps on a free plan, so a cold start really can take
+      // this long. Saying so beats looking broken.
+      out.textContent="Checking… (can take up to a minute if the server's asleep)";
+      fetch(SERVER+"/coverage",{method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({location:loc,radius:parseInt(radius,10)})})
+        .then(function(r){return r.json();})
+        .then(function(d){
+          btn.disabled=false;
+          if(!d||!d.ok){
+            out.textContent=(d&&d.reason==="unresolved_location")
+              ? "Couldn't find that place — try a ZIP code."
+              : "Couldn't check right now. Try again in a moment.";
+            return;
+          }
+          var near=(d.nearest||[]).length
+            ? '<div style="margin-top:0.45rem;color:var(--text3);font-size:0.85rem;">Nearest: '
+              + d.nearest.slice(0,5).map(esc).join(" · ") + '</div>' : "";
+          var verdict = d.agencies>=40 ? "Strong coverage here."
+                      : d.agencies>=15 ? "Solid coverage here."
+                      : d.agencies>0   ? "Thin coverage here — a wider radius will help."
+                                       : "No verified pages in range yet — a scan would fall back to search only.";
+          out.innerHTML='<b style="color:var(--text);font-size:1.05rem;">'
+            + d.agencies + ' verified agencies</b> within ' + d.radius
+            + ' mi of ' + esc(d.location) + '. ' + esc(verdict) + near;
+        })
+        .catch(function(){btn.disabled=false;
+          out.textContent="Couldn't reach the server. Try again in a moment.";});
+    }
+    btn.addEventListener("click",check);
+    zip.addEventListener("keydown",function(e){if(e.key==="Enter")check();});
   })();
 
   // Testimonials, read straight from Supabase with a plain fetch rather than
