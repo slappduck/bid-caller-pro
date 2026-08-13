@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Post a Bid Notice — CurbCall Pro for Agencies</title>
+<meta name="description" content="Cities, counties and districts can post a sidewalk, ADA or concrete bid notice free, and reach concrete contractors working in the area." />
+<meta name="theme-color" content="#0b0d14" />
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#0b0d14; --panel:#13162a; --card:#1c2035; --line:#2a2f4a;
+  --amber:#f59e0b; --green:#22c55e; --red:#ef4444;
+  --text:#f1f5f9; --text2:#9aa4ba; --text3:#5b6479;
+  --ui:'Inter',sans-serif; --display:'Bebas Neue',sans-serif; --mono:'DM Mono',monospace;
+}
+body{font-family:var(--ui);background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased;}
+a{color:var(--amber);}
+.wrap{max-width:44rem;margin:0 auto;padding:0 1.25rem;}
+.hazard{height:6px;background:repeating-linear-gradient(135deg,var(--amber) 0 14px,#0b0d14 14px 28px);opacity:0.85;}
+nav{border-bottom:1px solid var(--line);}
+.nav-in{display:flex;align-items:center;justify-content:space-between;height:62px;max-width:44rem;margin:0 auto;padding:0 1.25rem;}
+.logo{font-family:var(--display);font-size:1.4rem;letter-spacing:0.05em;color:var(--text);text-decoration:none;}
+.logo b{color:var(--amber);font-weight:400;}
+.nav-in a.back{font-size:0.85rem;font-weight:600;color:var(--text2);text-decoration:none;}
+.nav-in a.back:hover{color:var(--text);}
+header{padding:3rem 0 1.5rem;}
+.eyebrow{font-family:var(--mono);font-size:0.72rem;letter-spacing:0.22em;text-transform:uppercase;color:var(--amber);}
+h1{font-family:var(--display);font-size:clamp(2.4rem,7vw,3.6rem);line-height:1;margin:0.5rem 0 0.6rem;}
+.lead{color:var(--text2);font-size:1.02rem;}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:1.5rem;margin:1.5rem 0;}
+label{display:block;font-size:0.78rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:var(--amber);margin:0 0 0.35rem;}
+.req::after{content:" *";color:var(--red);}
+input,textarea,select{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:10px;
+  padding:0.75rem 0.9rem;color:var(--text);font-family:var(--ui);font-size:1rem;margin-bottom:1rem;}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--amber);}
+textarea{resize:vertical;min-height:6rem;}
+.row{display:flex;gap:0.75rem;}
+.row>div{flex:1;min-width:0;}
+.hint{color:var(--text3);font-size:0.8rem;margin:-0.7rem 0 1rem;}
+button{width:100%;background:var(--amber);color:#10131c;border:none;border-radius:12px;padding:0.95rem;
+  font-size:1rem;font-weight:800;cursor:pointer;font-family:var(--ui);}
+button:disabled{opacity:0.6;cursor:default;}
+#out{margin-top:1rem;font-size:0.92rem;}
+.note{border-left:3px solid var(--line);padding-left:1rem;color:var(--text3);font-size:0.86rem;margin:1.5rem 0;}
+.note b{color:var(--text2);}
+footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--text3);font-size:0.82rem;margin-top:2rem;}
+</style>
+</head>
+<body>
+<div class="hazard"></div>
+<nav>
+  <div class="nav-in">
+    <a class="logo" href="index.html">Curb<b>Call</b> Pro</a>
+    <!-- Deliberately NOT a link into app.html. The contractor app and this
+         are different jobs for different people; sending a city clerk into
+         a bid-hunting app with a trial paywall would be nonsense. -->
+    <a class="back" href="index.html">For contractors &rarr;</a>
+  </div>
+</nav>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">For agencies</span>
+    <h1>Post a bid notice</h1>
+    <p class="lead">Free, for any city, county, township or district. Post sidewalk, ADA,
+      curb or concrete work and it reaches concrete contractors already searching your area.
+      No account, no cost, nothing to install.</p>
+  </header>
+
+  <div class="note">
+    <b>This is not a procurement system and it does not replace your legal notice.</b>
+    It takes no bids and no attachments &mdash; it's a listing, so contractors know the work
+    exists and who to call. Most states require legal notices in a newspaper of record;
+    keep doing that. This runs alongside it.
+  </div>
+
+  <div class="card">
+    <label class="req" for="f-title">Project title</label>
+    <input id="f-title" maxlength="200" placeholder="2026 Sidewalk &amp; ADA Ramp Replacement Program" />
+
+    <div class="row">
+      <div>
+        <label class="req" for="f-city">City / town</label>
+        <input id="f-city" maxlength="80" placeholder="Aurora" />
+      </div>
+      <div style="max-width:8rem;">
+        <label class="req" for="f-state">State</label>
+        <input id="f-state" maxlength="20" placeholder="MO" />
+      </div>
+    </div>
+
+    <label for="f-agency">Agency name</label>
+    <input id="f-agency" maxlength="160" placeholder="City of Aurora Public Works" />
+
+    <label for="f-scope">Scope of work</label>
+    <textarea id="f-scope" maxlength="2000" placeholder="Approx. 4,000 LF of sidewalk replacement, 12 ADA curb ramps, 900 LF curb &amp; gutter."></textarea>
+    <div class="hint">Quantities help a contractor decide fast. Rough numbers are fine.</div>
+
+    <label for="f-deadline">Bids due</label>
+    <input id="f-deadline" maxlength="60" placeholder="2026-09-15, or 'Sept 15, 2026 2:00 PM'" />
+
+    <div class="row">
+      <div>
+        <label for="f-contact">Contact name</label>
+        <input id="f-contact" maxlength="120" placeholder="City Clerk" />
+      </div>
+      <div>
+        <label for="f-phone">Phone</label>
+        <input id="f-phone" maxlength="40" placeholder="(417) 555-0100" />
+      </div>
+    </div>
+
+    <label for="f-email">Contact email</label>
+    <input id="f-email" maxlength="160" placeholder="clerk@example.gov" />
+
+    <label for="f-url">Link to the full notice or plans</label>
+    <input id="f-url" maxlength="400" placeholder="https://..." />
+
+    <button id="go" type="button">Submit notice</button>
+    <div id="out"></div>
+  </div>
+
+  <div class="note">
+    <b>What happens next.</b> A person reviews every submission before it appears &mdash;
+    usually within a day &mdash; so nothing goes live automatically. Once approved it shows
+    up for contractors scanning near you. To change or pull a notice, email
+    <a href="mailto:Yumiwave1@gmail.com">Yumiwave1@gmail.com</a>.
+  </div>
+</div>
+
+<footer>
+  <div class="wrap">&copy; 2026 CurbCall Pro by Oblique Systems &middot;
+    <a href="index.html">For contractors</a> &middot;
+    <a href="terms.html">Terms</a> &middot; <a href="privacy.html">Privacy</a></div>
+</footer>
+
+<script>
+(function(){
+  var SERVER="https://bid-caller-pro.onrender.com";
+  var out=document.getElementById("out"), btn=document.getElementById("go");
+  function val(id){return (document.getElementById(id).value||"").trim();}
+  btn.addEventListener("click",function(){
+    var body={title:val("f-title"),city:val("f-city"),state:val("f-state"),
+              agency:val("f-agency"),scope:val("f-scope"),deadline:val("f-deadline"),
+              contact:val("f-contact"),phone:val("f-phone"),email:val("f-email"),url:val("f-url")};
+    if(!body.title||!body.city||!body.state){
+      out.style.color="var(--red)";
+      out.textContent="Project title, city and state are needed.";return;
+    }
+    btn.disabled=true;out.style.color="var(--text2)";
+    // Free-plan backend sleeps; a cold start really can take this long.
+    out.textContent="Sending… (can take up to a minute if the server's asleep)";
+    fetch(SERVER+"/agency/submit",{method:"POST",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})
+      .then(function(r){return r.json().then(function(d){return {s:r.status,d:d};});})
+      .then(function(res){
+        btn.disabled=false;
+        if(res.d&&res.d.ok){
+          out.style.color="var(--green)";
+          out.textContent=res.d.message||"Thanks — we'll review it shortly.";
+          ["f-title","f-scope","f-deadline","f-url"].forEach(function(i){
+            document.getElementById(i).value="";});
+        }else{
+          out.style.color="var(--red)";
+          out.textContent=(res.d&&res.d.detail) ? res.d.detail
+            : "Couldn't submit that. Check the fields and try again.";
+        }
+      })
+      .catch(function(){btn.disabled=false;out.style.color="var(--red)";
+        out.textContent="Couldn't reach the server. Try again in a moment.";});
+  });
+})();
+</script>
+</body>
+</html>
