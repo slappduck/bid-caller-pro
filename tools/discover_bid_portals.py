@@ -180,6 +180,61 @@ def _load_registry(state_filter=None, limit=None):
     return rows
 
 
+def _recheck_missing(args):
+    """Re-probe the domains a previous run recorded as not_found, and rewrite
+    their rows in place.
+
+    Separate from --resume, which skips anything already in the file --
+    exactly the wrong behaviour after widening CANDIDATE_BID_PATHS, when the
+    rows worth revisiting are the ones already recorded as misses. Rewrites
+    rather than appends so a domain never ends up with two rows.
+    """
+    with open(OUT_CSV, newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+
+    def _targeted(row):
+        if row.get("status") == "found":
+            return False
+        return not args.state or (row.get("state") or "").upper() == args.state.upper()
+
+    targets = [r for r in rows if _targeted(r)]
+    if args.limit:
+        targets = targets[:args.limit]
+    print(f"[recheck] {len(targets)} previously-missed domain(s) to re-probe "
+          f"({len(bid_sources.CANDIDATE_BID_PATHS)} paths each)", flush=True)
+
+    by_domain, found, checked, t0 = {}, 0, 0, time.time()
+    with ThreadPoolExecutor(max_workers=args.workers) as ex:
+        futures = {ex.submit(_check_domain, {
+            "domain": t["domain"], "city": t.get("city", ""), "state": t.get("state", ""),
+            "type": t.get("type", ""), "org": t.get("org", ""),
+        }): t["domain"] for t in targets}
+        for fut in as_completed(futures):
+            checked += 1
+            try:
+                res = fut.result()
+            except Exception:
+                continue
+            if res["status"] == "found":
+                found += 1
+                by_domain[res["domain"]] = res
+            if checked % 100 == 0 or checked == len(targets):
+                print(f"[recheck] {checked}/{len(targets)}, {found} newly found "
+                      f"({time.time() - t0:.0f}s)", flush=True)
+
+    for row in rows:
+        hit = by_domain.get(row["domain"])
+        if hit:
+            row.update(hit)
+    with open(OUT_CSV, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=FIELDS)
+        w.writeheader()
+        w.writerows(rows)
+    total = sum(1 for r in rows if r.get("status") == "found")
+    print(f"[recheck] done. {found} newly found; {total} verified bid pages total.",
+          flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -191,7 +246,15 @@ def main():
                           "different hosts, so this is polite per-server, not aggressive)")
     ap.add_argument("--resume", action="store_true",
                      help="skip domains already present in the output CSV")
+    ap.add_argument("--recheck-missing", action="store_true",
+                     help="re-probe ONLY the domains already recorded as not_found/error, "
+                          "and rewrite their rows in place. For after CANDIDATE_BID_PATHS "
+                          "is widened -- --resume would skip exactly these, since they are "
+                          "already in the file.")
     args = ap.parse_args()
+
+    if args.recheck_missing:
+        return _recheck_missing(args)
 
     registry = _load_registry(state_filter=args.state, limit=args.limit)
 
