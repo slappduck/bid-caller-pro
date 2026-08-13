@@ -233,6 +233,19 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
   </div>
 </section>
 
+<!-- Testimonials. Hidden by default and only revealed once at least one
+     approved review comes back — an empty "what contractors say" heading is
+     worse than no section at all. -->
+<section id="reviews" style="display:none;">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">From the field</span>
+      <h2>What contractors say</h2>
+    </div>
+    <div class="feat" id="review-grid"></div>
+  </div>
+</section>
+
 <section id="pricing">
   <div class="wrap">
     <div class="sec-head">
@@ -337,6 +350,39 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
       a.setAttribute("href", u + (u.indexOf("?") === -1 ? "?" : "&")
         + "client_reference_id=" + encodeURIComponent(refId));
     });
+  })();
+
+  // Testimonials, read straight from Supabase with a plain fetch rather than
+  // pulling in supabase-js — this is a marketing page and the whole call is
+  // one GET. RLS only exposes rows with approved = true, so the anon key
+  // below (already public, same one app.html ships) cannot see anything a
+  // human hasn't cleared for publication.
+  (function loadReviews(){
+    var URL_="https://novwdthapkorstdtloky.supabase.co";
+    var KEY="sb_publishable_sUuQHkrN_wsJqakUMfL_VA_58koZ76C";
+    var q="/rest/v1/reviews?approved=eq.true&select=rating,quote,display_name,company"
+        + "&order=created_at.desc&limit=6";
+    function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+      return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
+    fetch(URL_+q,{headers:{apikey:KEY,Authorization:"Bearer "+KEY}})
+      .then(function(r){return r.ok?r.json():[];})
+      .then(function(rows){
+        rows=(rows||[]).filter(function(r){return (r.quote||"").trim();});
+        if(!rows.length)return;               // stays hidden
+        document.getElementById("review-grid").innerHTML=rows.map(function(r){
+          var n=Math.max(1,Math.min(5,r.rating||5));
+          var who=[r.display_name,r.company].filter(Boolean).map(esc).join(" · ");
+          return '<div class="fcard">'
+            + '<div style="color:var(--amber);letter-spacing:0.1em;">'
+            + new Array(n+1).join("★") + new Array(6-n).join("☆") + '</div>'
+            + '<p style="margin:0.6rem 0 0.5rem;color:var(--text);">'
+            + esc(r.quote) + '</p>'
+            + (who?'<p style="font-size:0.8rem;">' + who + '</p>':'')
+            + '</div>';
+        }).join("");
+        document.getElementById("reviews").style.display="";
+      })
+      .catch(function(){/* no reviews section, page is otherwise unaffected */});
   })();
 </script>
 </body>

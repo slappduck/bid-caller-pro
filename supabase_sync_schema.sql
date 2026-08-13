@@ -100,3 +100,67 @@ alter table user_feeds enable row level security;
 drop policy if exists "Users manage their own feeds" on user_feeds;
 create policy "Users manage their own feeds" on user_feeds
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- Customer reviews, shown as testimonials on the marketing page.
+--
+-- Nothing appears publicly until approved is flipped to true by hand
+-- (Supabase -> Table editor -> reviews). This is the one table the whole
+-- internet can read, so it defaults to false and stays there until a human
+-- decides otherwise -- a public site that renders whatever a stranger typed
+-- is a liability, not a feature.
+--
+-- One review per user (unique on user_id) so submitting again edits your
+-- existing one rather than stacking duplicates. Approval is deliberately
+-- reset on edit -- see the trigger below -- so approved text cannot be
+-- swapped for something else after the fact.
+create table if not exists reviews (
+  id bigint generated always as identity primary key,
+  user_id uuid unique default auth.uid() references auth.users(id) on delete cascade,
+  rating int not null check (rating between 1 and 5),
+  quote text default '',
+  display_name text default '',
+  company text default '',
+  approved boolean not null default false,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+alter table reviews enable row level security;
+
+-- Read: anyone at all, signed in or not, may read APPROVED reviews -- the
+-- marketing page is a logged-out visitor. Separate policies are OR'd, so a
+-- signed-in user can additionally see their own while it waits for approval.
+drop policy if exists "Anyone can read approved reviews" on reviews;
+create policy "Anyone can read approved reviews" on reviews
+  for select using (approved = true);
+drop policy if exists "Users can read their own review" on reviews;
+create policy "Users can read their own review" on reviews
+  for select using (auth.uid() = user_id);
+
+-- Write: only your own row, and only ever for yourself.
+drop policy if exists "Users insert their own review" on reviews;
+create policy "Users insert their own review" on reviews
+  for insert with check (auth.uid() = user_id);
+drop policy if exists "Users update their own review" on reviews;
+create policy "Users update their own review" on reviews
+  for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- Editing a review sends it back for approval. Without this, a user could
+-- get a bland review approved and then rewrite it into anything at all,
+-- with the change appearing on the marketing site immediately. The RLS
+-- policy above cannot express "you may update every column except this
+-- one", so it is enforced here instead.
+create or replace function reviews_reset_approval() returns trigger
+  language plpgsql security definer set search_path = public as $$
+begin
+  if new.quote is distinct from old.quote
+     or new.rating is distinct from old.rating
+     or new.display_name is distinct from old.display_name
+     or new.company is distinct from old.company then
+    new.approved := false;
+  end if;
+  new.updated_at := now();
+  return new;
+end $$;
+drop trigger if exists reviews_reset_approval_trg on reviews;
+create trigger reviews_reset_approval_trg before update on reviews
+  for each row execute function reviews_reset_approval();

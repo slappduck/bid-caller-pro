@@ -152,6 +152,15 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .hdr-ic{display:inline-flex;align-items:center;gap:0.45rem;}
 .hdr-ic .icon-svg{color:var(--accent);}
 
+/* Star rating. Real <button>s, not spans: this is the one control on the
+   Account screen someone might reach by keyboard, and a div can't be
+   focused or activated with a key. */
+.stars{display:flex;gap:0.25rem;margin-bottom:0.7rem;}
+.stars button{background:none;border:none;padding:0.15rem;cursor:pointer;color:var(--text3);line-height:0;}
+.stars button.on{color:var(--accent);}
+.stars button .icon-svg{width:1.6rem;height:1.6rem;}
+.stars button.on .icon-svg{fill:currentColor;}
+
 .bottom-nav{display:flex;background:var(--surface);border-top:1px solid var(--border);padding-bottom:env(safe-area-inset-bottom);flex-shrink:0;}
 /* min-width:0 lets six items share a 320px screen without the labels
    overflowing; nowrap stops "Upcoming" and "Account" breaking onto two lines. */
@@ -2865,6 +2874,73 @@ function pipelineStatsSummary(){
 }
 let lastSyncAt=null;
 let companyEditMode=false;
+// ── Review / testimonial ──
+// Submitted here, displayed on the marketing page only after it's approved
+// by hand in Supabase. Editing an approved review sends it back for
+// approval (enforced by a trigger, not here) so approved text can't be
+// swapped afterwards.
+let reviewDraft={rating:0,quote:"",submitted:false,approved:false};
+
+async function loadReviewCard(){
+  const el=document.getElementById("review-body");
+  if(!el)return;
+  if(!sb||!currentUser){el.textContent="Sign in to leave a review.";return;}
+  try{
+    const{data,error}=await sb.from("reviews").select("*").maybeSingle();
+    if(error){el.textContent="Reviews aren't set up yet.";return;}
+    if(data)reviewDraft={rating:data.rating||0,quote:data.quote||"",
+                          submitted:true,approved:!!data.approved};
+  }catch(e){el.textContent="Couldn't load your review.";return;}
+  renderReviewCard();
+}
+
+function renderReviewCard(){
+  const el=document.getElementById("review-body");
+  if(!el)return;
+  const star=(n)=>`<button type="button" data-r="${n}" class="${n<=reviewDraft.rating?"on":""}"
+      aria-label="${n} star${n>1?"s":""}"><svg class="icon-svg"><use href="#i-star"/></svg></button>`;
+  const status=reviewDraft.submitted
+    ?(reviewDraft.approved
+        ?`<div class="account-status" style="color:var(--green);margin-top:0.5rem;">Published on the site — thank you.</div>`
+        :`<div class="account-status" style="margin-top:0.5rem;">Submitted — waiting to be reviewed before it goes public.</div>`)
+    :"";
+  el.innerHTML=`
+    <div class="stars" id="review-stars">${[1,2,3,4,5].map(star).join("")}</div>
+    <textarea class="input" id="review-quote" rows="3" maxlength="400"
+      placeholder="What's it done for you? (optional)"
+      style="resize:vertical;margin-bottom:0.6rem;">${esc(reviewDraft.quote)}</textarea>
+    <button class="btn-ghost" id="review-send" style="margin-top:0;">${reviewDraft.submitted?"Update my review":"Submit review"}</button>
+    ${status}`;
+  el.querySelectorAll("#review-stars button").forEach(b=>{
+    b.onclick=()=>{reviewDraft.rating=parseInt(b.dataset.r);
+      reviewDraft.quote=document.getElementById("review-quote").value;
+      renderReviewCard();};
+  });
+  document.getElementById("review-send").onclick=submitReview;
+}
+
+async function submitReview(){
+  if(!sb||!currentUser)return;
+  const quote=document.getElementById("review-quote").value.trim();
+  if(!reviewDraft.rating){toast("Pick a star rating first");return;}
+  const btn=document.getElementById("review-send");
+  btn.disabled=true;btn.textContent="Sending…";
+  // Name and company come from the profile rather than a free-text field:
+  // it's what a testimonial needs, it's already filled in, and it means one
+  // less thing that can be typed in wrong.
+  const row={rating:reviewDraft.rating,quote:quote,
+             display_name:companyProfile.contact||"",
+             company:companyProfile.name||""};
+  try{
+    const{error}=await sb.from("reviews").upsert(row,{onConflict:"user_id"});
+    if(error){toast("Couldn't save your review — "+error.message);
+      btn.disabled=false;renderReviewCard();return;}
+    reviewDraft.quote=quote;reviewDraft.submitted=true;reviewDraft.approved=false;
+    renderReviewCard();
+    toast("Thanks — we'll take a look.");
+  }catch(e){toast("Couldn't reach the server.");btn.disabled=false;renderReviewCard();}
+}
+
 async function loadReferralCard(){
   const el=document.getElementById("referral-body");
   if(!el) return;
@@ -2976,6 +3052,11 @@ function renderAccount(){
       <div class="account-status" style="margin-bottom:0.7rem;">Give a free month, get a free month — when someone you refer subscribes, you both get bonus time added automatically.</div>
       <div id="referral-body" class="account-status">Loading your link&hellip;</div>
     </div>
+    <div class="account-card" id="review-card">
+      <div class="account-email hdr-ic" style="font-size:0.85rem;"><svg class="icon-svg"><use href="#i-star"/></svg>Rate CurbCall Pro</div>
+      <div class="account-status" style="margin-bottom:0.7rem;">How's it working for you? With your OK we may quote this on the site — nothing appears publicly until it's reviewed.</div>
+      <div id="review-body" class="account-status">Loading&hellip;</div>
+    </div>
     <div class="account-email hdr-ic" style="font-size:0.85rem;margin:0.4rem 0 0.5rem;"><svg class="icon-svg"><use href="#i-credit-card"/></svg>Billing</div>
     <div class="plan" id="status-card"><div class="plan-name" style="display:flex;align-items:center;gap:0.5rem;"><span class="spin" style="border-top-color:var(--accent);border-color:rgba(245,158,11,0.25);"></span> Checking your plan...</div></div>
     <a class="btn-ghost" style="text-decoration:none;display:flex;align-items:center;justify-content:center;gap:0.45rem;box-sizing:border-box;" href="${PORTAL_URL}" target="_blank"><svg class="icon-svg"><use href="#i-credit-card"/></svg>Manage Billing on Stripe &rarr;</a>
@@ -3019,6 +3100,7 @@ function renderAccount(){
   };
   document.getElementById("notif-card").onclick=toggleNotifPermission;
   loadReferralCard();
+  loadReviewCard();
   document.getElementById("diag-refresh").onclick=()=>loadHealth();
   document.getElementById("diag-copy").onclick=async()=>{
     const text=diagnosticsText();
