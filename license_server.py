@@ -1061,6 +1061,55 @@ PUBLIC_BASE_URL = os.environ.get(
 CAMPAIGN_MAX_PER_REQUEST = int(os.environ.get("CAMPAIGN_MAX_PER_REQUEST", "200"))
 CAMPAIGN_PAUSE_SEC = float(os.environ.get("CAMPAIGN_PAUSE_SEC", "0.35"))
 _SUPPRESSION_KEY = "bidcaller:email_suppression"
+_DRAFTS_KEY = "bidcaller:campaign_drafts"
+# A draft that's been sitting for a day is probably forgotten, and approving
+# a forgotten campaign is how the wrong thing goes out. They expire.
+DRAFT_TTL_HOURS = int(os.environ.get("CAMPAIGN_DRAFT_TTL_HOURS", "24"))
+
+
+def _render_campaign(body, addr):
+    """The exact text a recipient receives -- one function so the preview
+    shown at draft time cannot drift from what approval actually sends."""
+    return (f"{body}\n\n---\n{MAILING_ADDRESS.strip()}\n"
+            f"Don't want these? Unsubscribe: {_unsub_url(addr)}")
+
+
+def _clean_recipients(recipients):
+    """(queue, skipped_unsubscribed, over_limit). Deduped case-insensitively,
+    unsubscribes dropped, batch capped."""
+    suppressed = _suppression()
+    seen, queue, skipped = set(), [], 0
+    for raw in recipients or []:
+        addr = str(raw or "").strip().lower()
+        if not addr or "@" not in addr or addr in seen:
+            continue
+        seen.add(addr)
+        if addr in suppressed:
+            skipped += 1
+            continue
+        queue.append(addr)
+    over = max(0, len(queue) - CAMPAIGN_MAX_PER_REQUEST)
+    return queue[:CAMPAIGN_MAX_PER_REQUEST], skipped, over
+
+
+def _drafts():
+    """Pending campaigns, with expired ones already dropped."""
+    got = kv_backend.get(_DRAFTS_KEY, None)
+    if not isinstance(got, dict):
+        return {}
+    cutoff = datetime.datetime.now() - datetime.timedelta(hours=DRAFT_TTL_HOURS)
+    live = {}
+    for k, v in got.items():
+        try:
+            if datetime.datetime.fromisoformat(v.get("created_at", "")) >= cutoff:
+                live[k] = v
+        except (TypeError, ValueError):
+            continue  # unparseable timestamp -> treat as expired, never as sendable
+    return live
+
+
+def _save_drafts(drafts):
+    kv_backend.set(_DRAFTS_KEY, drafts)
 
 
 def _suppression():
@@ -1113,7 +1162,13 @@ def unsubscribe():
 
 @app.route("/campaign/send", methods=["POST"])
 def campaign_send():
-    """Send one campaign to a caller-supplied list. Admin token required."""
+    """Prepare a campaign for a caller-supplied list. SENDS NOTHING.
+
+    Despite the route name this only ever builds a draft and returns the
+    exact message for review -- kept as /campaign/send deliberately, so that
+    there is no path in this app named "send" that actually mails anybody
+    without a separate approval. Sending is /campaign/approve.
+    """
     data = request.get_json(force=True, silent=True) or {}
     if not _admin_configured():
         return jsonify({"ok": False, "reason": "admin_not_configured"}), 503
@@ -1132,46 +1187,110 @@ def campaign_send():
     subject = (data.get("subject") or "").strip()
     body = (data.get("body") or "").strip()
     recipients = data.get("recipients") or []
-    dry_run = bool(data.get("dry_run"))
     if not subject or not body:
         return jsonify({"ok": False, "reason": "subject_and_body_required"}), 400
     if not isinstance(recipients, list) or not recipients:
         return jsonify({"ok": False, "reason": "no_recipients"}), 400
 
-    # Dedupe, drop anything unsubscribed, cap the batch.
-    suppressed = _suppression()
-    seen, queue, skipped = set(), [], 0
-    for raw in recipients:
-        addr = str(raw or "").strip().lower()
-        if not addr or "@" not in addr or addr in seen:
-            continue
-        seen.add(addr)
-        if addr in suppressed:
-            skipped += 1
-            continue
-        queue.append(addr)
-    over = max(0, len(queue) - CAMPAIGN_MAX_PER_REQUEST)
-    queue = queue[:CAMPAIGN_MAX_PER_REQUEST]
+    queue, skipped, over = _clean_recipients(recipients)
+    draft_id = secrets.token_hex(6)
+    drafts = _drafts()
+    drafts[draft_id] = {
+        "subject": subject, "body": body, "recipients": queue,
+        "skipped_unsubscribed": skipped, "over_limit_not_sent": over,
+        "created_at": datetime.datetime.now().isoformat(timespec="seconds"),
+    }
+    _save_drafts(drafts)
+    print(f"[campaign] drafted {draft_id}: {len(queue)} recipient(s), nothing sent",
+          flush=True)
+    return jsonify({
+        "ok": True, "status": "awaiting_approval", "sent": 0,
+        "draft_id": draft_id,
+        "would_send": len(queue), "skipped_unsubscribed": skipped,
+        "over_limit_not_sent": over, "sample": queue[:5],
+        # The full rendered message, footer and all -- what you approve is
+        # exactly what goes out, not a summary of it.
+        "preview": _render_campaign(body, queue[0]) if queue else "",
+        "expires_in_hours": DRAFT_TTL_HOURS,
+        "next": ("Nothing has been sent. Review 'preview', then POST "
+                 "/campaign/approve with this draft_id and confirm: true."),
+    })
 
-    if dry_run:
-        return jsonify({"ok": True, "dry_run": True, "would_send": len(queue),
-                        "skipped_unsubscribed": skipped, "over_limit_not_sent": over,
-                        "sample": queue[:5]})
 
+@app.route("/campaign/approve", methods=["POST"])
+def campaign_approve():
+    """The only endpoint in the app that actually sends a campaign.
+
+    Separate from drafting on purpose: a cold-email blast cannot be
+    recalled, so it takes a second, deliberate call naming the exact draft
+    -- a fat-fingered request can create a draft, but it cannot mail
+    anybody. `confirm: true` has to be passed explicitly as well, so no
+    single mistyped field is the difference between reviewing and sending.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    if not _admin_configured():
+        return jsonify({"ok": False, "reason": "admin_not_configured"}), 503
+    if not _admin_ok(data.get("admin_token")):
+        return jsonify({"ok": False, "reason": "unauthorized"}), 403
+    if not RESEND_API_KEY:
+        return jsonify({"ok": False, "reason": "email_unavailable"}), 503
+    if not MAILING_ADDRESS.strip():
+        return jsonify({"ok": False, "reason": "mailing_address_not_configured"}), 503
+    if data.get("confirm") is not True:
+        return jsonify({"ok": False, "reason": "confirmation_required",
+                        "detail": "Pass confirm: true to send. Nothing was sent."}), 400
+
+    draft_id = (data.get("draft_id") or "").strip()
+    drafts = _drafts()
+    draft = drafts.get(draft_id)
+    if not draft:
+        # Also covers a draft that aged out -- see _drafts().
+        return jsonify({"ok": False, "reason": "unknown_or_expired_draft",
+                        "detail": "Nothing was sent. Draft it again to get a fresh id."}), 404
+
+    # Re-check suppression at approval time, not just at draft time: someone
+    # may have unsubscribed in between, and the draft could be hours old.
+    queue, skipped_now, _ = _clean_recipients(draft.get("recipients") or [])
     sent, failed = 0, 0
     for addr in queue:
         unsub = _unsub_url(addr)
-        text = (f"{body}\n\n---\n{MAILING_ADDRESS.strip()}\n"
-                f"Don't want these? Unsubscribe: {unsub}")
-        ok = _send_email(addr, subject, text,
+        ok = _send_email(addr, draft["subject"], _render_campaign(draft["body"], addr),
                          headers={"List-Unsubscribe": f"<{unsub}>",
                                   "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"})
         sent += 1 if ok else 0
         failed += 0 if ok else 1
         time.sleep(CAMPAIGN_PAUSE_SEC)  # don't burst a provider into rate-limiting us
-    print(f"[campaign] sent {sent}, failed {failed}, skipped {skipped}", flush=True)
-    return jsonify({"ok": True, "sent": sent, "failed": failed,
-                    "skipped_unsubscribed": skipped, "over_limit_not_sent": over})
+
+    # Consume the draft either way, so an approval can't be replayed into a
+    # second copy of the same campaign landing in everyone's inbox.
+    drafts.pop(draft_id, None)
+    _save_drafts(drafts)
+    print(f"[campaign] approved {draft_id}: sent {sent}, failed {failed}, "
+          f"skipped {skipped_now}", flush=True)
+    return jsonify({"ok": True, "status": "sent", "draft_id": draft_id,
+                    "sent": sent, "failed": failed,
+                    "skipped_unsubscribed": skipped_now})
+
+
+@app.route("/campaign/drafts", methods=["POST"])
+def campaign_drafts():
+    """What's waiting for approval. Admin token required."""
+    data = request.get_json(force=True, silent=True) or {}
+    if not _admin_configured():
+        return jsonify({"ok": False, "reason": "admin_not_configured"}), 503
+    if not _admin_ok(data.get("admin_token")):
+        return jsonify({"ok": False, "reason": "unauthorized"}), 403
+    discard = (data.get("discard") or "").strip()
+    drafts = _drafts()
+    if discard:
+        drafts.pop(discard, None)
+        _save_drafts(drafts)
+    return jsonify({"ok": True, "drafts": [
+        {"draft_id": k, "subject": v.get("subject", ""),
+         "recipients": len(v.get("recipients") or []),
+         "created_at": v.get("created_at", "")}
+        for k, v in sorted(drafts.items(), key=lambda kv: kv[1].get("created_at", ""))
+    ]})
 
 
 @app.route("/campaign/suppression", methods=["POST"])

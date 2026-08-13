@@ -1,10 +1,15 @@
-"""Outbound campaign email: CAN-SPAM compliance, enforced in code.
+"""Outbound campaign email: nothing sends without explicit approval, and
+CAN-SPAM compliance is enforced in code.
 
-Commercial email has legal requirements and a blast cannot be un-sent, so
-the ones that can be checked mechanically are checked here rather than left
-to whoever writes the campaign text: a physical postal address in every
-message, a working one-click unsubscribe, and an unsubscribe that is
-honoured permanently and checked before every later send.
+A cold-email blast cannot be recalled, so drafting and sending are two
+separate calls: /campaign/send only ever builds a draft and returns the
+exact message for review, and /campaign/approve -- naming that draft, with
+confirm: true -- is the only thing in the app that mails anybody.
+
+The legal requirements that can be checked mechanically are checked here
+too rather than left to whoever writes the campaign text: a physical postal
+address in every message, a working one-click unsubscribe, and an
+unsubscribe honoured permanently and re-checked at approval time.
 """
 import os
 import sys
@@ -44,11 +49,23 @@ class CampaignTests(unittest.TestCase):
         for p in self._p:
             p.stop()
 
-    def _send(self, **over):
+    def _draft(self, **over):
         body = {"admin_token": TOKEN, "subject": "Try CurbCall Pro",
                 "body": "Free 7-day trial.", "recipients": ["a@x.com"]}
         body.update(over)
         return self.client.post("/campaign/send", json=body)
+
+    def _approve(self, draft_id, **over):
+        body = {"admin_token": TOKEN, "draft_id": draft_id, "confirm": True}
+        body.update(over)
+        return self.client.post("/campaign/approve", json=body)
+
+    def _send(self, **over):
+        """Draft then approve — the full path, for tests about what goes out."""
+        r = self._draft(**over)
+        if r.status_code != 200 or not r.get_json().get("draft_id"):
+            return r
+        return self._approve(r.get_json()["draft_id"])
 
     # ── the compliance guards ──
     def test_it_refuses_to_send_without_a_postal_address(self):
@@ -78,9 +95,20 @@ class CampaignTests(unittest.TestCase):
         link = [w for w in self.sent[0]["text"].split() if "/unsubscribe?" in w][0]
         self.assertEqual(self.client.get(link.replace(ls.PUBLIC_BASE_URL, "")).status_code, 200)
         self.sent.clear()
-        r = self._send(recipients=["gone@x.com", "stays@x.com"]).get_json()
+        drafted = self._draft(recipients=["gone@x.com", "stays@x.com"]).get_json()
+        self.assertEqual(drafted["skipped_unsubscribed"], 1)
+        self._approve(drafted["draft_id"])
         self.assertEqual([s["to"] for s in self.sent], ["stays@x.com"])
-        self.assertEqual(r["skipped_unsubscribed"], 1)
+
+    def test_unsubscribing_between_draft_and_approval_still_stops_the_send(self):
+        """The whole point of re-checking at approval: a draft can sit for
+        hours, and somebody who opts out in the meantime must not be mailed
+        by an approval of the older list."""
+        drafted = self._draft(recipients=["late@x.com", "stays@x.com"]).get_json()
+        self.assertEqual(drafted["would_send"], 2)
+        ls._suppress("late@x.com")
+        self._approve(drafted["draft_id"])
+        self.assertEqual([s["to"] for s in self.sent], ["stays@x.com"])
 
     def test_an_unsubscribe_link_cannot_be_edited_to_target_someone_else(self):
         r = self.client.get("/unsubscribe?e=victim@x.com&t=deadbeef")
@@ -107,14 +135,69 @@ class CampaignTests(unittest.TestCase):
 
     def test_a_batch_is_capped(self):
         with patch.object(ls, "CAMPAIGN_MAX_PER_REQUEST", 3):
-            r = self._send(recipients=[f"u{i}@x.com" for i in range(10)]).get_json()
+            d = self._draft(recipients=[f"u{i}@x.com" for i in range(10)]).get_json()
+            self.assertEqual(d["would_send"], 3)
+            self.assertEqual(d["over_limit_not_sent"], 7)
+            self._approve(d["draft_id"])
         self.assertEqual(len(self.sent), 3)
-        self.assertEqual(r["over_limit_not_sent"], 7)
 
-    def test_a_dry_run_sends_nothing(self):
-        r = self._send(recipients=["a@x.com", "b@x.com"], dry_run=True).get_json()
+    # ── the approval gate ──
+    def test_drafting_sends_nothing_at_all(self):
+        """There is no path named "send" that actually mails anybody."""
+        r = self._draft(recipients=["a@x.com", "b@x.com"]).get_json()
         self.assertEqual(self.sent, [])
+        self.assertEqual(r["sent"], 0)
+        self.assertEqual(r["status"], "awaiting_approval")
         self.assertEqual(r["would_send"], 2)
+
+    def test_the_preview_is_exactly_what_gets_sent(self):
+        d = self._draft(recipients=["a@x.com"]).get_json()
+        self._approve(d["draft_id"])
+        self.assertEqual(self.sent[0]["text"], d["preview"])
+
+    def test_approval_needs_an_explicit_confirm(self):
+        d = self._draft().get_json()
+        r = self._approve(d["draft_id"], confirm=False)
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.get_json()["reason"], "confirmation_required")
+        self.assertEqual(self.sent, [])
+
+    def test_approval_needs_the_admin_token(self):
+        d = self._draft().get_json()
+        r = self.client.post("/campaign/approve",
+                             json={"draft_id": d["draft_id"], "confirm": True})
+        self.assertEqual(r.status_code, 403)
+        self.assertEqual(self.sent, [])
+
+    def test_an_unknown_draft_sends_nothing(self):
+        r = self._approve("nosuchdraft")
+        self.assertEqual(r.status_code, 404)
+        self.assertEqual(self.sent, [])
+
+    def test_a_draft_cannot_be_approved_twice(self):
+        """Otherwise a retried request puts a second copy of the campaign in
+        everyone's inbox."""
+        d = self._draft(recipients=["a@x.com"]).get_json()
+        self._approve(d["draft_id"])
+        self.assertEqual(self._approve(d["draft_id"]).status_code, 404)
+        self.assertEqual(len(self.sent), 1)
+
+    def test_an_expired_draft_cannot_be_approved(self):
+        d = self._draft().get_json()
+        with patch.object(ls, "DRAFT_TTL_HOURS", 0):
+            r = self._approve(d["draft_id"])
+        self.assertEqual(r.status_code, 404)
+        self.assertEqual(self.sent, [])
+
+    def test_pending_drafts_are_listable_and_discardable(self):
+        d = self._draft().get_json()
+        listed = self.client.post("/campaign/drafts",
+                                  json={"admin_token": TOKEN}).get_json()
+        self.assertEqual([x["draft_id"] for x in listed["drafts"]], [d["draft_id"]])
+        self.client.post("/campaign/drafts",
+                         json={"admin_token": TOKEN, "discard": d["draft_id"]})
+        self.assertEqual(self._approve(d["draft_id"]).status_code, 404)
+        self.assertEqual(self.sent, [])
 
     def test_subject_and_body_are_required(self):
         self.assertEqual(self._send(subject="  ").status_code, 400)
