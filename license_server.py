@@ -519,7 +519,7 @@ def _email_health():
     return st
 
 
-def _send_email(to, subject, text, reply_to=None):
+def _send_email(to, subject, text, reply_to=None, headers=None):
     """The one place that actually calls Resend. Every caller below is
     best-effort (a support message, a key delivery, an admin alert, a
     referral notice), so this never raises -- it reports through
@@ -529,6 +529,8 @@ def _send_email(to, subject, text, reply_to=None):
     payload = {"from": FROM_EMAIL, "to": [to], "subject": subject, "text": text}
     if reply_to:
         payload["reply_to"] = reply_to
+    if headers:
+        payload["headers"] = headers
     req = urllib.request.Request(
         "https://api.resend.com/emails", data=json.dumps(payload).encode("utf-8"),
         method="POST", headers={"Authorization": f"Bearer {RESEND_API_KEY}",
@@ -1029,6 +1031,161 @@ def mykey():
         db.setdefault("devices", {})[device] = key
         _save_db(db)
     return jsonify({"ok": True, "key": key, "plan": plan, "expires": exp[:10]})
+
+
+# ═══════════════════════════════════════════════════════════
+# OUTBOUND EMAIL CAMPAIGNS (admin-only)
+# ═══════════════════════════════════════════════════════════
+# Commercial email to a list you supply. CAN-SPAM is not optional and the
+# rules are cheap to follow, so they are enforced here rather than left to
+# whoever writes the campaign text:
+#
+#   * a real physical postal address must appear in every message -- set
+#     MAILING_ADDRESS or this endpoint refuses to send at all, because an
+#     accidentally non-compliant blast cannot be un-sent;
+#   * every message carries a working one-click unsubscribe, both as a link
+#     and as the List-Unsubscribe header mail clients surface themselves;
+#   * an unsubscribe is honoured immediately and permanently, and is checked
+#     before every send;
+#   * the From address and subject are whatever you set -- keep them honest,
+#     deceptive headers and subject lines are the part that actually gets
+#     people fined.
+#
+# Deliberately NOT included: any way to harvest recipients. The list is
+# supplied per request and never derived from scan data or permit records.
+MAILING_ADDRESS = os.environ.get("MAILING_ADDRESS", "")
+# Where the unsubscribe link points. Must be this server, since that's what
+# serves /unsubscribe -- not the Netlify site.
+PUBLIC_BASE_URL = os.environ.get(
+    "PUBLIC_BASE_URL", "https://bid-caller-pro.onrender.com").rstrip("/")
+CAMPAIGN_MAX_PER_REQUEST = int(os.environ.get("CAMPAIGN_MAX_PER_REQUEST", "200"))
+CAMPAIGN_PAUSE_SEC = float(os.environ.get("CAMPAIGN_PAUSE_SEC", "0.35"))
+_SUPPRESSION_KEY = "bidcaller:email_suppression"
+
+
+def _suppression():
+    got = kv_backend.get(_SUPPRESSION_KEY, None)
+    return set(got) if isinstance(got, list) else set()
+
+
+def _suppress(email):
+    email = (email or "").strip().lower()
+    if not email:
+        return False
+    current = _suppression()
+    if email in current:
+        return True
+    current.add(email)
+    kv_backend.set(_SUPPRESSION_KEY, sorted(current))
+    return True
+
+
+def _unsub_token(email):
+    """Signed so an unsubscribe link needs no stored state and cannot be used
+    to unsubscribe somebody else by editing the address in the URL."""
+    return hmac.new(LICENSE_SECRET.encode(), (email or "").strip().lower().encode(),
+                    hashlib.sha256).hexdigest()[:32]
+
+
+def _unsub_url(email):
+    qs = urllib.parse.urlencode({"e": email, "t": _unsub_token(email)})
+    return f"{PUBLIC_BASE_URL}/unsubscribe?{qs}"
+
+
+@app.route("/unsubscribe", methods=["GET"])
+def unsubscribe():
+    """Public and GET on purpose -- this is the link in the email, and it has
+    to work in one click from any mail client with no login and no form."""
+    email = (request.args.get("e") or "").strip().lower()
+    token = (request.args.get("t") or "").strip()
+    page = ("<!doctype html><meta name=viewport content='width=device-width,initial-scale=1'>"
+            "<body style=\"background:#0d0f18;color:#f1f5f9;font-family:system-ui,sans-serif;"
+            "padding:3rem 1.5rem;max-width:32rem;margin:0 auto;\">{}</body>")
+    if not email or not hmac.compare_digest(token, _unsub_token(email)):
+        return page.format("<h2>That link isn't valid.</h2><p>If you're still getting mail "
+                           f"you didn't ask for, reply to it or write to {SUPPORT_EMAIL} "
+                           "and we'll take you off by hand.</p>"), 400
+    _suppress(email)
+    print(f"[campaign] unsubscribed {email}", flush=True)
+    return page.format("<h2>You're unsubscribed.</h2><p>We won't email "
+                       f"<b>{email}</b> again. Nothing else is needed.</p>")
+
+
+@app.route("/campaign/send", methods=["POST"])
+def campaign_send():
+    """Send one campaign to a caller-supplied list. Admin token required."""
+    data = request.get_json(force=True, silent=True) or {}
+    if not _admin_configured():
+        return jsonify({"ok": False, "reason": "admin_not_configured"}), 503
+    if not _admin_ok(data.get("admin_token")):
+        return jsonify({"ok": False, "reason": "unauthorized"}), 403
+    if not RESEND_API_KEY:
+        return jsonify({"ok": False, "reason": "email_unavailable"}), 503
+    # A physical address is a legal requirement for commercial email, and an
+    # unlawful blast cannot be recalled -- so refuse rather than send.
+    if not MAILING_ADDRESS.strip():
+        return jsonify({"ok": False, "reason": "mailing_address_not_configured",
+                        "detail": "Set MAILING_ADDRESS (a real postal address) before "
+                                  "sending commercial email -- CAN-SPAM requires it in "
+                                  "every message."}), 503
+
+    subject = (data.get("subject") or "").strip()
+    body = (data.get("body") or "").strip()
+    recipients = data.get("recipients") or []
+    dry_run = bool(data.get("dry_run"))
+    if not subject or not body:
+        return jsonify({"ok": False, "reason": "subject_and_body_required"}), 400
+    if not isinstance(recipients, list) or not recipients:
+        return jsonify({"ok": False, "reason": "no_recipients"}), 400
+
+    # Dedupe, drop anything unsubscribed, cap the batch.
+    suppressed = _suppression()
+    seen, queue, skipped = set(), [], 0
+    for raw in recipients:
+        addr = str(raw or "").strip().lower()
+        if not addr or "@" not in addr or addr in seen:
+            continue
+        seen.add(addr)
+        if addr in suppressed:
+            skipped += 1
+            continue
+        queue.append(addr)
+    over = max(0, len(queue) - CAMPAIGN_MAX_PER_REQUEST)
+    queue = queue[:CAMPAIGN_MAX_PER_REQUEST]
+
+    if dry_run:
+        return jsonify({"ok": True, "dry_run": True, "would_send": len(queue),
+                        "skipped_unsubscribed": skipped, "over_limit_not_sent": over,
+                        "sample": queue[:5]})
+
+    sent, failed = 0, 0
+    for addr in queue:
+        unsub = _unsub_url(addr)
+        text = (f"{body}\n\n---\n{MAILING_ADDRESS.strip()}\n"
+                f"Don't want these? Unsubscribe: {unsub}")
+        ok = _send_email(addr, subject, text,
+                         headers={"List-Unsubscribe": f"<{unsub}>",
+                                  "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"})
+        sent += 1 if ok else 0
+        failed += 0 if ok else 1
+        time.sleep(CAMPAIGN_PAUSE_SEC)  # don't burst a provider into rate-limiting us
+    print(f"[campaign] sent {sent}, failed {failed}, skipped {skipped}", flush=True)
+    return jsonify({"ok": True, "sent": sent, "failed": failed,
+                    "skipped_unsubscribed": skipped, "over_limit_not_sent": over})
+
+
+@app.route("/campaign/suppression", methods=["POST"])
+def campaign_suppression():
+    """Read or add to the do-not-email list. Admin token required."""
+    data = request.get_json(force=True, silent=True) or {}
+    if not _admin_configured():
+        return jsonify({"ok": False, "reason": "admin_not_configured"}), 503
+    if not _admin_ok(data.get("admin_token")):
+        return jsonify({"ok": False, "reason": "unauthorized"}), 403
+    for addr in (data.get("add") or []):
+        _suppress(addr)
+    current = sorted(_suppression())
+    return jsonify({"ok": True, "count": len(current), "suppressed": current})
 
 
 @app.route("/support", methods=["POST"])
