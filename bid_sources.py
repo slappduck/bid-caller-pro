@@ -104,12 +104,42 @@ def civicplus_endpoints(domain):
 # takes, most likely first. Deliberately short: each one is a live fetch, so
 # this is a probe, not a crawl. A hit gets recorded in the portal directory by
 # the caller and is free on every later scan.
+# Ordered most-likely first and it matters: the live scan path only probes
+# the first couple (candidate_bid_urls(..., limit=2)) to protect the request
+# budget, while the offline crawl walks the whole list.
+#
+# The original five found a bid page for 24.8% of the .gov registry. The
+# homepage-link fallback catches sites that link to bids from the front page
+# in obvious words -- but a county that files procurement three levels down
+# under Departments links nothing obvious from its homepage and matched none
+# of five guesses, which is why counties came out so badly (Arkansas: 1 of
+# 89; Oklahoma: 2 of 64).
 CANDIDATE_BID_PATHS = (
     "/Bids.aspx",          # CivicPlus — by far the most common
     "/bids",
     "/bids-and-rfps",
     "/purchasing",
     "/rfp",
+    # ── added after measuring the first crawl's misses ──
+    "/rfps",
+    "/procurement",
+    "/solicitations",
+    "/bid-opportunities",
+    "/bidopportunities",
+    "/current-bids",
+    "/open-bids",
+    "/invitation-to-bid",
+    "/notice-to-bidders",
+    "/doing-business/bids",
+    "/business/bids",
+    "/departments/purchasing",
+    "/departments/finance/purchasing",
+    "/government/purchasing",
+    "/purchasing/bids",
+    "/finance/purchasing",
+    "/RFP.aspx",
+    "/Purchasing.aspx",
+    "/bids.html",
 )
 
 

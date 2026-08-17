@@ -318,6 +318,52 @@ def _recent_scans():
         return []
 
 
+@app.route("/coverage", methods=["POST"])
+def coverage():
+    """How many verified bid pages we hold within a radius of somewhere.
+
+    Public and unauthenticated on purpose: this is what lets someone check
+    their own area BEFORE paying. Coverage is genuinely uneven -- a 50mi
+    radius around Boston reaches ~149 verified agencies and one around
+    Springfield, MO reaches ~9 -- and a contractor who finds that out after
+    subscribing is a refund and a bad review. Better they see it first.
+
+    Cheap by construction: a geocode (cached) plus arithmetic against
+    coordinates already on disk. No search credits, no AI call, nothing that
+    scales with cost -- so leaving it open costs essentially nothing.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    location = (data.get("location") or "").strip()
+    try:
+        radius = float(data.get("radius") or 50)
+    except (TypeError, ValueError):
+        radius = 50.0
+    radius = max(5.0, min(radius, 250.0))
+    if not location:
+        return jsonify({"ok": False, "reason": "no_location"}), 400
+    center = _resolve_center(location)
+    if not center:
+        return jsonify({"ok": False, "reason": "unresolved_location"}), 404
+    try:
+        towns = bid_portals.towns_within_radius(
+            bid_portals.load_directory(), center["lat"], center["lon"], radius)
+    except Exception as ex:
+        print(f"[coverage] lookup failed: {ex}", flush=True)
+        return jsonify({"ok": False, "reason": "lookup_failed"}), 500
+    towns.sort(key=lambda t: _miles_between(center["lat"], center["lon"], t[2], t[3]))
+    return jsonify({
+        "ok": True,
+        "location": f"{center['city']}, {center['state']}".strip(", "),
+        "radius": int(radius),
+        # Direct-read coverage only. The scan ALSO searches for county,
+        # school-district and state-portal work that has no entry here, so
+        # this is a floor on what a scan reaches, not a ceiling -- said
+        # plainly in the UI rather than quietly inflating the number.
+        "agencies": len(towns),
+        "nearest": [f"{c}, {s}" for c, s, _, _ in towns[:8]],
+    })
+
+
 @app.route("/health", methods=["GET"])
 def health_detail():
     """Which backends are actually wired up, and is local search still working.
@@ -473,7 +519,7 @@ def _email_health():
     return st
 
 
-def _send_email(to, subject, text, reply_to=None):
+def _send_email(to, subject, text, reply_to=None, headers=None):
     """The one place that actually calls Resend. Every caller below is
     best-effort (a support message, a key delivery, an admin alert, a
     referral notice), so this never raises -- it reports through
@@ -483,6 +529,8 @@ def _send_email(to, subject, text, reply_to=None):
     payload = {"from": FROM_EMAIL, "to": [to], "subject": subject, "text": text}
     if reply_to:
         payload["reply_to"] = reply_to
+    if headers:
+        payload["headers"] = headers
     req = urllib.request.Request(
         "https://api.resend.com/emails", data=json.dumps(payload).encode("utf-8"),
         method="POST", headers={"Authorization": f"Bearer {RESEND_API_KEY}",
@@ -983,6 +1031,469 @@ def mykey():
         db.setdefault("devices", {})[device] = key
         _save_db(db)
     return jsonify({"ok": True, "key": key, "plan": plan, "expires": exp[:10]})
+
+
+# ═══════════════════════════════════════════════════════════
+# OUTBOUND EMAIL CAMPAIGNS (admin-only)
+# ═══════════════════════════════════════════════════════════
+# Commercial email to a list you supply. CAN-SPAM is not optional and the
+# rules are cheap to follow, so they are enforced here rather than left to
+# whoever writes the campaign text:
+#
+#   * a real physical postal address must appear in every message -- set
+#     MAILING_ADDRESS or this endpoint refuses to send at all, because an
+#     accidentally non-compliant blast cannot be un-sent;
+#   * every message carries a working one-click unsubscribe, both as a link
+#     and as the List-Unsubscribe header mail clients surface themselves;
+#   * an unsubscribe is honoured immediately and permanently, and is checked
+#     before every send;
+#   * the From address and subject are whatever you set -- keep them honest,
+#     deceptive headers and subject lines are the part that actually gets
+#     people fined.
+#
+# Deliberately NOT included: any way to harvest recipients. The list is
+# supplied per request and never derived from scan data or permit records.
+MAILING_ADDRESS = os.environ.get("MAILING_ADDRESS", "")
+# Where the unsubscribe link points. Must be this server, since that's what
+# serves /unsubscribe -- not the Netlify site.
+PUBLIC_BASE_URL = os.environ.get(
+    "PUBLIC_BASE_URL", "https://bid-caller-pro.onrender.com").rstrip("/")
+CAMPAIGN_MAX_PER_REQUEST = int(os.environ.get("CAMPAIGN_MAX_PER_REQUEST", "200"))
+CAMPAIGN_PAUSE_SEC = float(os.environ.get("CAMPAIGN_PAUSE_SEC", "0.35"))
+_SUPPRESSION_KEY = "bidcaller:email_suppression"
+_DRAFTS_KEY = "bidcaller:campaign_drafts"
+# A draft that's been sitting for a day is probably forgotten, and approving
+# a forgotten campaign is how the wrong thing goes out. They expire.
+DRAFT_TTL_HOURS = int(os.environ.get("CAMPAIGN_DRAFT_TTL_HOURS", "24"))
+
+
+def _render_campaign(body, addr):
+    """The exact text a recipient receives -- one function so the preview
+    shown at draft time cannot drift from what approval actually sends."""
+    return (f"{body}\n\n---\n{MAILING_ADDRESS.strip()}\n"
+            f"Don't want these? Unsubscribe: {_unsub_url(addr)}")
+
+
+def _clean_recipients(recipients):
+    """(queue, skipped_unsubscribed, over_limit). Deduped case-insensitively,
+    unsubscribes dropped, batch capped."""
+    suppressed = _suppression()
+    seen, queue, skipped = set(), [], 0
+    for raw in recipients or []:
+        addr = str(raw or "").strip().lower()
+        if not addr or "@" not in addr or addr in seen:
+            continue
+        seen.add(addr)
+        if addr in suppressed:
+            skipped += 1
+            continue
+        queue.append(addr)
+    over = max(0, len(queue) - CAMPAIGN_MAX_PER_REQUEST)
+    return queue[:CAMPAIGN_MAX_PER_REQUEST], skipped, over
+
+
+def _drafts():
+    """Pending campaigns, with expired ones already dropped."""
+    got = kv_backend.get(_DRAFTS_KEY, None)
+    if not isinstance(got, dict):
+        return {}
+    cutoff = datetime.datetime.now() - datetime.timedelta(hours=DRAFT_TTL_HOURS)
+    live = {}
+    for k, v in got.items():
+        try:
+            if datetime.datetime.fromisoformat(v.get("created_at", "")) >= cutoff:
+                live[k] = v
+        except (TypeError, ValueError):
+            continue  # unparseable timestamp -> treat as expired, never as sendable
+    return live
+
+
+def _save_drafts(drafts):
+    kv_backend.set(_DRAFTS_KEY, drafts)
+
+
+def _suppression():
+    got = kv_backend.get(_SUPPRESSION_KEY, None)
+    return set(got) if isinstance(got, list) else set()
+
+
+def _suppress(email):
+    email = (email or "").strip().lower()
+    if not email:
+        return False
+    current = _suppression()
+    if email in current:
+        return True
+    current.add(email)
+    kv_backend.set(_SUPPRESSION_KEY, sorted(current))
+    return True
+
+
+def _unsub_token(email):
+    """Signed so an unsubscribe link needs no stored state and cannot be used
+    to unsubscribe somebody else by editing the address in the URL."""
+    return hmac.new(LICENSE_SECRET.encode(), (email or "").strip().lower().encode(),
+                    hashlib.sha256).hexdigest()[:32]
+
+
+def _unsub_url(email):
+    qs = urllib.parse.urlencode({"e": email, "t": _unsub_token(email)})
+    return f"{PUBLIC_BASE_URL}/unsubscribe?{qs}"
+
+
+@app.route("/unsubscribe", methods=["GET"])
+def unsubscribe():
+    """Public and GET on purpose -- this is the link in the email, and it has
+    to work in one click from any mail client with no login and no form."""
+    email = (request.args.get("e") or "").strip().lower()
+    token = (request.args.get("t") or "").strip()
+    page = ("<!doctype html><meta name=viewport content='width=device-width,initial-scale=1'>"
+            "<body style=\"background:#0d0f18;color:#f1f5f9;font-family:system-ui,sans-serif;"
+            "padding:3rem 1.5rem;max-width:32rem;margin:0 auto;\">{}</body>")
+    if not email or not hmac.compare_digest(token, _unsub_token(email)):
+        return page.format("<h2>That link isn't valid.</h2><p>If you're still getting mail "
+                           f"you didn't ask for, reply to it or write to {SUPPORT_EMAIL} "
+                           "and we'll take you off by hand.</p>"), 400
+    _suppress(email)
+    print(f"[campaign] unsubscribed {email}", flush=True)
+    return page.format("<h2>You're unsubscribed.</h2><p>We won't email "
+                       f"<b>{email}</b> again. Nothing else is needed.</p>")
+
+
+@app.route("/campaign/send", methods=["POST"])
+def campaign_send():
+    """Prepare a campaign for a caller-supplied list. SENDS NOTHING.
+
+    Despite the route name this only ever builds a draft and returns the
+    exact message for review -- kept as /campaign/send deliberately, so that
+    there is no path in this app named "send" that actually mails anybody
+    without a separate approval. Sending is /campaign/approve.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    if not _admin_configured():
+        return jsonify({"ok": False, "reason": "admin_not_configured"}), 503
+    if not _admin_ok(data.get("admin_token")):
+        return jsonify({"ok": False, "reason": "unauthorized"}), 403
+    if not RESEND_API_KEY:
+        return jsonify({"ok": False, "reason": "email_unavailable"}), 503
+    # A physical address is a legal requirement for commercial email, and an
+    # unlawful blast cannot be recalled -- so refuse rather than send.
+    if not MAILING_ADDRESS.strip():
+        return jsonify({"ok": False, "reason": "mailing_address_not_configured",
+                        "detail": "Set MAILING_ADDRESS (a real postal address) before "
+                                  "sending commercial email -- CAN-SPAM requires it in "
+                                  "every message."}), 503
+
+    subject = (data.get("subject") or "").strip()
+    body = (data.get("body") or "").strip()
+    recipients = data.get("recipients") or []
+    if not subject or not body:
+        return jsonify({"ok": False, "reason": "subject_and_body_required"}), 400
+    if not isinstance(recipients, list) or not recipients:
+        return jsonify({"ok": False, "reason": "no_recipients"}), 400
+
+    queue, skipped, over = _clean_recipients(recipients)
+    draft_id = secrets.token_hex(6)
+    drafts = _drafts()
+    drafts[draft_id] = {
+        "subject": subject, "body": body, "recipients": queue,
+        "skipped_unsubscribed": skipped, "over_limit_not_sent": over,
+        "created_at": datetime.datetime.now().isoformat(timespec="seconds"),
+    }
+    _save_drafts(drafts)
+    print(f"[campaign] drafted {draft_id}: {len(queue)} recipient(s), nothing sent",
+          flush=True)
+    return jsonify({
+        "ok": True, "status": "awaiting_approval", "sent": 0,
+        "draft_id": draft_id,
+        "would_send": len(queue), "skipped_unsubscribed": skipped,
+        "over_limit_not_sent": over, "sample": queue[:5],
+        # The full rendered message, footer and all -- what you approve is
+        # exactly what goes out, not a summary of it.
+        "preview": _render_campaign(body, queue[0]) if queue else "",
+        "expires_in_hours": DRAFT_TTL_HOURS,
+        "next": ("Nothing has been sent. Review 'preview', then POST "
+                 "/campaign/approve with this draft_id and confirm: true."),
+    })
+
+
+@app.route("/campaign/approve", methods=["POST"])
+def campaign_approve():
+    """The only endpoint in the app that actually sends a campaign.
+
+    Separate from drafting on purpose: a cold-email blast cannot be
+    recalled, so it takes a second, deliberate call naming the exact draft
+    -- a fat-fingered request can create a draft, but it cannot mail
+    anybody. `confirm: true` has to be passed explicitly as well, so no
+    single mistyped field is the difference between reviewing and sending.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    if not _admin_configured():
+        return jsonify({"ok": False, "reason": "admin_not_configured"}), 503
+    if not _admin_ok(data.get("admin_token")):
+        return jsonify({"ok": False, "reason": "unauthorized"}), 403
+    if not RESEND_API_KEY:
+        return jsonify({"ok": False, "reason": "email_unavailable"}), 503
+    if not MAILING_ADDRESS.strip():
+        return jsonify({"ok": False, "reason": "mailing_address_not_configured"}), 503
+    if data.get("confirm") is not True:
+        return jsonify({"ok": False, "reason": "confirmation_required",
+                        "detail": "Pass confirm: true to send. Nothing was sent."}), 400
+
+    draft_id = (data.get("draft_id") or "").strip()
+    drafts = _drafts()
+    draft = drafts.get(draft_id)
+    if not draft:
+        # Also covers a draft that aged out -- see _drafts().
+        return jsonify({"ok": False, "reason": "unknown_or_expired_draft",
+                        "detail": "Nothing was sent. Draft it again to get a fresh id."}), 404
+
+    # Re-check suppression at approval time, not just at draft time: someone
+    # may have unsubscribed in between, and the draft could be hours old.
+    queue, skipped_now, _ = _clean_recipients(draft.get("recipients") or [])
+    sent, failed = 0, 0
+    for addr in queue:
+        unsub = _unsub_url(addr)
+        ok = _send_email(addr, draft["subject"], _render_campaign(draft["body"], addr),
+                         headers={"List-Unsubscribe": f"<{unsub}>",
+                                  "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"})
+        sent += 1 if ok else 0
+        failed += 0 if ok else 1
+        time.sleep(CAMPAIGN_PAUSE_SEC)  # don't burst a provider into rate-limiting us
+
+    # Consume the draft either way, so an approval can't be replayed into a
+    # second copy of the same campaign landing in everyone's inbox.
+    drafts.pop(draft_id, None)
+    _save_drafts(drafts)
+    print(f"[campaign] approved {draft_id}: sent {sent}, failed {failed}, "
+          f"skipped {skipped_now}", flush=True)
+    return jsonify({"ok": True, "status": "sent", "draft_id": draft_id,
+                    "sent": sent, "failed": failed,
+                    "skipped_unsubscribed": skipped_now})
+
+
+@app.route("/campaign/drafts", methods=["POST"])
+def campaign_drafts():
+    """What's waiting for approval. Admin token required."""
+    data = request.get_json(force=True, silent=True) or {}
+    if not _admin_configured():
+        return jsonify({"ok": False, "reason": "admin_not_configured"}), 503
+    if not _admin_ok(data.get("admin_token")):
+        return jsonify({"ok": False, "reason": "unauthorized"}), 403
+    discard = (data.get("discard") or "").strip()
+    drafts = _drafts()
+    if discard:
+        drafts.pop(discard, None)
+        _save_drafts(drafts)
+    return jsonify({"ok": True, "drafts": [
+        {"draft_id": k, "subject": v.get("subject", ""),
+         "recipients": len(v.get("recipients") or []),
+         "created_at": v.get("created_at", "")}
+        for k, v in sorted(drafts.items(), key=lambda kv: kv[1].get("created_at", ""))
+    ]})
+
+
+@app.route("/campaign/suppression", methods=["POST"])
+def campaign_suppression():
+    """Read or add to the do-not-email list. Admin token required."""
+    data = request.get_json(force=True, silent=True) or {}
+    if not _admin_configured():
+        return jsonify({"ok": False, "reason": "admin_not_configured"}), 503
+    if not _admin_ok(data.get("admin_token")):
+        return jsonify({"ok": False, "reason": "unauthorized"}), 403
+    for addr in (data.get("add") or []):
+        _suppress(addr)
+    current = sorted(_suppression())
+    return jsonify({"ok": True, "count": len(current), "suppressed": current})
+
+
+# ═══════════════════════════════════════════════════════════
+# AGENCY-POSTED NOTICES (the "lister" side)
+# ═══════════════════════════════════════════════════════════
+# A city or county posts a bid notice directly, and once approved it shows
+# up in scans covering that area.
+#
+# This exists because of what the crawl could NOT reach. Re-probing 269
+# missed Missouri domains against 24 URL patterns found exactly one page:
+# the rest are towns of a few hundred people and rural water districts with
+# no bid page anywhere, and in three cases no working domain at all. Those
+# agencies are far too small for Bonfire or OpenGov to sell to, so nobody
+# offers them anything. A free form is the only way that work becomes
+# visible, and it fills the exact hole crawling can't.
+#
+# Deliberately NOT a procurement system. It takes a notice and nothing
+# else -- no bid submissions, no attachments, no sealed-bid handling, none
+# of which can be done casually without real legal exposure. Most states
+# also require legal notices in a newspaper of record, so this supplements
+# an agency's statutory notice and never replaces it. Said plainly on the
+# form itself.
+_US_STATES = {
+    "AL": "alabama", "AK": "alaska", "AZ": "arizona", "AR": "arkansas",
+    "CA": "california", "CO": "colorado", "CT": "connecticut", "DE": "delaware",
+    "DC": "district of columbia", "FL": "florida", "GA": "georgia", "HI": "hawaii",
+    "ID": "idaho", "IL": "illinois", "IN": "indiana", "IA": "iowa", "KS": "kansas",
+    "KY": "kentucky", "LA": "louisiana", "ME": "maine", "MD": "maryland",
+    "MA": "massachusetts", "MI": "michigan", "MN": "minnesota", "MS": "mississippi",
+    "MO": "missouri", "MT": "montana", "NE": "nebraska", "NV": "nevada",
+    "NH": "new hampshire", "NJ": "new jersey", "NM": "new mexico", "NY": "new york",
+    "NC": "north carolina", "ND": "north dakota", "OH": "ohio", "OK": "oklahoma",
+    "OR": "oregon", "PA": "pennsylvania", "RI": "rhode island", "SC": "south carolina",
+    "SD": "south dakota", "TN": "tennessee", "TX": "texas", "UT": "utah",
+    "VT": "vermont", "VA": "virginia", "WA": "washington", "WV": "west virginia",
+    "WI": "wisconsin", "WY": "wyoming", "PR": "puerto rico", "VI": "virgin islands",
+    "GU": "guam", "AS": "american samoa", "MP": "northern mariana islands",
+}
+_STATE_BY_NAME = {name: code for code, name in _US_STATES.items()}
+
+
+def _normalize_state(raw):
+    """A real state code, or "" if it isn't one.
+
+    Never truncate to two characters: "Missouri" cut to "MI" is Michigan, a
+    valid code for the wrong state, and the notice would then surface for
+    contractors 600 miles away. Accept the full name instead, and reject
+    anything that isn't a state at all rather than guessing.
+    """
+    s = " ".join(str(raw or "").split()).strip()
+    if not s:
+        return ""
+    if len(s) == 2 and s.upper() in _US_STATES:
+        return s.upper()
+    return _STATE_BY_NAME.get(s.lower(), "")
+
+
+_AGENCY_KEY = "bidcaller:agency_bids"
+_AGENCY_RATE_KEY = "bidcaller:agency_post_rate"
+AGENCY_MAX_PER_IP_PER_DAY = int(os.environ.get("AGENCY_MAX_PER_IP_PER_DAY", "10"))
+
+
+def _agency_bids():
+    got = kv_backend.get(_AGENCY_KEY, None)
+    return got if isinstance(got, dict) else {}
+
+
+def _save_agency_bids(d):
+    kv_backend.set(_AGENCY_KEY, d)
+
+
+def _agency_rate_ok(ip):
+    """Crude per-IP daily cap. The form is unauthenticated by necessity --
+    a rural clerk is not going to create an account -- so this is what
+    stops one script filling the moderation queue overnight."""
+    today = datetime.datetime.now().strftime("%Y%m%d")
+    got = kv_backend.get(_AGENCY_RATE_KEY, None)
+    counts = got if isinstance(got, dict) else {}
+    if counts.get("day") != today:
+        counts = {"day": today, "ips": {}}
+    n = int(counts["ips"].get(ip, 0))
+    if n >= AGENCY_MAX_PER_IP_PER_DAY:
+        return False
+    counts["ips"][ip] = n + 1
+    kv_backend.set(_AGENCY_RATE_KEY, counts)
+    return True
+
+
+@app.route("/agency/submit", methods=["POST"])
+def agency_submit():
+    """Public: an agency posts a notice. Nothing is visible until approved."""
+    data = request.get_json(force=True, silent=True) or {}
+    ip = (request.headers.get("X-Forwarded-For", "") or request.remote_addr or "?")
+    ip = ip.split(",")[0].strip()
+    if not _agency_rate_ok(ip):
+        return jsonify({"ok": False, "reason": "rate_limited",
+                        "detail": "That's a lot of notices from one place today. "
+                                  f"Email {SUPPORT_EMAIL} and we'll sort it out."}), 429
+
+    def s(key, limit):
+        return str(data.get(key) or "").strip()[:limit]
+
+    title, city = s("title", 200), s("city", 80)
+    state = _normalize_state(data.get("state"))
+    if not title or not city or not state:
+        return jsonify({"ok": False, "reason": "title_city_state_required",
+                        "detail": "Project title, city and a real US state are needed "
+                                  "(two-letter code or the full name)."}), 400
+
+    entry = {
+        "title": title, "scope": s("scope", 2000), "city": city, "state": state,
+        "deadline": s("deadline", 60), "contact": s("contact", 120),
+        "email": s("email", 160), "phone": s("phone", 40), "url": s("url", 400),
+        "agency": s("agency", 160), "status": "Open", "source": "agency_posted",
+        "approved": False, "created_at": datetime.datetime.now().isoformat(timespec="seconds"),
+    }
+    bids = _agency_bids()
+    bid_id = secrets.token_hex(6)
+    bids[bid_id] = entry
+    _save_agency_bids(bids)
+    _alert_admin("New agency bid notice awaiting approval",
+                 f"{title}\n{city}, {state}\n\nApprove: /agency/review")
+    print(f"[agency] notice {bid_id} submitted: {title[:60]} ({city}, {state})", flush=True)
+    return jsonify({"ok": True, "id": bid_id,
+                    "message": "Thanks — we'll review it and it'll appear for "
+                               "contractors in your area, usually within a day."})
+
+
+@app.route("/agency/review", methods=["POST"])
+def agency_review():
+    """Admin: list, approve or delete submitted notices."""
+    data = request.get_json(force=True, silent=True) or {}
+    if not _admin_configured():
+        return jsonify({"ok": False, "reason": "admin_not_configured"}), 503
+    if not _admin_ok(data.get("admin_token")):
+        return jsonify({"ok": False, "reason": "unauthorized"}), 403
+    bids = _agency_bids()
+    approve, delete = (data.get("approve") or "").strip(), (data.get("delete") or "").strip()
+    if delete:
+        bids.pop(delete, None)
+        _save_agency_bids(bids)
+    if approve and approve in bids:
+        entry = bids[approve]
+        # Geocode once, at approval, so a scan never pays for it. A notice we
+        # can't place on the map can't be radius-filtered and would show up
+        # for the wrong people, so it stays unapproved.
+        g = _geo_from_city(entry["city"], entry["state"])
+        if not g:
+            return jsonify({"ok": False, "reason": "ungeocodable_city",
+                            "detail": f"Couldn't place {entry['city']}, {entry['state']}. "
+                                      "Fix the city/state on the notice first."}), 400
+        entry["lat"], entry["lon"] = g["lat"], g["lon"]
+        entry["approved"] = True
+        entry["approved_at"] = datetime.datetime.now().isoformat(timespec="seconds")
+        _save_agency_bids(bids)
+        print(f"[agency] approved {approve}", flush=True)
+    return jsonify({"ok": True, "notices": [
+        {"id": k, "approved": v.get("approved", False), "title": v.get("title", ""),
+         "city": v.get("city", ""), "state": v.get("state", ""),
+         "created_at": v.get("created_at", "")}
+        for k, v in sorted(bids.items(), key=lambda kv: kv[1].get("created_at", ""))
+    ]})
+
+
+def _add_agency_bids(grouped, center, radius, cdb, city_coords, stats=None):
+    """Merge approved agency-posted notices covering this area into a scan.
+
+    Free by comparison with everything else in the pipeline: they're already
+    geocoded (at approval), so this is arithmetic and no fetch at all.
+    """
+    added = 0
+    for entry in _agency_bids().values():
+        if not entry.get("approved"):
+            continue
+        lat, lon = entry.get("lat"), entry.get("lon")
+        if lat is None or lon is None:
+            continue
+        if _miles_between(center["lat"], center["lon"], lat, lon) > radius:
+            continue
+        bid = {k: entry.get(k, "") for k in
+               ("title", "scope", "deadline", "contact", "email", "phone", "url", "status")}
+        bid["city"] = entry["city"]
+        _place_bid(grouped, bid, center, radius, cdb, default_city=entry["city"],
+                   city_coords=city_coords, default_state=entry["state"],
+                   fallback_coords=(lat, lon), stats=stats)
+        added += 1
+    if added and stats is not None:
+        stats["agency_posted"] = stats.get("agency_posted", 0) + added
+    return added
 
 
 @app.route("/support", methods=["POST"])
@@ -3086,6 +3597,13 @@ def _perform_scan(location, radius, force=False):
     # no contacts_found at all, because that branch never ran. Doing it here
     # instead covers every source, and it runs on the handful of bids that
     # survived the radius rather than everything the search turned up.
+    # Agencies that posted a notice directly (the lister side). Already
+    # geocoded at approval, so this adds no fetch and no search credit --
+    # and it's the only way work from towns with no bid page at all reaches
+    # anybody. Added before enrichment so a notice missing a deadline still
+    # gets the same treatment as any other bid.
+    _add_agency_bids(grouped, center, radius, cdb, city_coords, drop_stats)
+
     _enrich_placed_bids(grouped, drop_stats)
 
     for city_bids in grouped.values():
