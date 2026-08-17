@@ -1,0 +1,44 @@
+name: Weekly upcoming-work alerts
+
+# The weekly sibling of saved-search-alerts.yml. Same reason for existing:
+# Render's web service can't wake itself up, so GitHub Actions is the clock.
+# This one pokes /run-upcoming-alerts, which runs every saved search through
+# the Upcoming pipeline (capital improvement plans, council budgets, ADA
+# transition plans) and emails each user only what's new since last week.
+#
+# Why weekly and not daily: a CIP is republished a few times a year. A daily
+# email would be the same list over and over. Open bids are the time-sensitive
+# feed and those already run daily in saved-search-alerts.yml.
+#
+# Setup is the same two repo secrets the daily workflow already uses --
+# BIDCALLER_SERVER_URL and CRON_SECRET. If they aren't set, or CRON_SECRET
+# isn't also set on Render, the endpoint replies 403 and nothing happens.
+#
+# To change the day or time: edit the cron below. It is UTC, so subtract 6
+# hours for US Central in summer, 5 in winter. Test any time without waiting
+# for the schedule: Actions tab -> this workflow -> "Run workflow".
+
+on:
+  schedule:
+    # Monday 12:00 UTC = ~7am US Central. Start of the work week, before the
+    # phone starts ringing, so a planned project can be acted on that morning.
+    - cron: "0 12 * * 1"
+  workflow_dispatch: {}
+
+jobs:
+  trigger-upcoming:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger upcoming-work alert run
+        run: |
+          resp=$(curl -sS -X POST "${BIDCALLER_SERVER_URL}/run-upcoming-alerts" \
+            -H "Content-Type: application/json" \
+            -H "X-Cron-Secret: ${CRON_SECRET}" \
+            --max-time 280 \
+            -w "\nHTTP_STATUS:%{http_code}")
+          echo "$resp"
+          status=$(echo "$resp" | grep -o 'HTTP_STATUS:[0-9]*' | cut -d: -f2)
+          if [ "$status" -ge 400 ]; then exit 1; fi
+        env:
+          BIDCALLER_SERVER_URL: ${{ secrets.BIDCALLER_SERVER_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}

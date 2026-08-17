@@ -25,30 +25,24 @@ someone has seen it work — not when the code is written.
 | Search cost trimmed ~30% | Skip generic queries when a known portal already answered |
 | Recall benchmark | `tools/recall_check.py` + a fixture test that can't go stale |
 | Custom icon set, no emoji | Both app and marketing page |
+| Customer reviews | In-app rating, approval-gated, testimonials on the site |
+| Coverage checker | Public `/coverage`, honest per-area numbers before paying |
+| Outbound campaign sender | Draft → approve, CAN-SPAM enforced in code |
+| Agency bid posting | Separate `post-a-bid.html`, moderated, feeds scans |
+| Weekly Upcoming scan | Mondays ~7am Central, emails each saved search what's newly planned |
 
 ## Waiting on Josh (blocked, not forgotten)
 
 | Item | What's needed |
 |---|---|
-| **PR #8 merge** | Reviews, coverage checker, campaign sender, agency posting — all built and tested, unmerged |
 | **Re-run `supabase_sync_schema.sql`** | Adds `reviews` + `user_feeds`. Idempotent. Until then those features are inert |
 | **Set `MAILING_ADDRESS` in Render** | Campaign sender refuses to send commercial email without a postal address (CAN-SPAM) |
 | **Allowlist `query.wikidata.org`** | Egress-blocked. This is the only untested lever for rural coverage (~750 MO towns with no `.gov`) |
-| **Weekly scan schedule** | Which day/time, and Upcoming only or Upcoming + a fresh bid scan? Nothing built yet |
+| **Confirm the weekly day/time** | Built and defaulted to Monday 7am Central, Upcoming only (bids already run daily). One line in `.github/workflows/weekly-upcoming-alerts.yml` to change |
 | **Approve reviews / notices** | Both queues are moderated by hand, by design. Nothing publishes itself |
-
-## Built, not yet merged (PR #8)
-
-- Customer reviews — in-app rating, approval-gated, testimonials on the site
-- Coverage checker — public `/coverage`, honest per-area numbers before paying
-- Outbound campaign sender — draft → approve, CAN-SPAM enforced in code
-- Agency bid posting — separate `post-a-bid.html`, moderated, feeds scans
 
 ## Known gaps / not started
 
-- **Upcoming is not scheduled.** Works on demand; its logic is inline in the
-  route, so the alert job can't reuse it. Needs the same extraction
-  `_perform_scan` already had before it can run weekly.
 - **Bonfire / OpenGov / PlanetBids adapters.** Researched, all three look
   freely readable, none built. All three are JS single-page apps, so they
   need either a headless browser per scan or their internal API reverse
