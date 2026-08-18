@@ -29,17 +29,29 @@ someone has seen it work — not when the code is written.
 | Coverage checker | Public `/coverage`, honest per-area numbers before paying |
 | Outbound campaign sender | Draft → approve, CAN-SPAM enforced in code |
 | Agency bid posting | Separate `post-a-bid.html`, moderated, feeds scans |
-| Weekly Upcoming scan | Mondays ~7am Central, emails each saved search what's newly planned |
+| Daily open-bid alerts | GitHub Actions → `/run-saved-search-alerts`, 23 consecutive successful runs |
 
 ## Waiting on Josh (blocked, not forgotten)
 
 | Item | What's needed |
 |---|---|
-| **Re-run `supabase_sync_schema.sql`** | Adds `reviews` + `user_feeds`. Idempotent. Until then those features are inert |
-| **Set `MAILING_ADDRESS` in Render** | Campaign sender refuses to send commercial email without a postal address (CAN-SPAM) |
-| **Allowlist `query.wikidata.org`** | Egress-blocked. This is the only untested lever for rural coverage (~750 MO towns with no `.gov`) |
-| **Confirm the weekly day/time** | Built and defaulted to Monday 7am Central, Upcoming only (bids already run daily). One line in `.github/workflows/weekly-upcoming-alerts.yml` to change |
+| **Merge `claude/weekly-upcoming`** | Blocks all three items in the section below from running at all |
+| **Re-run `supabase_sync_schema.sql`** | Adds `reviews`. Idempotent — safe to run again. Until then the review feature is inert, and reviews are the only planned source of usage data |
+| **Allowlist `query.wikidata.org`** | Egress-blocked. The only untested lever for coverage, and it helps most in AR/OK where the sales region is weakest |
+| **A campaign list** | The sender is built, approval-gated and CAN-SPAM compliant, but has no recipients and no copy. This is the last gap between "built" and "selling" |
 | **Approve reviews / notices** | Both queues are moderated by hand, by design. Nothing publishes itself |
+
+`MAILING_ADDRESS` was set in Render on 2026-08-18. Not yet *verified* — the
+`/health` flag that reports it ships with the branch below.
+
+## Built and pushed, NOT merged (`claude/weekly-upcoming`)
+
+- **Weekly Upcoming scan** — Mondays 12:00 UTC (~7am Central), emails each
+  saved search what is newly planned. Uses the same two GitHub secrets the
+  daily job already uses, so nothing new to configure.
+- **`campaign_sender` in `/health`** — the only way to confirm
+  `MAILING_ADDRESS` took effect without attempting a real send.
+- **The 9-state sales region section** in this file.
 
 ## Known gaps / not started
 
