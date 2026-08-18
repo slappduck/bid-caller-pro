@@ -925,6 +925,68 @@ def _run_upcoming_alerts():
             "emails_sent": emails_sent, "errors": errors}
 
 
+# ── Full data export (admin-only) ──
+# Everything a customer owns lives in one Supabase project on a free plan with
+# limited backups. If that project is wiped, suspended or lapses there is no
+# second copy anywhere: saved bids, pipeline notes and company profiles are
+# user-authored and exist nowhere else.
+#
+# Deliberately pull-only and manual. The obvious "just back it up
+# automatically" answer is a scheduled job committing a dump or uploading an
+# Actions artifact, and BOTH leak customer data -- this repository is public.
+# So the export is served once, to an authenticated admin, and whoever runs it
+# decides where it lands.
+_EXPORT_TABLES = ("company_profiles", "saved_bids", "saved_searches",
+                  "user_feeds", "reviews")
+
+
+def _export_table(name):
+    """A whole table via the service-role key. Returns (rows, error)."""
+    rows = _supabase_admin_request(f"/rest/v1/{name}?select=*")
+    if rows is None:
+        return [], "unreachable_or_missing"
+    if not isinstance(rows, list):
+        return [], "unexpected_shape"
+    return rows, ""
+
+
+@app.route("/admin/export", methods=["POST"])
+def admin_export():
+    """Full JSON dump of every user-owned table. Admin token required.
+
+    This contains personal data by definition -- names, emails, phone numbers,
+    and a contractor's private pipeline notes. Treat the response like a
+    password: somewhere private, never a public repo or a shared drive.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    if not _admin_configured():
+        return jsonify({"ok": False, "reason": "admin_not_configured"}), 503
+    if not _admin_ok(data.get("admin_token")):
+        return jsonify({"ok": False, "reason": "unauthorized"}), 403
+    if not (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY):
+        return jsonify({"ok": False, "reason": "supabase_not_configured"}), 503
+
+    tables, errors, total = {}, {}, 0
+    for name in _EXPORT_TABLES:
+        rows, err = _export_table(name)
+        if err:
+            # A table that was never created is a real finding, not a crash:
+            # report it per-table and still return everything else.
+            errors[name] = err
+        tables[name] = rows
+        total += len(rows)
+
+    print(f"[export] {total} rows across {len(_EXPORT_TABLES)} tables"
+          + (f", errors: {errors}" if errors else ""), flush=True)
+    return jsonify({"ok": True,
+                    "exported_at": datetime.datetime.now(
+                        datetime.timezone.utc).isoformat(),
+                    "tables": tables,
+                    "row_counts": {k: len(v) for k, v in tables.items()},
+                    "total_rows": total,
+                    "errors": errors})
+
+
 @app.route("/run-upcoming-alerts", methods=["POST"])
 def run_upcoming_alerts():
     """Weekly counterpart to /run-saved-search-alerts, same CRON_SECRET gate
