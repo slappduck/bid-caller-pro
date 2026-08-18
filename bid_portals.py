@@ -73,6 +73,50 @@ _NATIONAL_CSV = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                              "data", "bid_portal_directory.csv")
 _national_seeds_cache = None
 
+# Governments that are NOT on a .gov domain, found via Wikidata's official-website
+# property -- Lee's Summit is lees-summit.mo.us, Blue Springs is
+# bluespringsgov.com. The national crawl is built from the CISA .gov registry, so
+# it is structurally blind to every one of these.
+#
+# Kept in its own file rather than merged into bid_portal_directory.csv because
+# tools/discover_bid_portals.py rewrites that file wholesale on every run and
+# would silently delete them. Same reason bid_portal_coords.csv is separate.
+#
+# Each row passed two independent checks in tools/verify_wikidata_candidates.py:
+# the domain is provably the named town's (name in the domain, or the town named
+# on its homepage), and it serves a page that reads like a bid page. The
+# ownership check matters -- Wikidata is crowd-sourced and 20 candidates pointed
+# at a website belonging to some other town entirely.
+_WIKIDATA_CSV = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             "data", "wikidata_portals.csv")
+_wikidata_seeds_cache = None
+
+
+def _rows_to_seeds(path):
+    """(city, state) -> [{url, platform}] for every 'found' row in a portal CSV."""
+    seeds = {}
+    try:
+        with open(path, newline="", encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                if row.get("status") != "found" or not row.get("bid_url"):
+                    continue
+                key = ((row.get("city") or "").strip(), (row.get("state") or "").strip())
+                if not key[0] or not key[1]:
+                    continue
+                seeds.setdefault(key, []).append({
+                    "url": row["bid_url"], "platform": row.get("platform") or "custom",
+                })
+    except OSError:
+        pass  # missing file degrades to "no seeds from here", never a crash
+    return seeds
+
+
+def _wikidata_seeds():
+    global _wikidata_seeds_cache
+    if _wikidata_seeds_cache is None:
+        _wikidata_seeds_cache = _rows_to_seeds(_WIKIDATA_CSV)
+    return _wikidata_seeds_cache
+
 
 def _national_seeds():
     global _national_seeds_cache
@@ -211,6 +255,16 @@ def _seed(directory):
         if k not in directory:
             directory[k] = [
                 {**e, "source": "national_crawl", "added": today, "last_ok": None,
+                 "last_checked": None, "fail_count": 0}
+                for e in entries
+            ]
+    # Last, so a .gov page already known for a town keeps precedence: these are
+    # the towns neither list could ever have reached.
+    for (city, state), entries in _wikidata_seeds().items():
+        k = _key(city, state)
+        if k not in directory:
+            directory[k] = [
+                {**e, "source": "wikidata", "added": today, "last_ok": None,
                  "last_checked": None, "fail_count": 0}
                 for e in entries
             ]
