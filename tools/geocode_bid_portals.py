@@ -93,6 +93,12 @@ def _load_towns(state_filter=None, limit=None):
     for city, state in bid_portals.SEED_PORTALS:
         _add(city.title(), state)
 
+    # The non-.gov towns (data/wikidata_portals.csv). Same trap as SEED_PORTALS
+    # above: a town with a real bid page and no coordinates is invisible to
+    # towns_within_radius, so it would sit in the directory doing nothing.
+    for city, state in bid_portals._wikidata_seeds():
+        _add(city, state)
+
     if limit:
         towns = towns[:limit]
     return towns
