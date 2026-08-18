@@ -41,3 +41,7 @@ kv_*.json
 # Test-only dependencies (playwright), installed on demand
 node_modules/
 package-lock.json
+
+# Prospect/marketing lists: business contact data, and this repo is public.
+data/prospects*.csv
+data/*prospects*.csv
