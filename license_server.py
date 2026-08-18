@@ -25,8 +25,9 @@ ENV VARS (set in Render → your service → Environment):
   FROM_EMAIL               OPTIONAL sender, e.g. "Bids <keys@yourdomain.com>"
   (BRAVE_API_KEY is no longer used — you can delete it.)
 
-  Real automated saved-search email alerts (/run-saved-search-alerts) --
-  OFF until BOTH of these are set; safe to leave unset indefinitely:
+  Real automated email alerts -- daily open bids (/run-saved-search-alerts)
+  and weekly planned work (/run-upcoming-alerts), both driven by the same two
+  variables. OFF until BOTH are set; safe to leave unset indefinitely:
   SUPABASE_SERVICE_ROLE_KEY  Supabase -> Settings -> API -> service_role
                              key. HIGH PRIVILEGE (bypasses row-level
                              security for the whole project) -- Render env
@@ -34,9 +35,10 @@ ENV VARS (set in Render → your service → Environment):
   CRON_SECRET                a random string you make up; put the SAME
                              value in this Render env var AND in the
                              GitHub repo's Actions secrets (see
-                             .github/workflows/saved-search-alerts.yml).
-                             This is what lets that scheduled workflow
-                             (and only it) trigger the alert run.
+                             .github/workflows/saved-search-alerts.yml and
+                             weekly-upcoming-alerts.yml). This is what lets
+                             those scheduled workflows (and only them)
+                             trigger an alert run.
 
 START COMMAND (raise the timeout — scans do real work, and wide-radius scans
 now search multiple towns around the area, not just the center one, so they
@@ -82,10 +84,28 @@ import residential_permits
 
 app = Flask(__name__)
 
-# ── CORS: production Netlify site + deploy previews ──
-CORS(app, resources={r"/*": {"origins": [
-    re.compile(r"^https://([a-z0-9-]+--)?curbcallpro\.netlify\.app$"),
-]}})
+# ── CORS: the Netlify site, its deploy previews, and any custom domain ──
+# This list is the whole reason the browser is allowed to talk to this server,
+# so putting the site on a new hostname WITHOUT adding it here loads the page
+# fine and then fails every single API call -- login, scan, save. It looks
+# like the server is down when it is really the browser refusing to send.
+#
+# SITE_ORIGINS is how a custom domain gets added without a deploy: a
+# comma-separated list of full origins, e.g.
+#   SITE_ORIGINS=https://curbcallpro.com,https://www.curbcallpro.com
+# Set it in Render the same day DNS is pointed, not after.
+def _site_origins():
+    origins = [
+        re.compile(r"^https://([a-z0-9-]+--)?curbcallpro\.netlify\.app$"),
+    ]
+    for raw in os.environ.get("SITE_ORIGINS", "").split(","):
+        raw = raw.strip().rstrip("/")
+        if raw:
+            origins.append(raw)
+    return origins
+
+
+CORS(app, resources={r"/*": {"origins": _site_origins()}})
 
 # ── Secrets ──
 LICENSE_SECRET = os.environ.get("LICENSE_SECRET", "CHANGE_THIS_LONG_RANDOM_SECRET")
@@ -388,6 +408,15 @@ def health_detail():
         "durable_storage": kv_backend.is_durable(),
         "resend_email": bool(RESEND_API_KEY),
         "saved_search_alerts": bool(SUPABASE_SERVICE_ROLE_KEY and CRON_SECRET and RESEND_API_KEY),
+        # Weekly planned-work alerts need everything the daily job needs, plus
+        # an extraction key -- /upcoming has no non-AI path.
+        "upcoming_alerts": bool(SUPABASE_SERVICE_ROLE_KEY and CRON_SECRET
+                                and RESEND_API_KEY and OPENAI_API_KEY),
+        # The campaign sender refuses outright without a postal address, so
+        # "did MAILING_ADDRESS actually take effect" is answerable from the
+        # Diagnostics screen instead of by attempting a real send.
+        "campaign_sender": bool(RESEND_API_KEY and MAILING_ADDRESS.strip()
+                                and _admin_configured()),
     }
     tav = _tavily_health()
     email_health = _email_health()
@@ -799,6 +828,192 @@ def run_saved_search_alerts():
     if not CRON_SECRET or not hmac.compare_digest(token, CRON_SECRET):
         return jsonify({"ok": False, "reason": "unauthorized"}), 403
     result = _run_saved_search_alerts()
+    return jsonify(result), (200 if result.get("ok") else 500)
+
+
+# ── Weekly "planned work" alerts (/run-upcoming-alerts) ──
+# Same shape as the daily saved-search alerts above, against /upcoming instead
+# of /scan. Deliberately weekly, not daily: a capital improvement plan or a
+# council budget is republished a few times a year, so a daily email about it
+# would be the same list over and over and get filtered as noise. Weekly is
+# also the honest cadence for the lead time this feature exists to give -- the
+# point is to know about the 2027 sidewalk program while there is still time to
+# talk to the city, not to react within 24 hours.
+def _send_upcoming_email(email, location, radius, new_items):
+    lines = [f'Planned concrete work spotted near "{location}" ({int(radius)} mi):', ""]
+    for city, b in new_items[:20]:
+        line = f"- {b.get('title') or 'Untitled'} — {city}"
+        if b.get("deadline"):
+            line += f" (timeline: {b['deadline']})"
+        lines.append(line)
+        if b.get("url"):
+            lines.append(f"  {b['url']}")
+    if len(new_items) > 20:
+        lines.append(f"...and {len(new_items) - 20} more.")
+    lines.extend([
+        "",
+        "These are budgeted or planned projects, not open bids — nothing here",
+        "can be bid on yet. That is the point: it is time to introduce yourself",
+        "to the agency before the notice goes out.",
+        "",
+        "Open CurbCall Pro and check the Upcoming tab for full details.",
+    ])
+    if _send_email(email, f"{len(new_items)} planned project(s) near {location}",
+                   "\n".join(lines)):
+        print(f"[upcoming-alerts] sent {len(new_items)} planned items to {email}",
+              flush=True)
+        return True
+    return False
+
+
+def _run_upcoming_alerts():
+    """Runs every saved search through _perform_upcoming once, diffs against
+    what that search was already told about, and emails only what's new.
+
+    Reuses the saved_searches table rather than adding a second one: a
+    contractor who saved "Aurora, MO / 50mi" wants that area watched, and
+    making them save the same area twice for two feeds would be silly.
+
+    Kept separate from _run_saved_search_alerts (rather than folded into it)
+    so a failure or a slow run in one cadence can't take the other down, and
+    so the weekly job can be rescheduled without touching the daily one."""
+    if not (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY):
+        return {"ok": False, "reason": "supabase_not_configured"}
+    if not RESEND_API_KEY:
+        return {"ok": False, "reason": "email_not_configured"}
+    if not OPENAI_API_KEY:
+        # Every /upcoming result comes out of an extraction call. Without a
+        # key this would quietly email nobody and report success.
+        return {"ok": False, "reason": "ai_not_configured"}
+
+    searches = _fetch_all_saved_searches()
+    cdb = _cache()
+    seen_store = cdb.setdefault("upcoming_alert_seen", {})
+    email_cache = {}
+    emails_sent = 0
+    users_checked = set()
+    errors = []
+
+    for s in searches:
+        user_id = s.get("user_id")
+        location = (s.get("location") or "").strip()
+        try:
+            radius = float(s.get("radius") or 25)
+        except (TypeError, ValueError):
+            radius = 25.0
+        if not (user_id and location):
+            continue
+        users_checked.add(user_id)
+
+        try:
+            outcome = _perform_upcoming(location, radius)
+        except Exception as ex:
+            errors.append(f"{user_id}/{location}: {ex}")
+            print(f"[upcoming-alerts] run failed for {location!r}: {ex}", flush=True)
+            continue
+        if not outcome:
+            continue
+
+        seen_key = f"{user_id}|{location.lower()}|{int(radius)}"
+        seen = set(seen_store.get(seen_key, []))
+        all_sigs, new_items = [], []
+        for city, items in (outcome.get("items") or {}).items():
+            for b in items:
+                # No _is_open_bid filter here, unlike the daily job: everything
+                # /upcoming returns is status "Planned", which that function
+                # correctly calls not-open. Filtering here would send nothing.
+                sig = _bid_sig(city, b)
+                all_sigs.append(sig)
+                if sig not in seen:
+                    new_items.append((city, b))
+        seen_store[seen_key] = all_sigs[-300:]  # cap so this can't grow forever
+
+        if new_items:
+            if user_id not in email_cache:
+                email_cache[user_id] = _get_user_email(user_id) or ""
+            email = email_cache[user_id]
+            if email and _send_upcoming_email(
+                    email, outcome.get("location", location), radius, new_items):
+                emails_sent += 1
+
+    cdb["upcoming_alert_seen"] = seen_store
+    _save_cache(cdb)
+    return {"ok": True, "searches_checked": len(searches),
+            "users_checked": len(users_checked),
+            "emails_sent": emails_sent, "errors": errors}
+
+
+# ── Full data export (admin-only) ──
+# Everything a customer owns lives in one Supabase project on a free plan with
+# limited backups. If that project is wiped, suspended or lapses there is no
+# second copy anywhere: saved bids, pipeline notes and company profiles are
+# user-authored and exist nowhere else.
+#
+# Deliberately pull-only and manual. The obvious "just back it up
+# automatically" answer is a scheduled job committing a dump or uploading an
+# Actions artifact, and BOTH leak customer data -- this repository is public.
+# So the export is served once, to an authenticated admin, and whoever runs it
+# decides where it lands.
+_EXPORT_TABLES = ("company_profiles", "saved_bids", "saved_searches",
+                  "user_feeds", "reviews")
+
+
+def _export_table(name):
+    """A whole table via the service-role key. Returns (rows, error)."""
+    rows = _supabase_admin_request(f"/rest/v1/{name}?select=*")
+    if rows is None:
+        return [], "unreachable_or_missing"
+    if not isinstance(rows, list):
+        return [], "unexpected_shape"
+    return rows, ""
+
+
+@app.route("/admin/export", methods=["POST"])
+def admin_export():
+    """Full JSON dump of every user-owned table. Admin token required.
+
+    This contains personal data by definition -- names, emails, phone numbers,
+    and a contractor's private pipeline notes. Treat the response like a
+    password: somewhere private, never a public repo or a shared drive.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    if not _admin_configured():
+        return jsonify({"ok": False, "reason": "admin_not_configured"}), 503
+    if not _admin_ok(data.get("admin_token")):
+        return jsonify({"ok": False, "reason": "unauthorized"}), 403
+    if not (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY):
+        return jsonify({"ok": False, "reason": "supabase_not_configured"}), 503
+
+    tables, errors, total = {}, {}, 0
+    for name in _EXPORT_TABLES:
+        rows, err = _export_table(name)
+        if err:
+            # A table that was never created is a real finding, not a crash:
+            # report it per-table and still return everything else.
+            errors[name] = err
+        tables[name] = rows
+        total += len(rows)
+
+    print(f"[export] {total} rows across {len(_EXPORT_TABLES)} tables"
+          + (f", errors: {errors}" if errors else ""), flush=True)
+    return jsonify({"ok": True,
+                    "exported_at": datetime.datetime.now(
+                        datetime.timezone.utc).isoformat(),
+                    "tables": tables,
+                    "row_counts": {k: len(v) for k, v in tables.items()},
+                    "total_rows": total,
+                    "errors": errors})
+
+
+@app.route("/run-upcoming-alerts", methods=["POST"])
+def run_upcoming_alerts():
+    """Weekly counterpart to /run-saved-search-alerts, same CRON_SECRET gate
+    and same external-scheduler arrangement (see .github/workflows)."""
+    data = request.get_json(force=True, silent=True) or {}
+    token = data.get("token") or request.headers.get("X-Cron-Secret", "")
+    if not CRON_SECRET or not hmac.compare_digest(token, CRON_SECRET):
+        return jsonify({"ok": False, "reason": "unauthorized"}), 403
+    result = _run_upcoming_alerts()
     return jsonify(result), (200 if result.get("ok") else 500)
 
 
@@ -3835,38 +4050,28 @@ def _ai_extract_upcoming(area, text):
         return None
 
 
-@app.route("/upcoming", methods=["POST"])
-def upcoming():
-    data = request.get_json(force=True, silent=True) or {}
-    key = data.get("key", "")
-    device = data.get("device_id", "")
-    supabase_token = data.get("supabase_token", "")
-    location = (data.get("location") or "").strip()
-    try:
-        radius = float(data.get("radius") or 25)
-    except (TypeError, ValueError):
-        radius = 25.0
+def _perform_upcoming(location, radius, force=False):
+    """Core of /upcoming: resolve a location, search for planned/budgeted
+    concrete work near it, extract and cache. Extracted out of the /upcoming
+    route -- exactly as _perform_scan was -- so the weekly alert job can run
+    the same pipeline instead of a second copy of it that drifts.
 
-    if not _license_is_active(key, device, supabase_token):
-        return jsonify({"ok": False, "reason": "not_licensed"}), 403
-    if not location:
-        return jsonify({"ok": False, "reason": "no_location"})
-
+    Returns a dict of response fields, or None if the location can't be
+    resolved. Callers are responsible for checking OPENAI_API_KEY first;
+    without it this finds nothing, since every page here needs extraction."""
     center = _resolve_center(location)
     if not center:
-        return jsonify({"ok": False, "reason": "location_not_found"})
-    if not OPENAI_API_KEY:
-        return jsonify({"ok": False, "reason": "ai_unavailable"})
+        return None
 
     cdb = _cache()
     today = datetime.datetime.now().strftime("%Y%m%d")
     cache = cdb.setdefault("upcoming_cache", {})
     ckey = f"{center['state']}|{center['city'].lower()}|{int(radius)}|{today}"
-    if ckey in cache:
+    if ckey in cache and not force:
         c = cache[ckey]
-        return jsonify({"ok": True, "location": f"{center['city']}, {center['state']}",
-                        "items": c["items"], "total": c["total"],
-                        "city_coords": c.get("city_coords", {}), "cached": True})
+        return {"location": f"{center['city']}, {center['state']}",
+                "items": c["items"], "total": c["total"],
+                "city_coords": c.get("city_coords", {}), "cached": True}
 
     c, s = center["city"], center["state"]
     queries = [
@@ -3927,9 +4132,34 @@ def upcoming():
     cdb["upcoming_cache"] = {k: v for k, v in cache.items() if k.endswith(today)}
     _save_cache(cdb)
 
-    return jsonify({"ok": True, "location": f"{center['city']}, {center['state']}",
-                    "items": grouped, "total": total, "city_coords": city_coords,
-                    "debug": {"pages": len(pages), "kept": total, "funnel": drop_stats}})
+    return {"location": f"{center['city']}, {center['state']}",
+            "items": grouped, "total": total, "city_coords": city_coords,
+            "debug": {"pages": len(pages), "kept": total, "funnel": drop_stats}}
+
+
+@app.route("/upcoming", methods=["POST"])
+def upcoming():
+    data = request.get_json(force=True, silent=True) or {}
+    key = data.get("key", "")
+    device = data.get("device_id", "")
+    supabase_token = data.get("supabase_token", "")
+    location = (data.get("location") or "").strip()
+    try:
+        radius = float(data.get("radius") or 25)
+    except (TypeError, ValueError):
+        radius = 25.0
+
+    if not _license_is_active(key, device, supabase_token):
+        return jsonify({"ok": False, "reason": "not_licensed"}), 403
+    if not location:
+        return jsonify({"ok": False, "reason": "no_location"})
+    if not OPENAI_API_KEY:
+        return jsonify({"ok": False, "reason": "ai_unavailable"})
+
+    outcome = _perform_upcoming(location, radius)
+    if outcome is None:
+        return jsonify({"ok": False, "reason": "location_not_found"})
+    return jsonify(dict(outcome, ok=True))
 
 
 if __name__ == "__main__":

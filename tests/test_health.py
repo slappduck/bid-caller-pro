@@ -29,6 +29,9 @@ FULLY_CONFIGURED = {
     "RESEND_API_KEY": SECRET,
     "SUPABASE_SERVICE_ROLE_KEY": SECRET,
     "CRON_SECRET": SECRET,
+    # Not secrets, but the campaign sender is only "configured" with both.
+    "ADMIN_TOKEN": SECRET,
+    "MAILING_ADDRESS": "CurbCall Pro, 123 Main St, Aurora MO 65605",
 }
 
 
