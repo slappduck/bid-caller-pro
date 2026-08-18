@@ -394,6 +394,11 @@ def health_detail():
         # an extraction key -- /upcoming has no non-AI path.
         "upcoming_alerts": bool(SUPABASE_SERVICE_ROLE_KEY and CRON_SECRET
                                 and RESEND_API_KEY and OPENAI_API_KEY),
+        # The campaign sender refuses outright without a postal address, so
+        # "did MAILING_ADDRESS actually take effect" is answerable from the
+        # Diagnostics screen instead of by attempting a real send.
+        "campaign_sender": bool(RESEND_API_KEY and MAILING_ADDRESS.strip()
+                                and _admin_configured()),
     }
     tav = _tavily_health()
     email_health = _email_health()
