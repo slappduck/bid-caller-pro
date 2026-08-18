@@ -84,10 +84,28 @@ import residential_permits
 
 app = Flask(__name__)
 
-# ── CORS: production Netlify site + deploy previews ──
-CORS(app, resources={r"/*": {"origins": [
-    re.compile(r"^https://([a-z0-9-]+--)?curbcallpro\.netlify\.app$"),
-]}})
+# ── CORS: the Netlify site, its deploy previews, and any custom domain ──
+# This list is the whole reason the browser is allowed to talk to this server,
+# so putting the site on a new hostname WITHOUT adding it here loads the page
+# fine and then fails every single API call -- login, scan, save. It looks
+# like the server is down when it is really the browser refusing to send.
+#
+# SITE_ORIGINS is how a custom domain gets added without a deploy: a
+# comma-separated list of full origins, e.g.
+#   SITE_ORIGINS=https://curbcallpro.com,https://www.curbcallpro.com
+# Set it in Render the same day DNS is pointed, not after.
+def _site_origins():
+    origins = [
+        re.compile(r"^https://([a-z0-9-]+--)?curbcallpro\.netlify\.app$"),
+    ]
+    for raw in os.environ.get("SITE_ORIGINS", "").split(","):
+        raw = raw.strip().rstrip("/")
+        if raw:
+            origins.append(raw)
+    return origins
+
+
+CORS(app, resources={r"/*": {"origins": _site_origins()}})
 
 # ── Secrets ──
 LICENSE_SECRET = os.environ.get("LICENSE_SECRET", "CHANGE_THIS_LONG_RANDOM_SECRET")
