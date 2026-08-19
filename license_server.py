@@ -1807,6 +1807,20 @@ def admin_list():
 # ═══════════════════════════════════════════════════════════
 # LICENSE / TRIAL GATE
 # ═══════════════════════════════════════════════════════════
+def _trial_identity(email):
+    """Normalize an email for TRIAL-ELIGIBILITY purposes only -- never for
+    license-key lookups, which must stay exact. Strips a +tag from the local
+    part: josh+1@gmail.com and josh+2@gmail.com deliver to the same inbox on
+    Gmail, Outlook, Fastmail and most other providers, so without this, a free
+    7-day trial (no card required, and every scan spends real OpenAI/search
+    budget) could be farmed indefinitely from one real inbox."""
+    email = (email or "").strip().lower()
+    local, sep, domain = email.partition("@")
+    if not sep:
+        return email
+    return f"{local.split('+', 1)[0]}@{domain}"
+
+
 def _license_is_active(key, device, supabase_token=None):
     """Return True if this request has a valid license, active trial,
     OR a signed-in Supabase account (email-based trial counts too)."""
@@ -1829,9 +1843,10 @@ def _license_is_active(key, device, supabase_token=None):
                 ev, _, _, _ = verify_key(ekey)
                 if ev:
                     return True
-            # email-based trial
+            # email-based trial -- normalized, so josh+1@ and josh+2@ can't
+            # each claim their own free trial off one real inbox
             trials = db.setdefault("trials", {})
-            trial_key = f"email:{email}"
+            trial_key = f"email:{_trial_identity(email)}"
             if trial_key in trials:
                 started = datetime.datetime.fromisoformat(trials[trial_key]["started"])
                 if datetime.datetime.now() <= started + datetime.timedelta(days=TRIAL_DAYS):

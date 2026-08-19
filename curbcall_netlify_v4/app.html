@@ -487,6 +487,13 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
         <div class="field-label" style="margin-top:0.8rem;">Password</div>
         <input class="input" id="auth-password" type="password" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" />
       </div>
+      <label class="auth-trial-note" id="terms-check-wrap"
+             style="display:flex;align-items:flex-start;gap:0.5rem;text-align:left;margin-top:0.8rem;cursor:pointer;">
+        <input type="checkbox" id="terms-check" style="margin-top:0.2rem;flex-shrink:0;" />
+        <span>I agree to the
+          <a href="terms.html" target="_blank" style="color:var(--text2);">Terms</a> and
+          <a href="privacy.html" target="_blank" style="color:var(--text2);">Privacy Policy</a>.</span>
+      </label>
       <button class="btn-primary" id="email-btn">Create Account</button>
       <button class="btn-ghost" id="magic-btn">Send magic link instead</button>
     </div>
@@ -496,9 +503,6 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
     <div class="auth-toggle" id="forgot-wrap" style="display:none;margin-top:0.4rem;"><a id="forgot-link">Forgot password?</a></div>
   </div>
   <div class="auth-trial-note">Free for 7 days &nbsp;&middot;&nbsp; No credit card &nbsp;&middot;&nbsp; Cancel anytime</div>
-  <div class="auth-trial-note" style="margin-top:0.5rem;">By creating an account, you agree to our
-    <a href="terms.html" style="color:var(--text3);">Terms</a> and
-    <a href="privacy.html" style="color:var(--text3);">Privacy Policy</a>.</div>
 </div>
 
 <div class="modal-back" id="modal-back"></div>
@@ -909,6 +913,9 @@ function setAuthMode(mode){
   document.getElementById("toggle-link").onclick=()=>setAuthMode(isSignup?"signin":"signup");
   document.getElementById("auth-msg").textContent="";
   document.getElementById("forgot-wrap").style.display=isSignup?"none":"block";
+  // Agreeing to Terms/Privacy is what a NEW account means -- signing back
+  // into an existing one isn't re-agreeing to anything.
+  document.getElementById("terms-check-wrap").style.display=isSignup?"flex":"none";
 }
 
 document.getElementById("toggle-link").onclick=()=>setAuthMode("signin");
@@ -951,6 +958,9 @@ function showPasswordReset(){
 
 document.getElementById("google-btn").onclick=async()=>{
   if(!signInAvailable())return;
+  if(authMode==="signup"&&!document.getElementById("terms-check").checked){
+    setMsg("Please agree to the Terms and Privacy Policy to continue","err");return;
+  }
   setMsg("","");
   const{error}=await sb.auth.signInWithOAuth({
     provider:"google",
@@ -964,7 +974,10 @@ document.getElementById("email-btn").onclick=async()=>{
   const email=document.getElementById("auth-email").value.trim();
   const password=document.getElementById("auth-password").value;
   if(!email){setMsg("Enter your email","err");return;}
-  if(!password||password.length<6){setMsg("Password must be at least 6 characters","err");return;}
+  if(!password||password.length<8){setMsg("Password must be at least 8 characters","err");return;}
+  if(authMode==="signup"&&!document.getElementById("terms-check").checked){
+    setMsg("Please agree to the Terms and Privacy Policy to continue","err");return;
+  }
   setMsg("...","");
   let res;
   if(authMode==="signup"){
@@ -985,6 +998,9 @@ document.getElementById("magic-btn").onclick=async()=>{
   if(!signInAvailable())return;
   const email=document.getElementById("auth-email").value.trim();
   if(!email){setMsg("Enter your email first","err");return;}
+  if(authMode==="signup"&&!document.getElementById("terms-check").checked){
+    setMsg("Please agree to the Terms and Privacy Policy to continue","err");return;
+  }
   setMsg("Sending...","");
   const{error}=await sb.auth.signInWithOtp({email,options:{emailRedirectTo:window.location.href}});
   if(error){setMsg(error.message,"err");return;}
