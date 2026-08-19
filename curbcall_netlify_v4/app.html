@@ -932,7 +932,17 @@ function requireOnline(what){
 }
 
 // ── Auth screen logic ──
-let authMode="signup"; // signup | signin
+// signup | signin. A first-time visitor arriving from the marketing site needs
+// an account, so signup is the right default for them -- but showing "Create
+// your free account" to someone who already HAS one, every time they open the
+// app, invites them to make a second account by mistake.
+//
+// Keyed off its own flag rather than last_user_email, which is deliberately
+// cleared on sign-out (see onAuthStateChange) because offline boot treats it
+// as "this device belongs to a signed-in user". Having an account is a fact
+// about the person that outlives any one session, so it is stored separately
+// and never cleared.
+let authMode = store.get("has_account", false) ? "signin" : "signup";
 
 function setAuthMode(mode){
   authMode=mode;
@@ -955,6 +965,12 @@ function setAuthMode(mode){
 }
 
 document.getElementById("toggle-link").onclick=()=>setAuthMode("signin");
+
+// The markup is written in the signup state, so a returning visitor whose
+// authMode started as "signin" would otherwise see signup's title, button,
+// name field and Terms checkbox. Applying the mode once at boot is what makes
+// the screen match the variable.
+setAuthMode(authMode);
 
 // ── Forgot password ──
 document.getElementById("forgot-link").onclick=async()=>{
@@ -1070,6 +1086,9 @@ if(sb)sb.auth.onAuthStateChange((event,session)=>{
     // Remembered so a later offline start knows this device belongs to a
     // signed-in user and can go straight to their cached bids.
     store.set("last_user_email",session.user.email||"");
+    // Never cleared on sign-out: next launch should offer Sign in, not Create
+    // account, to someone who has been here before.
+    store.set("has_account",true);
     applyPendingSignupName();
     checkAdminStatus();
     showApp();
