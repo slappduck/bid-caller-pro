@@ -2750,6 +2750,43 @@ def _fetch_raw(url, timeout=None):
     return _fetch_page(url, timeout=timeout)[0]
 
 
+def _resolve_bid_url(ai_url, page_url, source_text=""):
+    """Which link a bid card should actually open.
+
+    Two things were sending contractors to 404s:
+
+    1. `b.setdefault("url", page_url)` never fired. The extraction prompt says
+       'Use "" for any missing field', so the model returns "url": "" -- the
+       key EXISTS, so setdefault left the empty string in place and the card
+       rendered no link at all.
+
+    2. Worse, when the model did supply a URL it was usually invented.
+       _fetch_text strips every tag before the text reaches the model, so it
+       never sees an href -- it only sees visible words. Asked for a "url"
+       anyway, it reconstructs a plausible-looking one from the domain and a
+       guessed path. Plausible-looking and wrong is exactly a 404.
+
+    So the model's URL is trusted only when it appears verbatim in the text
+    the model was actually shown -- i.e. the page printed it as visible text.
+    Anything else falls back to the page we fetched the bid from, which is
+    known-reachable and at worst one click from the real notice.
+    """
+    page_url = (page_url or "").strip()
+    s = (ai_url or "").strip()
+    if not s:
+        return page_url
+    low = s.lower()
+    if low.startswith(("http://", "https://")):
+        # Verbatim in the source text means the page really published it.
+        return s if (source_text and s in source_text) else page_url
+    if s.startswith("/") and page_url:
+        # A root-relative path is a real path the model read off the page, not
+        # a fabricated absolute URL -- resolving it against the page is safe.
+        return urllib.parse.urljoin(page_url, s)
+    # mailto:, javascript:, bare words, anything else: not a bid link.
+    return page_url
+
+
 def _fetch_text(url, timeout=None):
     raw = _fetch_page(url, timeout=timeout)[0]
     if not raw:
@@ -3241,7 +3278,7 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
             raw[0] += len(bids)
             for b in bids:
                 if isinstance(b, dict):
-                    b.setdefault("url", url)
+                    b["url"] = _resolve_bid_url(b.get("url"), url, text)
                     _place_bid(grouped, b, center, radius, cdb, default_city=default_city,
                               city_coords=city_coords, default_state=state,
                               fallback_coords=town_coords, stats=stats)
@@ -3341,7 +3378,7 @@ def _run_local_queries(queries, ai_label, max_pages, grouped, center, radius, cd
             raw[0] += len(bids)
             for b in bids:
                 if isinstance(b, dict):
-                    b.setdefault("url", it["url"])
+                    b["url"] = _resolve_bid_url(b.get("url"), it["url"], text)
                     bid_city = (b.get("city") or default_city or "").split(",")[0].strip()
                     _place_bid(grouped, b, center, radius, cdb, default_city=default_city,
                               city_coords=city_coords, default_state=state,
@@ -4198,7 +4235,7 @@ def _perform_upcoming(location, radius, force=False):
         with lock:
             for b in items:
                 if isinstance(b, dict):
-                    b.setdefault("url", it["url"])
+                    b["url"] = _resolve_bid_url(b.get("url"), it["url"], text)
                     b["status"] = "Planned"
                     _place_bid(grouped, b, center, radius, cdb, default_city="",
                               city_coords=city_coords, default_state=s,
