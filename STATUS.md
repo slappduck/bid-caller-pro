@@ -13,7 +13,8 @@ someone has seen it work — not when the code is written.
 
 | What | Notes |
 |---|---|
-| National bid-portal directory | 3,152 verified city/county bid pages, 52 states. Read directly every scan |
+| National bid-portal directory | 3,460 verified city/county bid pages across 2,995 towns, 52 states. Read directly every scan |
+| Non-`.gov` portals | 308 more, from Wikidata. Region 443 → 751 agencies; Topeka 50mi tripled |
 | Live homepage-link fallback | A town with no known portal still gets a real shot at its own bid page |
 | Radius scan reaches the whole radius | Was ~6 guessed points at any radius; now every verified town in range |
 | Anchor towns are real procurement offices | Aurora 50mi now searches Springfield, Branson, Monett… instead of guessed map points |

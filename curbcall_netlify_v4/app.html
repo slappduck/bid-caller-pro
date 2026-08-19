@@ -481,12 +481,23 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
     <div class="divider"><span>or use email</span></div>
 
     <div id="email-form">
+      <div id="name-wrap">
+        <div class="field-label">Your name</div>
+        <input class="input" id="auth-name" placeholder="Jane Doe" style="margin-bottom:0.8rem;" />
+      </div>
       <div class="field-label">Email</div>
       <input class="input" id="auth-email" type="email" inputmode="email" placeholder="you@example.com" />
       <div id="password-wrap">
         <div class="field-label" style="margin-top:0.8rem;">Password</div>
         <input class="input" id="auth-password" type="password" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" />
       </div>
+      <label class="auth-trial-note" id="terms-check-wrap"
+             style="display:flex;align-items:flex-start;gap:0.5rem;text-align:left;margin-top:0.8rem;cursor:pointer;">
+        <input type="checkbox" id="terms-check" style="margin-top:0.2rem;flex-shrink:0;" />
+        <span>I agree to the
+          <a href="terms.html" target="_blank" style="color:var(--text2);">Terms</a> and
+          <a href="privacy.html" target="_blank" style="color:var(--text2);">Privacy Policy</a>.</span>
+      </label>
       <button class="btn-primary" id="email-btn">Create Account</button>
       <button class="btn-ghost" id="magic-btn">Send magic link instead</button>
     </div>
@@ -496,7 +507,6 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
     <div class="auth-toggle" id="forgot-wrap" style="display:none;margin-top:0.4rem;"><a id="forgot-link">Forgot password?</a></div>
   </div>
   <div class="auth-trial-note">Free for 7 days &nbsp;&middot;&nbsp; No credit card &nbsp;&middot;&nbsp; Cancel anytime</div>
-  <div class="auth-trial-note" style="margin-top:0.5rem;"><a href="terms.html" style="color:var(--text3);">Terms</a> &nbsp;&middot;&nbsp; <a href="privacy.html" style="color:var(--text3);">Privacy</a></div>
 </div>
 
 <div class="modal-back" id="modal-back"></div>
@@ -685,6 +695,37 @@ async function syncPullCompanyProfile(){
   }else if(companyProfile.name){
     pushCompanyProfile();
   }
+}
+
+// The name typed at signup becomes the Company Info "Contact Person" --
+// applied once, and only if that field is still empty, so it can never
+// clobber something the user later typed themselves in Account.
+function applyPendingSignupName(){
+  const name=store.get("pending_signup_name","");
+  if(name&&!companyProfile.contact){
+    companyProfile.contact=name;
+    store.set("company_profile",companyProfile);
+    pushCompanyProfile();
+  }
+  store.set("pending_signup_name","");
+}
+
+// Admin status only ever gates whether the Admin entry point is SHOWN --
+// every actual admin action still requires the real admin token, checked
+// server-side. This just decides whether to bother offering it.
+let isAdmin=false;
+async function checkAdminStatus(){
+  if(!sb||!currentUser)return;
+  try{
+    const token=await getSupabaseToken();
+    if(!token)return;
+    const r=await fetch(SERVER+"/admin/whoami",{method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({supabase_token:token})});
+    const d=await r.json();
+    isAdmin=!!(d&&d.is_admin);
+    if(document.getElementById("screen-account").classList.contains("active"))renderAccount();
+  }catch(e){isAdmin=false;}
 }
 
 // ── Feed sync ──
@@ -907,6 +948,10 @@ function setAuthMode(mode){
   document.getElementById("toggle-link").onclick=()=>setAuthMode(isSignup?"signin":"signup");
   document.getElementById("auth-msg").textContent="";
   document.getElementById("forgot-wrap").style.display=isSignup?"none":"block";
+  // Agreeing to Terms/Privacy is what a NEW account means -- signing back
+  // into an existing one isn't re-agreeing to anything.
+  document.getElementById("terms-check-wrap").style.display=isSignup?"flex":"none";
+  document.getElementById("name-wrap").style.display=isSignup?"block":"none";
 }
 
 document.getElementById("toggle-link").onclick=()=>setAuthMode("signin");
@@ -947,8 +992,22 @@ function showPasswordReset(){
   };
 }
 
+// The name field's value has to survive whatever comes next -- a full page
+// redirect for Google OAuth, or an email confirmation link that reopens the
+// app fresh -- so it's stashed in localStorage rather than a JS variable,
+// and consumed once, the first time a real session appears after signup.
+function capturePendingSignupName(){
+  if(authMode!=="signup")return;
+  const name=(document.getElementById("auth-name").value||"").trim();
+  if(name)store.set("pending_signup_name",name);
+}
+
 document.getElementById("google-btn").onclick=async()=>{
   if(!signInAvailable())return;
+  if(authMode==="signup"&&!document.getElementById("terms-check").checked){
+    setMsg("Please agree to the Terms and Privacy Policy to continue","err");return;
+  }
+  capturePendingSignupName();
   setMsg("","");
   const{error}=await sb.auth.signInWithOAuth({
     provider:"google",
@@ -962,7 +1021,11 @@ document.getElementById("email-btn").onclick=async()=>{
   const email=document.getElementById("auth-email").value.trim();
   const password=document.getElementById("auth-password").value;
   if(!email){setMsg("Enter your email","err");return;}
-  if(!password||password.length<6){setMsg("Password must be at least 6 characters","err");return;}
+  if(!password||password.length<8){setMsg("Password must be at least 8 characters","err");return;}
+  if(authMode==="signup"&&!document.getElementById("terms-check").checked){
+    setMsg("Please agree to the Terms and Privacy Policy to continue","err");return;
+  }
+  capturePendingSignupName();
   setMsg("...","");
   let res;
   if(authMode==="signup"){
@@ -983,6 +1046,10 @@ document.getElementById("magic-btn").onclick=async()=>{
   if(!signInAvailable())return;
   const email=document.getElementById("auth-email").value.trim();
   if(!email){setMsg("Enter your email first","err");return;}
+  if(authMode==="signup"&&!document.getElementById("terms-check").checked){
+    setMsg("Please agree to the Terms and Privacy Policy to continue","err");return;
+  }
+  capturePendingSignupName();
   setMsg("Sending...","");
   const{error}=await sb.auth.signInWithOtp({email,options:{emailRedirectTo:window.location.href}});
   if(error){setMsg(error.message,"err");return;}
@@ -1003,6 +1070,8 @@ if(sb)sb.auth.onAuthStateChange((event,session)=>{
     // Remembered so a later offline start knows this device belongs to a
     // signed-in user and can go straight to their cached bids.
     store.set("last_user_email",session.user.email||"");
+    applyPendingSignupName();
+    checkAdminStatus();
     showApp();
   } else {
     currentUser=null;
@@ -3057,6 +3126,12 @@ function renderAccount(){
       <div class="account-status" style="margin-bottom:0.7rem;">How's it working for you? With your OK we may quote this on the site — nothing appears publicly until it's reviewed.</div>
       <div id="review-body" class="account-status">Loading&hellip;</div>
     </div>
+    ${isAdmin?`
+    <div class="account-card" id="admin-card" style="cursor:pointer;border-color:var(--amber);">
+      <div class="account-email hdr-ic" style="font-size:0.85rem;"><svg class="icon-svg"><use href="#i-lock"/></svg>Admin</div>
+      <div class="account-status">Reviews, agency notices, campaign drafts, backups &rarr;</div>
+    </div>
+    `:""}
     <div class="account-email hdr-ic" style="font-size:0.85rem;margin:0.4rem 0 0.5rem;"><svg class="icon-svg"><use href="#i-credit-card"/></svg>Billing</div>
     <div class="plan" id="status-card"><div class="plan-name" style="display:flex;align-items:center;gap:0.5rem;"><span class="spin" style="border-top-color:var(--accent);border-color:rgba(245,158,11,0.25);"></span> Checking your plan...</div></div>
     <a class="btn-ghost" style="text-decoration:none;display:flex;align-items:center;justify-content:center;gap:0.45rem;box-sizing:border-box;" href="${PORTAL_URL}" target="_blank"><svg class="icon-svg"><use href="#i-credit-card"/></svg>Manage Billing on Stripe &rarr;</a>
@@ -3099,6 +3174,8 @@ function renderAccount(){
     await sb.auth.signOut();toast("Signed out");
   };
   document.getElementById("notif-card").onclick=toggleNotifPermission;
+  const adminCard=document.getElementById("admin-card");
+  if(adminCard)adminCard.onclick=openAdminPanel;
   loadReferralCard();
   loadReviewCard();
   document.getElementById("diag-refresh").onclick=()=>loadHealth();
@@ -3166,6 +3243,143 @@ function renderAccount(){
   if(coCancelBtn)coCancelBtn.onclick=()=>{companyEditMode=false;renderAccount();};
 
   loadAccountStatus();
+}
+
+// ── Admin panel ──
+// Reachable only from Account, and only when checkAdminStatus() found the
+// signed-in email on the server's allowlist -- but that check ONLY decides
+// whether this entry point is shown. Every actual admin action below still
+// requires the real admin token, exactly as it would from a direct API call;
+// this is a nicer way to reach the same server-side gate, not a second one.
+function adminToken(){try{return localStorage.getItem("admin_token")||"";}catch(e){return"";}}
+function setAdminToken(t){try{localStorage.setItem("admin_token",t);}catch(e){}}
+async function adminCall(path,body){
+  const r=await fetch(SERVER+path,{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({...body,admin_token:adminToken()})});
+  return r.json();
+}
+
+function openAdminPanel(){
+  const mc=document.getElementById("modal-content");
+  if(!adminToken()){
+    mc.innerHTML=`<h2>Admin</h2>
+      <div class="account-status" style="margin-bottom:0.8rem;">Enter the admin token to continue. It's kept only on this device.</div>
+      <input class="input" id="admin-token-input" type="password" placeholder="Admin token" style="margin-bottom:0.8rem;" />
+      <div class="modal-actions"><button class="ma-gold" id="admin-unlock-btn">Unlock</button>
+        <button class="ma-ghost" onclick="closeModal();">Cancel</button></div>`;
+    document.getElementById("admin-unlock-btn").onclick=async()=>{
+      const t=document.getElementById("admin-token-input").value.trim();
+      if(!t)return;
+      setAdminToken(t);
+      const check=await adminCall("/admin/list",{});
+      if(!check.ok){setAdminToken("");toast("That token didn't work");return;}
+      renderAdminPanel();
+    };
+  }else{
+    renderAdminPanel();
+  }
+  document.getElementById("modal-back").classList.add("open");
+  document.getElementById("modal").classList.add("open");
+}
+
+async function renderAdminPanel(){
+  const mc=document.getElementById("modal-content");
+  mc.innerHTML=`<h2>Admin</h2><div class="account-status">Loading&hellip;</div>`;
+  const [list,agency,drafts,reviews]=await Promise.all([
+    adminCall("/admin/list",{}),
+    adminCall("/agency/review",{}),
+    adminCall("/campaign/drafts",{}),
+    adminCall("/admin/reviews",{}),
+  ]);
+  if(!list.ok||!agency.ok||!drafts.ok||!reviews.ok){
+    setAdminToken("");
+    mc.innerHTML=`<h2>Admin</h2><div class="account-status">Token stopped working — try again.</div>
+      <div class="modal-actions"><button class="ma-ghost" onclick="closeModal();">Close</button></div>`;
+    return;
+  }
+  const pendingNotices=agency.notices.filter(n=>!n.approved);
+  const approvedNotices=agency.notices.filter(n=>n.approved);
+  const pendingReviews=reviews.reviews.filter(r=>!r.approved);
+
+  mc.innerHTML=`<h2>Admin</h2>
+    <div class="stats-grid" style="margin-bottom:1rem;">
+      <div class="stat-box"><div class="n">${list.counts.active_trials}</div><div class="l">Active Trials</div></div>
+      <div class="stat-box"><div class="n">${list.counts.active_subs}</div><div class="l">Active Subs</div></div>
+      <div class="stat-box"><div class="n">${pendingNotices.length}</div><div class="l">Notices to Review</div></div>
+      <div class="stat-box"><div class="n">${drafts.drafts.length}</div><div class="l">Campaign Drafts</div></div>
+    </div>
+
+    <div class="account-email hdr-ic" style="font-size:0.85rem;margin-bottom:0.5rem;"><svg class="icon-svg"><use href="#i-briefcase"/></svg>Agency Notices${pendingNotices.length?` (${pendingNotices.length} pending)`:""}</div>
+    ${pendingNotices.length?pendingNotices.map(n=>`
+      <div class="detail-row" style="align-items:center;">
+        <div class="detail-label" style="flex:1;">${esc(n.title||"Untitled")} &mdash; ${esc(n.city)}, ${esc(n.state)}</div>
+        <button class="btn-ghost" data-notice-approve="${esc(n.id)}" style="color:var(--green);border-color:var(--green);padding:0.3rem 0.7rem;font-size:0.76rem;flex-shrink:0;">Approve</button>
+        <button class="btn-ghost" data-notice-delete="${esc(n.id)}" style="color:var(--red);border-color:var(--red);padding:0.3rem 0.7rem;font-size:0.76rem;flex-shrink:0;">Delete</button>
+      </div>`).join(""):`<div class="account-status" style="margin-bottom:0.8rem;">Nothing pending.</div>`}
+    ${approvedNotices.length?`<div class="account-status" style="margin:0.4rem 0 0.8rem;">${approvedNotices.length} already approved and live.</div>`:""}
+
+    <div class="account-email hdr-ic" style="font-size:0.85rem;margin-bottom:0.5rem;"><svg class="icon-svg"><use href="#i-mail"/></svg>Campaign Drafts</div>
+    ${drafts.drafts.length?drafts.drafts.map(d=>`
+      <div class="detail-row" style="align-items:center;">
+        <div class="detail-label" style="flex:1;">${esc(d.subject||"Untitled")} &mdash; ${d.recipients} recipient(s)</div>
+        <button class="btn-ghost" data-draft-send="${esc(d.draft_id)}" style="color:var(--green);border-color:var(--green);padding:0.3rem 0.7rem;font-size:0.76rem;flex-shrink:0;">Send</button>
+        <button class="btn-ghost" data-draft-discard="${esc(d.draft_id)}" style="color:var(--red);border-color:var(--red);padding:0.3rem 0.7rem;font-size:0.76rem;flex-shrink:0;">Discard</button>
+      </div>`).join(""):`<div class="account-status" style="margin-bottom:0.8rem;">No drafts waiting.</div>`}
+
+    <div class="account-email hdr-ic" style="font-size:0.85rem;margin-bottom:0.5rem;"><svg class="icon-svg"><use href="#i-star"/></svg>Reviews${pendingReviews.length?` (${pendingReviews.length} pending)`:""}</div>
+    ${pendingReviews.length?pendingReviews.map(r=>`
+      <div class="detail-row" style="align-items:center;">
+        <div class="detail-label" style="flex:1;">${"★".repeat(r.rating)} &mdash; ${esc((r.quote||"").slice(0,80))}${(r.quote||"").length>80?"…":""}</div>
+        <button class="btn-ghost" data-review-approve="${esc(r.id)}" style="color:var(--green);border-color:var(--green);padding:0.3rem 0.7rem;font-size:0.76rem;flex-shrink:0;">Approve</button>
+        <button class="btn-ghost" data-review-reject="${esc(r.id)}" style="color:var(--red);border-color:var(--red);padding:0.3rem 0.7rem;font-size:0.76rem;flex-shrink:0;">Reject</button>
+      </div>`).join(""):`<div class="account-status" style="margin-bottom:0.8rem;">Nothing pending.</div>`}
+
+    <div class="account-email hdr-ic" style="font-size:0.85rem;margin:0.8rem 0 0.5rem;"><svg class="icon-svg"><use href="#i-download"/></svg>Backup</div>
+    <div class="account-status" style="margin-bottom:0.6rem;">Every user table, as JSON. Save it somewhere private — never a public repo.</div>
+    <button class="btn-ghost" id="admin-export-btn" style="margin-bottom:1rem;">Download backup</button>
+
+    <div class="modal-actions"><button class="ma-ghost" id="admin-lock-btn">Lock</button>
+      <button class="ma-ghost" onclick="closeModal();">Close</button></div>`;
+
+  mc.querySelectorAll("[data-notice-approve]").forEach(b=>b.onclick=async()=>{
+    const r=await adminCall("/agency/review",{approve:b.dataset.noticeApprove});
+    if(r.ok)renderAdminPanel();else toast(r.detail||"Couldn't approve that notice");
+  });
+  mc.querySelectorAll("[data-notice-delete]").forEach(b=>b.onclick=async()=>{
+    if(!confirm("Delete this notice permanently?"))return;
+    await adminCall("/agency/review",{delete:b.dataset.noticeDelete});
+    renderAdminPanel();
+  });
+  mc.querySelectorAll("[data-draft-send]").forEach(b=>b.onclick=async()=>{
+    if(!confirm("Send this campaign now? This cannot be undone."))return;
+    const r=await adminCall("/campaign/approve",{draft_id:b.dataset.draftSend,confirm:true});
+    if(r.ok)toast(`Sent to ${r.sent} recipient(s)${r.failed?`, ${r.failed} failed`:""}`);
+    else toast(r.detail||r.reason||"Send failed");
+    renderAdminPanel();
+  });
+  mc.querySelectorAll("[data-draft-discard]").forEach(b=>b.onclick=async()=>{
+    await adminCall("/campaign/drafts",{discard:b.dataset.draftDiscard});
+    renderAdminPanel();
+  });
+  mc.querySelectorAll("[data-review-approve]").forEach(b=>b.onclick=async()=>{
+    await adminCall("/admin/reviews",{approve:b.dataset.reviewApprove});
+    renderAdminPanel();
+  });
+  mc.querySelectorAll("[data-review-reject]").forEach(b=>b.onclick=async()=>{
+    await adminCall("/admin/reviews",{reject:b.dataset.reviewReject});
+    renderAdminPanel();
+  });
+  document.getElementById("admin-export-btn").onclick=async()=>{
+    const r=await adminCall("/admin/export",{});
+    if(!r.ok){toast("Export failed");return;}
+    const blob=new Blob([JSON.stringify(r,null,2)],{type:"application/json"});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download=`curbcall-backup-${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+  document.getElementById("admin-lock-btn").onclick=()=>{setAdminToken("");closeModal();};
 }
 
 // Turns an expires_at ISO timestamp into a live 'Xd Yh left' / 'Yh Zm left'

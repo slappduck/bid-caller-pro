@@ -675,21 +675,27 @@ def _alert_admin(subject, detail):
 # Uses the service-role key to read across ALL users' saved_searches (bypasses
 # the row-level-security policies the anon key is normally scoped by) and to
 # look up a user's email via the Auth admin API. See /run-saved-search-alerts.
-def _supabase_admin_request(path):
+def _supabase_admin_request(path, method="GET", data=None):
     if not (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY):
         return None
+    headers = {
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+    }
+    body = None
+    if data is not None:
+        body = json.dumps(data).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+        headers["Prefer"] = "return=minimal"
     req = urllib.request.Request(
-        f"{SUPABASE_URL}{path}",
-        headers={
-            "apikey": SUPABASE_SERVICE_ROLE_KEY,
-            "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
-        },
+        f"{SUPABASE_URL}{path}", data=body, method=method, headers=headers,
     )
     try:
         with urllib.request.urlopen(req, timeout=20) as resp:
-            return json.loads(resp.read().decode("utf-8"))
+            raw = resp.read().decode("utf-8")
+            return json.loads(raw) if raw else True
     except Exception as ex:
-        print(f"[alerts] supabase admin request failed ({path}): {ex}", flush=True)
+        print(f"[admin] supabase admin request failed ({method} {path}): {ex}", flush=True)
         return None
 
 
@@ -966,6 +972,52 @@ def _export_table(name):
     if not isinstance(rows, list):
         return [], "unexpected_shape"
     return rows, ""
+
+
+@app.route("/admin/whoami", methods=["POST"])
+def admin_whoami():
+    """Tells the caller, and only the caller, whether their signed-in account
+    is an admin. Public and unauthenticated on purpose -- it never reveals
+    the allowlist, only a yes/no about the one Supabase token presented, so
+    the app can decide whether to show an Admin entry point without needing
+    the admin token just to ask the question."""
+    data = request.get_json(force=True, silent=True) or {}
+    email = _verify_supabase_token(data.get("supabase_token", ""))
+    return jsonify({"ok": True, "is_admin": _is_admin_email(email)})
+
+
+@app.route("/admin/reviews", methods=["POST"])
+def admin_reviews():
+    """Admin: list every review, or approve/reject one. Admin token required.
+
+    Moderation used to mean opening Supabase's table editor by hand -- fine
+    when it was the only queue, awkward now that agency notices and campaign
+    drafts already have a page. approve/reject take the review's numeric id;
+    both are handled the same way (a boolean flip of `approved`), listed
+    separately only so the caller's intent reads clearly in the request.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    if not _admin_configured():
+        return jsonify({"ok": False, "reason": "admin_not_configured"}), 503
+    if not _admin_ok(data.get("admin_token")):
+        return jsonify({"ok": False, "reason": "unauthorized"}), 403
+    if not (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY):
+        return jsonify({"ok": False, "reason": "supabase_not_configured"}), 503
+
+    raw_id = data.get("approve") or data.get("reject")
+    if raw_id:
+        try:
+            review_id = int(raw_id)
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "reason": "invalid_review_id"}), 400
+        _supabase_admin_request(
+            f"/rest/v1/reviews?id=eq.{review_id}", method="PATCH",
+            data={"approved": bool(data.get("approve"))})
+
+    rows = _supabase_admin_request(
+        "/rest/v1/reviews?select=id,rating,quote,display_name,company,"
+        "approved,created_at&order=created_at.desc")
+    return jsonify({"ok": True, "reviews": rows if isinstance(rows, list) else []})
 
 
 @app.route("/admin/export", methods=["POST"])
@@ -1807,6 +1859,35 @@ def admin_list():
 # ═══════════════════════════════════════════════════════════
 # LICENSE / TRIAL GATE
 # ═══════════════════════════════════════════════════════════
+# Accounts that never trial-expire and never need a subscription -- for
+# testing the live product with a real signed-in account instead of resetting
+# a device trial. A comma-separated env var, same pattern as MAILING_ADDRESS
+# and FROM_EMAIL: nobody's email address belongs in a public repo.
+ADMIN_EMAILS = os.environ.get("ADMIN_EMAILS", "")
+
+
+def _admin_email_set():
+    return {e.strip().lower() for e in ADMIN_EMAILS.split(",") if e.strip()}
+
+
+def _is_admin_email(email):
+    return bool(email) and email.strip().lower() in _admin_email_set()
+
+
+def _trial_identity(email):
+    """Normalize an email for TRIAL-ELIGIBILITY purposes only -- never for
+    license-key lookups, which must stay exact. Strips a +tag from the local
+    part: josh+1@gmail.com and josh+2@gmail.com deliver to the same inbox on
+    Gmail, Outlook, Fastmail and most other providers, so without this, a free
+    7-day trial (no card required, and every scan spends real OpenAI/search
+    budget) could be farmed indefinitely from one real inbox."""
+    email = (email or "").strip().lower()
+    local, sep, domain = email.partition("@")
+    if not sep:
+        return email
+    return f"{local.split('+', 1)[0]}@{domain}"
+
+
 def _license_is_active(key, device, supabase_token=None):
     """Return True if this request has a valid license, active trial,
     OR a signed-in Supabase account (email-based trial counts too)."""
@@ -1823,15 +1904,18 @@ def _license_is_active(key, device, supabase_token=None):
     if supabase_token:
         email = _verify_supabase_token(supabase_token)
         if email:
+            if _is_admin_email(email):
+                return True
             # email has an active issued key?
             ekey = db.get("emails", {}).get(email)
             if ekey and ekey not in db.get("revoked", []):
                 ev, _, _, _ = verify_key(ekey)
                 if ev:
                     return True
-            # email-based trial
+            # email-based trial -- normalized, so josh+1@ and josh+2@ can't
+            # each claim their own free trial off one real inbox
             trials = db.setdefault("trials", {})
-            trial_key = f"email:{email}"
+            trial_key = f"email:{_trial_identity(email)}"
             if trial_key in trials:
                 started = datetime.datetime.fromisoformat(trials[trial_key]["started"])
                 if datetime.datetime.now() <= started + datetime.timedelta(days=TRIAL_DAYS):
