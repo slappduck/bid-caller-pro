@@ -3286,9 +3286,18 @@ function renderAccount(){
 function adminToken(){try{return localStorage.getItem("admin_token")||"";}catch(e){return"";}}
 function setAdminToken(t){try{localStorage.setItem("admin_token",t);}catch(e){}}
 async function adminCall(path,body,tokenOverride){
-  const r=await fetch(SERVER+path,{method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({...body,admin_token:tokenOverride||adminToken()})});
-  return r.json();
+  // Never throws. Every admin action awaits this, and none of them caught --
+  // so one failed request became an unhandled rejection and the button just
+  // did nothing: no toast, no error. Worst on the campaign send, where
+  // silence is indistinguishable from success and invites a second click.
+  try{
+    const r=await fetch(SERVER+path,{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({...body,admin_token:tokenOverride||adminToken()})});
+    return await r.json();
+  }catch(e){
+    return {ok:false,reason:"network_error",
+            detail:"Couldn't reach the server \u2014 nothing was changed"};
+  }
 }
 
 function openAdminPanel(){
@@ -3307,10 +3316,9 @@ function openAdminPanel(){
       // or Render cold-starting past the timeout. The clear never ran, so an
       // unverified token stayed in localStorage and every later open skipped
       // this prompt entirely and went to a panel that could only fail.
-      let check;
-      try{check=await adminCall("/admin/list",{},t);}
-      catch(e){toast("Couldn't reach the server — try again");return;}
-      if(!check||!check.ok){toast("That token didn't work");return;}
+      const check=await adminCall("/admin/list",{},t);
+      if(check.reason==="network_error"){toast(check.detail);return;}
+      if(!check.ok){toast("That token didn't work");return;}
       setAdminToken(t);
       renderAdminPanel();
     };
@@ -3324,15 +3332,13 @@ function openAdminPanel(){
 async function renderAdminPanel(){
   const mc=document.getElementById("modal-content");
   mc.innerHTML=`<h2>Admin</h2><div class="account-status">Loading&hellip;</div>`;
-  let list,agency,drafts,reviews;
-  try{
-    [list,agency,drafts,reviews]=await Promise.all([
-      adminCall("/admin/list",{}),
-      adminCall("/agency/review",{}),
-      adminCall("/campaign/drafts",{}),
-      adminCall("/admin/reviews",{}),
-    ]);
-  }catch(e){
+  const [list,agency,drafts,reviews]=await Promise.all([
+    adminCall("/admin/list",{}),
+    adminCall("/agency/review",{}),
+    adminCall("/campaign/drafts",{}),
+    adminCall("/admin/reviews",{}),
+  ]);
+  if([list,agency,drafts,reviews].some(r=>r.reason==="network_error")){
     // Without this the modal sat on "Loading..." forever on any network
     // blip, with no way back other than reloading the page.
     mc.innerHTML=`<h2>Admin</h2><div class="account-status">Couldn't reach the server.</div>
@@ -3404,6 +3410,9 @@ async function renderAdminPanel(){
     if(!confirm("Send this campaign now? This cannot be undone."))return;
     const r=await adminCall("/campaign/approve",{draft_id:b.dataset.draftSend,confirm:true});
     if(r.ok)toast(`Sent to ${r.sent} recipient(s)${r.failed?`, ${r.failed} failed`:""}`);
+    // "Send failed" would be a guess here: the request may well have reached
+    // the server. Say what is actually known before anyone clicks again.
+    else if(r.reason==="network_error")toast("Lost connection \u2014 check Drafts before resending");
     else toast(r.detail||r.reason||"Send failed");
     renderAdminPanel();
   });
