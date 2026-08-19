@@ -176,3 +176,46 @@ class AdminReviewsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EnvSecretTrimmingTests(unittest.TestCase):
+    """A token pasted into Render with a trailing newline matches nothing the
+    operator can type, and the server reports plain "unauthorized" -- which
+    looks exactly like having the wrong token. The client already trims what
+    the user types, so the server has to trim too or the two ends can silently
+    disagree on an invisible character."""
+
+    def setUp(self):
+        self._orig = dict(os.environ)
+
+    def tearDown(self):
+        os.environ.clear()
+        os.environ.update(self._orig)
+
+    def test_a_trailing_newline_is_stripped(self):
+        os.environ["ADMIN_TOKEN"] = "s3cret\n"
+        self.assertEqual(ls._env_secret("ADMIN_TOKEN", "fallback"), "s3cret")
+
+    def test_surrounding_spaces_are_stripped(self):
+        os.environ["ADMIN_TOKEN"] = "  s3cret  "
+        self.assertEqual(ls._env_secret("ADMIN_TOKEN", "fallback"), "s3cret")
+
+    def test_an_unset_variable_falls_back(self):
+        os.environ.pop("ADMIN_TOKEN", None)
+        self.assertEqual(ls._env_secret("ADMIN_TOKEN", "fallback"), "fallback")
+
+    def test_an_empty_variable_falls_back_rather_than_disabling_the_check(self):
+        """An empty string must not become a usable token -- it would make
+        every request with no token at all pass _admin_ok."""
+        os.environ["ADMIN_TOKEN"] = ""
+        self.assertEqual(ls._env_secret("ADMIN_TOKEN", "fallback"), "fallback")
+
+    def test_whitespace_only_falls_back_to_a_value_that_stays_unconfigured(self):
+        os.environ["ADMIN_TOKEN"] = "   "
+        self.assertEqual(
+            ls._env_secret("ADMIN_TOKEN", ls._ADMIN_TOKEN_PLACEHOLDER),
+            ls._ADMIN_TOKEN_PLACEHOLDER)
+
+    def test_an_interior_space_is_preserved(self):
+        os.environ["ADMIN_TOKEN"] = "two words"
+        self.assertEqual(ls._env_secret("ADMIN_TOKEN", "fallback"), "two words")

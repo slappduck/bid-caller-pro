@@ -3272,9 +3272,9 @@ function renderAccount(){
 // this is a nicer way to reach the same server-side gate, not a second one.
 function adminToken(){try{return localStorage.getItem("admin_token")||"";}catch(e){return"";}}
 function setAdminToken(t){try{localStorage.setItem("admin_token",t);}catch(e){}}
-async function adminCall(path,body){
+async function adminCall(path,body,tokenOverride){
   const r=await fetch(SERVER+path,{method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({...body,admin_token:adminToken()})});
+    body:JSON.stringify({...body,admin_token:tokenOverride||adminToken()})});
   return r.json();
 }
 
@@ -3289,9 +3289,16 @@ function openAdminPanel(){
     document.getElementById("admin-unlock-btn").onclick=async()=>{
       const t=document.getElementById("admin-token-input").value.trim();
       if(!t)return;
+      // Validate BEFORE storing. This used to store first and clear on a
+      // bad answer, which is fine until the fetch itself throws -- offline,
+      // or Render cold-starting past the timeout. The clear never ran, so an
+      // unverified token stayed in localStorage and every later open skipped
+      // this prompt entirely and went to a panel that could only fail.
+      let check;
+      try{check=await adminCall("/admin/list",{},t);}
+      catch(e){toast("Couldn't reach the server — try again");return;}
+      if(!check||!check.ok){toast("That token didn't work");return;}
       setAdminToken(t);
-      const check=await adminCall("/admin/list",{});
-      if(!check.ok){setAdminToken("");toast("That token didn't work");return;}
       renderAdminPanel();
     };
   }else{
@@ -3304,16 +3311,27 @@ function openAdminPanel(){
 async function renderAdminPanel(){
   const mc=document.getElementById("modal-content");
   mc.innerHTML=`<h2>Admin</h2><div class="account-status">Loading&hellip;</div>`;
-  const [list,agency,drafts,reviews]=await Promise.all([
-    adminCall("/admin/list",{}),
-    adminCall("/agency/review",{}),
-    adminCall("/campaign/drafts",{}),
-    adminCall("/admin/reviews",{}),
-  ]);
+  let list,agency,drafts,reviews;
+  try{
+    [list,agency,drafts,reviews]=await Promise.all([
+      adminCall("/admin/list",{}),
+      adminCall("/agency/review",{}),
+      adminCall("/campaign/drafts",{}),
+      adminCall("/admin/reviews",{}),
+    ]);
+  }catch(e){
+    // Without this the modal sat on "Loading..." forever on any network
+    // blip, with no way back other than reloading the page.
+    mc.innerHTML=`<h2>Admin</h2><div class="account-status">Couldn't reach the server.</div>
+      <div class="modal-actions"><button class="ma-gold" onclick="closeModal();openAdminPanel();">Retry</button>
+        <button class="ma-ghost" onclick="closeModal();">Close</button></div>`;
+    return;
+  }
   if(!list.ok||!agency.ok||!drafts.ok||!reviews.ok){
     setAdminToken("");
     mc.innerHTML=`<h2>Admin</h2><div class="account-status">Token stopped working — try again.</div>
-      <div class="modal-actions"><button class="ma-ghost" onclick="closeModal();">Close</button></div>`;
+      <div class="modal-actions"><button class="ma-gold" onclick="closeModal();openAdminPanel();">Enter token</button>
+        <button class="ma-ghost" onclick="closeModal();">Close</button></div>`;
     return;
   }
   const pendingNotices=agency.notices.filter(n=>!n.approved);

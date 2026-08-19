@@ -113,9 +113,26 @@ def _site_origins():
 CORS(app, resources={r"/*": {"origins": _site_origins()}})
 
 # ── Secrets ──
-LICENSE_SECRET = os.environ.get("LICENSE_SECRET", "CHANGE_THIS_LONG_RANDOM_SECRET")
+
+def _env_secret(name, default):
+    """A secret from the environment, trimmed.
+
+    Values pasted into a hosting dashboard routinely pick up a trailing
+    newline or space. A token that differs from what the operator typed by an
+    invisible character fails every comparison and reports plain
+    "unauthorized", which is indistinguishable from having the wrong token --
+    a genuinely nasty afternoon. The client already trims what the user types,
+    so trimming here makes the two ends agree.
+    """
+    # Strip first, then fall back: a variable holding only whitespace is a
+    # variable someone meant to set and didn't, and it must not become a
+    # usable secret.
+    return (os.environ.get(name) or "").strip() or default
+
+
+LICENSE_SECRET = _env_secret("LICENSE_SECRET", "CHANGE_THIS_LONG_RANDOM_SECRET")
 _ADMIN_TOKEN_PLACEHOLDER = "CHANGE_THIS_ADMIN_TOKEN"
-ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", _ADMIN_TOKEN_PLACEHOLDER)
+ADMIN_TOKEN = _env_secret("ADMIN_TOKEN", _ADMIN_TOKEN_PLACEHOLDER)
 
 
 def _admin_configured():
