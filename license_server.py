@@ -2,10 +2,12 @@
 license_server.py — License validation + bid scanning for Bid Caller Pro
 ═══════════════════════════════════════════════════════════════════════════
 /scan now returns LOCAL + FEDERAL leads, filtered to a mile radius:
-  • LOCAL   — DuckDuckGo (with browser-like headers, no key) finds local bid
-              pages; pages are scraped and OpenAI extracts structured bids.
-              If DDG ever returns nothing and TAVILY_API_KEY is set, Tavily is
-              used as an automatic fallback.
+  • LOCAL   — 2,995 known city/county bid pages are read directly (no search
+              cost at all), plus web search for everything not in that
+              directory: Google Programmable Search first (free, 100/day),
+              Tavily if configured and Google came back empty, then scraping
+              DuckDuckGo as the last resort. Pages are fetched and OpenAI
+              extracts structured bids.
   • FEDERAL — SAM.gov solicitations for the user's state.
   • Both are distance-filtered against the user's radius and grouped by city,
     then cached per area per day.
@@ -15,7 +17,6 @@ ENV VARS (set in Render → your service → Environment):
   ADMIN_TOKEN              admin token for /issue and /revoke
   OPENAI_API_KEY           REQUIRED for local extraction
   SAM_API_KEY              REQUIRED for federal bids (free key: sam.gov)
-  TAVILY_API_KEY           OPTIONAL fallback search (free 1k/mo: tavily.com)
   UPSTASH_REDIS_REST_URL   persistent storage (free: upstash.com) -- needed so
   UPSTASH_REDIS_REST_TOKEN   trials/keys survive restarts
   SUPABASE_URL             your Supabase project URL (https://xxx.supabase.co)
@@ -23,7 +24,11 @@ ENV VARS (set in Render → your service → Environment):
   STRIPE_WEBHOOK_SECRET    from Stripe -> Developers -> Webhooks (whsec_...)
   RESEND_API_KEY           OPTIONAL, emails the key to buyers (resend.com)
   FROM_EMAIL               OPTIONAL sender, e.g. "Bids <keys@yourdomain.com>"
-  (BRAVE_API_KEY is no longer used — you can delete it.)
+  GOOGLE_API_KEY           local bid search. Free: 100 queries/day.
+  GOOGLE_CSE_ID            the Programmable Search engine id that pairs
+                           with it. BOTH are required or Google is skipped.
+  TAVILY_API_KEY           OPTIONAL paid fallback, tried only when Google
+                           returns nothing. Scans work without it.
 
   Real automated email alerts -- daily open bids (/run-saved-search-alerts)
   and weekly planned work (/run-upcoming-alerts), both driven by the same two
@@ -144,23 +149,6 @@ _LOCAL_CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scan_ca
 def _empty_lic():
     return {"revoked": [], "trials": {}, "issued": {},
             "customers": {}, "emails": {}, "devices": {}}
-
-
-def _upstash(*cmd):
-    """Run one Redis command via Upstash REST. Returns (result, ok)."""
-    if not (UPSTASH_URL and UPSTASH_TOKEN):
-        return None, False
-    body = json.dumps(list(cmd)).encode("utf-8")
-    req = urllib.request.Request(UPSTASH_URL, data=body, method="POST", headers={
-        "Authorization": f"Bearer {UPSTASH_TOKEN}",
-        "Content-Type": "application/json",
-    })
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            return json.loads(resp.read().decode("utf-8")).get("result"), True
-    except Exception as ex:
-        print(f"[upstash] error: {ex}", flush=True)
-        return None, False
 
 
 def _db():
@@ -401,7 +389,8 @@ def health_detail():
     # free, and a hung upstream must not make the health check itself look down.
     backends = {
         "openai": bool(OPENAI_API_KEY),          # AI bid extraction — /scan is inert without it
-        "tavily": bool(TAVILY_API_KEY),          # primary local search
+        "google_search": bool(GOOGLE_API_KEY and GOOGLE_CSE_ID),  # primary local search
+        "tavily": bool(TAVILY_API_KEY),          # optional paid fallback
         "sam_gov": bool(SAM_API_KEY),            # federal bids
         "supabase": bool(SUPABASE_URL and SUPABASE_ANON_KEY),
         "upstash_redis": bool(UPSTASH_URL and UPSTASH_TOKEN),
@@ -419,6 +408,7 @@ def health_detail():
                                 and _admin_configured()),
     }
     tav = _tavily_health()
+    goo = _google_health()
     email_health = _email_health()
     with _ddg_lock:
         ddg_streak = _ddg_fail_streak
@@ -427,11 +417,17 @@ def health_detail():
     ddg = {
         "consecutive_empty_searches": ddg_streak,
         "degraded": ddg_streak >= DDG_TRIP_THRESHOLD,
-        "is_sole_local_search": not bool(TAVILY_API_KEY),
+        "is_sole_local_search": not (backends["google_search"] or backends["tavily"]),
     }
     problems = []
     # A configured-but-rejected key is worse than an absent one: everything
     # keeps returning 200 and scans just quietly come back nearly empty.
+    if backends["google_search"] and goo["quota_or_auth_failure"]:
+        problems.append(
+            f"Google Search is rejecting queries (HTTP {goo['last_status']}) — 429 means "
+            "the free 100-a-day cap is spent and clears at midnight Pacific; 403 usually "
+            "means the Custom Search API isn't enabled on the project. Local bid search "
+            "has fallen back to Tavily or scraping DuckDuckGo.")
     if backends["tavily"] and tav["quota_or_auth_failure"]:
         problems.append(
             f"Tavily is rejecting searches (HTTP {tav['last_status']}) — most likely the "
@@ -454,11 +450,13 @@ def health_detail():
             "real domain or point SUPPORT_EMAIL at that verified address.")
     if not backends["openai"]:
         problems.append("OPENAI_API_KEY unset — /scan and /upcoming return no local bids at all")
-    if not backends["tavily"] and ddg["degraded"]:
-        problems.append("DuckDuckGo appears blocked and no TAVILY_API_KEY is set — "
-                        "local bid search is effectively down")
-    elif not backends["tavily"]:
-        problems.append("TAVILY_API_KEY unset — local search depends solely on scraping DuckDuckGo")
+    if ddg["is_sole_local_search"] and ddg["degraded"]:
+        problems.append("DuckDuckGo appears blocked and no search API is configured — "
+                        "local bid search is effectively down. Set GOOGLE_API_KEY and "
+                        "GOOGLE_CSE_ID (free, 100 queries/day).")
+    elif ddg["is_sole_local_search"]:
+        problems.append("No search API configured — local search depends solely on "
+                        "scraping DuckDuckGo. Set GOOGLE_API_KEY and GOOGLE_CSE_ID.")
     if not backends["sam_gov"]:
         problems.append("SAM_API_KEY unset — no federal bids in results")
     if not kv_backend.is_durable():
@@ -480,6 +478,9 @@ def health_detail():
         # ...and the ones before it, so a change in recall reads as a trend
         # rather than a single number with nothing to compare it against.
         "recent_scans": _recent_scans(),
+        "google_search": {k: goo[k] for k in
+                          ("ok", "failed", "last_status", "last_error",
+                           "quota_or_auth_failure", "failing")},
         "tavily": {k: tav[k] for k in
                    ("ok", "failed", "last_status", "last_error",
                     "quota_or_auth_failure", "failing")},
@@ -2543,6 +2544,93 @@ def _tavily_health():
     return st
 
 
+# ── Google Programmable Search — the free-tier primary (no scraping) ──
+# 100 queries/day free, permanently, off Google's own index. Chosen over
+# Tavily as the default because a scan is 12-40 searches: any paid allowance
+# disappears fast, and the free tier here is 3x Tavily's while being a
+# documented API rather than a scrape.
+#
+# Two values, both from Google and both required:
+#   GOOGLE_API_KEY  console.cloud.google.com -> enable "Custom Search API"
+#   GOOGLE_CSE_ID   programmablesearchengine.google.com -> create an engine,
+#                   turn ON "Search the entire web", copy the Search engine ID
+GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
+GOOGLE_CSE_ID = os.environ.get("GOOGLE_CSE_ID", "")
+GOOGLE_URL = "https://www.googleapis.com/customsearch/v1"
+
+_google_state = {"ok": 0, "failed": 0, "last_error": "", "last_status": 0}
+
+
+def _google_note(ok, status=0, detail=""):
+    with _tavily_lock:  # same lock: these counters are read together in /health
+        if ok:
+            _google_state["ok"] += 1
+        else:
+            _google_state["failed"] += 1
+            _google_state["last_status"] = status
+            _google_state["last_error"] = (detail or "")[:200]
+
+
+def _google_health():
+    with _tavily_lock:
+        st = dict(_google_state)
+    # 429 = daily 100-query cap hit; 403 usually means the Custom Search API
+    # was never enabled on the project, or billing/quota is misconfigured.
+    st["quota_or_auth_failure"] = st["last_status"] in (401, 403, 429)
+    st["failing"] = st["failed"] > 0 and st["ok"] == 0
+    return st
+
+
+def _google_search(query, max_results=5):
+    """Search via Google Programmable Search; returns [{url, content}].
+
+    Deliberately returns only the snippet as `content`, never raw page text --
+    Google's API does not provide page bodies, so callers fall through to
+    _fetch_text on the URL exactly as they already do for a thin Tavily hit.
+    """
+    if not (GOOGLE_API_KEY and GOOGLE_CSE_ID):
+        return []
+    params = urllib.parse.urlencode({
+        "key": GOOGLE_API_KEY,
+        "cx": GOOGLE_CSE_ID,
+        "q": query,
+        # Google caps num at 10 per request and rejects anything higher.
+        "num": max(1, min(int(max_results or 5), 10)),
+    })
+    req = urllib.request.Request(f"{GOOGLE_URL}?{params}", method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        detail = ""
+        try:
+            detail = e.read().decode("utf-8")[:300]
+        except Exception:
+            pass
+        print(f"[scan] Google CSE HTTP {e.code}: {detail}", flush=True)
+        _google_note(False, e.code, detail)
+        if e.code in (401, 403, 429):
+            _alert_admin(
+                f"Google Search returning HTTP {e.code} — local bid search degraded",
+                "Google Programmable Search rejected a query. 429 means the free "
+                "100-queries-a-day cap is spent and it will clear on its own at "
+                "midnight Pacific; 403 usually means the Custom Search API isn't "
+                "enabled on the project; 401 means the key is wrong. Until it "
+                "clears, scans fall back to Tavily (if configured) and then to "
+                f"scraping DuckDuckGo.\n\nResponse: {detail}",
+            )
+        return []
+    except Exception as ex:
+        print(f"[scan] Google CSE error: {ex}", flush=True)
+        _google_note(False, 0, str(ex))
+        return []
+    _google_note(True)
+    items = data.get("items") or []
+    print(f"[scan] Google: {len(items)} results for {query!r}", flush=True)
+    return [{"url": it.get("link") or "", "content": it.get("snippet") or ""}
+            for it in items if it.get("link")]
+
+
 def _tavily_search(query, max_results=5):
     """Search via Tavily; returns [{url, content}]."""
     if not TAVILY_API_KEY:
@@ -2596,7 +2684,29 @@ def _tavily_search(query, max_results=5):
     return out
 
 
-# ── DuckDuckGo with a browser "disguise" — primary local search (no key) ──
+def _web_search(query, max_results=6):
+    """One search, whichever provider is available. Returns ([{url, content}],
+    used_scraper).
+
+    Order is cheapest-reliable first: Google's free tier (100/day, real API),
+    then Tavily if a key is configured and still has credit, then scraping
+    DuckDuckGo as the last resort. Callers only need `used_scraper` so they
+    can apply DDG's pacing delay and skip it entirely otherwise -- the old
+    code inferred that from "did Tavily return nothing", which stopped being
+    true the moment there was more than one keyed provider.
+    """
+    if GOOGLE_API_KEY and GOOGLE_CSE_ID:
+        results = _google_search(query, max_results=max_results)
+        if results:
+            return results, False
+    if TAVILY_API_KEY:
+        results = _tavily_search(query, max_results=max_results)
+        if results:
+            return results, False
+    return _ddg_search(query), True
+
+
+# ── DuckDuckGo with a browser "disguise" — last-resort local search (no key) ──
 _DDG_UAS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
@@ -2742,12 +2852,6 @@ def _fetch_page(url, timeout=None):
     except Exception as ex:
         name = type(ex).__name__.lower()
         return "", "timeout" if "timeout" in name else "unreachable"
-
-
-def _fetch_raw(url, timeout=None):
-    """Page source, untouched. _fetch_text strips tags, which is right for
-    feeding prose to the AI and useless for a parser that needs the markup."""
-    return _fetch_page(url, timeout=timeout)[0]
 
 
 def _resolve_bid_url(ai_url, page_url, source_text=""):
@@ -3325,10 +3429,7 @@ def _run_local_queries(queries, ai_label, max_pages, grouped, center, radius, cd
             items.append(r)
 
     for q in queries:
-        results = _tavily_search(q, max_results=6) if TAVILY_API_KEY else []
-        used_ddg = not results
-        if used_ddg:
-            results = _ddg_search(q)
+        results, used_ddg = _web_search(q, max_results=6)
         for r in results:
             with lock:
                 if r["url"] in seen_urls:
@@ -4204,10 +4305,7 @@ def _perform_upcoming(location, radius, force=False):
     ]
     seen, pages = set(), []
     for q in queries:
-        results = _tavily_search(q, max_results=6) if TAVILY_API_KEY else []
-        used_ddg = not results
-        if used_ddg:
-            results = _ddg_search(q)
+        results, used_ddg = _web_search(q, max_results=6)
         for r in results:
             if r["url"] not in seen:
                 seen.add(r["url"])

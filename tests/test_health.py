@@ -32,6 +32,9 @@ FULLY_CONFIGURED = {
     # Not secrets, but the campaign sender is only "configured" with both.
     "ADMIN_TOKEN": SECRET,
     "MAILING_ADDRESS": "CurbCall Pro, 123 Main St, Aurora MO 65605",
+    # Google Programmable Search: the free-tier primary. Needs both halves.
+    "GOOGLE_API_KEY": SECRET,
+    "GOOGLE_CSE_ID": "a1b2c3d4e5f6g7h8i",
 }
 
 
@@ -74,25 +77,41 @@ class HealthTests(unittest.TestCase):
         self.assertFalse(body["backends"]["openai"])
         self.assertTrue(any("OPENAI_API_KEY" in p for p in body["problems"]))
 
-    def test_missing_tavily_is_flagged_as_a_single_point_of_failure(self):
-        body = self._get(TAVILY_API_KEY="")
+    def test_no_search_api_is_flagged_as_a_single_point_of_failure(self):
+        """Scraping DDG alone is the fragile case -- and it is only reached
+        when NEITHER keyed provider is configured, not merely when Tavily
+        is missing."""
+        body = self._get(TAVILY_API_KEY="", GOOGLE_API_KEY="", GOOGLE_CSE_ID="")
         self.assertTrue(body["local_search"]["is_sole_local_search"])
         self.assertTrue(any("solely on scraping DuckDuckGo" in p for p in body["problems"]))
 
-    def test_blocked_duckduckgo_with_no_tavily_reads_as_search_down(self):
+    def test_google_alone_is_enough_to_not_be_sole_search(self):
+        """Dropping Tavily is now the expected configuration, not a warning."""
+        body = self._get(TAVILY_API_KEY="")
+        self.assertFalse(body["local_search"]["is_sole_local_search"])
+        self.assertFalse(any("solely on scraping DuckDuckGo" in p for p in body["problems"]))
+
+    def test_blocked_duckduckgo_with_no_search_api_reads_as_search_down(self):
         with patch.object(ls, "_ddg_fail_streak", ls.DDG_TRIP_THRESHOLD):
-            body = self._get(TAVILY_API_KEY="")
+            body = self._get(TAVILY_API_KEY="", GOOGLE_API_KEY="", GOOGLE_CSE_ID="")
         self.assertTrue(body["local_search"]["degraded"])
         self.assertTrue(any("effectively down" in p for p in body["problems"]))
 
-    def test_blocked_duckduckgo_is_tolerable_when_tavily_is_configured(self):
+    def test_blocked_duckduckgo_is_tolerable_when_a_search_api_is_configured(self):
         with patch.object(ls, "_ddg_fail_streak", ls.DDG_TRIP_THRESHOLD):
             body = self._get()
         self.assertTrue(body["local_search"]["degraded"])
         self.assertFalse(body["local_search"]["is_sole_local_search"])
-        # Tavily is carrying local search, so this is not a search outage.
+        # A keyed provider is carrying local search, so this is not an outage.
         self.assertEqual(body["problems"], [])
         self.assertEqual(body["status"], "ok")
+
+    def test_half_configured_google_does_not_count_as_configured(self):
+        """A key without the engine id (or vice versa) cannot search -- it must
+        not suppress the 'no search API' warning."""
+        body = self._get(TAVILY_API_KEY="", GOOGLE_CSE_ID="")
+        self.assertFalse(body["backends"]["google_search"])
+        self.assertTrue(body["local_search"]["is_sole_local_search"])
 
 
 if __name__ == "__main__":
