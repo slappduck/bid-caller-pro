@@ -3088,7 +3088,11 @@ def _ai_extract(area, text):
         "\"Awarded\", never \"Open\", however recent it is.\n\n"
         "Respond ONLY with a JSON array. Each item has keys: \"title\", \"scope\", "
         "\"status\" (\"Open\", \"Closed\" or \"Awarded\"), \"deadline\", \"contact\", \"email\", "
-        "\"phone\", \"value\", \"url\", \"city\". \"city\" is the US city where the work "
+        "\"phone\", \"value\", \"url\", \"city\". \"deadline\" must be an absolute "
+        "calendar date exactly as the page states it (e.g. \"July 24, 2026\" or "
+        "\"12/01/2026\"); NEVER a countdown or relative phrase like \"in 8 days\" "
+        "or \"next week\" -- use \"\" if the page only gives one of those. "
+        "\"city\" is the US city where the work "
         "will be performed, exactly as written in the text; if the location is not clearly "
         "stated, use \"\" and do NOT guess. \"value\" is a dollar amount only if stated. "
         "Use \"\" for any missing field. If no real bids, return []. "
@@ -3121,6 +3125,13 @@ def _ai_extract(area, text):
             for b in bids:
                 if isinstance(b, dict) and _is_open_bid(b):
                     b["status"] = "Awarded"
+        closed_page = _page_declares_closed(text, len(bids))
+        for b in bids:
+            if not isinstance(b, dict):
+                continue
+            b["deadline"] = _clean_deadline(b.get("deadline"))
+            if closed_page and _is_open_bid(b):
+                b["status"] = "Closed"
         return bids
     except Exception:
         return None
@@ -3555,6 +3566,54 @@ _OPEN_SOLICITATION_PHRASES = (
     "responses due", "questions due", "request for proposals due",
     "bids will be accepted", "deadline for bids",
 )
+
+
+# A countdown is not a deadline. "In 8 days" was rendered by somebody's page
+# at some unknown moment; kept as-is it displays as fact, scores as urgent,
+# and -- because it carries no date and no year -- _apply_deadline_status
+# cannot tell that it expired. A real listing showed "In 8 days" for a
+# solicitation that had closed 26 days earlier.
+_RELATIVE_DEADLINE_RE = re.compile(
+    r"^(in\s+(a|an|\d+)\s+(day|week|month|hour)s?|tomorrow|today|tonight|"
+    r"next\s+(week|month|year)|this\s+(week|month)|\d+\s+days?\s+(left|remaining)|"
+    r"closing\s+soon|due\s+soon|asap|open\s+now|ongoing|tbd|n/?a)\.?$", re.I)
+
+
+def _clean_deadline(text):
+    """Deadline text with unverifiable countdowns removed.
+
+    Anything naming a date or even a bare year is kept -- "FY2027" and
+    "December 1, 2026" are both checkable. A pure countdown is not, and
+    showing "Not listed" beats showing a number we cannot stand behind.
+    """
+    s = " ".join(str(text or "").split())
+    if not s or _parse_deadline(s):
+        return s
+    return "" if _RELATIVE_DEADLINE_RE.match(s) else s
+
+
+# Phrases where a page states, about itself, that the thing is over.
+_EXPLICIT_CLOSED_MARKERS = (
+    "status: closed", "status:closed", "past due", "bidding is closed",
+    "bidding has closed", "this solicitation is closed",
+    "solicitation is closed", "no longer accepting", "submissions are closed",
+    "closed to bidding", "bid is closed", "closed for bidding",
+)
+
+
+def _page_declares_closed(text, bid_count):
+    """True when the page itself says this solicitation is closed.
+
+    Only trusted on a single-solicitation detail page. A listing page carries
+    a status per row and one row reading "Closed" says nothing about the
+    others -- closing all of them would throw away real work, which is a
+    worse failure than showing one stale bid. On a page describing exactly
+    one solicitation there is no such ambiguity.
+    """
+    if bid_count != 1:
+        return False
+    low = (text or "").lower()
+    return any(m in low for m in _EXPLICIT_CLOSED_MARKERS)
 
 
 def _looks_awarded(text):
