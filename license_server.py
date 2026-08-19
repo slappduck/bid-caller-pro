@@ -486,6 +486,12 @@ def health_detail():
     return jsonify({
         "service": "Bid Caller Pro License Server",
         "status": "ok" if not problems else "degraded",
+        # Which build is actually answering. Without this there is no way to
+        # tell a deploy that picked up a fix from one that silently did not --
+        # every other field looks identical either way. Render sets
+        # RENDER_GIT_COMMIT; empty elsewhere, which is honest rather than
+        # guessed.
+        "version": _env_secret("RENDER_GIT_COMMIT", "")[:7],
         "backends": backends,
         "local_search": ddg,
         "storage": kv_backend.health(),

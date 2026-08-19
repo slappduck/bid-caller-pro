@@ -497,3 +497,26 @@ class ScanHistoryTests(unittest.TestCase):
     def test_health_answers_even_when_storage_is_the_broken_thing(self):
         with patch.object(kv_backend, "get", side_effect=RuntimeError("down")):
             self.assertEqual(ls._recent_scans(), [])
+
+
+class VersionFieldTests(unittest.TestCase):
+    """/health reports which build is answering, so a deploy that silently
+    didn't pick up a change is distinguishable from one that did."""
+
+    def setUp(self):
+        self.app = ls.app.test_client()
+        self._orig = dict(os.environ)
+
+    def tearDown(self):
+        os.environ.clear()
+        os.environ.update(self._orig)
+
+    def test_the_commit_is_reported_short(self):
+        os.environ["RENDER_GIT_COMMIT"] = "abcdef1234567890"
+        body = self.app.get("/health").get_json()
+        self.assertEqual(body["version"], "abcdef1")
+
+    def test_it_is_empty_rather_than_guessed_when_not_deployed(self):
+        os.environ.pop("RENDER_GIT_COMMIT", None)
+        body = self.app.get("/health").get_json()
+        self.assertEqual(body["version"], "")
