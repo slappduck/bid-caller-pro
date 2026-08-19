@@ -1606,3 +1606,803 @@ TN,Waverly,waverlytn.org,no_bid_page,domain,,
 TN,Waynesboro,cityofwaynesboro.org,no_bid_page,domain,,
 TN,White House,cityofwhitehouse.com,unreachable,,,
 TN,Whitwell,cityofwhitwell.com,no_bid_page,domain,,
+AK,Anchorage,muni.org,found,homepage,https://muni.org/departments/purchasing,yes
+AK,Anderson,anderson.govoffice.com,no_bid_page,domain,,
+AK,Angoon,cityofangoon.org,found,domain,https://cityofangoon.org/rfp,no
+AK,Chena Hot Springs,chenahotsprings.com,no_bid_page,domain,,
+AK,Coffman Cove,ccalaska.com,unreachable,,,
+AK,Cold Bay,coldbay.org,no_bid_page,domain,,
+AK,Cordova,cityofcordova.net,found,domain,https://cityofcordova.net/rfp,yes
+AK,Craig,craigak.com,unreachable,,,
+AK,Deering,nana.com,no_bid_page,homepage,,
+AK,Delta Junction,deltajunction.us,unreachable,,,
+AK,Dillingham,dillinghamak.us,unreachable,,,
+AK,Ekuk,dced.state.ak.us,unreachable,,,
+AK,Ekwok,ekwok.com,unreachable,,,
+AK,Fairbanks,fairbanksalaska.us,found,domain,https://fairbanksalaska.us/rfps,yes
+AK,False Pass,home.gci.net,unreachable,,,
+AK,Gustavus,cms.gustavus-ak.gov,found,domain,https://cms.gustavus-ak.gov/Bids.aspx,no
+AK,Haines,haines.ak.us,unreachable,,,
+AK,Homer,ci.homer.ak.us,unreachable,,,
+AK,Hoonah,cityofhoonah.org,unreachable,,,
+AK,Houston,houstonak.com,no_bid_page,domain,,
+AK,Juneau,juneau.org,found,domain,https://juneau.org/doing-business/bids,yes
+AK,Kake,cityofkake.com,unreachable,,,
+AK,Kenai,kenai.city,unreachable,,,
+AK,King Cove,cityofkingcove.com,no_bid_page,domain,,
+AK,Klawock,cityofklawock.com,unreachable,,,
+AK,Kodiak,city.kodiak.ak.us,unreachable,,,
+AK,Nome,nomealaska.org,found,domain,https://nomealaska.org/Bids.aspx,no
+AK,North Pole,northpolealaska.com,no_bid_page,domain,,
+AK,Palmer,cityofpalmer.org,unreachable,,,
+AK,Petersburg,ci.petersburg.ak.us,found,domain,https://ci.petersburg.ak.us/rfps,yes
+AK,Sand Point,sandpointak.com,no_bid_page,domain,,
+AK,Seldovia,seldoviachamber.org,no_bid_page,domain,,
+AK,Seward,cityofseward.us,unreachable,,,
+AK,Sitka,cityofsitka.com,no_bid_page,domain,,
+AK,Skagway,skagway.org,unreachable,,,
+AK,Soldotna,soldotna.org,no_bid_page,domain,,
+AK,Tenakee Springs,tenakeespringsak.com,no_bid_page,domain,,
+AK,Thorne Bay,thornebayalaska.net,unreachable,,,
+AK,Unalakleet,kawerak.org,unreachable,,,
+AK,Utqiagvik,utqiagvik.us,no_bid_page,domain,,
+AK,Wrangell,wrangell.com,unreachable,,,
+AK,Yakutat,yakutatak.govoffice2.com,no_bid_page,domain,,
+AL,Abbeville,cityofabbeville.org,found,domain,https://cityofabbeville.org/Bids.aspx,yes
+AL,Adamsville,cityofadamsville.org,no_bid_page,domain,,
+AL,Alabaster,cityofalabaster.com,found,domain,https://cityofalabaster.com/Bids.aspx,yes
+AL,Albertville,cityofalbertville.com,found,domain,https://cityofalbertville.com/Bids.aspx,no
+AL,Alexander City,alexandercityonline.com,no_bid_page,domain,,
+AL,Aliceville,thecityofaliceville.com,no_bid_page,domain,,
+AL,Arab,arabcity.org,found,domain,https://arabcity.org/Bids.aspx,no
+AL,Ashland,cityofashland.net,unreachable,,,
+AL,Ashville,cityofashville.web.officelive.com,unreachable,,,
+AL,Athens,athensal.us,unreachable,,,
+AL,Atmore,cityofatmore.com,unreachable,,,
+AL,Attalla,attallacity.com,unreachable,,,
+AL,Auburn,auburnalabama.org,no_bid_page,domain,,
+AL,Bay Minette,cityofbayminette.org,no_bid_page,domain,,
+AL,Bayou La Batre,cityofbayoulabatre.com,no_bid_page,domain,,
+AL,Bessemer,bessemeral.org,no_bid_page,domain,,
+AL,Boaz,cityofboaz.org,found,domain,https://cityofboaz.org/Bids.aspx,no
+AL,Brent,cityofbrentalabama.com,unreachable,,,
+AL,Brewton,cityofbrewton.org,unreachable,,,
+AL,Brookwood,brookwoodalabama.com,unreachable,,,
+AL,Brundidge,brundidge.org,no_bid_page,domain,,
+AL,Calera,cityofcalera.org,found,domain,https://cityofcalera.org/Bids.aspx,no
+AL,Camden,camdenalabama.org,found,domain,https://camdenalabama.org/Bids.aspx,yes
+AL,Center Point,thecityofcenterpoint.org,unreachable,,,
+AL,Centre,cityofcentre.com,no_bid_page,domain,,
+AL,Centreville,centrevillealabama.homestead.com,no_bid_page,domain,,
+AL,Chatom,chatom.org,no_bid_page,domain,,
+AL,Chelsea,cityofchelsea.com,found,domain,https://cityofchelsea.com/Bids.aspx,yes
+AL,Chickasaw,cityofchickasaw.org,no_bid_page,domain,,
+AL,Childersburg,childersburg.org,unreachable,,,
+AL,Citronelle,cityofcitronelle.com,unreachable,,,
+AL,Clanton,clanton.al.us,unreachable,,,
+AL,Clay,clayalabama.com,no_bid_page,domain,,
+AL,Columbiana,cityofcolumbiana.com,unreachable,,,
+AL,Creola,cityofcreola.org,found,domain,https://cityofcreola.org/rfps,no
+AL,Dadeville,dadeville.com,no_bid_page,domain,,
+AL,Daleville,dalevilleal.com,unreachable,,,
+AL,Daphne,daphneal.com,found,domain,https://daphneal.com/Bids.aspx,yes
+AL,Decatur,cityofdecatural.com,no_bid_page,domain,,
+AL,Dora,cityofdora.com,no_bid_page,domain,,
+AL,Dothan,dothan.org,found,domain,https://dothan.org/Bids.aspx,yes
+AL,Eufaula,eufaulaalabama.com,found,domain,https://eufaulaalabama.com/Bids.aspx,no
+AL,Eutaw,eutawonline.com,unreachable,,,
+AL,Evergreen,evergreenal.org,no_bid_page,domain,,
+AL,Fairfield,cityofenterprise.net,not_this_town,,,
+AL,Fairhope,cofairhope.com,unreachable,,,
+AL,Fayette,fayetteal.org,no_bid_page,domain,,
+AL,Florence,florenceal.org,unreachable,,,
+AL,Foley,cityoffoley.org,no_bid_page,domain,,
+AL,Fort Benning,benning.army.mil,unreachable,,,
+AL,Fort Benning,moore.army.mil,unreachable,,,
+AL,Fort Payne,fortpayne.org,no_bid_page,domain,,
+AL,Fultondale,cityoffultondale.com,unreachable,,,
+AL,Gadsden,cityofgadsden.com,found,domain,https://cityofgadsden.com/Bids.aspx,no
+AL,Gardendale,cityofgardendale.com,unreachable,,,
+AL,Geneva,cityofgeneva.com,unreachable,,,
+AL,Glencoe,cityofglencoe.net,unreachable,,,
+AL,Greenville,greenville-alabama.com,unreachable,,,
+AL,Grove Hill,grovehillal.com,no_bid_page,domain,,
+AL,Guin,guinal.org,no_bid_page,domain,,
+AL,Guntersville,guntersvilleal.org,found,domain,https://guntersvilleal.org/invitation-to-bid,yes
+AL,Haleyville,cityofhaleyville.com,unreachable,,,
+AL,Hamilton,cityofhamilton.org,unreachable,,,
+AL,Hanceville,cityofhanceville.net,no_bid_page,domain,,
+AL,Hartford,cityofhartfordal.org,found,domain,https://cityofhartfordal.org/Bids.aspx,no
+AL,Hartselle,hartselle.org,found,domain,https://hartselle.org/Bids.aspx,no
+AL,Headland,headlandalabama.org,no_bid_page,domain,,
+AL,Heflin,cityofheflin.org,no_bid_page,domain,,
+AL,Helena,cityofhelena.org,unreachable,,,
+AL,Hokes Bluff,cityofhokesbluff.com,found,domain,https://cityofhokesbluff.com/Bids.aspx,no
+AL,Homewood,homewoodal.net,no_bid_page,domain,,
+AL,Hoover,hooveral.org,unreachable,,,
+AL,Hueytown,hueytownal.org,unreachable,,,
+AL,Jackson,cityofjacksonal.com,no_bid_page,domain,,
+AL,Jacksonville,jacksonville-al.org,unreachable,,,
+AL,Jasper,jaspercity.com,no_bid_page,domain,,
+AL,LaFayette,lafayetteal.com,no_bid_page,domain,,
+AL,Leeds,leedsalabama.org,no_bid_page,domain,,
+AL,Lincoln,lincolnalabama.com,found,domain,https://lincolnalabama.com/Bids.aspx,yes
+AL,Linden,lindenalabama.net,found,domain,https://lindenalabama.net/bids,no
+AL,Livingston,ci.livingston.al.us,unreachable,,,
+AL,Luverne,luverne.org,found,domain,https://luverne.org/bids-and-rfps,no
+AL,Marion,marionalabama.org,no_bid_page,domain,,
+AL,Midfield,cityofmidfield.com,no_bid_page,domain,,
+AL,Millbrook,cityofmillbrook.org,found,domain,https://cityofmillbrook.org/Bids.aspx,no
+AL,Mobile,cityofmobile.org,found,domain,https://cityofmobile.org/Bids.aspx,yes
+AL,Monroeville,cityofmonroeville.com,unreachable,,,
+AL,Montevallo,cityofmontevallo.com,found,domain,https://cityofmontevallo.com/Bids.aspx,yes
+AL,Mountain Brook,mtnbrook.org,unreachable,,,
+AL,Muscle Shoals,cityofmuscleshoals.com,found,domain,https://cityofmuscleshoals.com/Bids.aspx,yes
+AL,Northport,cityofnorthport.org,unreachable,,,
+AL,Oakville,oakvilleindianmounds.com,no_bid_page,domain,,
+AL,Oneonta,cityofoneonta.us,found,domain,https://cityofoneonta.us/business/bids,yes
+AL,Opelika,opelika.org,unreachable,,,
+AL,Opp,cityofopp.com,unreachable,,,
+AL,Orange Beach,cityoforangebeach.com,no_bid_page,domain,,
+AL,Oxford,oxfordalabama.org,unreachable,,,
+AL,Pelham,pelhamonline.com,unreachable,,,
+AL,Pell City,pell-city.com,found,domain,https://pell-city.com/procurement,yes
+AL,Phenix City,phenixcityal.us,unreachable,,,
+AL,Phil Campbell,philcampbellal.com,found,domain,https://philcampbellal.com/bids-and-rfps,no
+AL,Piedmont,piedmontcity.org,no_bid_page,domain,,
+AL,Pinson,thecityofpinson.com,found,domain,https://thecityofpinson.com/invitation-to-bid,yes
+AL,Plantersville,plantersville.us,no_bid_page,domain,,
+AL,Pleasant Grove,cityofpg.com,not_this_town,,,
+AL,Prichard,thecityofprichard.org,found,domain,https://thecityofprichard.org/bids,no
+AL,Rainbow City,rbcalabama.com,unreachable,,,
+AL,Red Bay,cityofredbay.org,no_bid_page,domain,,
+AL,Roanoke,roanokealabama.org,unreachable,,,
+AL,Robertsdale,robertsdale.org,found,domain,https://robertsdale.org/current-bids,yes
+AL,Rockford,rockfordalabama.net,unreachable,,,
+AL,Russellville,russellvilleal.org,unreachable,,,
+AL,Saraland,saraland.org,no_bid_page,domain,,
+AL,Satsuma,cityofsatsuma.com,no_bid_page,domain,,
+AL,Scottsboro,cityofscottsboro.com,unreachable,,,
+AL,Semmes,cityofsemmes.org,unreachable,,,
+AL,Sheffield,sheffieldalabama.org,no_bid_page,domain,,
+AL,Smiths Station,smithsstation.us,no_bid_page,domain,,
+AL,Spanish Fort,cityofspanishfort.com,no_bid_page,domain,,
+AL,Springville,springvillealabama.org,unreachable,,,
+AL,Sumiton,thecityofsumiton.com,found,domain,https://thecityofsumiton.com/Bids.aspx,no
+AL,Sylacauga,sylacauga.net,no_bid_page,domain,,
+AL,Talladega,talladega.com,no_bid_page,domain,,
+AL,Tallassee,tallassee.al.us,unreachable,,,
+AL,Tarrant,cityoftarrant.com,unreachable,,,
+AL,Thomasville,thomasvilleal.com,no_bid_page,domain,,
+AL,Troy,troyalabama.com,no_bid_page,domain,,
+AL,Trussville,trussville.org,found,domain,https://trussville.org/bids,yes
+AL,Tuscaloosa,tuscaloosa.com,found,domain,https://tuscaloosa.com/bids,yes
+AL,Tuscumbia,cityoftuscumbia.org,found,domain,https://cityoftuscumbia.org/Bids.aspx,yes
+AL,Tuskegee,tuskegeealabama.org,no_bid_page,domain,,
+AL,Tuskegee University,tuskegee.edu,no_bid_page,homepage,,
+AL,Union Springs,unionspringsalabama.com,no_bid_page,domain,,
+AL,Uniontown,uniontownal.org,no_bid_page,domain,,
+AL,Valley,cityofvalley.com,found,domain,https://cityofvalley.com/Bids.aspx,yes
+AL,Valley Grande,cityofvalleygrande.com,found,domain,https://cityofvalleygrande.com/bids,yes
+AL,Vestavia Hills,vestaviahills.net,unreachable,,,
+AL,Westover,westoveralabama.org,no_bid_page,domain,,
+AL,Wetumpka,cityofwetumpka.com,unreachable,,,
+AL,Winfield,winfieldcity.org,found,domain,https://winfieldcity.org/bids,no
+AL,York,cityyork.com,unreachable,,,
+AZ,Avondale,avondale.org,no_bid_page,domain,,
+AZ,Benson,cityofbenson.com,no_bid_page,domain,,
+AZ,Bisbee,cityofbisbee.com,unreachable,,,
+AZ,Bullhead City,bullheadcity.com,no_bid_page,domain,,
+AZ,Cliff Dwellers Lodge,cliffdwellerslodge.com,no_bid_page,domain,,
+AZ,Coolidge,coolidgeaz.com,unreachable,,,
+AZ,Douglas,douglasaz.org,unreachable,,,
+AZ,El Mirage,cityofelmirage.org,no_bid_page,domain,,
+AZ,Eloy,eloyaz.org,no_bid_page,domain,,
+AZ,Flagstaff,flagstaff.az.gov,no_bid_page,domain,,
+AZ,Glendale,glendaleaz.com,found,domain,https://glendaleaz.com/procurement,yes
+AZ,Gold Canyon,goldcanyon.net,found,domain,https://goldcanyon.net/Bids.aspx,no
+AZ,Goodyear,ci.goodyear.az.us,unreachable,,,
+AZ,Litchfield Park,litchfield-park.org,unreachable,,,
+AZ,Page,cityofpage.org,no_bid_page,domain,,
+AZ,Parker,townofparkerarizona.com,found,domain,https://townofparkerarizona.com/bids,no
+AZ,Safford,cityofsafford.us,found,domain,https://cityofsafford.us/Bids.aspx,yes
+AZ,San Luis,cityofsanluis.org,unreachable,,,
+AZ,Show Low,ci.show-low.az.us,unreachable,,,
+AZ,Somerton,cityofsomerton.com,unreachable,,,
+AZ,South Tucson,southtucson.org,unreachable,,,
+AZ,St. Johns,sjaz.us,unreachable,,,
+AZ,Tolleson,tollesonaz.org,found,domain,https://tollesonaz.org/Bids.aspx,no
+AZ,Willcox,cityofwillcox.org,unreachable,,,
+CA,Adelanto,ci.adelanto.ca.us,unreachable,,,
+CA,Agoura Hills,agourahillscity.org,unreachable,,,
+CA,Albany,albanyca.org,unreachable,,,
+CA,Alhambra,cityofalhambra.org,found,domain,https://cityofalhambra.org/Bids.aspx,no
+CA,Altadena,altadenatowncouncil.org,unreachable,,,
+CA,Alturas,cityofalturas.org,no_bid_page,domain,,
+CA,Amador City,amador-city.com,no_bid_page,domain,,
+CA,Anderson,ci.anderson.ca.us,no_bid_page,domain,,
+CA,Aptos,aptos.ca,no_bid_page,domain,,
+CA,Arcata,cityofarcata.org,found,domain,https://cityofarcata.org/Bids.aspx,yes
+CA,Arroyo Grande,arroyogrande.org,found,domain,https://arroyogrande.org/Bids.aspx,yes
+CA,Artesia,cityofartesia.us,found,domain,https://cityofartesia.us/Bids.aspx,yes
+CA,Arvin,arvin.org,found,domain,https://arvin.org/Bids.aspx,yes
+CA,Atascadero,atascadero.org,found,domain,https://atascadero.org/bids,yes
+CA,Atwater,atwater.org,found,domain,https://atwater.org/bids,no
+CA,Auburn,auburn.ca.gov,found,domain,https://auburn.ca.gov/Bids.aspx,no
+CA,Avalon,cityofavalon.com,unreachable,,,
+CA,Avenal,cityofavenal.com,unreachable,,,
+CA,Azusa,ci.azusa.ca.us,unreachable,,,
+CA,B Bar H Ranch,bbarhranch.com,unreachable,,,
+CA,Baldwin Park,baldwinpark.com,found,domain,https://baldwinpark.com/Bids.aspx,no
+CA,Banning,ci.banning.ca.us,found,domain,https://ci.banning.ca.us/Bids.aspx,no
+CA,Barstow,barstowca.org,unreachable,,,
+CA,Beale Air Force Base,beale.af.mil,unreachable,,,
+CA,Beaumont,ci.beaumont.ca.us,unreachable,,,
+CA,Bell,cityofbell.org,unreachable,,,
+CA,Bell Gardens,bellgardens.org,unreachable,,,
+CA,Bellflower,bellflower.org,no_bid_page,domain,,
+CA,Beverly Hills,beverlyhills.org,found,domain,https://beverlyhills.org/Bids.aspx,yes
+CA,Big Bear Lake,citybigbearlake.com,unreachable,,,
+CA,Bishop,ca-bishop.us,unreachable,,,
+CA,Blue Jay,webarchive.loc.gov,unreachable,,,
+CA,Blue Lake,bluelake.ca.gov,found,domain,https://bluelake.ca.gov/rfp,yes
+CA,Blythe,cityofblythe.ca.gov,found,domain,https://cityofblythe.ca.gov/Bids.aspx,yes
+CA,Bradbury,cityofbradbury.org,no_bid_page,domain,,
+CA,Brea,ci.brea.ca.us,unreachable,,,
+CA,Buellton,cityofbuellton.com,unreachable,,,
+CA,Calabasas,cityofcalabasas.com,unreachable,,,
+CA,Calexico,calexico.ca.gov,found,domain,https://calexico.ca.gov/departments/purchasing,yes
+CA,California City,californiacity.com,no_bid_page,domain,,
+CA,Calimesa,cityofcalimesa.net,found,domain,https://cityofcalimesa.net/Bids.aspx,no
+CA,Calipatria,calipatria.com,found,domain,https://calipatria.com/rfp,yes
+CA,Camarillo,ci.camarillo.ca.us,no_bid_page,domain,,
+CA,Camp Meeker,campmeeker.org,no_bid_page,domain,,
+CA,Canyon Country,santa-clarita.com,not_this_town,,,
+CA,Canyon Lake,cityofcanyonlake.com,unreachable,,,
+CA,Carmel-by-the-Sea,ci.carmel.ca.us,no_bid_page,homepage,,
+CA,Carmichael,carmichaelcalifornia.com,found,domain,https://carmichaelcalifornia.com/Bids.aspx,yes
+CA,Carpinteria,carpinteria.ca.us,unreachable,,,
+CA,Cazadero,cazadero.net,unreachable,,,
+CA,Ceres,ci.ceres.ca.us,found,domain,https://ci.ceres.ca.us/Bids.aspx,yes
+CA,Cerritos,ci.cerritos.ca.us,unreachable,,,
+CA,Chico,chico.ca.us,no_bid_page,domain,,
+CA,Chino,cityofchino.org,no_bid_page,domain,,
+CA,Chowchilla,ci.chowchilla.ca.us,found,domain,https://ci.chowchilla.ca.us/Bids.aspx,no
+CA,Circle Oaks,circleoaks.org,no_bid_page,domain,,
+CA,City of Industry,cityofindustry.org,found,domain,https://cityofindustry.org/Bids.aspx,no
+CA,Claremont,ci.claremont.ca.us,no_bid_page,domain,,
+CA,Clearlake,clearlake.ca.us,found,domain,https://clearlake.ca.us/Bids.aspx,yes
+CA,Coachella,coachella.org,unreachable,,,
+CA,Coalinga,coalinga.com,found,domain,https://coalinga.com/Bids.aspx,yes
+CA,Colton,ci.colton.ca.us,unreachable,,,
+CA,Compton,comptoncity.org,unreachable,,,
+CA,Corcoran,cityofcorcoran.com,no_bid_page,domain,,
+CA,Corning,corning.org,no_bid_page,domain,,
+CA,Corona,ci.corona.ca.us,unreachable,,,
+CA,Coronado,coronado.ca.us,found,domain,https://coronado.ca.us/Bids.aspx,yes
+CA,Covina,ci.covina.ca.us,unreachable,,,
+CA,Crescent City,crescentcity.org,found,domain,https://crescentcity.org/bids,yes
+CA,Cudahy,cityofcudahy.com,found,domain,https://cityofcudahy.com/Bids.aspx,yes
+CA,Davis,cityofdavis.org,unreachable,,,
+CA,Del Mar,delmar.ca.us,unreachable,,,
+CA,Del Rey Oaks,delreyoaks.org,unreachable,,,
+CA,Delano,cityofdelano.org,found,domain,https://cityofdelano.org/Bids.aspx,yes
+CA,Desert Hot Springs,cityofdhs.org,no_bid_page,homepage,,
+CA,Diamond Bar,ci.diamond-bar.ca.us,unreachable,,,
+CA,Dinuba,dinuba.org,no_bid_page,domain,,
+CA,Dorris,dorrisca.us,no_bid_page,domain,,
+CA,Duarte,accessduarte.com,unreachable,,,
+CA,Dunsmuir,ci.dunsmuir.ca.us,no_bid_page,domain,,
+CA,El Cajon,ci.el-cajon.ca.us,unreachable,,,
+CA,El Centro,cityofelcentro.org,found,domain,https://cityofelcentro.org/Bids.aspx,yes
+CA,El Monte,ci.el-monte.ca.us,found,domain,https://ci.el-monte.ca.us/Bids.aspx,no
+CA,El Segundo,elsegundo.org,unreachable,,,
+CA,Elk Grove,elkgrovecity.org,unreachable,,,
+CA,Escalon,cityofescalon.org,no_bid_page,domain,,
+CA,Escondido,escondido.org,no_bid_page,domain,,
+CA,Etna,etnaca.com,no_bid_page,domain,,
+CA,Eureka,ci.eureka.ca.gov,found,domain,https://ci.eureka.ca.gov/Bids.aspx,yes
+CA,Exeter,cityofexeter.com,found,domain,https://cityofexeter.com/bids,no
+CA,Fairfield,fairfield.ca.gov,unreachable,,,
+CA,Fall River Mills,fallrivervalleycc.org,not_this_town,,,
+CA,Fallbrook,thevillagenews.com,unreachable,,,
+CA,Ferndale,ci.ferndale.ca.us,no_bid_page,domain,,
+CA,Fillmore,fillmoreca.com,unreachable,,,
+CA,Firebaugh,ci.firebaugh.ca.us,unreachable,,,
+CA,Fort Bragg,city.fortbragg.com,no_bid_page,domain,,
+CA,Fortuna,friendlyfortuna.com,unreachable,,,
+CA,Fowler,fowlercity.org,unreachable,,,
+CA,Galt,ci.galt.ca.us,unreachable,,,
+CA,Garden Grove,ggcity.org,found,homepage,https://ggcity.org/finance/purchasing,no
+CA,Glendora,ci.glendora.ca.us,found,domain,https://ci.glendora.ca.us/Bids.aspx,yes
+CA,Goleta,cityofgoleta.org,unreachable,,,
+CA,Gonzales,ci.gonzales.ca.us,unreachable,,,
+CA,Grass Valley,cityofgrassvalley.com,no_bid_page,domain,,
+CA,Greenfield,ci.greenfield.ca.us,unreachable,,,
+CA,Gridley,gridley.ca.us,no_bid_page,domain,,
+CA,Grover Beach,grover.org,found,homepage,https://grover.org/Bids.aspx,yes
+CA,Gustine,cityofgustine.com,found,domain,https://cityofgustine.com/Bids.aspx,yes
+CA,Hanford,cityofhanfordca.com,found,domain,https://cityofhanfordca.com/Bids.aspx,no
+CA,Havilah,havilahmuseum.org,no_bid_page,domain,,
+CA,Hawaiian Gardens,hgcity.org,unreachable,,,
+CA,Hawthorne,cityofhawthorne.org,unreachable,,,
+CA,Hemet,cityofhemet.org,unreachable,,,
+CA,Hesperia,cityofhesperia.us,unreachable,,,
+CA,Hidden Hills,hiddenhillscity.org,no_bid_page,domain,,
+CA,Highland,ci.highland.ca.us,unreachable,,,
+CA,Holtville,holtville.ca.gov,no_bid_page,domain,,
+CA,Hughson,hughson.org,unreachable,,,
+CA,Huntington Park,huntingtonpark.org,no_bid_page,domain,,
+CA,Huron,cityofberkeley.info,not_this_town,,,
+CA,Imperial,imperial.ca.gov,found,domain,https://imperial.ca.gov/Bids.aspx,yes
+CA,Indian Wells,cityofindianwells.org,unreachable,,,
+CA,Inglewood,cityofinglewood.org,unreachable,,,
+CA,Ione,ione-ca.com,unreachable,,,
+CA,Irwindale,ci.irwindale.ca.us,unreachable,,,
+CA,Isleton,cityofisleton.com,no_bid_page,domain,,
+CA,Kerman,cityofkerman.net,unreachable,,,
+CA,La Cañada Flintridge,lcf.ca.gov,no_bid_page,homepage,,
+CA,La Habra,ci.la-habra.ca.us,unreachable,,,
+CA,La Habra Heights,la-habra-heights.org,unreachable,,,
+CA,La Mesa,cityoflamesa.com,unreachable,,,
+CA,La Mirada,cityoflamirada.org,no_bid_page,domain,,
+CA,La Palma,cityoflapalma.org,unreachable,,,
+CA,La Puente,lapuente.org,found,domain,https://lapuente.org/bids,no
+CA,La Quinta,la-quinta.org,unreachable,,,
+CA,La Verne,cityoflaverne.org,unreachable,,,
+CA,Laguna Woods,lagunawoodscity.org,no_bid_page,domain,,
+CA,Lake Arrowhead,lakearrowhead.net,unreachable,,,
+CA,Lake Elsinore,lake-elsinore.org,unreachable,,,
+CA,Lake Forest,city-lakeforest.com,no_bid_page,domain,,
+CA,Lakeport,cityoflakeport.com,unreachable,,,
+CA,Lakewood,lakewoodcity.org,found,domain,https://lakewoodcity.org/bids,yes
+CA,Lancaster,cityoflancasterca.org,unreachable,,,
+CA,Lathrop,ci.lathrop.ca.us,unreachable,,,
+CA,Lawndale,lawndalecity.org,no_bid_page,domain,,
+CA,Lemon Grove,lemongrove.ca.gov,no_bid_page,domain,,
+CA,Lemoore,lemoore.com,no_bid_page,domain,,
+CA,Lincoln,ci.lincoln.ca.us,unreachable,,,
+CA,Lindsay,lindsay.ca.us,unreachable,,,
+CA,Live Oak,liveoakcity.org,unreachable,,,
+CA,Lomita,lomitacity.com,found,domain,https://lomitacity.com/current-bids,yes
+CA,Lompoc,cityoflompoc.com,unreachable,,,
+CA,Los Alamitos,cityoflosalamitos.org,found,domain,https://cityoflosalamitos.org/Bids.aspx,yes
+CA,Los Banos,losbanos.org,unreachable,,,
+CA,Lost Lake Resort,lostlakeriverresort.com,unreachable,,,
+CA,Loyalton,cityofloyalton.com,no_bid_page,domain,,
+CA,Lynwood,lynwood.ca.us,unreachable,,,
+CA,Malibu,malibucity.org,found,domain,https://malibucity.org/Bids.aspx,no
+CA,Maricopa,cityofmaricopa.org,no_bid_page,domain,,
+CA,Martinez,cityofmartinez.org,unreachable,,,
+CA,Marysville,marysville.ca.us,unreachable,,,
+CA,Maywood,cityofmaywood.com,found,domain,https://cityofmaywood.com/Bids.aspx,yes
+CA,McFarland,mcfarlandcity.org,no_bid_page,domain,,
+CA,Mendota,ci.mendota.ca.us,unreachable,,,
+CA,Menifee,cityofmenifee.us,unreachable,,,
+CA,Modesto,modestogov.com,found,domain,https://modestogov.com/Bids.aspx,yes
+CA,Mojave,visitmojave.com,no_bid_page,domain,,
+CA,Monrovia,ci.monrovia.ca.us,unreachable,,,
+CA,Montague,ci.montague.ca.us,unreachable,,,
+CA,Montclair,cityofmontclair.org,no_bid_page,domain,,
+CA,Montebello,cityofmontebello.com,found,domain,https://cityofmontebello.com/departments/finance/purchasing,yes
+CA,Monterey Park,ci.monterey-park.ca.us,unreachable,,,
+CA,Morro Bay,morro-bay.ca.us,found,domain,https://morro-bay.ca.us/Bids.aspx,no
+CA,Mount Shasta,ci.mt-shasta.ca.us,unreachable,,,
+CA,Needles,cityofneedles.com,unreachable,,,
+CA,Newman,cityofnewman.com,unreachable,,,
+CA,Norco,ci.norco.ca.us,unreachable,,,
+CA,Norwalk,norwalk.org,no_bid_page,domain,,
+CA,Oakdale,oakdalegov.com,unreachable,,,
+CA,Oceanside,ci.oceanside.ca.us,unreachable,,,
+CA,Orange Cove,cityoforangecove.com,found,domain,https://cityoforangecove.com/bids,yes
+CA,Orland,cityoforland.com,no_bid_page,domain,,
+CA,Oroville,cityoforoville.org,found,domain,https://cityoforoville.org/Bids.aspx,yes
+CA,Pacific Grove,ci.pg.ca.us,unreachable,,,
+CA,Pacific House,pacifichouse.org,found,domain,https://pacifichouse.org/Bids.aspx,no
+CA,Palmdale,cityofpalmdale.org,unreachable,,,
+CA,Palos Verdes Estates,pvestates.org,unreachable,,,
+CA,Paramount,paramountcity.com,unreachable,,,
+CA,Parlier,parlier.ca.us,found,domain,https://parlier.ca.us/Bids.aspx,no
+CA,Paso Robles,prcity.com,found,homepage,https://prcity.com/Bids.aspx,yes
+CA,Patterson,ci.patterson.ca.us,unreachable,,,
+CA,Perris,cityofperris.org,unreachable,,,
+CA,Pico Rivera,ci.pico-rivera.ca.us,unreachable,,,
+CA,Pioneertown,pioneertown.com,unreachable,,,
+CA,Pismo Beach,pismobeach.org,found,domain,https://pismobeach.org/Bids.aspx,yes
+CA,Placentia,placentia.org,found,domain,https://placentia.org/rfp,yes
+CA,Placerville,cityofplacerville.org,no_bid_page,domain,,
+CA,Plymouth,ci.plymouth.ca.us,unreachable,,,
+CA,Point Arena,pointarena.ca.gov,found,domain,https://pointarena.ca.gov/rfp,no
+CA,Pomona,ci.pomona.ca.us,unreachable,,,
+CA,Port Hueneme,ci.port-hueneme.ca.us,found,domain,https://ci.port-hueneme.ca.us/Bids.aspx,no
+CA,Porterville,ci.porterville.ca.us,unreachable,,,
+CA,Portola,ci.portola.ca.us,unreachable,,,
+CA,Poway,poway.org,found,domain,https://poway.org/Bids.aspx,yes
+CA,Rancho Cordova,cityofranchocordova.org,unreachable,,,
+CA,Rancho Cucamonga,cityofrc.us,unreachable,,,
+CA,Rancho Santa Margarita,cityofrsm.org,found,homepage,https://cityofrsm.org/Bids.aspx,yes
+CA,Red Bluff,cityofredbluff.org,no_bid_page,domain,,
+CA,Redding,cityofredding.org,found,domain,https://cityofredding.org/bids,yes
+CA,Redlands,ci.redlands.ca.us,unreachable,,,
+CA,Redondo Beach,redondo.org,no_bid_page,homepage,,
+CA,Redwood City,redwoodcity.org,unreachable,,,
+CA,Reedley,reedley.com,unreachable,,,
+CA,Rio Dell,riodellcity.com,no_bid_page,domain,,
+CA,Ripon,cityofripon.org,found,domain,https://cityofripon.org/Bids.aspx,yes
+CA,Riverbank,riverbank.org,found,domain,https://riverbank.org/Bids.aspx,no
+CA,Rocklin,ci.rocklin.ca.us,unreachable,,,
+CA,Rodeo,rodeoca.org,no_bid_page,domain,,
+CA,Rolling Hills,rolling-hills.org,no_bid_page,domain,,
+CA,Rosemead,cityofrosemead.org,no_bid_page,domain,,
+CA,Roseville,roseville.ca.us,found,domain,https://roseville.ca.us/rfp,yes
+CA,San Dimas,cityofsandimas.com,unreachable,,,
+CA,San Fernando,ci.san-fernando.ca.us,no_bid_page,domain,,
+CA,San Gabriel,sangabrielcity.com,found,domain,https://sangabrielcity.com/Bids.aspx,yes
+CA,San Joaquin,cityofsanjoaquin.org,unreachable,,,
+CA,San Marcos,ci.san-marcos.ca.us,unreachable,,,
+CA,San Marino,cityofsanmarino.org,no_bid_page,domain,,
+CA,San Rafael,cityofsanrafael.org,no_bid_page,domain,,
+CA,Sanger,ci.sanger.ca.us,found,domain,https://ci.sanger.ca.us/Bids.aspx,yes
+CA,Santa Fe Springs,california.com,unreachable,,,
+CA,Santa Maria,ci.santa-maria.ca.us,unreachable,,,
+CA,Santa Paula,ci.santa-paula.ca.us,unreachable,,,
+CA,Santa Rosa,srcity.org,found,homepage,https://srcity.org/bids,no
+CA,Santee,ci.santee.ca.us,unreachable,,,
+CA,Saratoga Springs,saratogasprings.com,no_bid_page,domain,,
+CA,Seaside,ci.seaside.ca.us,found,domain,https://ci.seaside.ca.us/Bids.aspx,yes
+CA,Selma,cityofselma.com,no_bid_page,domain,,
+CA,Shafter,shafter.com,unreachable,,,
+CA,Shasta Lake,ci.shasta-lake.ca.us,unreachable,,,
+CA,Sierra Madre,ci.sierra-madre.ca.us,unreachable,,,
+CA,Simi Valley,simivalley.org,unreachable,,,
+CA,Solana Beach,ci.solana-beach.ca.us,found,domain,https://ci.solana-beach.ca.us/Bids.aspx,yes
+CA,Soledad,cityofsoledad.com,found,domain,https://cityofsoledad.com/Bids.aspx,yes
+CA,Solvang,cityofsolvang.com,found,domain,https://cityofsolvang.com/Bids.aspx,yes
+CA,Sonora,sonoraca.com,unreachable,,,
+CA,South El Monte,ci.south-el-monte.ca.us,unreachable,,,
+CA,Stanford,visit.stanford.edu,no_bid_page,domain,,
+CA,Stanton,ci.stanton.ca.us,unreachable,,,
+CA,Surfside,surfsidecolony.org,unreachable,,,
+CA,Susanville,cityofsusanville.net,found,domain,https://cityofsusanville.net/Bids.aspx,no
+CA,Sutter Creek,ci.sutter-creek.ca.us,unreachable,,,
+CA,Taft,cityoftaft.org,found,domain,https://cityoftaft.org/Bids.aspx,yes
+CA,Tehachapi,liveuptehachapi.com,found,domain,https://liveuptehachapi.com/Bids.aspx,yes
+CA,Temecula,cityoftemecula.org,no_bid_page,domain,,
+CA,Thousand Oaks,toaks.org,found,homepage,https://toaks.org/bids,no
+CA,Tracy,ci.tracy.ca.us,found,domain,https://ci.tracy.ca.us/bids,yes
+CA,Trinidad,trinidad.ca.gov,unreachable,,,
+CA,Tulare,tulare.ca.gov,unreachable,,,
+CA,Turlock,cityofturlock.org,no_bid_page,domain,,
+CA,Ukiah,cityofukiah.com,found,domain,https://cityofukiah.com/purchasing,yes
+CA,Upland,ci.upland.ca.us,no_bid_page,domain,,
+CA,Valley Springs,valleyspringsca.us,found,domain,https://valleyspringsca.us/bids-and-rfps,no
+CA,Ventura,cityofventura.ca.gov,found,domain,https://cityofventura.ca.gov/Bids.aspx,yes
+CA,Vernon,cityofvernon.org,unreachable,,,
+CA,Victorville,ci.victorville.ca.us,unreachable,,,
+CA,Villa Park,villapark.org,found,domain,https://villapark.org/departments/finance/purchasing,yes
+CA,Visalia,visalia.city,found,domain,https://visalia.city/Bids.aspx,yes
+CA,Vista,cityofvista.com,unreachable,,,
+CA,Walnut,cityofwalnut.org,no_bid_page,domain,,
+CA,Wasco,ci.wasco.ca.us,unreachable,,,
+CA,Waterford,cityofwaterford.org,unreachable,,,
+CA,Weaverville,weavervilleonline.net,unreachable,,,
+CA,Weed,ci.weed.ca.us,no_bid_page,domain,,
+CA,West Covina,westcovina.org,unreachable,,,
+CA,West Hollywood,weho.org,unreachable,,,
+CA,West Sacramento,cityofwestsacramento.org,unreachable,,,
+CA,Westlake Village,wlv.org,found,homepage,https://wlv.org/Bids.aspx,no
+CA,Westmorland,cityofwestmorland.net,no_bid_page,domain,,
+CA,Wheatland,wheatland.ca.gov,no_bid_page,domain,,
+CA,Whittier,cityofwhittier.org,unreachable,,,
+CA,Wildomar,cityofwildomar.org,no_bid_page,domain,,
+CA,Williams,cityofwilliams.org,no_bid_page,domain,,
+CA,Winters,cityofwinters.org,found,domain,https://cityofwinters.org/Bids.aspx,yes
+CA,Woodlake,cityofwoodlake.com,unreachable,,,
+CA,Woodland,cityofwoodland.org,found,domain,https://cityofwoodland.org/Bids.aspx,no
+CA,Yreka,ci.yreka.ca.us,found,domain,https://ci.yreka.ca.us/Bids.aspx,no
+CA,Yuba City,yubacity.net,no_bid_page,domain,,
+CA,Yucaipa,yucaipa.org,unreachable,,,
+CO,Akron,townofakron.com,no_bid_page,domain,,
+CO,Alamosa,cityofalamosa.org,no_bid_page,domain,,
+CO,Arvada,arvada.org,found,domain,https://arvada.org/Bids.aspx,yes
+CO,Aurora,auroragov.org,found,domain,https://auroragov.org/purchasing,yes
+CO,Black Hawk,cityofblackhawk.org,unreachable,,,
+CO,Breckenridge,townofbreckenridge.com,unreachable,,,
+CO,Broomfield,broomfield.org,found,domain,https://broomfield.org/Bids.aspx,no
+CO,Brush,brushcolo.com,no_bid_page,domain,,
+CO,Burlington,burlingtoncolo.com,found,domain,https://burlingtoncolo.com/Bids.aspx,no
+CO,Cañon City,canoncity.org,not_this_town,,,
+CO,Central City,centralcitycolorado.us,unreachable,,,
+CO,Cherry Hills Village,cherryhillsvillage.com,found,domain,https://cherryhillsvillage.com/Bids.aspx,yes
+CO,Commerce City,ci.commerce-city.co.us,unreachable,,,
+CO,Conifer,goconifer.com,found,domain,https://goconifer.com/rfp,no
+CO,Cordillera,cordilleraliving.com,found,domain,https://cordilleraliving.com/bid-opportunities,no
+CO,Cortez,cityofcortez.com,unreachable,,,
+CO,Craig,ci.craig.co.us,found,domain,https://ci.craig.co.us/Bids.aspx,yes
+CO,Cripple Creek,cityofcripplecreek.com,no_bid_page,domain,,
+CO,Dacono,ci.dacono.co.us,unreachable,,,
+CO,Delta,delta-co.gov,unreachable,,,
+CO,Denver,denvergov.org,found,domain,https://denvergov.org/purchasing,yes
+CO,Dunton Hot Springs,duntondestinations.com,not_this_town,,,
+CO,Durango,durangogov.org,found,domain,https://durangogov.org/Bids.aspx,yes
+CO,Eads,kcedfonline.org,unreachable,,,
+CO,Edgewater,edgewaterco.com,unreachable,,,
+CO,Evans,cityofevans.org,unreachable,,,
+CO,Fairplay,fairplayco.us,no_bid_page,domain,,
+CO,Federal Heights,ci.federal-heights.co.us,unreachable,,,
+CO,Florence,florencecolorado.org,unreachable,,,
+CO,Fort Collins,fcgov.com,found,homepage,https://fcgov.com/purchasing,yes
+CO,Fort Lupton,fortlupton.org,unreachable,,,
+CO,Fort Morgan,cityoffortmorgan.com,unreachable,,,
+CO,Fountain,fountaincolorado.org,unreachable,,,
+CO,Fruita,fruita.org,found,domain,https://fruita.org/Bids.aspx,no
+CO,Georgetown,town.georgetown.co.us,unreachable,,,
+CO,Glendale,glendale.co.us,found,domain,https://glendale.co.us/Bids.aspx,no
+CO,Glenwood Springs,ci.glenwood-springs.co.us,unreachable,,,
+CO,Golden,cityofgolden.net,no_bid_page,domain,,
+CO,Greeley,greeleygov.com,found,domain,https://greeleygov.com/finance/purchasing,yes
+CO,Greenwood Village,greenwoodvillage.com,found,domain,https://greenwoodvillage.com/Bids.aspx,yes
+CO,Holyoke,holyokechamber.org,no_bid_page,domain,,
+CO,Hot Sulphur Springs,hotsulphurspringsco.com,no_bid_page,domain,,
+CO,Hugo,hugoimprovement.wix.com,unreachable,,,
+CO,Idaho Springs,idahospringsco.com,unreachable,,,
+CO,Kiowa,townofkiowa.com,unreachable,,,
+CO,La Junta,ci.la-junta.co.us,unreachable,,,
+CO,Lafayette,cityoflafayette.com,unreachable,,,
+CO,Lake City,townoflakecity.us,unreachable,,,
+CO,Lakewood,lakewood.org,no_bid_page,domain,,
+CO,Lamar,ci.lamar.co.us,found,domain,https://ci.lamar.co.us/rfp,yes
+CO,Las Animas,cityoflasanimas.com,unreachable,,,
+CO,Leadville,leadville.com,no_bid_page,domain,,
+CO,Lone Tree,cityoflonetree.com,found,domain,https://cityoflonetree.com/rfp,yes
+CO,Longmont,ci.longmont.co.us,unreachable,,,
+CO,Louisville,ci.louisville.co.us,unreachable,,,
+CO,Loveland,ci.loveland.co.us,unreachable,,,
+CO,Manitou Springs,manitousprings-co.gov,unreachable,,,
+CO,Meeker,townofmeeker.org,found,domain,https://townofmeeker.org/invitation-to-bid,yes
+CO,Monte Vista,ci.monte-vista.co.us,unreachable,,,
+CO,Montrose,cityofmontrose.org,found,domain,https://cityofmontrose.org/Bids.aspx,yes
+CO,Niwot,niwot.com,no_bid_page,domain,,
+CO,Northglenn,northglenn.org,found,domain,https://northglenn.org/bids,yes
+CO,Ouray,ci.ouray.co.us,no_bid_page,domain,,
+CO,Rifle,rifleco.org,found,domain,https://rifleco.org/bids,yes
+CO,Rocky Ford,rockyfordcolo.com,no_bid_page,domain,,
+CO,Salida,cityofsalida.com,unreachable,,,
+CO,San Luis,townofsanluisco.org,unreachable,,,
+CO,Sheridan,ci.sheridan.co.us,found,domain,https://ci.sheridan.co.us/Bids.aspx,yes
+CO,Silverton,silverton.co.us,unreachable,,,
+CO,Springfield,springfieldcolorado.com,unreachable,,,
+CO,Steamboat Springs,steamboatsprings.net,found,domain,https://steamboatsprings.net/Bids.aspx,no
+CO,Sterling,sterlingcolo.com,no_bid_page,domain,,
+CO,Telluride,telluride-co.gov,unreachable,,,
+CO,Thornton,cityofthornton.net,unreachable,,,
+CO,Trinidad,trinidad.co.gov,no_bid_page,domain,,
+CO,Victor,victorcolorado.com,found,domain,https://victorcolorado.com/rfps,no
+CO,Walden,colorado.gov,unreachable,,,
+CO,Walsenburg,cityofwalsenburg.com,unreachable,,,
+CO,Westcliffe,townofwestcliffe.com,no_bid_page,domain,,
+CO,Westminster,ci.westminster.co.us,unreachable,,,
+CO,Wheat Ridge,ci.wheatridge.co.us,no_bid_page,domain,,
+CO,Woodland Park,city-woodlandpark.org,unreachable,,,
+CO,Wray,wrayco.net,unreachable,,,
+CO,Yuma,yumacolo.org,unreachable,,,
+CT,Ansonia,cityofansonia.com,no_bid_page,domain,,
+CT,Barkhamsted,munic.state.ct.us,unreachable,,,
+CT,Bethany,bethany-ct.com,found,domain,https://bethany-ct.com/Bids.aspx,yes
+CT,Bethlehem,ci.bethlehem.ct.us,unreachable,,,
+CT,Black Rock,blackrockcc.org,unreachable,,,
+CT,Bristol,ci.bristol.ct.us,unreachable,,,
+CT,East Lyme,eltownhall.com,found,homepage,https://eltownhall.com/departments/purchasing,yes
+CT,Gaylordsville,gaylordsville.com,no_bid_page,domain,,
+CT,Litchfield,townoflitchfield.org,unreachable,,,
+CT,Mansfield,mansfieldct.org,no_bid_page,domain,,
+CT,Meriden,cityofmeriden.org,unreachable,,,
+CT,Middletown,cityofmiddletown.com,unreachable,,,
+CT,Milford,milfordct.us,found,domain,https://milfordct.us/Bids.aspx,yes
+CT,Mystic,mystic.org,no_bid_page,domain,,
+CT,Norwalk,norwalkct.org,found,domain,https://norwalkct.org/Bids.aspx,yes
+CT,Norwich,norwichct.org,unreachable,,,
+CT,Preston,preston-ct.org,unreachable,,,
+CT,Shelton,cityofshelton.org,no_bid_page,domain,,
+CT,Torrington,torringtonct.org,found,domain,https://torringtonct.org/Bids.aspx,no
+CT,Waterbury,waterburyct.org,no_bid_page,domain,,
+CT,West Haven,cityofwesthaven.com,found,domain,https://cityofwesthaven.com/Bids.aspx,no
+CT,Wethersfield,wethersfieldct.com,unreachable,,,
+CT,Windsor,townofwindsorct.com,found,domain,https://townofwindsorct.com/Bids.aspx,no
+DE,Ardencroft,theardens.com,not_this_town,,,
+DE,Delaware City,delawarecity.org,unreachable,,,
+DE,Dover,cityofdover.com,found,domain,https://cityofdover.com/purchasing,yes
+DE,Georgetown,georgetowndel.com,found,domain,https://georgetowndel.com/Bids.aspx,yes
+DE,Harrington,harrington.delaware.gov,no_bid_page,domain,,
+DE,Lewes,ci.lewes.de.us,no_bid_page,domain,,
+DE,Milford,cityofmilford.com,found,domain,https://cityofmilford.com/Bids.aspx,yes
+DE,New Castle,newcastlecity.delaware.gov,found,domain,https://newcastlecity.delaware.gov/invitation-to-bid,yes
+DE,Rehoboth Beach,cityofrehoboth.com,no_bid_page,homepage,,
+DE,Seaford,seafordde.com,no_bid_page,domain,,
+DE,Woodbrook,woodbrookdelaware.org,unreachable,,,
+FL,Alachua,cityofalachua.com,found,domain,https://cityofalachua.com/Bids.aspx,no
+FL,Altamonte Springs,altamonte.org,found,homepage,https://altamonte.org/procurement,yes
+FL,Anna Maria,cityofannamaria.com,unreachable,,,
+FL,Apalachicola,cityofapalachicola.com,found,domain,https://cityofapalachicola.com/rfp,no
+FL,Apopka,apopka.net,no_bid_page,domain,,
+FL,Archer,cityofarcher.com,found,domain,https://cityofarcher.com/rfps,yes
+FL,Asbury Lake,lakeasbury.us,unreachable,,,
+FL,Atlantic Beach,coab.us,found,homepage,https://coab.us/Bids.aspx,no
+FL,Auburndale,auburndalefl.com,found,domain,https://auburndalefl.com/rfp,yes
+FL,Aventura,cityofaventura.com,unreachable,,,
+FL,Avon Park,avonpark.cc,unreachable,,,
+FL,Bartow,cityofbartow.net,found,domain,https://cityofbartow.net/Bids.aspx,no
+FL,Bealsville,bealsville.com,unreachable,,,
+FL,Belle Glade,bellegladegov.com,unreachable,,,
+FL,Belle Isle,cityofbelleislefl.org,unreachable,,,
+FL,Belleair Beach,cityofbelleairbeach.com,unreachable,,,
+FL,Belleair Bluffs,belleairbluffs.org,unreachable,,,
+FL,Belleview,belleviewfl.org,unreachable,,,
+FL,Blountstown,blountstown.org,no_bid_page,domain,,
+FL,Boca Raton,myboca.us,found,homepage,https://myboca.us/Bids.aspx,yes
+FL,Bonifay,cityofbonifay.com,unreachable,,,
+FL,Bonita Springs,cityofbonitasprings.org,no_bid_page,domain,,
+FL,Bowling Green,bowlinggreenfl.org,no_bid_page,domain,,
+FL,Boynton Beach,boynton-beach.org,found,domain,https://boynton-beach.org/Bids.aspx,no
+FL,Bradenton,cityofbradenton.com,found,domain,https://cityofbradenton.com/purchasing,yes
+FL,Bradenton Beach,cityofbradentonbeach.com,no_bid_page,domain,,
+FL,Bristol,cityofbristolflorida.org,no_bid_page,domain,,
+FL,Brooksville,cityofbrooksville.us,found,domain,https://cityofbrooksville.us/Bids.aspx,yes
+FL,Brownsville,myescambia.com,not_this_town,,,
+FL,Bunnell,bunnellcity.us,found,domain,https://bunnellcity.us/Bids.aspx,yes
+FL,Bushnell,cityofbushnellfl.com,no_bid_page,domain,,
+FL,Callaway,cityofcallaway.com,found,domain,https://cityofcallaway.com/Bids.aspx,no
+FL,Cape Canaveral,cityofcapecanaveral.org,no_bid_page,domain,,
+FL,Cape Coral,capecoral.net,unreachable,,,
+FL,Carrabelle,mycarrabelle.com,found,domain,https://mycarrabelle.com/Bids.aspx,no
+FL,Cassadaga,cassadaga.org,unreachable,,,
+FL,Casselberry,casselberry.org,found,domain,https://casselberry.org/Bids.aspx,no
+FL,Cedar Key,thecityofcedarkey.org,unreachable,,,
+FL,Chattahoochee,cityofchattahoochee.com,no_bid_page,domain,,
+FL,Chiefland,chiefland.govoffice.com,no_bid_page,domain,,
+FL,Chipley,cityofchipley.com,found,domain,https://cityofchipley.com/Bids.aspx,no
+FL,Clearwater,myclearwater.com,no_bid_page,domain,,
+FL,Clermont,cityofclermontfl.com,unreachable,,,
+FL,Cocoa,cocoafl.org,found,domain,https://cocoafl.org/Bids.aspx,no
+FL,Cocoa Beach,cityofcocoabeach.com,found,domain,https://cityofcocoabeach.com/Bids.aspx,no
+FL,Coconut Creek,coconutcreek.net,found,domain,https://coconutcreek.net/purchasing,yes
+FL,Cooper City,coopercityfl.org,no_bid_page,domain,,
+FL,Coral Gables,coralgables.com,found,domain,https://coralgables.com/procurement,yes
+FL,Coral Springs,coralsprings.org,found,domain,https://coralsprings.org/purchasing,yes
+FL,Crescent City,crescentcity-fl.com,found,domain,https://crescentcity-fl.com/bids,yes
+FL,Crestview,cityofcrestview.org,found,domain,https://cityofcrestview.org/Bids.aspx,yes
+FL,Crystal River,crystalriverfl.org,unreachable,,,
+FL,Dade City,dadecityfl.com,no_bid_page,domain,,
+FL,Davenport,mydavenport.org,found,domain,https://mydavenport.org/departments/purchasing,yes
+FL,Daytona Beach,codb.us,found,homepage,https://codb.us/Bids.aspx,no
+FL,Daytona Beach Shores,dbshores.org,found,homepage,https://dbshores.org/Bids.aspx,no
+FL,DeBary,debary.org,found,domain,https://debary.org/Bids.aspx,yes
+FL,DeFuniak Springs,defuniaksprings.net,no_bid_page,domain,,
+FL,DeLand,deland.org,found,domain,https://deland.org/Bids.aspx,no
+FL,Deerfield Beach,deerfield-beach.com,found,domain,https://deerfield-beach.com/Bids.aspx,no
+FL,Destin,cityofdestin.com,found,domain,https://cityofdestin.com/Bids.aspx,yes
+FL,Doral,cityofdoral.com,no_bid_page,domain,,
+FL,Dunedin,dunedingov.com,unreachable,,,
+FL,Dunnellon,dunnellon.org,unreachable,,,
+FL,Eagle Lake,eaglelake-fla.com,unreachable,,,
+FL,Edgewater,cityofedgewater.org,found,domain,https://cityofedgewater.org/Bids.aspx,yes
+FL,Eglin Air Force Base,eglin.af.mil,unreachable,,,
+FL,El Portal,elportalvillage.com,unreachable,,,
+FL,Eustis,eustis.org,no_bid_page,domain,,
+FL,Fanning Springs,fanningspringsflorida.org,no_bid_page,domain,,
+FL,Fellsmere,cityoffellsmere.org,unreachable,,,
+FL,Fernandina Beach,fbfl.us,found,homepage,https://fbfl.us/Bids.aspx,no
+FL,Flagler Beach,cityofflaglerbeach.com,found,domain,https://cityofflaglerbeach.com/Bids.aspx,yes
+FL,Floridatown,niche.com,not_this_town,,,
+FL,Fort Meade,cityoffortmeade.com,found,domain,https://cityoffortmeade.com/Bids.aspx,no
+FL,Fort Myers,cityftmyers.com,no_bid_page,homepage,,
+FL,Fort Pierce,cityoffortpierce.com,found,domain,https://cityoffortpierce.com/Bids.aspx,no
+FL,Fort Walton Beach,fwb.org,found,homepage,https://fwb.org/Bids.aspx,no
+FL,Frostproof,cityoffrostproof.com,no_bid_page,domain,,
+FL,Fruitland Park,fruitlandpark.org,found,domain,https://fruitlandpark.org/procurement,yes
+FL,Golf,villageofgolf.org,unreachable,,,
+FL,Green Cove Springs,greencovesprings.com,found,domain,https://greencovesprings.com/Bids.aspx,no
+FL,Gretna,mygretna.net,unreachable,,,
+FL,Gulf Breeze,cityofgulfbreeze.com,unreachable,,,
+FL,Gulfport,mygulfport.us,unreachable,,,
+FL,Haines City,hainescity.com,found,domain,https://hainescity.com/Bids.aspx,no
+FL,Hawthorne,cityofhawthorne.net,found,domain,https://cityofhawthorne.net/purchasing,yes
+FL,Hialeah Gardens,cityofhialeahgardens.com,unreachable,,,
+FL,High Springs,highsprings.us,found,domain,https://highsprings.us/rfps,yes
+FL,Holly Hill,hollyhillfl.org,unreachable,,,
+FL,Hollywood,hollywoodfl.org,found,domain,https://hollywoodfl.org/Bids.aspx,yes
+FL,Holmes Beach,holmesbeachfl.org,no_bid_page,domain,,
+FL,Homestead,cityofhomestead.com,unreachable,,,
+FL,Hurlburt Field,hurlburt.af.mil,unreachable,,,
+FL,Indian Harbour Beach,indianharbourbeach.org,found,domain,https://indianharbourbeach.org/Bids.aspx,no
+FL,Indian Rocks Beach,indian-rocks-beach.com,no_bid_page,domain,,
+FL,Jacksonville Beach,jacksonvillebeach.org,found,domain,https://jacksonvillebeach.org/Bids.aspx,yes
+FL,Jasper,jasperflonline.com,no_bid_page,domain,,
+FL,Key Colony Beach,keycolonybeach.net,found,domain,https://keycolonybeach.net/rfp,yes
+FL,Key West,keywestcity.com,no_bid_page,domain,,
+FL,Keystone Heights,keystoneheights.us,no_bid_page,domain,,
+FL,Kissimmee,kissimmee.org,unreachable,,,
+FL,LaBelle,citylabelle.com,no_bid_page,domain,,
+FL,Lake Alfred,mylakealfred.com,found,domain,https://mylakealfred.com/Bids.aspx,yes
+FL,Lake Butler,cityoflakebutler.org,no_bid_page,domain,,
+FL,Lake City,lcfla.com,unreachable,,,
+FL,Lake Helen,lakehelen.com,unreachable,,,
+FL,Lake Mary,lakemaryfl.com,unreachable,,,
+FL,Lake Wales,cityoflakewales.com,unreachable,,,
+FL,Lakeland,lakelandgov.net,found,domain,https://lakelandgov.net/purchasing,yes
+FL,Largo,largo.com,no_bid_page,domain,,
+FL,Lauderdale Lakes,lauderdalelakes.org,found,domain,https://lauderdalelakes.org/Bids.aspx,yes
+FL,Laurel Hill,laurelhillnow.com,no_bid_page,domain,,
+FL,Layton,cityoflayton.com,no_bid_page,domain,,
+FL,Lighthouse Point,lighthousepoint.com,unreachable,,,
+FL,Live Oak,cityofliveoak.org,no_bid_page,domain,,
+FL,Longwood,longwoodfl.org,found,domain,https://longwoodfl.org/Bids.aspx,no
+FL,Lynn Haven,cityoflynnhaven.com,unreachable,,,
+FL,Macclenny,cityofmacclenny.com,no_bid_page,domain,,
+FL,Madison,cityofmadisonfl.com,found,domain,https://cityofmadisonfl.com/bids,yes
+FL,Maitland,itsmymaitland.com,found,domain,https://itsmymaitland.com/Bids.aspx,yes
+FL,Marathon,ci.marathon.fl.us,unreachable,,,
+FL,Marco Island,cityofmarcoisland.com,no_bid_page,domain,,
+FL,Margate,margatefl.com,found,domain,https://margatefl.com/Bids.aspx,no
+FL,Marianna,cityofmarianna.com,found,domain,https://cityofmarianna.com/Bids.aspx,yes
+FL,Mary Esther,cityofmaryesther.com,found,domain,https://cityofmaryesther.com/Bids.aspx,yes
+FL,Mascotte,cityofmascotte.com,found,domain,https://cityofmascotte.com/Bids.aspx,yes
+FL,Melbourne,melbourneflorida.org,unreachable,,,
+FL,Merritt Island,merrittislandnow.com,unreachable,,,
+FL,Mexico Beach,mexicobeachgov.com,found,domain,https://mexicobeachgov.com/bids,yes
+FL,Midway,mymidwayfl.com,no_bid_page,domain,,
+FL,Milton,ci.milton.fl.us,unreachable,,,
+FL,Minneola,minneola.us,unreachable,,,
+FL,Monticello,cityofmonticello.us,found,domain,https://cityofmonticello.us/Bids.aspx,no
+FL,Moore Haven,moorehaven.org,found,domain,https://moorehaven.org/rfp,yes
+FL,Mount Dora,ci.mount-dora.fl.us,found,domain,https://ci.mount-dora.fl.us/Bids.aspx,no
+FL,Mulberry,cityofmulberryfl.org,unreachable,,,
+FL,Naples,naplesgov.com,unreachable,,,
+FL,Navarre,floridasplayground.com,not_this_town,,,
+FL,Neptune Beach,ci.neptune-beach.fl.us,unreachable,,,
+FL,New Port Richey,citynpr.org,unreachable,,,
+FL,New Smyrna Beach,cityofnsb.com,found,homepage,https://cityofnsb.com/Bids.aspx,yes
+FL,Newberry,ci.newberry.fl.us,unreachable,,,
+FL,Niceville,cityofniceville.org,found,domain,https://cityofniceville.org/Bids.aspx,yes
+FL,North Bay Village,nbvillage.com,not_this_town,,,
+FL,North Lauderdale,nlauderdale.org,no_bid_page,homepage,,
+FL,North Miami Beach,citynmb.com,unreachable,,,
+FL,North Port,cityofnorthport.com,found,domain,https://cityofnorthport.com/Bids.aspx,yes
+FL,Oak Hill,oakhillfl.com,unreachable,,,
+FL,Oakland Park,oaklandparkfl.org,no_bid_page,domain,,
+FL,Ocala,ocalafl.org,unreachable,,,
+FL,Ocoee,ocoee.org,found,domain,https://ocoee.org/Bids.aspx,yes
+FL,Okeechobee,cityofokeechobee.com,no_bid_page,domain,,
+FL,Oldsmar,myoldsmar.com,found,domain,https://myoldsmar.com/Bids.aspx,yes
+FL,Orange City,ourorangecity.com,unreachable,,,
+FL,Ormond Beach,ormondbeach.org,unreachable,,,
+FL,Oviedo,cityofoviedo.net,found,domain,https://cityofoviedo.net/Bids.aspx,yes
+FL,Pahokee,cityofpahokee.com,unreachable,,,
+FL,Palm Bay,palmbayflorida.org,unreachable,,,
+FL,Palm Beach Gardens,pbgfl.com,unreachable,,,
+FL,Palm Coast,palmcoastgov.com,found,domain,https://palmcoastgov.com/Bids.aspx,yes
+FL,Palmetto,palmettofl.org,no_bid_page,domain,,
+FL,Panama City,pcgov.org,unreachable,,,
+FL,Panama City Beach,pcbgov.com,no_bid_page,homepage,,
+FL,Parker,cityofparker.com,found,domain,https://cityofparker.com/Bids.aspx,yes
+FL,Parkland,cityofparkland.org,found,domain,https://cityofparkland.org/Bids.aspx,no
+FL,Patrick Space Force Base,patrick.spaceforce.mil,unreachable,,,
+FL,Pembroke Pines,ppines.com,found,homepage,https://ppines.com/Bids.aspx,no
+FL,Pensacola,cityofpensacola.com,found,domain,https://cityofpensacola.com/Bids.aspx,yes
+FL,Pensacola Beach,visitpensacola.com,not_this_town,,,
+FL,Perry,cityofperry.net,unreachable,,,
+FL,Pinellas Park,pinellas-park.com,unreachable,,,
+FL,Plant City,plantcitygov.com,found,domain,https://plantcitygov.com/procurement,yes
+FL,Plantation,plantation.org,unreachable,,,
+FL,Polk City,mypolkcity.org,unreachable,,,
+FL,Port Canaveral,portcanaveral.org,unreachable,,,
+FL,Port Charlotte,portcharlotte.com,unreachable,,,
+FL,Port Orange,port-orange.org,unreachable,,,
+FL,Port Richey,cityofportrichey.com,unreachable,,,
+FL,Port St. Joe,cityofportstjoe.com,no_bid_page,domain,,
+FL,Port St. Lucie,cityofpsl.com,found,homepage,https://cityofpsl.com/procurement,yes
+FL,Punta Gorda,ci.punta-gorda.fl.us,unreachable,,,
+FL,Quincy,myquincy.net,unreachable,,,
+FL,Riviera Beach,rivierabch.com,found,homepage,https://rivierabch.com/bids,yes
+FL,Rockledge,cityofrockledge.org,found,domain,https://cityofrockledge.org/Bids.aspx,no
+FL,Safety Harbor,cityofsafetyharbor.com,no_bid_page,domain,,
