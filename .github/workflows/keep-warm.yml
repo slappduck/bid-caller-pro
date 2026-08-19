@@ -1,0 +1,57 @@
+name: Keep the server warm
+
+# Render's free tier spins a service down after ~15 minutes with no traffic,
+# and the next visitor waits up to a minute for it to boot. That minute lands
+# on the worst possible person: a prospect running their first scan, deciding
+# whether this is real software. This pings the cheap static "/" probe often
+# enough that it never gets there.
+#
+# This is the free stand-in for paying for an always-on instance. It is
+# genuinely worse than paying, in two ways worth knowing:
+#
+#   1. GitHub's scheduled runners are best-effort. A */10 schedule is often
+#      late and is sometimes skipped entirely when their queue is busy, so a
+#      cold start can still slip through. Paying removes the possibility.
+#   2. It consumes free-tier instance hours. Render's free plan allots a fixed
+#      number per month; keeping one service awake ~13h/day uses roughly 400
+#      of them. That fits comfortably for a single service, but a second free
+#      service on the same account changes that maths -- check the dashboard
+#      before adding one.
+#
+# Deliberately NOT 24/7. Concrete contractors in the Midwest are not signing
+# up at 3am, and the hours saved are the ones that keep this inside the free
+# allowance. Nights and the small hours are left to spin down.
+#
+# When there's revenue, delete this file and pay for an always-on instance
+# instead -- it is strictly better, just not free.
+
+on:
+  schedule:
+    # Every 10 minutes, 11:00-23:59 UTC = roughly 6am-7pm US Central.
+    - cron: "*/10 11-23 * * *"
+  workflow_dispatch: {}
+
+# A slow ping should never pile up behind the previous one.
+concurrency:
+  group: keep-warm
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping the health probe
+        run: |
+          # "/" is the static probe -- no scan, no API spend, just proof the
+          # process is up. --max-time is generous on purpose: if the service
+          # HAS gone cold, this request is the one paying the wake-up cost,
+          # which is exactly the point.
+          code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 90 \
+            "${BIDCALLER_SERVER_URL}/") || code="000"
+          echo "GET / -> $code"
+          # Never fail the workflow. A missed ping is not an incident, and a
+          # red X every time GitHub's scheduler hiccups trains you to ignore
+          # the one that matters.
+          exit 0
+        env:
+          BIDCALLER_SERVER_URL: ${{ secrets.BIDCALLER_SERVER_URL }}
