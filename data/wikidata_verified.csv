@@ -204,7 +204,7 @@ IA,Elkader,elkader-iowa.com,no_bid_page,domain,,
 IA,Elkhart,elkhartiowa.com,no_bid_page,domain,,
 IA,Ely,elyiowa.com,no_bid_page,domain,,
 IA,Emmetsburg,emmetsburg.com,no_bid_page,domain,,
-IA,Epworth,ci.epworth.ia.us,unreachable,,,
+IA,Epworth,ci.epworth.ia.us,found,domain,https://ci.epworth.ia.us/bids,yes
 IA,Estherville,cityofestherville.org,no_bid_page,domain,,
 IA,Evansdale,evansdale.govoffice.com,unreachable,,,
 IA,Everly,everlyiowa.com,unreachable,,,
@@ -223,7 +223,7 @@ IA,Glenwood,cityofglenwood.org,no_bid_page,domain,,
 IA,Glidden,gliddeniowa.com,no_bid_page,domain,,
 IA,Greene,greeneiowa.com,unreachable,,,
 IA,Greenfield,greenfieldiowa.com,no_bid_page,domain,,
-IA,Griswold,griswoldia.govoffice2.com,unreachable,,,
+IA,Griswold,griswoldia.govoffice2.com,found,domain,https://griswoldia.govoffice2.com/bids,no
 IA,Grundy Center,grundycentergoodlife.com,no_bid_page,domain,,
 IA,Guthrie Center,guthriecenter.com,unreachable,,,
 IA,Guttenberg,cityofguttenberg.com,unreachable,,,
@@ -493,7 +493,7 @@ IL,Golconda,visitgolconda.com,unreachable,,,
 IL,Grafton,cityofgrafton.org,unreachable,,,
 IL,Granite City,granitecity.illinois.gov,unreachable,,,
 IL,Grayville,cityofgrayville.com,unreachable,,,
-IL,Greenville,greenvilleillinois.com,unreachable,,,
+IL,Greenville,greenvilleillinois.com,found,domain,https://greenvilleillinois.com/rfps,yes
 IL,Griggsville,griggsville-il.org,no_bid_page,domain,,
 IL,Hamilton,hamiltonillinois.org,found,domain,https://hamiltonillinois.org/Bids.aspx,no
 IL,Harrisburg,thecityofharrisburgil.com,unreachable,,,
@@ -1012,7 +1012,7 @@ KY,Lawrenceburg,lawrenceburgky.org,no_bid_page,domain,,
 KY,Lebanon,lebanon.ky.gov,no_bid_page,domain,,
 KY,Leitchfield,leitchfield.org,unreachable,,,
 KY,Lewisport,lewisport.cityof.org,no_bid_page,domain,,
-KY,Liberty,libertycaseycounty.com,unreachable,,,
+KY,Liberty,libertycaseycounty.com,found,domain,https://libertycaseycounty.com/bids-and-rfps,no
 KY,London,cityoflondonky.org,unreachable,,,
 KY,Ludlow,ludlow.org,unreachable,,,
 KY,Lyndon,cityofdublin.org,not_this_town,,,
@@ -1390,7 +1390,7 @@ NE,Valley,valleyne.org,unreachable,,,
 NE,Wahoo,wahoo.ne.us,no_bid_page,domain,,
 NE,Wakefield,ci.wakefield.ne.us,unreachable,,,
 NE,Waverly,citywaverly.com,unreachable,,,
-NE,Wayne,cityofwayne.org,unreachable,,,
+NE,Wayne,cityofwayne.org,found,domain,https://cityofwayne.org/Bids.aspx,no
 NE,Weeping Water,weepingwaternebraska.com,found,domain,https://weepingwaternebraska.com/Bids.aspx,no
 NE,West Point,ci.west-point.ne.us,unreachable,,,
 NE,Wisner,ci.wisner.ne.us,unreachable,,,
@@ -1815,7 +1815,7 @@ AZ,Tolleson,tollesonaz.org,found,domain,https://tollesonaz.org/Bids.aspx,no
 AZ,Willcox,cityofwillcox.org,unreachable,,,
 CA,Adelanto,ci.adelanto.ca.us,unreachable,,,
 CA,Agoura Hills,agourahillscity.org,unreachable,,,
-CA,Albany,albanyca.org,unreachable,,,
+CA,Albany,albanyca.org,found,domain,https://www.albanyca.gov/Departments/City-Clerk/RFP-RFQ-Bids,yes
 CA,Alhambra,cityofalhambra.org,found,domain,https://cityofalhambra.org/Bids.aspx,no
 CA,Altadena,altadenatowncouncil.org,unreachable,,,
 CA,Alturas,cityofalturas.org,no_bid_page,domain,,
@@ -1943,7 +1943,7 @@ CA,Isleton,cityofisleton.com,no_bid_page,domain,,
 CA,Kerman,cityofkerman.net,unreachable,,,
 CA,La Cañada Flintridge,lcf.ca.gov,no_bid_page,homepage,,
 CA,La Habra,ci.la-habra.ca.us,unreachable,,,
-CA,La Habra Heights,la-habra-heights.org,unreachable,,,
+CA,La Habra Heights,la-habra-heights.org,found,domain,https://la-habra-heights.org/bids-and-rfps,no
 CA,La Mesa,cityoflamesa.com,unreachable,,,
 CA,La Mirada,cityoflamirada.org,found,domain,"https://cityoflamirada.org/departments/city_clerk/city_bids,_rfps,_rfqs.php",yes
 CA,La Palma,cityoflapalma.org,unreachable,,,
@@ -2302,7 +2302,7 @@ FL,Frostproof,cityoffrostproof.com,found,domain,https://cityoffrostproof.com/gov
 FL,Fruitland Park,fruitlandpark.org,found,domain,https://fruitlandpark.org/procurement,yes
 FL,Golf,villageofgolf.org,unreachable,,,
 FL,Green Cove Springs,greencovesprings.com,found,domain,https://greencovesprings.com/Bids.aspx,no
-FL,Gretna,mygretna.net,unreachable,,,
+FL,Gretna,mygretna.net,found,domain,https://mygretna.net/Bids.aspx,no
 FL,Gulf Breeze,cityofgulfbreeze.com,unreachable,,,
 FL,Gulfport,mygulfport.us,unreachable,,,
 FL,Haines City,hainescity.com,found,domain,https://hainescity.com/Bids.aspx,no
@@ -2429,7 +2429,7 @@ FL,Starke,cityofstarke.org,no_bid_page,domain,,
 FL,Stuart,cityofstuart.us,unreachable,,,
 FL,SummerCamp Beach,joe.com,unreachable,,,
 FL,Sun 'n Lake of Sebring,snldistrict.org,found,homepage,"https://snldistrict.org/business/bids,_rfqs___rfps.php",yes
-FL,Sunny Isles Beach,sibfl.net,unreachable,,,
+FL,Sunny Isles Beach,sibfl.net,found,homepage,https://sibfl.net/purchasing,yes
 FL,Sweetwater,cityofsweetwater.fl.gov,found,domain,https://cityofsweetwater.fl.gov/Bids.aspx,no
 FL,Tallahassee,talgov.com,unreachable,,,
 FL,Tamarac,tamarac.org,unreachable,,,
@@ -2449,7 +2449,7 @@ FL,Waldo,waldo-fl.com,no_bid_page,domain,,
 FL,Wauchula,cityofwauchula.com,no_bid_page,domain,,
 FL,Webster,websterfl.com,no_bid_page,domain,,
 FL,West Melbourne,westmelbourne.org,found,domain,https://westmelbourne.org/bids,yes
-FL,West Miami,cityofwestmiamifl.com,unreachable,,,
+FL,West Miami,cityofwestmiamifl.com,found,domain,https://cityofwestmiamifl.com/departments/purchasing,yes
 FL,West Palm Beach,wpb.org,found,homepage,https://wpb.org/bids,yes
 FL,West Park,citywestpark.com,unreachable,,,
 FL,Weston,westonfl.org,unreachable,,,
@@ -2978,7 +2978,7 @@ MA,Medford,medford.org,no_bid_page,domain,,
 MA,Methuen,ci.methuen.ma.us,unreachable,,,
 MA,Newburyport,cityofnewburyport.com,unreachable,,,
 MA,North Attleborough,north-attleboro.ma.us,unreachable,,,
-MA,Palmer,townofpalmer.com,unreachable,,,
+MA,Palmer,townofpalmer.com,found,domain,https://townofpalmer.com/bids,yes
 MA,Pittsfield,pittsfield-ma.org,found,domain,https://pittsfield-ma.org/bids-and-rfps,no
 MA,Revere,revere.org,no_bid_page,domain,,
 MA,Salem,salem.com,unreachable,,,
@@ -3072,7 +3072,7 @@ MI,Charlotte,charlottemi.org,unreachable,,,
 MI,Cheboygan,cheboygan.org,found,domain,https://cheboygan.org/Bids.aspx,no
 MI,Chelsea,city-chelsea.org,found,domain,https://city-chelsea.org/government/requests_for_proposals_bid_openings.php,yes
 MI,Clawson,cityofclawson.com,found,domain,https://cityofclawson.com/doing_business/bid_opportunities.php,yes
-MI,Clio,clio.govoffice.com,unreachable,,,
+MI,Clio,clio.govoffice.com,found,domain,https://clio.govoffice.com/departments/purchasing,yes
 MI,Coldwater,coldwater.org,unreachable,,,
 MI,Coleman,cityofcoleman.org,no_bid_page,domain,,
 MI,Coloma,cityofcoloma.org,unreachable,,,
@@ -3171,7 +3171,7 @@ MI,Northville,ci.northville.mi.us,found,domain,https://ci.northville.mi.us/Bids.
 MI,Norton Shores,nortonshores.org,found,domain,https://nortonshores.org/business/bids,yes
 MI,Novi,cityofnovi.org,no_bid_page,domain,,
 MI,Olivet,cityofolivet.org,found,domain,https://cityofolivet.org/bids,no
-MI,Owosso,ci.owosso.mi.us,unreachable,,,
+MI,Owosso,ci.owosso.mi.us,found,domain,https://ci.owosso.mi.us/Bids.aspx,yes
 MI,Parchment,parchment.org,no_bid_page,domain,,
 MI,Paw Paw,pawpaw.net,found,domain,https://pawpaw.net/about/bids,no
 MI,Perry,perry.mi.us,found,domain,https://perry.mi.us/Bids.aspx,no
@@ -3224,7 +3224,7 @@ MI,Westland,cityofwestland.com,found,domain,https://cityofwestland.com/Bids.aspx
 MI,Whitehall,cityofwhitehall.org,no_bid_page,domain,,
 MI,Williamston,williamston-mi.us,no_bid_page,domain,,
 MI,Woodhaven,woodhavenmi.org,no_bid_page,domain,,
-MI,Wyandotte,wyandotte.net,unreachable,,,
+MI,Wyandotte,wyandotte.net,found,domain,https://wyandotte.net/Bids.aspx,yes
 MI,Ypsilanti,cityofypsilanti.com,found,domain,https://cityofypsilanti.com/Bids.aspx,yes
 MI,Zeeland,cityofzeeland.com,found,domain,https://cityofzeeland.com/Bids.aspx,no
 MN,Adams,adamsminnesota.com,unreachable,,,
@@ -3308,7 +3308,7 @@ MN,Chanhassen,ci.chanhassen.mn.us,unreachable,,,
 MN,Chaska,mn-chaska.civicplus.com,found,domain,https://mn-chaska.civicplus.com/Bids.aspx,no
 MN,Chatfield,ci.chatfield.mn.us,unreachable,,,
 MN,Chisago City,ci.chisago.mn.us,no_bid_page,homepage,,
-MN,Chisholm,chisholm.govoffice.com,unreachable,,,
+MN,Chisholm,chisholm.govoffice.com,found,domain,https://chisholm.govoffice.com/bids,yes
 MN,Circle Pines,ci.circle-pines.mn.us,no_bid_page,domain,,
 MN,Clara City,claracity.org,unreachable,,,
 MN,Claremont,claremontmn.com,unreachable,,,
@@ -3361,10 +3361,10 @@ MN,Elbow Lake,elbowlakechamber.com,no_bid_page,domain,,
 MN,Elgin,elginmn.com,found,domain,https://elginmn.com/Bids.aspx,no
 MN,Elko New Market,ci.enm.mn.us,unreachable,,,
 MN,Ellendale,ellendalemn.com,unreachable,,,
-MN,Ely,ely.mn.us,unreachable,,,
+MN,Ely,ely.mn.us,found,domain,https://ely.mn.us/rfp,yes
 MN,Erhard,co.otter-tail.mn.us,not_this_town,,,
 MN,Evansville,evansvillemn.com,unreachable,,,
-MN,Eveleth,evelethmn.com,unreachable,,,
+MN,Eveleth,evelethmn.com,found,domain,https://evelethmn.com/government/purchasing,yes
 MN,Excelsior,ci.excelsior.mn.us,found,domain,https://ci.excelsior.mn.us/Bids.aspx,no
 MN,Fairfax,cityoffairfax-mn.gov,unreachable,,,
 MN,Fairmont,fairmont.org,found,domain,https://fairmont.org/contracts-and-bidding-information/,yes
@@ -3534,7 +3534,7 @@ MN,Nashwauk,nashwauk.govoffice.com,unreachable,,,
 MN,Nevis,nevis.govoffice.com,unreachable,,,
 MN,New Hope,ci.new-hope.mn.us,no_bid_page,domain,,
 MN,New London,newlondonmn.net,no_bid_page,domain,,
-MN,New Prague,ci.new-prague.mn.us,unreachable,,,
+MN,New Prague,ci.new-prague.mn.us,found,domain,https://ci.new-prague.mn.us/solicitations,yes
 MN,New Richland,cityofnewrichlandmn.com,found,domain,https://cityofnewrichlandmn.com/Bids.aspx,yes
 MN,New Ulm,ci.new-ulm.mn.us,found,domain,https://ci.new-ulm.mn.us/Bids.aspx,yes
 MN,New York Mills,explorenewyorkmills.com,found,domain,https://explorenewyorkmills.com/bids,no
@@ -3556,7 +3556,7 @@ MN,Oakdale,ci.oakdale.mn.us,found,domain,https://ci.oakdale.mn.us/Bids.aspx,yes
 MN,Olivia,olivia.mn.us,no_bid_page,domain,,
 MN,Onamia,onamia.com,found,domain,https://onamia.com/rfp,no
 MN,Orono,ci.orono.mn.us,unreachable,,,
-MN,Oronoco,oronoco.com,unreachable,,,
+MN,Oronoco,oronoco.com,found,domain,https://oronoco.com/departments/purchasing,yes
 MN,Ortonville,cityofortonville.wordpress.com,unreachable,,,
 MN,Oslo,oslo.ima-jenn.com,unreachable,,,
 MN,Osseo,discoverosseo.com,unreachable,,,
@@ -3689,7 +3689,7 @@ MN,Wolverton,cityofwolverton.com,no_bid_page,domain,,
 MN,Woodland,woodlandmn.org,no_bid_page,domain,,
 MN,Worthington,ci.worthington.mn.us,found,domain,https://ci.worthington.mn.us/Bids.aspx,yes
 MN,Wykoff,wykoff.govoffice2.com,unreachable,,,
-MN,Wyoming,wyomingmn.org,unreachable,,,
+MN,Wyoming,wyomingmn.org,found,domain,https://wyomingmn.org/rfp,yes
 MN,Zimmerman,zimmerman.govoffice.com,unreachable,,,
 MN,Zumbrota,ci.zumbrota.mn.us,no_bid_page,domain,,
 MS,Aberdeen,aberdeenms.us,unreachable,,,
@@ -3743,7 +3743,7 @@ MS,Natchez,natchez.ms.us,found,domain,https://natchez.ms.us/Bids.aspx,no
 MS,New Albany,visitnewalbany.com,no_bid_page,domain,,
 MS,Newton,newtonms.org,no_bid_page,domain,,
 MS,Olive Branch,obms.us,found,homepage,https://obms.us/Bids.aspx,yes
-MS,Oxford,oxfordms.net,unreachable,,,
+MS,Oxford,oxfordms.net,found,domain,https://oxfordms.net/Bids.aspx,no
 MS,Pascagoula,cityofpascagoula.com,found,domain,https://cityofpascagoula.com/Bids.aspx,no
 MS,Pass Christian,pass-christian.com,found,domain,https://pass-christian.com/bids,yes
 MS,Pearl,cityofpearl.com,no_bid_page,domain,,
@@ -3797,7 +3797,7 @@ MT,Havre,ci.havre.mt.us,no_bid_page,domain,,
 MT,Kalispell,kalispell.com,found,domain,https://kalispell.com/Bids.aspx,yes
 MT,Laurel,laurel.mt.gov,unreachable,,,
 MT,Lewistown,cityoflewistown.com,no_bid_page,domain,,
-MT,Libby,libbymontana.com,unreachable,,,
+MT,Libby,libbymontana.com,found,domain,https://libbymontana.com/Bids.aspx,no
 MT,Livingston,livingstonmontana.org,unreachable,,,
 MT,Lolo Hot Springs,lolohotsprings.com,no_bid_page,domain,,
 MT,Miles City,milescitychamber.com,no_bid_page,domain,,
@@ -4054,7 +4054,7 @@ NJ,Hackensack,hackensack.org,found,domain,https://hackensack.org/Bids.aspx,no
 NJ,Hamilton Township,townshipofhamilton.com,no_bid_page,homepage,,
 NJ,Hopewell,hopewellboro-nj.us,found,domain,https://hopewellboro-nj.us/Bids.aspx,no
 NJ,Middle Township,middletownship.com,found,domain,https://middletownship.com/Bids.aspx,no
-NJ,Morristown,townofmorristown.org,unreachable,,,
+NJ,Morristown,townofmorristown.org,found,domain,https://townofmorristown.org/departments/purchasing,yes
 NJ,Mount Holly,twp.mountholly.nj.us,found,domain,https://twp.mountholly.nj.us/bid-advertisements,yes
 NJ,New Brunswick,newbrunswick.com,no_bid_page,domain,,
 NJ,Newton,newtontownhall.com,found,domain,https://newtontownhall.com/Bids.aspx,no
@@ -4077,7 +4077,7 @@ NM,Española,cityofespanola.org,unreachable,,,
 NM,Eunice,cityofeunice.org,found,domain,https://cityofeunice.org/Bids.aspx,yes
 NM,Farmington,fmtn.org,no_bid_page,homepage,,
 NM,Fort Stanton,fortstanton.org,no_bid_page,domain,,
-NM,Grants,cityofgrants.org,unreachable,,,
+NM,Grants,cityofgrants.org,found,domain,https://cityofgrants.org/Bids.aspx,no
 NM,Hobbs,hobbsnm.org,no_bid_page,domain,,
 NM,Isleta Pueblo,isletapueblo.com,no_bid_page,domain,,
 NM,Jal,cityofjal.us,unreachable,,,
@@ -4294,7 +4294,7 @@ OH,Nelsonville,nelsonville.net,no_bid_page,domain,,
 OH,New Carlisle,newcarlisleohio.net,unreachable,,,
 OH,New Franklin,newfranklin.org,found,domain,https://newfranklin.org/Bids.aspx,no
 OH,New Knoxville,newknoxville.com,no_bid_page,domain,,
-OH,New Lebanon,newlebanonoh.com,unreachable,,,
+OH,New Lebanon,newlebanonoh.com,found,domain,https://newlebanonoh.com/Bids.aspx,no
 OH,New Lexington,newlexington.org,unreachable,,,
 OH,New Philadelphia,newphilaoh.com,unreachable,,,
 OH,New Vienna,newvienna.net,unreachable,,,
@@ -4438,7 +4438,7 @@ PA,Hemlock Farms,hemlockfarms.org,no_bid_page,domain,,
 PA,Hershey,hersheypa.com,no_bid_page,domain,,
 PA,Hollidaysburg,hollidaysburgpa.org,no_bid_page,domain,,
 PA,Honesdale,co.wayne.pa.us,unreachable,,,
-PA,Huntingdon,huntingdonborough.com,unreachable,,,
+PA,Huntingdon,huntingdonborough.com,found,domain,https://huntingdonborough.com/Bids.aspx,no
 PA,Indiana,indianaboro.com,found,domain,https://indianaboro.com/rfp,yes
 PA,Lancaster,cityoflancasterpa.com,found,domain,https://cityoflancasterpa.com/bids,yes
 PA,Langeloth,langeloth.com,no_bid_page,domain,,
@@ -4996,7 +4996,7 @@ TX,Peñitas,cityofpenitas.com,found,homepage,https://cityofpenitas.com/bids,no
 TX,Pflugerville,cityofpflugerville.com,unreachable,,,
 TX,Pilot Point,cityofpilotpoint.org,found,domain,https://cityofpilotpoint.org/Bids.aspx,yes
 TX,Piney Point Village,cityofpineypoint.com,no_bid_page,homepage,,
-TX,Pittsburg,pittsburgtexas.com,unreachable,,,
+TX,Pittsburg,pittsburgtexas.com,found,domain,https://pittsburgtexas.com/Bids.aspx,no
 TX,Plains,plainstx.net,found,domain,https://plainstx.net/RFP.aspx,no
 TX,Plainview,plainviewtx.org,found,domain,https://plainviewtx.org/Bids.aspx,yes
 TX,Pleasanton,pleasantontx.org,no_bid_page,domain,,
@@ -5260,7 +5260,7 @@ UT,St. George,sgcity.org,found,homepage,https://sgcity.org/bids,yes
 UT,Sunset,sunset-ut.com,found,domain,https://sunset-ut.com/rfp,yes
 UT,Syracuse,syracuseut.com,unreachable,,,
 UT,Toquerville,toquerville.org,unreachable,,,
-UT,Tremonton,tremontoncity.org,unreachable,,,
+UT,Tremonton,tremontoncity.org,found,domain,https://tremontoncity.org/Bids.aspx,no
 UT,Uintah,uintahcity.com,no_bid_page,domain,,
 UT,Vernal,vernalcity.org,unreachable,,,
 UT,Vineyard,vineyard.utah.gov,unreachable,,,
