@@ -11,7 +11,13 @@ Only rows passing BOTH are safe to merge into the portal directory. Output
 carries every row and its verdict so the failures stay auditable rather than
 silently disappearing.
 
+A national candidate set runs to several thousand domains and each one costs
+up to a homepage fetch plus a walk of CANDIDATE_BID_PATHS, so the run is long
+enough that losing it to an interruption matters. Results are therefore
+written as they complete, and --resume skips domains already in the output:
+
   python3 tools/verify_wikidata_candidates.py [--limit N] [--workers N]
+  python3 tools/verify_wikidata_candidates.py --resume    # continue a run
 """
 import argparse, csv, os, re, sys, urllib.error, urllib.request
 from concurrent.futures import ThreadPoolExecutor
@@ -91,38 +97,71 @@ def probe(row):
     return dict(row, status="no_bid_page", owns=owns, bid_url="", relevant="")
 
 
+FIELDS = ["state", "place", "domain", "status", "owns", "bid_url", "relevant"]
+
+
+def _already_done(path):
+    """domain -> row for everything a previous run already probed."""
+    done = {}
+    if not os.path.exists(path):
+        return done
+    with open(path, newline="") as fh:
+        for row in csv.DictReader(fh):
+            if row.get("domain"):
+                done[row["domain"]] = row
+    return done
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--workers", type=int, default=14)
+    ap.add_argument("--resume", action="store_true",
+                    help="skip domains already in the output and append")
+    ap.add_argument("--in", dest="src", default=IN)
+    ap.add_argument("--out", dest="dst", default=OUT)
     args = ap.parse_args()
 
-    rows = list(csv.DictReader(open(IN)))
+    with open(args.src, newline="") as fh:
+        rows = list(csv.DictReader(fh))
+
+    prior = _already_done(args.dst) if args.resume else {}
+    if prior:
+        rows = [r for r in rows if r["domain"] not in prior]
+        print(f"{len(prior)} already probed, {len(rows)} left", flush=True)
     if args.limit:
         rows = rows[:args.limit]
+    if not rows:
+        print("nothing left to probe")
+        return
     print(f"probing {len(rows)} candidates with {args.workers} workers",
           flush=True)
 
-    out, done = [], 0
-    with ThreadPoolExecutor(max_workers=args.workers) as ex:
-        for res in ex.map(probe, rows):
-            out.append(res)
-            done += 1
-            if done % 100 == 0:
-                found = sum(1 for r in out if r["status"] == "found")
-                print(f"  {done}/{len(rows)} — {found} found", flush=True)
-
-    with open(OUT, "w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=["state", "place", "domain",
-                                           "status", "owns", "bid_url",
-                                           "relevant"])
-        w.writeheader()
-        w.writerows(out)
-
+    # Append when resuming so an interrupted run keeps what it earned; the
+    # header only goes in when the file is being created.
+    mode = "a" if (args.resume and prior) else "w"
     tally = {}
-    for r in out:
+    for r in prior.values():
         tally[r["status"]] = tally.get(r["status"], 0) + 1
-    print(f"\n{OUT}")
+
+    done = 0
+    with open(args.dst, mode, newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=FIELDS)
+        if mode == "w":
+            w.writeheader()
+        with ThreadPoolExecutor(max_workers=args.workers) as ex:
+            for res in ex.map(probe, rows):
+                w.writerow({k: res.get(k, "") for k in FIELDS})
+                tally[res["status"]] = tally.get(res["status"], 0) + 1
+                done += 1
+                if done % 100 == 0:
+                    # Flush on the same cadence as the progress line: a kill
+                    # then loses at most the last hundred probes.
+                    fh.flush()
+                    print(f"  {done}/{len(rows)} — {tally.get('found', 0)} "
+                          f"found", flush=True)
+
+    print(f"\n{args.dst}")
     for k, v in sorted(tally.items(), key=lambda kv: -kv[1]):
         print(f"  {k:16s} {v}")
 
