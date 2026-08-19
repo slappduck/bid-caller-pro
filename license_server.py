@@ -2336,6 +2336,56 @@ def _score_bid(bid):
     return score
 
 
+# US timezone abbreviations as UTC offsets. A bid page states its deadline in
+# local time ("2:00 PM CST"), the server runs UTC, and getting this wrong in
+# the wrong direction closes a bid that is still live -- so the table only
+# covers abbreviations that are unambiguous in a US bidding context.
+_TZ_OFFSETS = {
+    "UTC": 0, "GMT": 0,
+    "EST": -5, "EDT": -4, "ET": -5,
+    "CST": -6, "CDT": -5, "CT": -6,
+    "MST": -7, "MDT": -6, "MT": -7,
+    "PST": -8, "PDT": -7, "PT": -8,
+    "AKST": -9, "AKDT": -8,
+    "HST": -10, "HAST": -10,
+}
+
+# The latest zone any US bid could be in. Used when a deadline states a time
+# but no zone: assuming Hawaii means we only ever call a bid closed once it
+# has closed everywhere, which is the safe direction to be wrong in.
+_LATEST_US_OFFSET = -10
+
+_TIME_RE = re.compile(
+    r"(?<!\d)(\d{1,2})[:.](\d{2})\s*([ap])\.?m\.?\s*([A-Z]{2,4})?", re.I)
+
+
+def _parse_deadline_moment(text):
+    """The exact instant a deadline falls, as an aware UTC datetime.
+
+    None when the text has no time of day -- a date-only deadline is handled
+    by the plain date comparison, which correctly leaves "due today" open all
+    day because nobody stated an hour.
+    """
+    d = _parse_deadline(text)
+    if not d:
+        return None
+    m = _TIME_RE.search(" ".join(str(text or "").split()))
+    if not m:
+        return None
+    hour, minute, half, tz = int(m.group(1)), int(m.group(2)), m.group(3).lower(), m.group(4)
+    if hour > 12 or minute > 59:
+        return None
+    if half == "p" and hour != 12:
+        hour += 12
+    elif half == "a" and hour == 12:
+        hour = 0
+    offset = _TZ_OFFSETS.get((tz or "").upper(), _LATEST_US_OFFSET)
+    local = datetime.datetime(d.year, d.month, d.day, hour, minute,
+                              tzinfo=datetime.timezone(
+                                  datetime.timedelta(hours=offset)))
+    return local.astimezone(datetime.timezone.utc)
+
+
 def _apply_deadline_status(bid):
     """Force status to Closed if the stated deadline has already passed.
 
@@ -2351,7 +2401,14 @@ def _apply_deadline_status(bid):
     deadline_text = bid.get("deadline")
     d = _parse_deadline(deadline_text)
     if d:
-        if d < datetime.datetime.now().date():
+        # A deadline that names an hour is checked to the minute. Without this
+        # a bid due "08/19/2026 01:00 AM EDT" read as open for the whole of
+        # the 19th, hours after it had shut.
+        moment = _parse_deadline_moment(deadline_text)
+        if moment is not None:
+            if moment < datetime.datetime.now(datetime.timezone.utc):
+                bid["status"] = "Closed"
+        elif d < datetime.datetime.now().date():
             bid["status"] = "Closed"
         return bid
     m = re.search(r"(?<!\d)(20\d{2})(?!\d)", str(deadline_text or ""))
