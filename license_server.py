@@ -3031,6 +3031,13 @@ def _sam_fetch(state):
     return (data or {}).get("opportunitiesData") or []
 
 
+def _sam_notice_url(notice_id):
+    """The public sam.gov page for a notice id, or "" if there isn't one."""
+    nid = str(notice_id or "").strip()
+    # Ids are hex; anything else is not something to build a URL from.
+    return f"https://sam.gov/opp/{nid}/view" if re.fullmatch(r"[0-9a-fA-F]{8,}", nid) else ""
+
+
 def _normalize_opp(opp):
     poc_list = opp.get("pointOfContact") or []
     poc = poc_list[0] if poc_list else {}
@@ -3052,7 +3059,10 @@ def _normalize_opp(opp):
         "email": poc.get("email") or "",
         "phone": poc.get("phone") or "",
         "value": "",
-        "url": opp.get("uiLink") or "",
+        # uiLink is not always present, but every notice has a noticeId and
+        # sam.gov's public URL for one is stable. Without this the card
+        # renders no link at all -- all the detail and nowhere to go.
+        "url": opp.get("uiLink") or _sam_notice_url(opp.get("noticeId")),
     }
     _apply_deadline_status(bid)
     return bid, city, perf_state

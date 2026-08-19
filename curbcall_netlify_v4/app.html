@@ -2630,8 +2630,18 @@ function openDetail(city,b){
     return`<div class="detail-row"><div class="detail-label">${label}</div><div class="detail-val">${v}</div></div>`;
   }
   const statuses=[["submitted","Submitted"],["won","Won"],["lost","Lost"],["passed","Passed"]];
+  // This chip used to be the literal text OPEN, so every bid detail claimed
+  // to be open no matter what the server said -- including ones the feed had
+  // already worked out were closed.
+  const live=isOpen(b);
+  const statusLabel=(b.status||(live?"Open":"Closed")).toUpperCase();
+  // A notice we have no link for is still worth chasing, so offer the search
+  // a person would run rather than rendering nothing. Never a guessed deep
+  // link: a plausible-looking URL that 404s is worse than no URL.
+  const findUrl="https://www.google.com/search?q="+encodeURIComponent(
+    `"${b.title||""}" ${city||""} bid`.trim());
   mc.innerHTML=`<h2>${esc(b.title||"Untitled Project")}</h2>
-    <div class="bid-meta"><span class="chip">${esc(city)}</span><span class="chip">OPEN</span></div>
+    <div class="bid-meta"><span class="chip">${esc(city)}</span><span class="chip"${live?"":' style="color:var(--red);"'}>${esc(statusLabel)}</span></div>
     ${row("Scope of Work",b.scope)}
     <div class="detail-row">
       <div class="detail-label">Est. Value</div>
@@ -2639,7 +2649,8 @@ function openDetail(city,b){
     </div>
     ${row("Deadline",b.deadline||"Not listed")}
     ${row("Contact",b.contact)}${row("Email",b.email,b.email?"mailto:"+b.email:null)}
-    ${row("Phone",b.phone,b.phone?"tel:"+b.phone:null)}${row("Original Posting",b.url,b.url)}
+    ${row("Phone",b.phone,b.phone?"tel:"+b.phone:null)}${b.url?row("Original Posting",b.url,b.url)
+      :row("Original Posting","Not linked \u2014 search for it",findUrl)}
     <div class="detail-row">
       <div class="detail-label">Bid Status</div>
       <div class="pipeline-row">
@@ -2652,7 +2663,9 @@ function openDetail(city,b){
     </div>
     <div class="modal-actions">
       ${safeUrl("mailto:"+b.email)?`<a class="ma-gold" href="${esc(safeUrl("mailto:"+b.email))}">Email</a>`:""}
-      ${safeUrl(b.url)?`<a class="ma-ghost" href="${esc(safeUrl(b.url))}" target="_blank" rel="noopener noreferrer">Open</a>`:""}
+      ${safeUrl(b.url)
+        ?`<a class="ma-ghost" href="${esc(safeUrl(b.url))}" target="_blank" rel="noopener noreferrer">Open</a>`
+        :`<a class="ma-ghost" href="${esc(findUrl)}" target="_blank" rel="noopener noreferrer">Find Posting</a>`}
       <button class="ma-ghost" data-act="share">Share</button>
       <button class="ma-ghost" data-act="save">${saved[bidId(city,b)]?"\u2605 Saved":"\u2606 Save"}</button>
       ${b.deadline?`<button class="ma-ghost" data-act="calendar">Add to Calendar</button>`:""}
