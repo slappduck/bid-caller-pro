@@ -130,5 +130,47 @@ class OwnershipTests(unittest.TestCase):
                                       "<h1>Springfield</h1>"), "")
 
 
+class BidPageRecognitionTests(unittest.TestCase):
+    """What counts as a bid page, and why the bar differs by how the URL was
+    reached. A guessed path like /Bids.aspx is itself evidence; a link
+    followed off a homepage is not, so it has to say something only a real
+    solicitation page says."""
+
+    def setUp(self):
+        self.served = {}
+        self._orig_get = verify._get
+        verify._get = lambda url, **kw: self.served.get(url)
+        self.addCleanup(lambda: setattr(verify, "_get", self._orig_get))
+
+    def test_a_real_solicitation_page_is_recognised_either_way(self):
+        self.served["u"] = "Invitation to Bid -- 2026 Sidewalk Program"
+        self.assertIsNotNone(verify._bid_page_at("u"))
+        self.assertIsNotNone(verify._bid_page_at("u", strict=True))
+
+    def test_a_business_improvement_district_page_is_never_a_bid_page(self):
+        """cityofselma.com/.../downtown_selma_bid.php passed the loose test:
+        a BID page is dense with the word and is not a solicitation."""
+        self.served["u"] = ("Downtown Selma BID -- the Business Improvement "
+                            "District supports local merchants.")
+        self.assertIsNone(verify._bid_page_at("u"))
+        self.assertIsNone(verify._bid_page_at("u", strict=True))
+
+    def test_an_incidental_mention_passes_loose_but_not_strict(self):
+        self.served["u"] = "Council forbidden to discuss the bid informally."
+        self.assertIsNotNone(verify._bid_page_at("u"))
+        self.assertIsNone(verify._bid_page_at("u", strict=True))
+
+    def test_a_page_that_never_arrived_is_not_a_bid_page(self):
+        self.assertIsNone(verify._bid_page_at("missing"))
+
+    def test_relevance_is_reported_but_does_not_gate_the_find(self):
+        """~8% of live bid pages carry concrete work at any moment; the page
+        belongs in the directory either way."""
+        self.served["u"] = "Invitation to Bid -- roof replacement"
+        hit = verify._bid_page_at("u", strict=True)
+        self.assertEqual(hit["relevant"], "no")
+        self.assertEqual(hit["bid_url"], "u")
+
+
 if __name__ == "__main__":
     unittest.main()

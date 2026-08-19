@@ -63,6 +63,51 @@ def _owns(place, domain, home):
     return ""
 
 
+# "BID" is also a Business Improvement District, and those pages are dense
+# with the word -- cityofselma.com/.../downtown_selma_bid.php sailed through
+# the loose test below. It is never a solicitation page.
+_NOT_A_BID_PAGE = ("business improvement district",)
+
+# A guessed path like /Bids.aspx is itself evidence, so the body test there
+# can stay loose. An arbitrary link followed off a homepage carries no such
+# evidence, so it has to say something only a real solicitation page says --
+# the bare token "bid" also matches "bidding", "forbidden" and the district
+# sense above.
+_STRONG_BID_MARKERS = (
+    "invitation to bid", "invitation for bid", "request for proposal",
+    "request for qualification", "sealed bid", "bid opportunit",
+    "current bid", "open bid", "notice to bidder", "bid opening",
+    "accepting bid", "bid document", "bid tabulation", "bids due",
+    "request for bid", "bid packet", "solicitation", "procurement",
+    "rfp", "rfq",
+)
+
+
+def _bid_page_at(url, strict=False):
+    """{"bid_url", "relevant"} if this URL serves something that reads like a
+    bid page, else None.
+
+    Plenty of sites answer 200 for any URL, so a page coming back is not by
+    itself evidence -- it has to read like one.
+    """
+    body = _get(url)
+    if not body:
+        return None
+    low = body.lower()
+    if any(w in low for w in _NOT_A_BID_PAGE):
+        return None
+    markers = _STRONG_BID_MARKERS if strict else (
+        "bid", "rfp", "request for proposal", "solicitation", "procurement",
+        "invitation to")
+    if not any(w in low for w in markers):
+        return None
+    # relevant = concrete/sidewalk work open right now. Usually "no", and that
+    # is fine: ~8% of live bid pages carry concrete work at any moment. The
+    # page itself is what belongs in the directory.
+    return {"bid_url": url,
+            "relevant": "yes" if bid_sources.looks_relevant(body) else "no"}
+
+
 def probe(row):
     state, place, domain = row["state"], row["place"], row["domain"]
     base = "https://" + domain
@@ -79,21 +124,21 @@ def probe(row):
         return dict(row, status="not_this_town", owns="", bid_url="", relevant="")
 
     for path in bid_sources.CANDIDATE_BID_PATHS:
-        body = _get(base + path)
-        if not body:
-            continue
-        # Plenty of sites answer 200 for any URL, so a page that came back is
-        # not yet evidence of a bid page -- it has to read like one.
-        low = body.lower()
-        if any(w in low for w in ("bid", "rfp", "request for proposal",
-                                  "solicitation", "procurement",
-                                  "invitation to")):
-            # relevant = concrete/sidewalk work open right now. Usually "no",
-            # and that is fine: ~8% of live bid pages carry concrete work at
-            # any moment. The page itself is what belongs in the directory.
-            rel = "yes" if bid_sources.looks_relevant(body) else "no"
-            return dict(row, status="found", owns=owns,
-                        bid_url=base + path, relevant=rel)
+        hit = _bid_page_at(base + path)
+        if hit:
+            return dict(row, status="found", owns=owns, **hit)
+
+    # None of the guessed paths hit. Before giving up, follow the link a real
+    # visitor would click: every platform puts its bid page somewhere
+    # different, but nearly all of them link to it from the front page with
+    # obvious wording. The homepage is already fetched, so this costs a couple
+    # of requests and only on sites that would otherwise be recorded as a
+    # miss.
+    for url in bid_sources.extract_bid_link_candidates(home, base):
+        hit = _bid_page_at(url, strict=True)
+        if hit:
+            return dict(row, status="found", owns=owns, **hit)
+
     return dict(row, status="no_bid_page", owns=owns, bid_url="", relevant="")
 
 
