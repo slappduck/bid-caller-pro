@@ -1,4 +1,49 @@
 domain,city,state,type,org,status,bid_url,platform,checked_date,source,verified_by
+muni.org,Anchorage,AK,City,Anchorage,found,https://muni.org/departments/purchasing,agency,2026-08-19,wikidata,homepage
+cityofangoon.org,Angoon,AK,City,Angoon,found,https://cityofangoon.org/rfp,agency,2026-08-19,wikidata,domain
+cityofcordova.net,Cordova,AK,City,Cordova,found,https://cityofcordova.net/rfp,agency,2026-08-19,wikidata,domain
+fairbanksalaska.us,Fairbanks,AK,City,Fairbanks,found,https://fairbanksalaska.us/rfps,agency,2026-08-19,wikidata,domain
+cms.gustavus-ak.gov,Gustavus,AK,City,Gustavus,found,https://cms.gustavus-ak.gov/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+juneau.org,Juneau,AK,City,Juneau,found,https://juneau.org/doing-business/bids,agency,2026-08-19,wikidata,domain
+nomealaska.org,Nome,AK,City,Nome,found,https://nomealaska.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.petersburg.ak.us,Petersburg,AK,City,Petersburg,found,https://ci.petersburg.ak.us/rfps,agency,2026-08-19,wikidata,domain
+cityofabbeville.org,Abbeville,AL,City,Abbeville,found,https://cityofabbeville.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofalabaster.com,Alabaster,AL,City,Alabaster,found,https://cityofalabaster.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofalbertville.com,Albertville,AL,City,Albertville,found,https://cityofalbertville.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+arabcity.org,Arab,AL,City,Arab,found,https://arabcity.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofboaz.org,Boaz,AL,City,Boaz,found,https://cityofboaz.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofcalera.org,Calera,AL,City,Calera,found,https://cityofcalera.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+camdenalabama.org,Camden,AL,City,Camden,found,https://camdenalabama.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofchelsea.com,Chelsea,AL,City,Chelsea,found,https://cityofchelsea.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofcreola.org,Creola,AL,City,Creola,found,https://cityofcreola.org/rfps,agency,2026-08-19,wikidata,domain
+daphneal.com,Daphne,AL,City,Daphne,found,https://daphneal.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+dothan.org,Dothan,AL,City,Dothan,found,https://dothan.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+eufaulaalabama.com,Eufaula,AL,City,Eufaula,found,https://eufaulaalabama.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofgadsden.com,Gadsden,AL,City,Gadsden,found,https://cityofgadsden.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+guntersvilleal.org,Guntersville,AL,City,Guntersville,found,https://guntersvilleal.org/invitation-to-bid,agency,2026-08-19,wikidata,domain
+cityofhartfordal.org,Hartford,AL,City,Hartford,found,https://cityofhartfordal.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+hartselle.org,Hartselle,AL,City,Hartselle,found,https://hartselle.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofhokesbluff.com,Hokes Bluff,AL,City,Hokes Bluff,found,https://cityofhokesbluff.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+lincolnalabama.com,Lincoln,AL,City,Lincoln,found,https://lincolnalabama.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+lindenalabama.net,Linden,AL,City,Linden,found,https://lindenalabama.net/bids,agency,2026-08-19,wikidata,domain
+luverne.org,Luverne,AL,City,Luverne,found,https://luverne.org/bids-and-rfps,agency,2026-08-19,wikidata,domain
+cityofmillbrook.org,Millbrook,AL,City,Millbrook,found,https://cityofmillbrook.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofmobile.org,Mobile,AL,City,Mobile,found,https://cityofmobile.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofmontevallo.com,Montevallo,AL,City,Montevallo,found,https://cityofmontevallo.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofmuscleshoals.com,Muscle Shoals,AL,City,Muscle Shoals,found,https://cityofmuscleshoals.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofoneonta.us,Oneonta,AL,City,Oneonta,found,https://cityofoneonta.us/business/bids,agency,2026-08-19,wikidata,domain
+pell-city.com,Pell City,AL,City,Pell City,found,https://pell-city.com/procurement,agency,2026-08-19,wikidata,domain
+philcampbellal.com,Phil Campbell,AL,City,Phil Campbell,found,https://philcampbellal.com/bids-and-rfps,agency,2026-08-19,wikidata,domain
+thecityofpinson.com,Pinson,AL,City,Pinson,found,https://thecityofpinson.com/invitation-to-bid,agency,2026-08-19,wikidata,domain
+thecityofprichard.org,Prichard,AL,City,Prichard,found,https://thecityofprichard.org/bids,agency,2026-08-19,wikidata,domain
+robertsdale.org,Robertsdale,AL,City,Robertsdale,found,https://robertsdale.org/current-bids,agency,2026-08-19,wikidata,domain
+thecityofsumiton.com,Sumiton,AL,City,Sumiton,found,https://thecityofsumiton.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+trussville.org,Trussville,AL,City,Trussville,found,https://trussville.org/bids,agency,2026-08-19,wikidata,domain
+tuscaloosa.com,Tuscaloosa,AL,City,Tuscaloosa,found,https://tuscaloosa.com/bids,agency,2026-08-19,wikidata,domain
+cityoftuscumbia.org,Tuscumbia,AL,City,Tuscumbia,found,https://cityoftuscumbia.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofvalley.com,Valley,AL,City,Valley,found,https://cityofvalley.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofvalleygrande.com,Valley Grande,AL,City,Valley Grande,found,https://cityofvalleygrande.com/bids,agency,2026-08-19,wikidata,domain
+winfieldcity.org,Winfield,AL,City,Winfield,found,https://winfieldcity.org/bids,agency,2026-08-19,wikidata,domain
 austin-ar.com,Austin,AR,City,Austin,found,https://austin-ar.com/Bids.aspx,civicplus,2026-08-18,wikidata,domain
 bentonvillear.com,Bentonville,AR,City,Bentonville,found,https://bentonvillear.com/Bids.aspx,civicplus,2026-08-18,wikidata,domain
 brinkleyar.com,Brinkley,AR,City,Brinkley,found,https://brinkleyar.com/Bids.aspx,civicplus,2026-08-18,wikidata,domain
@@ -13,6 +58,274 @@ northlittlerock.ar.gov,North Little Rock,AR,City,North Little Rock,found,https:/
 rockportar.org,Rockport,AR,City,Rockport,found,https://rockportar.org/Bids.aspx,civicplus,2026-08-18,wikidata,domain
 russellvillearkansas.org,Russellville,AR,City,Russellville,found,https://russellvillearkansas.org/Bids.aspx,civicplus,2026-08-18,wikidata,domain
 tontitown.com,Tontitown,AR,City,Tontitown,found,https://tontitown.com/purchasing,agency,2026-08-18,wikidata,domain
+glendaleaz.com,Glendale,AZ,City,Glendale,found,https://glendaleaz.com/procurement,agency,2026-08-19,wikidata,domain
+goldcanyon.net,Gold Canyon,AZ,City,Gold Canyon,found,https://goldcanyon.net/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+townofparkerarizona.com,Parker,AZ,City,Parker,found,https://townofparkerarizona.com/bids,agency,2026-08-19,wikidata,domain
+cityofsafford.us,Safford,AZ,City,Safford,found,https://cityofsafford.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+tollesonaz.org,Tolleson,AZ,City,Tolleson,found,https://tollesonaz.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofalhambra.org,Alhambra,CA,City,Alhambra,found,https://cityofalhambra.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofarcata.org,Arcata,CA,City,Arcata,found,https://cityofarcata.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+arroyogrande.org,Arroyo Grande,CA,City,Arroyo Grande,found,https://arroyogrande.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofartesia.us,Artesia,CA,City,Artesia,found,https://cityofartesia.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+arvin.org,Arvin,CA,City,Arvin,found,https://arvin.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+atascadero.org,Atascadero,CA,City,Atascadero,found,https://atascadero.org/bids,agency,2026-08-19,wikidata,domain
+atwater.org,Atwater,CA,City,Atwater,found,https://atwater.org/bids,agency,2026-08-19,wikidata,domain
+auburn.ca.gov,Auburn,CA,City,Auburn,found,https://auburn.ca.gov/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+baldwinpark.com,Baldwin Park,CA,City,Baldwin Park,found,https://baldwinpark.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.banning.ca.us,Banning,CA,City,Banning,found,https://ci.banning.ca.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+beverlyhills.org,Beverly Hills,CA,City,Beverly Hills,found,https://beverlyhills.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+bluelake.ca.gov,Blue Lake,CA,City,Blue Lake,found,https://bluelake.ca.gov/rfp,agency,2026-08-19,wikidata,domain
+cityofblythe.ca.gov,Blythe,CA,City,Blythe,found,https://cityofblythe.ca.gov/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+calexico.ca.gov,Calexico,CA,City,Calexico,found,https://calexico.ca.gov/departments/purchasing,agency,2026-08-19,wikidata,domain
+cityofcalimesa.net,Calimesa,CA,City,Calimesa,found,https://cityofcalimesa.net/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+calipatria.com,Calipatria,CA,City,Calipatria,found,https://calipatria.com/rfp,agency,2026-08-19,wikidata,domain
+carmichaelcalifornia.com,Carmichael,CA,City,Carmichael,found,https://carmichaelcalifornia.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.ceres.ca.us,Ceres,CA,City,Ceres,found,https://ci.ceres.ca.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.chowchilla.ca.us,Chowchilla,CA,City,Chowchilla,found,https://ci.chowchilla.ca.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofindustry.org,City of Industry,CA,City,City of Industry,found,https://cityofindustry.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+clearlake.ca.us,Clearlake,CA,City,Clearlake,found,https://clearlake.ca.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+coalinga.com,Coalinga,CA,City,Coalinga,found,https://coalinga.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+coronado.ca.us,Coronado,CA,City,Coronado,found,https://coronado.ca.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+crescentcity.org,Crescent City,CA,City,Crescent City,found,https://crescentcity.org/bids,agency,2026-08-19,wikidata,domain
+cityofcudahy.com,Cudahy,CA,City,Cudahy,found,https://cityofcudahy.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofdelano.org,Delano,CA,City,Delano,found,https://cityofdelano.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofelcentro.org,El Centro,CA,City,El Centro,found,https://cityofelcentro.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.el-monte.ca.us,El Monte,CA,City,El Monte,found,https://ci.el-monte.ca.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.eureka.ca.gov,Eureka,CA,City,Eureka,found,https://ci.eureka.ca.gov/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofexeter.com,Exeter,CA,City,Exeter,found,https://cityofexeter.com/bids,agency,2026-08-19,wikidata,domain
+ggcity.org,Garden Grove,CA,City,Garden Grove,found,https://ggcity.org/finance/purchasing,agency,2026-08-19,wikidata,homepage
+ci.glendora.ca.us,Glendora,CA,City,Glendora,found,https://ci.glendora.ca.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+grover.org,Grover Beach,CA,City,Grover Beach,found,https://grover.org/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+cityofgustine.com,Gustine,CA,City,Gustine,found,https://cityofgustine.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofhanfordca.com,Hanford,CA,City,Hanford,found,https://cityofhanfordca.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+imperial.ca.gov,Imperial,CA,City,Imperial,found,https://imperial.ca.gov/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+lapuente.org,La Puente,CA,City,La Puente,found,https://lapuente.org/bids,agency,2026-08-19,wikidata,domain
+lakewoodcity.org,Lakewood,CA,City,Lakewood,found,https://lakewoodcity.org/bids,agency,2026-08-19,wikidata,domain
+lomitacity.com,Lomita,CA,City,Lomita,found,https://lomitacity.com/current-bids,agency,2026-08-19,wikidata,domain
+cityoflosalamitos.org,Los Alamitos,CA,City,Los Alamitos,found,https://cityoflosalamitos.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+malibucity.org,Malibu,CA,City,Malibu,found,https://malibucity.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofmaywood.com,Maywood,CA,City,Maywood,found,https://cityofmaywood.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+modestogov.com,Modesto,CA,City,Modesto,found,https://modestogov.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofmontebello.com,Montebello,CA,City,Montebello,found,https://cityofmontebello.com/departments/finance/purchasing,agency,2026-08-19,wikidata,domain
+morro-bay.ca.us,Morro Bay,CA,City,Morro Bay,found,https://morro-bay.ca.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityoforangecove.com,Orange Cove,CA,City,Orange Cove,found,https://cityoforangecove.com/bids,agency,2026-08-19,wikidata,domain
+cityoforoville.org,Oroville,CA,City,Oroville,found,https://cityoforoville.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+pacifichouse.org,Pacific House,CA,City,Pacific House,found,https://pacifichouse.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+parlier.ca.us,Parlier,CA,City,Parlier,found,https://parlier.ca.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+prcity.com,Paso Robles,CA,City,Paso Robles,found,https://prcity.com/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+pismobeach.org,Pismo Beach,CA,City,Pismo Beach,found,https://pismobeach.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+placentia.org,Placentia,CA,City,Placentia,found,https://placentia.org/rfp,agency,2026-08-19,wikidata,domain
+pointarena.ca.gov,Point Arena,CA,City,Point Arena,found,https://pointarena.ca.gov/rfp,agency,2026-08-19,wikidata,domain
+ci.port-hueneme.ca.us,Port Hueneme,CA,City,Port Hueneme,found,https://ci.port-hueneme.ca.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+poway.org,Poway,CA,City,Poway,found,https://poway.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofrsm.org,Rancho Santa Margarita,CA,City,Rancho Santa Margarita,found,https://cityofrsm.org/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+cityofredding.org,Redding,CA,City,Redding,found,https://cityofredding.org/bids,agency,2026-08-19,wikidata,domain
+cityofripon.org,Ripon,CA,City,Ripon,found,https://cityofripon.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+riverbank.org,Riverbank,CA,City,Riverbank,found,https://riverbank.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+roseville.ca.us,Roseville,CA,City,Roseville,found,https://roseville.ca.us/rfp,agency,2026-08-19,wikidata,domain
+sangabrielcity.com,San Gabriel,CA,City,San Gabriel,found,https://sangabrielcity.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.sanger.ca.us,Sanger,CA,City,Sanger,found,https://ci.sanger.ca.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+srcity.org,Santa Rosa,CA,City,Santa Rosa,found,https://srcity.org/bids,agency,2026-08-19,wikidata,homepage
+ci.seaside.ca.us,Seaside,CA,City,Seaside,found,https://ci.seaside.ca.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.solana-beach.ca.us,Solana Beach,CA,City,Solana Beach,found,https://ci.solana-beach.ca.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofsoledad.com,Soledad,CA,City,Soledad,found,https://cityofsoledad.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofsolvang.com,Solvang,CA,City,Solvang,found,https://cityofsolvang.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofsusanville.net,Susanville,CA,City,Susanville,found,https://cityofsusanville.net/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityoftaft.org,Taft,CA,City,Taft,found,https://cityoftaft.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+liveuptehachapi.com,Tehachapi,CA,City,Tehachapi,found,https://liveuptehachapi.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+toaks.org,Thousand Oaks,CA,City,Thousand Oaks,found,https://toaks.org/bids,agency,2026-08-19,wikidata,homepage
+ci.tracy.ca.us,Tracy,CA,City,Tracy,found,https://ci.tracy.ca.us/bids,agency,2026-08-19,wikidata,domain
+cityofukiah.com,Ukiah,CA,City,Ukiah,found,https://cityofukiah.com/purchasing,agency,2026-08-19,wikidata,domain
+valleyspringsca.us,Valley Springs,CA,City,Valley Springs,found,https://valleyspringsca.us/bids-and-rfps,agency,2026-08-19,wikidata,domain
+cityofventura.ca.gov,Ventura,CA,City,Ventura,found,https://cityofventura.ca.gov/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+villapark.org,Villa Park,CA,City,Villa Park,found,https://villapark.org/departments/finance/purchasing,agency,2026-08-19,wikidata,domain
+visalia.city,Visalia,CA,City,Visalia,found,https://visalia.city/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+wlv.org,Westlake Village,CA,City,Westlake Village,found,https://wlv.org/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+cityofwinters.org,Winters,CA,City,Winters,found,https://cityofwinters.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofwoodland.org,Woodland,CA,City,Woodland,found,https://cityofwoodland.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.yreka.ca.us,Yreka,CA,City,Yreka,found,https://ci.yreka.ca.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+arvada.org,Arvada,CO,City,Arvada,found,https://arvada.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+auroragov.org,Aurora,CO,City,Aurora,found,https://auroragov.org/purchasing,agency,2026-08-19,wikidata,domain
+broomfield.org,Broomfield,CO,City,Broomfield,found,https://broomfield.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+burlingtoncolo.com,Burlington,CO,City,Burlington,found,https://burlingtoncolo.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cherryhillsvillage.com,Cherry Hills Village,CO,City,Cherry Hills Village,found,https://cherryhillsvillage.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+goconifer.com,Conifer,CO,City,Conifer,found,https://goconifer.com/rfp,agency,2026-08-19,wikidata,domain
+cordilleraliving.com,Cordillera,CO,City,Cordillera,found,https://cordilleraliving.com/bid-opportunities,agency,2026-08-19,wikidata,domain
+ci.craig.co.us,Craig,CO,City,Craig,found,https://ci.craig.co.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+denvergov.org,Denver,CO,City,Denver,found,https://denvergov.org/purchasing,agency,2026-08-19,wikidata,domain
+durangogov.org,Durango,CO,City,Durango,found,https://durangogov.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+fcgov.com,Fort Collins,CO,City,Fort Collins,found,https://fcgov.com/purchasing,agency,2026-08-19,wikidata,homepage
+fruita.org,Fruita,CO,City,Fruita,found,https://fruita.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+glendale.co.us,Glendale,CO,City,Glendale,found,https://glendale.co.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+greeleygov.com,Greeley,CO,City,Greeley,found,https://greeleygov.com/finance/purchasing,agency,2026-08-19,wikidata,domain
+greenwoodvillage.com,Greenwood Village,CO,City,Greenwood Village,found,https://greenwoodvillage.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.lamar.co.us,Lamar,CO,City,Lamar,found,https://ci.lamar.co.us/rfp,agency,2026-08-19,wikidata,domain
+cityoflonetree.com,Lone Tree,CO,City,Lone Tree,found,https://cityoflonetree.com/rfp,agency,2026-08-19,wikidata,domain
+townofmeeker.org,Meeker,CO,City,Meeker,found,https://townofmeeker.org/invitation-to-bid,agency,2026-08-19,wikidata,domain
+cityofmontrose.org,Montrose,CO,City,Montrose,found,https://cityofmontrose.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+northglenn.org,Northglenn,CO,City,Northglenn,found,https://northglenn.org/bids,agency,2026-08-19,wikidata,domain
+rifleco.org,Rifle,CO,City,Rifle,found,https://rifleco.org/bids,agency,2026-08-19,wikidata,domain
+ci.sheridan.co.us,Sheridan,CO,City,Sheridan,found,https://ci.sheridan.co.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+steamboatsprings.net,Steamboat Springs,CO,City,Steamboat Springs,found,https://steamboatsprings.net/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+victorcolorado.com,Victor,CO,City,Victor,found,https://victorcolorado.com/rfps,agency,2026-08-19,wikidata,domain
+bethany-ct.com,Bethany,CT,City,Bethany,found,https://bethany-ct.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+eltownhall.com,East Lyme,CT,City,East Lyme,found,https://eltownhall.com/departments/purchasing,agency,2026-08-19,wikidata,homepage
+milfordct.us,Milford,CT,City,Milford,found,https://milfordct.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+norwalkct.org,Norwalk,CT,City,Norwalk,found,https://norwalkct.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+torringtonct.org,Torrington,CT,City,Torrington,found,https://torringtonct.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofwesthaven.com,West Haven,CT,City,West Haven,found,https://cityofwesthaven.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+townofwindsorct.com,Windsor,CT,City,Windsor,found,https://townofwindsorct.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofdover.com,Dover,DE,City,Dover,found,https://cityofdover.com/purchasing,agency,2026-08-19,wikidata,domain
+georgetowndel.com,Georgetown,DE,City,Georgetown,found,https://georgetowndel.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofmilford.com,Milford,DE,City,Milford,found,https://cityofmilford.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+newcastlecity.delaware.gov,New Castle,DE,City,New Castle,found,https://newcastlecity.delaware.gov/invitation-to-bid,agency,2026-08-19,wikidata,domain
+cityofalachua.com,Alachua,FL,City,Alachua,found,https://cityofalachua.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+altamonte.org,Altamonte Springs,FL,City,Altamonte Springs,found,https://altamonte.org/procurement,agency,2026-08-19,wikidata,homepage
+cityofapalachicola.com,Apalachicola,FL,City,Apalachicola,found,https://cityofapalachicola.com/rfp,agency,2026-08-19,wikidata,domain
+cityofarcher.com,Archer,FL,City,Archer,found,https://cityofarcher.com/rfps,agency,2026-08-19,wikidata,domain
+coab.us,Atlantic Beach,FL,City,Atlantic Beach,found,https://coab.us/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+auburndalefl.com,Auburndale,FL,City,Auburndale,found,https://auburndalefl.com/rfp,agency,2026-08-19,wikidata,domain
+cityofbartow.net,Bartow,FL,City,Bartow,found,https://cityofbartow.net/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+myboca.us,Boca Raton,FL,City,Boca Raton,found,https://myboca.us/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+boynton-beach.org,Boynton Beach,FL,City,Boynton Beach,found,https://boynton-beach.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofbradenton.com,Bradenton,FL,City,Bradenton,found,https://cityofbradenton.com/purchasing,agency,2026-08-19,wikidata,domain
+cityofbrooksville.us,Brooksville,FL,City,Brooksville,found,https://cityofbrooksville.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+bunnellcity.us,Bunnell,FL,City,Bunnell,found,https://bunnellcity.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofcallaway.com,Callaway,FL,City,Callaway,found,https://cityofcallaway.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+mycarrabelle.com,Carrabelle,FL,City,Carrabelle,found,https://mycarrabelle.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+casselberry.org,Casselberry,FL,City,Casselberry,found,https://casselberry.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofchipley.com,Chipley,FL,City,Chipley,found,https://cityofchipley.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cocoafl.org,Cocoa,FL,City,Cocoa,found,https://cocoafl.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofcocoabeach.com,Cocoa Beach,FL,City,Cocoa Beach,found,https://cityofcocoabeach.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+coconutcreek.net,Coconut Creek,FL,City,Coconut Creek,found,https://coconutcreek.net/purchasing,agency,2026-08-19,wikidata,domain
+coralgables.com,Coral Gables,FL,City,Coral Gables,found,https://coralgables.com/procurement,agency,2026-08-19,wikidata,domain
+coralsprings.org,Coral Springs,FL,City,Coral Springs,found,https://coralsprings.org/purchasing,agency,2026-08-19,wikidata,domain
+crescentcity-fl.com,Crescent City,FL,City,Crescent City,found,https://crescentcity-fl.com/bids,agency,2026-08-19,wikidata,domain
+cityofcrestview.org,Crestview,FL,City,Crestview,found,https://cityofcrestview.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+mydavenport.org,Davenport,FL,City,Davenport,found,https://mydavenport.org/departments/purchasing,agency,2026-08-19,wikidata,domain
+codb.us,Daytona Beach,FL,City,Daytona Beach,found,https://codb.us/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+dbshores.org,Daytona Beach Shores,FL,City,Daytona Beach Shores,found,https://dbshores.org/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+debary.org,DeBary,FL,City,DeBary,found,https://debary.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+deland.org,DeLand,FL,City,DeLand,found,https://deland.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+deerfield-beach.com,Deerfield Beach,FL,City,Deerfield Beach,found,https://deerfield-beach.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofdestin.com,Destin,FL,City,Destin,found,https://cityofdestin.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofedgewater.org,Edgewater,FL,City,Edgewater,found,https://cityofedgewater.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+fbfl.us,Fernandina Beach,FL,City,Fernandina Beach,found,https://fbfl.us/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+cityofflaglerbeach.com,Flagler Beach,FL,City,Flagler Beach,found,https://cityofflaglerbeach.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityoffortmeade.com,Fort Meade,FL,City,Fort Meade,found,https://cityoffortmeade.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityoffortpierce.com,Fort Pierce,FL,City,Fort Pierce,found,https://cityoffortpierce.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+fwb.org,Fort Walton Beach,FL,City,Fort Walton Beach,found,https://fwb.org/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+fruitlandpark.org,Fruitland Park,FL,City,Fruitland Park,found,https://fruitlandpark.org/procurement,agency,2026-08-19,wikidata,domain
+greencovesprings.com,Green Cove Springs,FL,City,Green Cove Springs,found,https://greencovesprings.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+hainescity.com,Haines City,FL,City,Haines City,found,https://hainescity.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofhawthorne.net,Hawthorne,FL,City,Hawthorne,found,https://cityofhawthorne.net/purchasing,agency,2026-08-19,wikidata,domain
+highsprings.us,High Springs,FL,City,High Springs,found,https://highsprings.us/rfps,agency,2026-08-19,wikidata,domain
+hollywoodfl.org,Hollywood,FL,City,Hollywood,found,https://hollywoodfl.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+indianharbourbeach.org,Indian Harbour Beach,FL,City,Indian Harbour Beach,found,https://indianharbourbeach.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+jacksonvillebeach.org,Jacksonville Beach,FL,City,Jacksonville Beach,found,https://jacksonvillebeach.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+keycolonybeach.net,Key Colony Beach,FL,City,Key Colony Beach,found,https://keycolonybeach.net/rfp,agency,2026-08-19,wikidata,domain
+mylakealfred.com,Lake Alfred,FL,City,Lake Alfred,found,https://mylakealfred.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+lakelandgov.net,Lakeland,FL,City,Lakeland,found,https://lakelandgov.net/purchasing,agency,2026-08-19,wikidata,domain
+lauderdalelakes.org,Lauderdale Lakes,FL,City,Lauderdale Lakes,found,https://lauderdalelakes.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+longwoodfl.org,Longwood,FL,City,Longwood,found,https://longwoodfl.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofmadisonfl.com,Madison,FL,City,Madison,found,https://cityofmadisonfl.com/bids,agency,2026-08-19,wikidata,domain
+itsmymaitland.com,Maitland,FL,City,Maitland,found,https://itsmymaitland.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+margatefl.com,Margate,FL,City,Margate,found,https://margatefl.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofmarianna.com,Marianna,FL,City,Marianna,found,https://cityofmarianna.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofmaryesther.com,Mary Esther,FL,City,Mary Esther,found,https://cityofmaryesther.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofmascotte.com,Mascotte,FL,City,Mascotte,found,https://cityofmascotte.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+mexicobeachgov.com,Mexico Beach,FL,City,Mexico Beach,found,https://mexicobeachgov.com/bids,agency,2026-08-19,wikidata,domain
+cityofmonticello.us,Monticello,FL,City,Monticello,found,https://cityofmonticello.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+moorehaven.org,Moore Haven,FL,City,Moore Haven,found,https://moorehaven.org/rfp,agency,2026-08-19,wikidata,domain
+ci.mount-dora.fl.us,Mount Dora,FL,City,Mount Dora,found,https://ci.mount-dora.fl.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofnsb.com,New Smyrna Beach,FL,City,New Smyrna Beach,found,https://cityofnsb.com/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+cityofniceville.org,Niceville,FL,City,Niceville,found,https://cityofniceville.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofnorthport.com,North Port,FL,City,North Port,found,https://cityofnorthport.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ocoee.org,Ocoee,FL,City,Ocoee,found,https://ocoee.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+myoldsmar.com,Oldsmar,FL,City,Oldsmar,found,https://myoldsmar.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofoviedo.net,Oviedo,FL,City,Oviedo,found,https://cityofoviedo.net/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+palmcoastgov.com,Palm Coast,FL,City,Palm Coast,found,https://palmcoastgov.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofparker.com,Parker,FL,City,Parker,found,https://cityofparker.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofparkland.org,Parkland,FL,City,Parkland,found,https://cityofparkland.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ppines.com,Pembroke Pines,FL,City,Pembroke Pines,found,https://ppines.com/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+cityofpensacola.com,Pensacola,FL,City,Pensacola,found,https://cityofpensacola.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+plantcitygov.com,Plant City,FL,City,Plant City,found,https://plantcitygov.com/procurement,agency,2026-08-19,wikidata,domain
+cityofpsl.com,Port St. Lucie,FL,City,Port St. Lucie,found,https://cityofpsl.com/procurement,agency,2026-08-19,wikidata,homepage
+rivierabch.com,Riviera Beach,FL,City,Riviera Beach,found,https://rivierabch.com/bids,agency,2026-08-19,wikidata,homepage
+cityofrockledge.org,Rockledge,FL,City,Rockledge,found,https://cityofrockledge.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+mysanibel.com,Sanibel,FL,City,Sanibel,found,https://mysanibel.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+sarasotagov.org,Sarasota,FL,City,Sarasota,found,https://sarasotagov.org/departments/purchasing,agency,2026-08-19,wikidata,domain
+cityofsebastian.org,Sebastian,FL,City,Sebastian,found,https://cityofsebastian.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+mysebring.com,Sebring,FL,City,Sebring,found,https://mysebring.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+myseminole.com,Seminole,FL,City,Seminole,found,https://myseminole.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+southbaycity.com,South Bay,FL,City,South Bay,found,https://southbaycity.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+southdaytona.org,South Daytona,FL,City,South Daytona,found,https://southdaytona.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+citystaug.com,St. Augustine,FL,City,St. Augustine,found,https://citystaug.com/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+staugbch.com,St. Augustine Beach,FL,City,St. Augustine Beach,found,https://staugbch.com/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+stcloud.org,St. Cloud,FL,City,St. Cloud,found,https://stcloud.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+stpetebeach.org,St. Pete Beach,FL,City,St. Pete Beach,found,https://stpetebeach.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofsweetwater.fl.gov,Sweetwater,FL,City,Sweetwater,found,https://cityofsweetwater.fl.gov/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+templeterrace.com,Temple Terrace,FL,City,Temple Terrace,found,https://templeterrace.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+titusville.com,Titusville,FL,City,Titusville,found,https://titusville.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+trentonflorida.org,Trenton,FL,City,Trenton,found,https://trentonflorida.org/bids,agency,2026-08-19,wikidata,domain
+covb.org,Vero Beach,FL,City,Vero Beach,found,https://covb.org/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+westmelbourne.org,West Melbourne,FL,City,West Melbourne,found,https://westmelbourne.org/bids,agency,2026-08-19,wikidata,domain
+wpb.org,West Palm Beach,FL,City,West Palm Beach,found,https://wpb.org/bids,agency,2026-08-19,wikidata,homepage
+cwgdn.com,Winter Garden,FL,City,Winter Garden,found,https://cwgdn.com/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+mywinterhaven.com,Winter Haven,FL,City,Winter Haven,found,https://mywinterhaven.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofwinterpark.org,Winter Park,FL,City,Winter Park,found,https://cityofwinterpark.org/purchasing,agency,2026-08-19,wikidata,domain
+winterspringsfl.org,Winter Springs,FL,City,Winter Springs,found,https://winterspringsfl.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+accgov.com,Athens,GA,City,Athens,found,https://accgov.com/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+avondaleestates.org,Avondale Estates,GA,City,Avondale Estates,found,https://avondaleestates.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofballground.com,Ball Ground,GA,City,Ball Ground,found,https://cityofballground.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofbuenavista.org,Buena Vista,GA,City,Buena Vista,found,https://cityofbuenavista.org/bids,agency,2026-08-19,wikidata,domain
+cityofcochran.com,Cochran,GA,City,Cochran,found,https://cityofcochran.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+crawfordvillega.org,Crawfordville,GA,City,Crawfordville,found,https://crawfordvillega.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+dillardgeorgia.com,Dillard,GA,City,Dillard,found,https://dillardgeorgia.com/bids,agency,2026-08-19,wikidata,domain
+cityofdouglas.com,Douglas,GA,City,Douglas,found,https://cityofdouglas.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+eatontongeorgia.com,Eatonton,GA,City,Eatonton,found,https://eatontongeorgia.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+fairburn.com,Fairburn,GA,City,Fairburn,found,https://fairburn.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityoffairmountga.com,Fairmount,GA,City,Fairmount,found,https://cityoffairmountga.com/bids-and-rfps,agency,2026-08-19,wikidata,domain
+forestparkga.org,Forest Park,GA,City,Forest Park,found,https://forestparkga.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+fortogov.com,Fort Oglethorpe,GA,City,Fort Oglethorpe,found,https://fortogov.com/doing-business/bids,agency,2026-08-19,wikidata,homepage
+fortvalleyga.org,Fort Valley,GA,City,Fort Valley,found,https://fortvalleyga.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+franklingeorgia.com,Franklin,GA,City,Franklin,found,https://franklingeorgia.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+gainesville.org,Gainesville,GA,City,Gainesville,found,https://gainesville.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofgrahamga.com,Graham,GA,City,Graham,found,https://cityofgrahamga.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofgrovetown.com,Grovetown,GA,City,Grovetown,found,https://cityofgrovetown.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofhogansville.org,Hogansville,GA,City,Hogansville,found,https://cityofhogansville.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+hollyspringsga.us,Holly Springs,GA,City,Holly Springs,found,https://hollyspringsga.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofirwinton.org,Irwinton,GA,City,Irwinton,found,https://cityofirwinton.org/rfp,agency,2026-08-19,wikidata,domain
+cityofjeffersonga.com,Jefferson,GA,City,Jefferson,found,https://cityofjeffersonga.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+jekyllisland.com,Jekyll Island,GA,City,Jekyll Island,found,https://jekyllisland.com/rfp,agency,2026-08-19,wikidata,domain
+jonesboroga.com,Jonesboro,GA,City,Jonesboro,found,https://jonesboroga.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityoflakeparkga.com,Lake Park,GA,City,Lake Park,found,https://cityoflakeparkga.com/bids,agency,2026-08-19,wikidata,domain
+cityoflilburn.com,Lilburn,GA,City,Lilburn,found,https://cityoflilburn.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+maconbibb.us,Macon,GA,City,Macon,found,https://maconbibb.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+mcdonoughga.org,McDonough,GA,City,McDonough,found,https://mcdonoughga.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+milledgevillega.us,Milledgeville,GA,City,Milledgeville,found,https://milledgevillega.us/bids,agency,2026-08-19,wikidata,domain
+moultriega.com,Moultrie,GA,City,Moultrie,found,https://moultriega.com/bids,agency,2026-08-19,wikidata,domain
+mtvernonga.org,Mount Vernon,GA,City,Mount Vernon,found,https://mtvernonga.org/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+cityofnahunta.org,Nahunta,GA,City,Nahunta,found,https://cityofnahunta.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+nicholson-ga.com,Nicholson,GA,City,Nicholson,found,https://nicholson-ga.com/bids,agency,2026-08-19,wikidata,domain
+norcrossga.net,Norcross,GA,City,Norcross,found,https://norcrossga.net/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+peachtree-city.org,Peachtree City,GA,City,Peachtree City,found,https://peachtree-city.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofroberta.com,Roberta,GA,City,Roberta,found,https://cityofroberta.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+roswellgov.com,Roswell,GA,City,Roswell,found,https://roswellgov.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+sandersville.net,Sandersville,GA,City,Sandersville,found,https://sandersville.net/departments/purchasing,agency,2026-08-19,wikidata,domain
+cityofsugarhill.com,Sugar Hill,GA,City,Sugar Hill,found,https://cityofsugarhill.com/bids,agency,2026-08-19,wikidata,domain
+cityofswainsboro.org,Swainsboro,GA,City,Swainsboro,found,https://cityofswainsboro.org/bids-and-rfps,agency,2026-08-19,wikidata,domain
+citysylvaniaga.net,Sylvania,GA,City,Sylvania,found,https://citysylvaniaga.net/doing-business/bids,agency,2026-08-19,wikidata,domain
+cityofsylvester.com,Sylvester,GA,City,Sylvester,found,https://cityofsylvester.com/bids,agency,2026-08-19,wikidata,domain
+cityofthomaston.com,Thomaston,GA,City,Thomaston,found,https://cityofthomaston.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+tifton.net,Tifton,GA,City,Tifton,found,https://tifton.net/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityoftybee.org,Tybee Island,GA,City,Tybee Island,found,https://cityoftybee.org/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+valdostacity.com,Valdosta,GA,City,Valdosta,found,https://valdostacity.com/purchasing,agency,2026-08-19,wikidata,domain
+villarica.org,Villa Rica,GA,City,Villa Rica,found,https://villarica.org/departments/finance/purchasing,agency,2026-08-19,wikidata,domain
+wacoga.net,Waco,GA,City,Waco,found,https://wacoga.net/bids,agency,2026-08-19,wikidata,domain
+cityofwalthourville.com,Walthourville,GA,City,Walthourville,found,https://cityofwalthourville.com/bids,agency,2026-08-19,wikidata,domain
+williamson-ga.us,Williamson,GA,City,Williamson,found,https://williamson-ga.us/rfp,agency,2026-08-19,wikidata,domain
+woodbinegeorgia.net,Woodbine,GA,City,Woodbine,found,https://woodbinegeorgia.net/Bids.aspx,civicplus,2026-08-19,wikidata,domain
 cityofames.org,Ames,IA,City,Ames,found,https://cityofames.org/finance/purchasing,agency,2026-08-18,wikidata,domain
 bedfordia.org,Bedford,IA,City,Bedford,found,https://bedfordia.org/Bids.aspx,civicplus,2026-08-18,wikidata,domain
 burlingtoniowa.org,Burlington,IA,City,Burlington,found,https://burlingtoniowa.org/Bids.aspx,civicplus,2026-08-18,wikidata,domain
@@ -65,6 +378,28 @@ westpointiowa.com,West Point,IA,City,West Point,found,https://westpointiowa.com/
 wiltoniowa.org,Wilton,IA,City,Wilton,found,https://wiltoniowa.org/Bids.aspx,civicplus,2026-08-18,wikidata,domain
 windsorheights.org,Windsor Heights,IA,City,Windsor Heights,found,https://windsorheights.org/Bids.aspx,civicplus,2026-08-18,wikidata,domain
 winfieldiowa.com,Winfield,IA,City,Winfield,found,https://winfieldiowa.com/Bids.aspx,civicplus,2026-08-18,wikidata,domain
+cityofamericanfalls.com,American Falls,ID,City,American Falls,found,https://cityofamericanfalls.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofblackfoot.org,Blackfoot,ID,City,Blackfoot,found,https://cityofblackfoot.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofboise.org,Boise,ID,City,Boise,found,https://cityofboise.org/purchasing,agency,2026-08-19,wikidata,domain
+burleyidaho.org,Burley,ID,City,Burley,found,https://burleyidaho.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofchubbuck.us,Chubbuck,ID,City,Chubbuck,found,https://cityofchubbuck.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cdaid.org,Coeur d'Alene,ID,City,Coeur d'Alene,found,https://cdaid.org/bids,agency,2026-08-19,wikidata,homepage
+daltongardens.govoffice.com,Dalton Gardens,ID,City,Dalton Gardens,found,https://daltongardens.govoffice.com/government/purchasing,agency,2026-08-19,wikidata,domain
+cityofeagle.org,Eagle,ID,City,Eagle,found,https://cityofeagle.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+fernanvillage.org,Fernan Lake Village,ID,City,Fernan Lake Village,found,https://fernanvillage.org/bids-and-rfps,agency,2026-08-19,wikidata,homepage
+cityofgenesee.com,Genesee,ID,City,Genesee,found,https://cityofgenesee.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.jerome.id.us,Jerome,ID,City,Jerome,found,https://ci.jerome.id.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ketchumidaho.org,Ketchum,ID,City,Ketchum,found,https://ketchumidaho.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityoflewiston.org,Lewiston,ID,City,Lewiston,found,https://cityoflewiston.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+mccall.id.us,McCall,ID,City,McCall,found,https://mccall.id.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+middleton.id.gov,Middleton,ID,City,Middleton,found,https://middleton.id.gov/departments/finance/purchasing,agency,2026-08-19,wikidata,domain
+mountain-home.us,Mountain Home,ID,City,Mountain Home,found,https://mountain-home.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofnampa.us,Nampa,ID,City,Nampa,found,https://cityofnampa.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofrichfield.us,Richfield,ID,City,Richfield,found,https://cityofrichfield.us/bids,agency,2026-08-19,wikidata,domain
+ctyofsandpoint.com,Sandpoint,ID,City,Sandpoint,found,https://ctyofsandpoint.com/bids,agency,2026-08-19,wikidata,domain
+tetoniaidaho.com,Tetonia,ID,City,Tetonia,found,https://tetoniaidaho.com/bids,agency,2026-08-19,wikidata,domain
+tfid.org,Twin Falls,ID,City,Twin Falls,found,https://tfid.org/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+wallace.id.gov,Wallace,ID,City,Wallace,found,https://wallace.id.gov/bids,agency,2026-08-19,wikidata,domain
 auburnillinois.us,Auburn,IL,City,Auburn,found,https://auburnillinois.us/bids,agency,2026-08-18,wikidata,domain
 belleville.net,Belleville,IL,City,Belleville,found,https://belleville.net/Bids.aspx,civicplus,2026-08-18,wikidata,domain
 blueisland.org,Blue Island,IL,City,Blue Island,found,https://blueisland.org/Bids.aspx,civicplus,2026-08-18,wikidata,domain
@@ -109,6 +444,30 @@ wheaton.il.us,Wheaton,IL,City,Wheaton,found,https://wheaton.il.us/Bids.aspx,civi
 woodriver.org,Wood River,IL,City,Wood River,found,https://woodriver.org/bids,agency,2026-08-18,wikidata,domain
 yorkville.il.us,Yorkville,IL,City,Yorkville,found,https://yorkville.il.us/Bids.aspx,civicplus,2026-08-18,wikidata,domain
 cityofzion.com,Zion,IL,City,Zion,found,https://cityofzion.com/bids,agency,2026-08-18,wikidata,domain
+alexandriaindiana.net,Alexandria,IN,City,Alexandria,found,https://alexandriaindiana.net/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofanderson.com,Anderson,IN,City,Anderson,found,https://cityofanderson.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.auburn.in.us,Auburn,IN,City,Auburn,found,https://ci.auburn.in.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofaustin.in.gov,Austin,IN,City,Austin,found,https://cityofaustin.in.gov/rfp,agency,2026-08-19,wikidata,domain
+bloomington.in.gov,Bloomington,IN,City,Bloomington,found,https://bloomington.in.gov/rfp,agency,2026-08-19,wikidata,domain
+cityofcharlestown.com,Charlestown,IN,City,Charlestown,found,https://cityofcharlestown.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+columbiacity.net,Columbia City,IN,City,Columbia City,found,https://columbiacity.net/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+crawfordsville.net,Crawfordsville,IN,City,Crawfordsville,found,https://crawfordsville.net/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+crownpoint.in.gov,Crown Point,IN,City,Crown Point,found,https://crownpoint.in.gov/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+eastchicago.com,East Chicago,IN,City,East Chicago,found,https://eastchicago.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+evansvillegov.org,Evansville,IN,City,Evansville,found,https://evansvillegov.org/purchasing,agency,2026-08-19,wikidata,domain
+cityoffortwayne.org,Fort Wayne,IN,City,Fort Wayne,found,https://cityoffortwayne.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofgreencastle.com,Greencastle,IN,City,Greencastle,found,https://cityofgreencastle.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofjeff.net,Jeffersonville,IN,City,Jeffersonville,found,https://cityofjeff.net/rfp,agency,2026-08-19,wikidata,homepage
+lafayette.in.gov,Lafayette,IN,City,Lafayette,found,https://lafayette.in.gov/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityoflawrence.org,Lawrence,IN,City,Lawrence,found,https://cityoflawrence.org/procurement,agency,2026-08-19,wikidata,domain
+lintonchamber.org,Linton,IN,City,Linton,found,https://lintonchamber.org/bids-and-rfps,agency,2026-08-19,wikidata,domain
+martinsville.in.gov,Martinsville,IN,City,Martinsville,found,https://martinsville.in.gov/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofrushville.in.gov,Rushville,IN,City,Rushville,found,https://cityofrushville.in.gov/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+seymourcity.com,Seymour,IN,City,Seymour,found,https://seymourcity.com/bids,agency,2026-08-19,wikidata,domain
+tiptonguide.com,Tipton,IN,City,Tipton,found,https://tiptonguide.com/bids,agency,2026-08-19,wikidata,domain
+myunioncity.com,Union City,IN,City,Union City,found,https://myunioncity.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.valparaiso.in.us,Valparaiso,IN,City,Valparaiso,found,https://ci.valparaiso.in.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+whitestown.in.gov,Whitestown,IN,City,Whitestown,found,https://whitestown.in.gov/Bids.aspx,civicplus,2026-08-19,wikidata,domain
 abilenecityhall.com,Abilene,KS,City,Abilene,found,https://abilenecityhall.com/Bids.aspx,civicplus,2026-08-18,wikidata,domain
 andoverks.com,Andover,KS,City,Andover,found,https://andoverks.com/Bids.aspx,civicplus,2026-08-18,wikidata,domain
 cityofatchison.com,Atchison,KS,City,Atchison,found,https://cityofatchison.com/doing-business/bids,agency,2026-08-18,wikidata,domain
@@ -190,6 +549,194 @@ paris.ky.gov,Paris,KY,City,Paris,found,https://paris.ky.gov/Bids.aspx,civicplus,
 prestonsburgky.org,Prestonsburg,KY,City,Prestonsburg,found,https://prestonsburgky.org/rfps,agency,2026-08-18,wikidata,domain
 shelbyvillekentucky.com,Shelbyville,KY,City,Shelbyville,found,https://shelbyvillekentucky.com/Bids.aspx,civicplus,2026-08-18,wikidata,domain
 cityofunionky.org,Union,KY,City,Union,found,https://cityofunionky.org/bids,agency,2026-08-18,wikidata,domain
+cityofabbeville.net,Abbeville,LA,City,Abbeville,found,https://cityofabbeville.net/bids,agency,2026-08-19,wikidata,domain
+cityofalexandriala.com,Alexandria,LA,City,Alexandria,found,https://cityofalexandriala.com/rfp,agency,2026-08-19,wikidata,domain
+cityofbastrop.com,Bastrop,LA,City,Bastrop,found,https://cityofbastrop.com/purchasing,agency,2026-08-19,wikidata,domain
+bossiercity.org,Bossier City,LA,City,Bossier City,found,https://bossiercity.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+breauxbridgelive.com,Breaux Bridge,LA,City,Breaux Bridge,found,https://breauxbridgelive.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+carencro.org,Carencro,LA,City,Carencro,found,https://carencro.org/rfp,agency,2026-08-19,wikidata,domain
+cityofderidder.org,DeRidder,LA,City,DeRidder,found,https://cityofderidder.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+gretnala.com,Gretna,LA,City,Gretna,found,https://gretnala.com/bids,agency,2026-08-19,wikidata,domain
+hammond.org,Hammond,LA,City,Hammond,found,https://hammond.org/purchasing,agency,2026-08-19,wikidata,domain
+kenner.la.us,Kenner,LA,City,Kenner,found,https://kenner.la.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityoflakecharles.com,Lake Charles,LA,City,Lake Charles,found,https://cityoflakecharles.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofopelousas.com,Opelousas,LA,City,Opelousas,found,https://cityofopelousas.com/bids-and-rfps,agency,2026-08-19,wikidata,domain
+plaquemine.org,Plaquemine,LA,City,Plaquemine,found,https://plaquemine.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofstgabriel.us,St. Gabriel,LA,City,St. Gabriel,found,https://cityofstgabriel.us/rfps,agency,2026-08-19,wikidata,domain
+sulphur.org,Sulphur,LA,City,Sulphur,found,https://sulphur.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.thibodaux.la.us,Thibodaux,LA,City,Thibodaux,found,https://ci.thibodaux.la.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+agawam.ma.us,Agawam,MA,City,Agawam,found,https://agawam.ma.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofattleboro.us,Attleboro,MA,City,Attleboro,found,https://cityofattleboro.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofeverett.com,Everett,MA,City,Everett,found,https://cityofeverett.com/bids,agency,2026-08-19,wikidata,domain
+holyoke.org,Holyoke,MA,City,Holyoke,found,https://holyoke.org/departments/purchasing,agency,2026-08-19,wikidata,domain
+cityoflawrence.com,Lawrence,MA,City,Lawrence,found,https://cityoflawrence.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofmalden.org,Malden,MA,City,Malden,found,https://cityofmalden.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+pittsfield-ma.org,Pittsfield,MA,City,Pittsfield,found,https://pittsfield-ma.org/bids-and-rfps,agency,2026-08-19,wikidata,domain
+ci.southbridge.ma.us,Southbridge,MA,City,Southbridge,found,https://ci.southbridge.ma.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+city.waltham.ma.us,Waltham,MA,City,Waltham,found,https://city.waltham.ma.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofwestfield.org,Westfield,MA,City,Westfield,found,https://cityofwestfield.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+belairmd.org,Bel Air,MD,City,Bel Air,found,https://belairmd.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofbowie.org,Bowie,MD,City,Bowie,found,https://cityofbowie.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+choosecambridge.com,Cambridge,MD,City,Cambridge,found,https://choosecambridge.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityoffrederick.com,Frederick,MD,City,Frederick,found,https://cityoffrederick.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityoffruitland.com,Fruitland,MD,City,Fruitland,found,https://cityoffruitland.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+hagerstownmd.org,Hagerstown,MD,City,Hagerstown,found,https://hagerstownmd.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityoflaurel.org,Laurel,MD,City,Laurel,found,https://cityoflaurel.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+olneymd.org,Olney,MD,City,Olney,found,https://olneymd.org/rfp,agency,2026-08-19,wikidata,domain
+auburnmaine.org,Auburn,ME,City,Auburn,found,https://auburnmaine.org/bids,agency,2026-08-19,wikidata,domain
+cityofbelfast.org,Belfast,ME,City,Belfast,found,https://cityofbelfast.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+biddefordmaine.org,Biddeford,ME,City,Biddeford,found,https://biddefordmaine.org/rfp,agency,2026-08-19,wikidata,domain
+houlton-maine.com,Houlton,ME,City,Houlton,found,https://houlton-maine.com/bids-and-rfps,agency,2026-08-19,wikidata,domain
+old-town.org,Old Town,ME,City,Old Town,found,https://old-town.org/departments/purchasing,agency,2026-08-19,wikidata,domain
+sacomaine.org,Saco,ME,City,Saco,found,https://sacomaine.org/bids,agency,2026-08-19,wikidata,domain
+skowhegan.org,Skowhegan,ME,City,Skowhegan,found,https://skowhegan.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+wiscasset.org,Wiscasset,ME,City,Wiscasset,found,https://wiscasset.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+bhcity.us,Benton Harbor,MI,City,Benton Harbor,found,https://bhcity.us/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+bhamgov.org,Birmingham,MI,City,Birmingham,found,https://bhamgov.org/bids,agency,2026-08-19,wikidata,homepage
+carocity.net,Caro,MI,City,Caro,found,https://carocity.net/bids,agency,2026-08-19,wikidata,domain
+cheboygan.org,Cheboygan,MI,City,Cheboygan,found,https://cheboygan.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofeastlansing.com,East Lansing,MI,City,East Lansing,found,https://cityofeastlansing.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+essexville.org,Essexville,MI,City,Essexville,found,https://essexville.org/bid-opportunities,agency,2026-08-19,wikidata,domain
+cityoffenton.org,Fenton,MI,City,Fenton,found,https://cityoffenton.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofflint.com,Flint,MI,City,Flint,found,https://cityofflint.com/bids,agency,2026-08-19,wikidata,domain
+cityoffremont.net,Fremont,MI,City,Fremont,found,https://cityoffremont.net/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+gardencitymi.org,Garden City,MI,City,Garden City,found,https://gardencitymi.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofgibraltar.net,Gibraltar,MI,City,Gibraltar,found,https://cityofgibraltar.net/procurement,agency,2026-08-19,wikidata,domain
+cityofgrandledge.com,Grand Ledge,MI,City,Grand Ledge,found,https://cityofgrandledge.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+greenvillemi.org,Greenville,MI,City,Greenville,found,https://greenvillemi.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+grossepointepark.org,Grosse Pointe Park,MI,City,Grosse Pointe Park,found,https://grossepointepark.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+hamtramckcity.gov,Hamtramck,MI,City,Hamtramck,found,https://hamtramckcity.gov/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofharborsprings.com,Harbor Springs,MI,City,Harbor Springs,found,https://cityofharborsprings.com/invitation-to-bid,agency,2026-08-19,wikidata,domain
+clarecounty.com,Harrison,MI,City,Harrison,found,https://clarecounty.com/rfp,agency,2026-08-19,wikidata,homepage
+cityofhartfordmi.org,Hartford,MI,City,Hartford,found,https://cityofhartfordmi.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofhillsdale.org,Hillsdale,MI,City,Hillsdale,found,https://cityofhillsdale.org/rfps,agency,2026-08-19,wikidata,domain
+cityofholland.com,Holland,MI,City,Holland,found,https://cityofholland.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofhoughton.com,Houghton,MI,City,Houghton,found,https://cityofhoughton.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+imlaycity.org,Imlay City,MI,City,Imlay City,found,https://imlaycity.org/rfp,agency,2026-08-19,wikidata,domain
+ci.ionia.mi.us,Ionia,MI,City,Ionia,found,https://ci.ionia.mi.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ironriver.org,Iron River,MI,City,Iron River,found,https://ironriver.org/bids-and-rfps,agency,2026-08-19,wikidata,domain
+cityofjackson.org,Jackson,MI,City,Jackson,found,https://cityofjackson.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+jonesville.org,Jonesville,MI,City,Jonesville,found,https://jonesville.org/bids,agency,2026-08-19,wikidata,domain
+kalamazoocity.org,Kalamazoo,MI,City,Kalamazoo,found,https://kalamazoocity.org/purchasing,agency,2026-08-19,wikidata,domain
+ci.kentwood.mi.us,Kentwood,MI,City,Kentwood,found,https://ci.kentwood.mi.us/purchasing,agency,2026-08-19,wikidata,domain
+laingsburg.us,Laingsburg,MI,City,Laingsburg,found,https://laingsburg.us/bids-and-rfps,agency,2026-08-19,wikidata,domain
+ludington.mi.us,Ludington,MI,City,Ludington,found,https://ludington.mi.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofmarshall.com,Marshall,MI,City,Marshall,found,https://cityofmarshall.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+mt-pleasant.org,Mount Pleasant,MI,City,Mount Pleasant,found,https://mt-pleasant.org/bids,agency,2026-08-19,wikidata,homepage
+cityofmunising.org,Munising,MI,City,Munising,found,https://cityofmunising.org/bids-and-rfps,agency,2026-08-19,wikidata,domain
+cityofmuskegonheights.org,Muskegon Heights,MI,City,Muskegon Heights,found,https://cityofmuskegonheights.org/bid-opportunities,agency,2026-08-19,wikidata,domain
+cityofnewbaltimore.org,New Baltimore,MI,City,New Baltimore,found,https://cityofnewbaltimore.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofnewbuffalo.org,New Buffalo,MI,City,New Buffalo,found,https://cityofnewbuffalo.org/rfp,agency,2026-08-19,wikidata,domain
+ci.northville.mi.us,Northville,MI,City,Northville,found,https://ci.northville.mi.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+nortonshores.org,Norton Shores,MI,City,Norton Shores,found,https://nortonshores.org/business/bids,agency,2026-08-19,wikidata,domain
+cityofolivet.org,Olivet,MI,City,Olivet,found,https://cityofolivet.org/bids,agency,2026-08-19,wikidata,domain
+perry.mi.us,Perry,MI,City,Perry,found,https://perry.mi.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofpleasantridge.org,Pleasant Ridge,MI,City,Pleasant Ridge,found,https://cityofpleasantridge.org/purchasing,agency,2026-08-19,wikidata,domain
+pontiac.mi.us,Pontiac,MI,City,Pontiac,found,https://pontiac.mi.us/purchasing,agency,2026-08-19,wikidata,domain
+ci.rochester.mi.us,Rochester,MI,City,Rochester,found,https://ci.rochester.mi.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+romulusgov.com,Romulus,MI,City,Romulus,found,https://romulusgov.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+saginaw-mi.com,Saginaw,MI,City,Saginaw,found,https://saginaw-mi.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofstclair.com,St. Clair,MI,City,St. Clair,found,https://cityofstclair.com/bids,agency,2026-08-19,wikidata,domain
+scsmi.net,St. Clair Shores,MI,City,St. Clair Shores,found,https://scsmi.net/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+sjcity.com,St. Joseph,MI,City,St. Joseph,found,https://sjcity.com/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+cityoftaylor.com,Taylor,MI,City,Taylor,found,https://cityoftaylor.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+mytecumseh.org,Tecumseh,MI,City,Tecumseh,found,https://mytecumseh.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+trentonmi.org,Trenton,MI,City,Trenton,found,https://trentonmi.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofvassar.org,Vassar,MI,City,Vassar,found,https://cityofvassar.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofwarren.org,Warren,MI,City,Warren,found,https://cityofwarren.org/bids,agency,2026-08-19,wikidata,domain
+cityofwestland.com,Westland,MI,City,Westland,found,https://cityofwestland.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofypsilanti.com,Ypsilanti,MI,City,Ypsilanti,found,https://cityofypsilanti.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofzeeland.com,Zeeland,MI,City,Zeeland,found,https://cityofzeeland.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+adrian.govoffice2.com,Adrian,MN,City,Adrian,found,https://adrian.govoffice2.com/departments/purchasing,agency,2026-08-19,wikidata,domain
+ci.aitkin.mn.us,Aitkin,MN,City,Aitkin,found,https://ci.aitkin.mn.us/departments/purchasing,agency,2026-08-19,wikidata,domain
+cityofalbertlea.org,Albert Lea,MN,City,Albert Lea,found,https://cityofalbertlea.org/rfp,agency,2026-08-19,wikidata,domain
+annandale.mn.us,Annandale,MN,City,Annandale,found,https://annandale.mn.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+appletonmn.com,Appleton,MN,City,Appleton,found,https://appletonmn.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofardenhills.org,Arden Hills,MN,City,Arden Hills,found,https://cityofardenhills.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.austin.mn.us,Austin,MN,City,Austin,found,https://ci.austin.mn.us/invitation-to-bid,agency,2026-08-19,wikidata,domain
+cityofavonmn.com,Avon,MN,City,Avon,found,https://cityofavonmn.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.becker.mn.us,Becker,MN,City,Becker,found,https://ci.becker.mn.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+bellechestermn.com,Bellechester,MN,City,Bellechester,found,https://bellechestermn.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.bemidji.mn.us,Bemidji,MN,City,Bemidji,found,https://ci.bemidji.mn.us/finance/purchasing,agency,2026-08-19,wikidata,domain
+biglakemn.org,Big Lake,MN,City,Big Lake,found,https://biglakemn.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+blackduckmn.com,Blackduck,MN,City,Blackduck,found,https://blackduckmn.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+bloomingprairie.com,Blooming Prairie,MN,City,Blooming Prairie,found,https://bloomingprairie.com/business/bids,agency,2026-08-19,wikidata,domain
+ci.brainerd.mn.us,Brainerd,MN,City,Brainerd,found,https://ci.brainerd.mn.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+brooklynpark.org,Brooklyn Park,MN,City,Brooklyn Park,found,https://brooklynpark.org/bids,agency,2026-08-19,wikidata,domain
+brownsvalleymn.com,Browns Valley,MN,City,Browns Valley,found,https://brownsvalleymn.com/solicitations,agency,2026-08-19,wikidata,domain
+ci.buffalo.mn.us,Buffalo,MN,City,Buffalo,found,https://ci.buffalo.mn.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofcarlos.com,Carlos,MN,City,Carlos,found,https://cityofcarlos.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofcarver.com,Carver,MN,City,Carver,found,https://cityofcarver.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+centervillemn.com,Centerville,MN,City,Centerville,found,https://centervillemn.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+mn-chaska.civicplus.com,Chaska,MN,City,Chaska,found,https://mn-chaska.civicplus.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofcourtland.com,Courtland,MN,City,Courtland,found,https://cityofcourtland.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+dassel.com,Dassel,MN,City,Dassel,found,https://dassel.com/bids,agency,2026-08-19,wikidata,domain
+dawsonmn.com,Dawson,MN,City,Dawson,found,https://dawsonmn.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+delano.mn.us,Delano,MN,City,Delano,found,https://delano.mn.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+eaglelakemn.com,Eagle Lake,MN,City,Eagle Lake,found,https://eaglelakemn.com/procurement,agency,2026-08-19,wikidata,domain
+ci.east-bethel.mn.us,East Bethel,MN,City,East Bethel,found,https://ci.east-bethel.mn.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+elginmn.com,Elgin,MN,City,Elgin,found,https://elginmn.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.excelsior.mn.us,Excelsior,MN,City,Excelsior,found,https://ci.excelsior.mn.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.farmington.mn.us,Farmington,MN,City,Farmington,found,https://ci.farmington.mn.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.foley.mn.us,Foley,MN,City,Foley,found,https://ci.foley.mn.us/bid-opportunities,agency,2026-08-19,wikidata,domain
+foradadays.com,Forada,MN,City,Forada,found,https://foradadays.com/bids-and-rfps,agency,2026-08-19,wikidata,domain
+ci.forest-lake.mn.us,Forest Lake,MN,City,Forest Lake,found,https://ci.forest-lake.mn.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+frazeecity.com,Frazee,MN,City,Frazee,found,https://frazeecity.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.fridley.mn.us,Fridley,MN,City,Fridley,found,https://ci.fridley.mn.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+gilbertmn.org,Gilbert,MN,City,Gilbert,found,https://gilbertmn.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+glyndonmn.com,Glyndon,MN,City,Glyndon,found,https://glyndonmn.com/bids-and-rfps,agency,2026-08-19,wikidata,domain
+cityofgoodhue.com,Goodhue,MN,City,Goodhue,found,https://cityofgoodhue.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofgrandrapidsmn.com,Grand Rapids,MN,City,Grand Rapids,found,https://cityofgrandrapidsmn.com/rfps,agency,2026-08-19,wikidata,domain
+hackensackchamber.com,Hackensack,MN,City,Hackensack,found,https://hackensackchamber.com/rfp,agency,2026-08-19,wikidata,domain
+harrismn.com,Harris,MN,City,Harris,found,https://harrismn.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+hawley.govoffice.com,Hawley,MN,City,Hawley,found,https://hawley.govoffice.com/departments/finance/purchasing,agency,2026-08-19,wikidata,domain
+heronlakecity.org,Heron Lake,MN,City,Heron Lake,found,https://heronlakecity.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+hopkinsmn.com,Hopkins,MN,City,Hopkins,found,https://hopkinsmn.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+hoytlakes.com,Hoyt Lakes,MN,City,Hoyt Lakes,found,https://hoytlakes.com/rfp,agency,2026-08-19,wikidata,domain
+cityofkellogg.org,Kellogg,MN,City,Kellogg,found,https://cityofkellogg.org/bids,agency,2026-08-19,wikidata,domain
+lakeparkmn.com,Lake Park,MN,City,Lake Park,found,https://lakeparkmn.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityoflesueur.com,Le Sueur,MN,City,Le Sueur,found,https://cityoflesueur.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+lewistonmn.org,Lewiston,MN,City,Lewiston,found,https://lewistonmn.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityoflittlefalls.com,Little Falls,MN,City,Little Falls,found,https://cityoflittlefalls.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+lonsdale.govoffice.com,Lonsdale,MN,City,Lonsdale,found,https://lonsdale.govoffice.com/departments/purchasing,agency,2026-08-19,wikidata,domain
+cityofluverne.org,Luverne,MN,City,Luverne,found,https://cityofluverne.org/bids,agency,2026-08-19,wikidata,domain
+lylemn.org,Lyle,MN,City,Lyle,found,https://lylemn.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+madeliamn.com,Madelia,MN,City,Madelia,found,https://madeliamn.com/rfp,agency,2026-08-19,wikidata,domain
+medfordminnesota.com,Medford,MN,City,Medford,found,https://medfordminnesota.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofmilaca.org,Milaca,MN,City,Milaca,found,https://cityofmilaca.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.morristown.mn.us,Morristown,MN,City,Morristown,found,https://ci.morristown.mn.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+mortonmn.com,Morton,MN,City,Morton,found,https://mortonmn.com/rfps,agency,2026-08-19,wikidata,domain
+mountainlakemn.com,Mountain Lake,MN,City,Mountain Lake,found,https://mountainlakemn.com/procurement,agency,2026-08-19,wikidata,domain
+cityofnewrichlandmn.com,New Richland,MN,City,New Richland,found,https://cityofnewrichlandmn.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.new-ulm.mn.us,New Ulm,MN,City,New Ulm,found,https://ci.new-ulm.mn.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+explorenewyorkmills.com,New York Mills,MN,City,New York Mills,found,https://explorenewyorkmills.com/bids,agency,2026-08-19,wikidata,domain
+cityofnisswa.com,Nisswa,MN,City,Nisswa,found,https://cityofnisswa.com/bids,agency,2026-08-19,wikidata,domain
+ci.north-branch.mn.us,North Branch,MN,City,North Branch,found,https://ci.north-branch.mn.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.northome.mn.us,Northome,MN,City,Northome,found,https://ci.northome.mn.us/bids.html,agency,2026-08-19,wikidata,domain
+ci.oakdale.mn.us,Oakdale,MN,City,Oakdale,found,https://ci.oakdale.mn.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+onamia.com,Onamia,MN,City,Onamia,found,https://onamia.com/rfp,agency,2026-08-19,wikidata,domain
+ci.otsego.mn.us,Otsego,MN,City,Otsego,found,https://ci.otsego.mn.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.owatonna.mn.us,Owatonna,MN,City,Owatonna,found,https://ci.owatonna.mn.us/purchasing,agency,2026-08-19,wikidata,domain
+princetonmn.org,Princeton,MN,City,Princeton,found,https://princetonmn.org/departments/purchasing,agency,2026-08-19,wikidata,domain
+red-wing.org,Red Wing,MN,City,Red Wing,found,https://red-wing.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+rockvillecity.org,Rockville,MN,City,Rockville,found,https://rockvillecity.org/departments/purchasing,agency,2026-08-19,wikidata,domain
+ci.rosemount.mn.us,Rosemount,MN,City,Rosemount,found,https://ci.rosemount.mn.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+royaltonmn.com,Royalton,MN,City,Royalton,found,https://royaltonmn.com/bids,agency,2026-08-19,wikidata,domain
+cityofsanbornmn.org,Sanborn,MN,City,Sanborn,found,https://cityofsanbornmn.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+shafermn.com,Shafer,MN,City,Shafer,found,https://shafermn.com/bids,agency,2026-08-19,wikidata,domain
+cityofsilverlake.org,Silver Lake,MN,City,Silver Lake,found,https://cityofsilverlake.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+slpmn.org,Spring Lake Park,MN,City,Spring Lake Park,found,https://slpmn.org/rfps,agency,2026-08-19,wikidata,homepage
+springfieldmn.org,Springfield,MN,City,Springfield,found,https://springfieldmn.org/doing-business/bids,agency,2026-08-19,wikidata,domain
+ci.stcloud.mn.us,St. Cloud,MN,City,St. Cloud,found,https://ci.stcloud.mn.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityoftower.com,Tower,MN,City,Tower,found,https://cityoftower.com/bids-and-rfps,agency,2026-08-19,wikidata,domain
+trumanmn.us,Truman,MN,City,Truman,found,https://trumanmn.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityvadnaisheights.com,Vadnais Heights,MN,City,Vadnais Heights,found,https://cityvadnaisheights.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+wabasha.org,Wabasha,MN,City,Wabasha,found,https://wabasha.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.waitepark.mn.us,Waite Park,MN,City,Waite Park,found,https://ci.waitepark.mn.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+walnutgrovemn.org,Walnut Grove,MN,City,Walnut Grove,found,https://walnutgrovemn.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+warrenminnesota.com,Warren,MN,City,Warren,found,https://warrenminnesota.com/bids,agency,2026-08-19,wikidata,domain
+wayzata.org,Wayzata,MN,City,Wayzata,found,https://wayzata.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.worthington.mn.us,Worthington,MN,City,Worthington,found,https://ci.worthington.mn.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
 acmogov.com,Appleton City,MO,City,Appleton City,found,https://acmogov.com/Bids.aspx,civicplus,2026-08-18,wikidata,homepage
 arnoldmo.org,Arnold,MO,City,Arnold,found,https://arnoldmo.org/rfp,agency,2026-08-18,wikidata,domain
 ashlandmo.us,Ashland,MO,City,Ashland,found,https://ashlandmo.us/Bids.aspx,civicplus,2026-08-18,wikidata,domain
@@ -239,6 +786,91 @@ trentonmo.com,Trenton,MO,City,Trenton,found,https://trentonmo.com/bids,agency,20
 ucitymo.org,University City,MO,City,University City,found,https://ucitymo.org/Bids.aspx,civicplus,2026-08-18,wikidata,homepage
 warrensburg-mo.com,Warrensburg,MO,City,Warrensburg,found,https://warrensburg-mo.com/Bids.aspx,civicplus,2026-08-18,wikidata,domain
 cityofwildwood.com,Wildwood,MO,City,Wildwood,found,https://cityofwildwood.com/Bids.aspx,civicplus,2026-08-18,wikidata,domain
+ackermanms.org,Ackerman,MS,City,Ackerman,found,https://ackermanms.org/rfps,agency,2026-08-19,wikidata,domain
+biloxi.ms.us,Biloxi,MS,City,Biloxi,found,https://biloxi.ms.us/bids,agency,2026-08-19,wikidata,domain
+cityofclarksdale.org,Clarksdale,MS,City,Clarksdale,found,https://cityofclarksdale.org/bids,agency,2026-08-19,wikidata,domain
+cityofclevelandms.com,Cleveland,MS,City,Cleveland,found,https://cityofclevelandms.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+thecityofcolumbusms.org,Columbus,MS,City,Columbus,found,https://thecityofcolumbusms.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+diberville.ms.us,D'Iberville,MS,City,D'Iberville,found,https://diberville.ms.us/bids,agency,2026-08-19,wikidata,domain
+laurelms.com,Laurel,MS,City,Laurel,found,https://laurelms.com/open-bids,agency,2026-08-19,wikidata,domain
+cityoflucedale.com,Lucedale,MS,City,Lucedale,found,https://cityoflucedale.com/bids,agency,2026-08-19,wikidata,domain
+cityofmosspoint.org,Moss Point,MS,City,Moss Point,found,https://cityofmosspoint.org/departments/purchasing,agency,2026-08-19,wikidata,domain
+natchez.ms.us,Natchez,MS,City,Natchez,found,https://natchez.ms.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+obms.us,Olive Branch,MS,City,Olive Branch,found,https://obms.us/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+cityofpascagoula.com,Pascagoula,MS,City,Pascagoula,found,https://cityofpascagoula.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+pass-christian.com,Pass Christian,MS,City,Pass Christian,found,https://pass-christian.com/bids,agency,2026-08-19,wikidata,domain
+cityofpetal.com,Petal,MS,City,Petal,found,https://cityofpetal.com/rfps,agency,2026-08-19,wikidata,domain
+picayune.ms.us,Picayune,MS,City,Picayune,found,https://picayune.ms.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofrollingfork.org,Rolling Fork,MS,City,Rolling Fork,found,https://cityofrollingfork.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+southaven.org,Southaven,MS,City,Southaven,found,https://southaven.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofstarkville.org,Starkville,MS,City,Starkville,found,https://cityofstarkville.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+waynesboroms.us,Waynesboro,MS,City,Waynesboro,found,https://waynesboroms.us/bids,agency,2026-08-19,wikidata,domain
+winonams.us,Winona,MS,City,Winona,found,https://winonams.us/bids,agency,2026-08-19,wikidata,domain
+adlc.us,Anaconda,MT,City,Anaconda,found,https://adlc.us/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+co.silverbow.mt.us,Butte,MT,City,Butte,found,https://co.silverbow.mt.us/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+cityofcolumbiafalls.org,Columbia Falls,MT,City,Columbia Falls,found,https://cityofcolumbiafalls.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+greatfallsmt.net,Great Falls,MT,City,Great Falls,found,https://greatfallsmt.net/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+kalispell.com,Kalispell,MT,City,Kalispell,found,https://kalispell.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.missoula.mt.us,Missoula,MT,City,Missoula,found,https://ci.missoula.mt.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofronan.org,Ronan,MT,City,Ronan,found,https://cityofronan.org/bids,agency,2026-08-19,wikidata,domain
+threeforksmontana.us,Three Forks,MT,City,Three Forks,found,https://threeforksmontana.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+townsendmt.com,Townsend,MT,City,Townsend,found,https://townsendmt.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.wolf-point.mt.us,Wolf Point,MT,City,Wolf Point,found,https://ci.wolf-point.mt.us/rfps,agency,2026-08-19,wikidata,domain
+ci.asheboro.nc.us,Asheboro,NC,City,Asheboro,found,https://ci.asheboro.nc.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofbelmont.org,Belmont,NC,City,Belmont,found,https://cityofbelmont.org/bid-opportunities,agency,2026-08-19,wikidata,domain
+bessemercity.com,Bessemer City,NC,City,Bessemer City,found,https://bessemercity.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofbrevard.com,Brevard,NC,City,Brevard,found,https://cityofbrevard.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofclaremont.org,Claremont,NC,City,Claremont,found,https://cityofclaremont.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofclintonnc.com,Clinton,NC,City,Clinton,found,https://cityofclintonnc.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+townofdanbury.org,Danbury,NC,City,Danbury,found,https://townofdanbury.org/rfp,agency,2026-08-19,wikidata,domain
+denvernc.com,Denver,NC,City,Denver,found,https://denvernc.com/bids,agency,2026-08-19,wikidata,domain
+fuquay-varina.org,Fuquay-Varina,NC,City,Fuquay-Varina,found,https://fuquay-varina.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofgraham.com,Graham,NC,City,Graham,found,https://cityofgraham.com/bids,agency,2026-08-19,wikidata,domain
+historichalifaxnc.com,Halifax,NC,City,Halifax,found,https://historichalifaxnc.com/procurement,agency,2026-08-19,wikidata,domain
+hamletnc.us,Hamlet,NC,City,Hamlet,found,https://hamletnc.us/bid-opportunities,agency,2026-08-19,wikidata,domain
+cityofkm.com,Kings Mountain,NC,City,Kings Mountain,found,https://cityofkm.com/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+cityoflenoir.com,Lenoir,NC,City,Lenoir,found,https://cityoflenoir.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.lincolnton.nc.us,Lincolnton,NC,City,Lincolnton,found,https://ci.lincolnton.nc.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+marionnc.org,Marion,NC,City,Marion,found,https://marionnc.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+monroenc.org,Monroe,NC,City,Monroe,found,https://monroenc.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+roanokerapidsnc.com,Roanoke Rapids,NC,City,Roanoke Rapids,found,https://roanokerapidsnc.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+townofrobbins.com,Robbins,NC,City,Robbins,found,https://townofrobbins.com/bidopportunities,agency,2026-08-19,wikidata,domain
+sanfordnc.net,Sanford,NC,City,Sanford,found,https://sanfordnc.net/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+smithfield-nc.com,Smithfield,NC,City,Smithfield,found,https://smithfield-nc.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofsouthport.com,Southport,NC,City,Southport,found,https://cityofsouthport.com/bids,agency,2026-08-19,wikidata,domain
+townofsparta.org,Sparta,NC,City,Sparta,found,https://townofsparta.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+statesvillenc.net,Statesville,NC,City,Statesville,found,https://statesvillenc.net/purchasing,agency,2026-08-19,wikidata,domain
+townofsylva.org,Sylva,NC,City,Sylva,found,https://townofsylva.org/rfp,agency,2026-08-19,wikidata,domain
+vallecrucis.com,Valle Crucis,NC,City,Valle Crucis,found,https://vallecrucis.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+townofwentworth.com,Wentworth,NC,City,Wentworth,found,https://townofwentworth.com/rfp,agency,2026-08-19,wikidata,domain
+cityofws.org,Winston-Salem,NC,City,Winston-Salem,found,https://cityofws.org/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+belfieldnd.com,Belfield,ND,City,Belfield,found,https://belfieldnd.com/bid-opportunities,agency,2026-08-19,wikidata,domain
+buffalond.com,Buffalo,ND,City,Buffalo,found,https://buffalond.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+buxtonnd.com,Buxton,ND,City,Buxton,found,https://buxtonnd.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+draytonnd.com,Drayton,ND,City,Drayton,found,https://draytonnd.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+edgeley.com,Edgeley,ND,City,Edgeley,found,https://edgeley.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+garrisonnd.com,Garrison,ND,City,Garrison,found,https://garrisonnd.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+gwinnernd.com,Gwinner,ND,City,Gwinner,found,https://gwinnernd.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+hankinsonnd.com,Hankinson,ND,City,Hankinson,found,https://hankinsonnd.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofharwood.com,Harwood,ND,City,Harwood,found,https://cityofharwood.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+hebronnd.org,Hebron,ND,City,Hebron,found,https://hebronnd.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofmandan.com,Mandan,ND,City,Mandan,found,https://cityofmandan.com/bids,agency,2026-08-19,wikidata,domain
+maxnd.com,Max,ND,City,Max,found,https://maxnd.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+mohallndak.com,Mohall,ND,City,Mohall,found,https://mohallndak.com/business/bids,agency,2026-08-19,wikidata,domain
+discovernorthwood.com,Northwood,ND,City,Northwood,found,https://discovernorthwood.com/rfps,agency,2026-08-19,wikidata,domain
+pagend.com,Page,ND,City,Page,found,https://pagend.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+parshallnd.com,Parshall,ND,City,Parshall,found,https://parshallnd.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+reynoldsnd.com,Reynolds,ND,City,Reynolds,found,https://reynoldsnd.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+selfridge-nd.com,Selfridge,ND,City,Selfridge,found,https://selfridge-nd.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+steelend.com,Steele,ND,City,Steele,found,https://steelend.com/business/bids,agency,2026-08-19,wikidata,domain
+strasburgnd.com,Strasburg,ND,City,Strasburg,found,https://strasburgnd.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityoftaylornd.net,Taylor,ND,City,Taylor,found,https://cityoftaylornd.net/bids,agency,2026-08-19,wikidata,domain
+valleycity.us,Valley City,ND,City,Valley City,found,https://valleycity.us/bids,agency,2026-08-19,wikidata,domain
+velvand.com,Velva,ND,City,Velva,found,https://velvand.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+washburnnd.com,Washburn,ND,City,Washburn,found,https://washburnnd.com/bids,agency,2026-08-19,wikidata,domain
+westhopend.com,Westhope,ND,City,Westhope,found,https://westhopend.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofwilliston.com,Williston,ND,City,Williston,found,https://cityofwilliston.com/bids,agency,2026-08-19,wikidata,domain
+wishek-nd.com,Wishek,ND,City,Wishek,found,https://wishek-nd.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
 cityofalliance.net,Alliance,NE,City,Alliance,found,https://cityofalliance.net/Bids.aspx,civicplus,2026-08-18,wikidata,domain
 almacity.com,Alma,NE,City,Alma,found,https://almacity.com/Bids.aspx,civicplus,2026-08-18,wikidata,domain
 centerne.com,Center,NE,City,Center,found,https://centerne.com/Bids.aspx,civicplus,2026-08-18,wikidata,domain
@@ -255,6 +887,100 @@ mindennebraska.org,Minden,NE,City,Minden,found,https://mindennebraska.org/Bids.a
 ci.north-platte.ne.us,North Platte,NE,City,North Platte,found,https://ci.north-platte.ne.us/Bids.aspx,civicplus,2026-08-18,wikidata,domain
 papillion.org,Papillion,NE,City,Papillion,found,https://papillion.org/Bids.aspx,civicplus,2026-08-18,wikidata,domain
 cityofsidney.org,Sidney,NE,City,Sidney,found,https://cityofsidney.org/Bids.aspx,civicplus,2026-08-18,wikidata,domain
+claremontnh.com,Claremont,NH,City,Claremont,found,https://claremontnh.com/procurement,agency,2026-08-19,wikidata,domain
+hanovernh.org,Hanover (NH),NH,City,Hanover (NH),found,https://hanovernh.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofportsmouth.com,Portsmouth,NH,City,Portsmouth,found,https://cityofportsmouth.com/finance/purchasing,agency,2026-08-19,wikidata,domain
+cityofasburypark.com,Asbury Park,NJ,City,Asbury Park,found,https://cityofasburypark.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+belviderenj.com,Belvidere,NJ,City,Belvidere,found,https://belviderenj.com/bids,agency,2026-08-19,wikidata,domain
+ci.camden.nj.us,Camden,NJ,City,Camden,found,https://ci.camden.nj.us/bids,agency,2026-08-19,wikidata,domain
+elizabethnj.org,Elizabeth,NJ,City,Elizabeth,found,https://elizabethnj.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+historicflemington.com,Flemington,NJ,City,Flemington,found,https://historicflemington.com/solicitations,agency,2026-08-19,wikidata,domain
+hackensack.org,Hackensack,NJ,City,Hackensack,found,https://hackensack.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+hopewellboro-nj.us,Hopewell,NJ,City,Hopewell,found,https://hopewellboro-nj.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+middletownship.com,Middle Township,NJ,Township,Middle Township,found,https://middletownship.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+newtontownhall.com,Newton,NJ,City,Newton,found,https://newtontownhall.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+trentonnj.org,Trenton,NJ,City,Trenton,found,https://trentonnj.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+woodbury.nj.us,Woodbury,NJ,City,Woodbury,found,https://woodbury.nj.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.alamogordo.nm.us,Alamogordo,NM,City,Alamogordo,found,https://ci.alamogordo.nm.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofclovis.org,Clovis,NM,City,Clovis,found,https://cityofclovis.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofelephantbutte.com,Elephant Butte,NM,City,Elephant Butte,found,https://cityofelephantbutte.com/invitation-to-bid,agency,2026-08-19,wikidata,domain
+cityofeunice.org,Eunice,NM,City,Eunice,found,https://cityofeunice.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+lovington.org,Lovington,NM,City,Lovington,found,https://lovington.org/rfp,agency,2026-08-19,wikidata,domain
+puebloofacoma.org,Pueblo of Acoma,NM,City,Pueblo of Acoma,found,https://puebloofacoma.org/rfp,agency,2026-08-19,wikidata,domain
+townofsilvercity.org,Silver City,NM,City,Silver City,found,https://townofsilvercity.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+bcnv.org,Boulder City,NV,City,Boulder City,found,https://bcnv.org/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+cityofcaliente.com,Caliente,NV,City,Caliente,found,https://cityofcaliente.com/invitation-to-bid,agency,2026-08-19,wikidata,domain
+cityoffernley.org,Fernley,NV,City,Fernley,found,https://cityoffernley.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+tonopahnevada.com,Tonopah,NV,City,Tonopah,found,https://tonopahnevada.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+yerington.net,Yerington,NV,City,Yerington,found,https://yerington.net/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+townofdelhiny.com,Delhi,NY,City,Delhi,found,https://townofdelhiny.com/bids,agency,2026-08-19,wikidata,domain
+elmsfordny.org,Elmsford,NY,City,Elmsford,found,https://elmsfordny.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+geneseony.org,Geneseo,NY,City,Geneseo,found,https://geneseony.org/rfps,agency,2026-08-19,wikidata,domain
+villageofmonticello.com,Monticello,NY,City,Monticello,found,https://villageofmonticello.com/rfp,agency,2026-08-19,wikidata,domain
+cmvny.com,Mount Vernon,NY,City,Mount Vernon,found,https://cmvny.com/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+oswegony.org,Oswego,NY,City,Oswego,found,https://oswegony.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofpeekskill.com,Peekskill,NY,City,Peekskill,found,https://cityofpeekskill.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+townofriverheadny.com,Riverhead,NY,City,Riverhead,found,https://townofriverheadny.com/solicitations,agency,2026-08-19,wikidata,domain
+cityofwhiteplains.com,White Plains,NY,City,White Plains,found,https://cityofwhiteplains.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofalliance.com,Alliance,OH,City,Alliance,found,https://cityofalliance.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofavon.com,Avon,OH,City,Avon,found,https://cityofavon.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofbellbrook.org,Bellbrook,OH,City,Bellbrook,found,https://cityofbellbrook.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofberea.org,Berea,OH,City,Berea,found,https://cityofberea.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+brecksville.oh.us,Brecksville,OH,City,Brecksville,found,https://brecksville.oh.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+broadview-heights.org,Broadview Heights,OH,City,Broadview Heights,found,https://broadview-heights.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+brookvilleohio.com,Brookville,OH,City,Brookville,found,https://brookvilleohio.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+carlisleoh.org,Carlisle,OH,City,Carlisle,found,https://carlisleoh.org/bids,agency,2026-08-19,wikidata,domain
+visitcincy.com,Cincinnati,OH,City,Cincinnati,found,https://visitcincy.com/rfp,agency,2026-08-19,wikidata,homepage
+clayton.oh.us,Clayton,OH,City,Clayton,found,https://clayton.oh.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+clydeohio.org,Clyde,OH,City,Clyde,found,https://clydeohio.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofdefiance.com,Defiance,OH,City,Defiance,found,https://cityofdefiance.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+englewood.oh.us,Englewood,OH,City,Englewood,found,https://englewood.oh.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+fairfield-city.org,Fairfield,OH,City,Fairfield,found,https://fairfield-city.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+garfieldhts.org,Garfield Heights,OH,City,Garfield Heights,found,https://garfieldhts.org/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+georgetownohio.us,Georgetown,OH,City,Georgetown,found,https://georgetownohio.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofgreen.org,Green,OH,City,Green,found,https://cityofgreen.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+hhoh.org,Huber Heights,OH,City,Huber Heights,found,https://hhoh.org/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+hudson.oh.us,Hudson,OH,City,Hudson,found,https://hudson.oh.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ketteringoh.org,Kettering,OH,City,Kettering,found,https://ketteringoh.org/purchasing,agency,2026-08-19,wikidata,domain
+cityoflorain.org,Lorain,OH,City,Lorain,found,https://cityoflorain.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+marionohio.us,Marion,OH,City,Marion,found,https://marionohio.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+marysvilleohio.org,Marysville,OH,City,Marysville,found,https://marysvilleohio.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+maumee.org,Maumee,OH,City,Maumee,found,https://maumee.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+citymol.org,Mentor-on-the-Lake,OH,City,Mentor-on-the-Lake,found,https://citymol.org/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+monroeohio.org,Monroe,OH,City,Monroe,found,https://monroeohio.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+mountvernonohio.org,Mount Vernon,OH,City,Mount Vernon,found,https://mountvernonohio.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+napoleonohio.cc,Napoleon,OH,City,Napoleon,found,https://napoleonohio.cc/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+newfranklin.org,New Franklin,OH,City,New Franklin,found,https://newfranklin.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.northwood.oh.us,Northwood,OH,City,Northwood,found,https://ci.northwood.oh.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofnorton.org,Norton,OH,City,Norton,found,https://cityofnorton.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+olmstedfalls.org,Olmsted Falls,OH,City,Olmsted Falls,found,https://olmstedfalls.org/bids,agency,2026-08-19,wikidata,domain
+orrville.com,Orrville,OH,City,Orrville,found,https://orrville.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ottawaohio.us,Ottawa,OH,City,Ottawa,found,https://ottawaohio.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+painesville.com,Painesville,OH,City,Painesville,found,https://painesville.com/bids,agency,2026-08-19,wikidata,domain
+villageofpaulding.com,Paulding,OH,City,Paulding,found,https://villageofpaulding.com/bids,agency,2026-08-19,wikidata,domain
+pepperpike.org,Pepper Pike,OH,City,Pepper Pike,found,https://pepperpike.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+readingohio.org,Reading,OH,City,Reading,found,https://readingohio.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+richfieldvillageohio.org,Richfield,OH,City,Richfield,found,https://richfieldvillageohio.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+richmondheightsohio.org,Richmond Heights,OH,City,Richmond Heights,found,https://richmondheightsohio.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.sandusky.oh.us,Sandusky,OH,City,Sandusky,found,https://ci.sandusky.oh.us/bids,agency,2026-08-19,wikidata,domain
+shakeronline.com,Shaker Heights,OH,City,Shaker Heights,found,https://shakeronline.com/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+sheffieldlake.net,Sheffield Lake,OH,City,Sheffield Lake,found,https://sheffieldlake.net/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+sidneyoh.com,Sidney,OH,City,Sidney,found,https://sidneyoh.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofspringboro.com,Springboro,OH,City,Springboro,found,https://cityofspringboro.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+stclairsville.com,St. Clairsville,OH,City,St. Clairsville,found,https://stclairsville.com/bids,agency,2026-08-19,wikidata,domain
+cityofstmarys.net,St. Marys,OH,City,St. Marys,found,https://cityofstmarys.net/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofstruthers.com,Struthers,OH,City,Struthers,found,https://cityofstruthers.com/bids,agency,2026-08-19,wikidata,domain
+ci.trenton.oh.us,Trenton,OH,City,Trenton,found,https://ci.trenton.oh.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+trotwood.org,Trotwood,OH,City,Trotwood,found,https://trotwood.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+mytwinsburg.com,Twinsburg,OH,City,Twinsburg,found,https://mytwinsburg.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+universityheights.com,University Heights,OH,City,University Heights,found,https://universityheights.com/rfp,agency,2026-08-19,wikidata,domain
+vandaliaohio.org,Vandalia,OH,City,Vandalia,found,https://vandaliaohio.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+wadsworthcity.com,Wadsworth,OH,City,Wadsworth,found,https://wadsworthcity.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofwarrensville.com,Warrensville Heights,OH,City,Warrensville Heights,found,https://cityofwarrensville.com/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+cityofwellston.org,Wellston,OH,City,Wellston,found,https://cityofwellston.org/bid-opportunities,agency,2026-08-19,wikidata,domain
+cityofwickliffe.com,Wickliffe,OH,City,Wickliffe,found,https://cityofwickliffe.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+willoughbyohio.com,Willoughby,OH,City,Willoughby,found,https://willoughbyohio.com/rfp,agency,2026-08-19,wikidata,domain
+coz.org,Zanesville,OH,City,Zanesville,found,https://coz.org/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
 adaok.com,Ada,OK,City,Ada,found,https://adaok.com/Bids.aspx,civicplus,2026-08-18,wikidata,domain
 alvaok.org,Alva,OK,City,Alva,found,https://alvaok.org/bids,agency,2026-08-18,wikidata,domain
 ardmorecity.org,Ardmore,OK,City,Ardmore,found,https://ardmorecity.org/Bids.aspx,civicplus,2026-08-18,wikidata,domain
@@ -286,6 +1012,56 @@ tecumsehok.com,Tecumseh,OK,City,Tecumseh,found,https://tecumsehok.com/Bids.aspx,
 waurika.us,Waurika,OK,City,Waurika,found,https://waurika.us/Bids.aspx,civicplus,2026-08-18,wikidata,domain
 cityofwilburton.com,Wilburton,OK,City,Wilburton,found,https://cityofwilburton.com/government/purchasing,agency,2026-08-18,wikidata,domain
 cityofwoodward.com,Woodward,OK,City,Woodward,found,https://cityofwoodward.com/Bids.aspx,civicplus,2026-08-18,wikidata,domain
+cityofalbany.net,Albany,OR,City,Albany,found,https://cityofalbany.net/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+chemult.org,Chemult,OR,City,Chemult,found,https://chemult.org/bids,agency,2026-08-19,wikidata,domain
+cityofcoquille.org,Coquille,OR,City,Coquille,found,https://cityofcoquille.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+orcity.org,Oregon City,OR,City,Oregon City,found,https://orcity.org/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+portorford.org,Port Orford,OR,City,Port Orford,found,https://portorford.org/rfp,agency,2026-08-19,wikidata,domain
+ci.st-helens.or.us,St. Helens,OR,City,St. Helens,found,https://ci.st-helens.or.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+bloomsburgpa.org,Bloomsburg,PA,City,Bloomsburg,found,https://bloomsburgpa.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofbutler.org,Butler,PA,City,Butler,found,https://cityofbutler.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+easton-pa.com,Easton,PA,City,Easton,found,https://easton-pa.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+visiterie.com,Erie,PA,City,Erie,found,https://visiterie.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+indianaboro.com,Indiana,PA,City,Indiana,found,https://indianaboro.com/rfp,agency,2026-08-19,wikidata,domain
+cityoflancasterpa.com,Lancaster,PA,City,Lancaster,found,https://cityoflancasterpa.com/bids,agency,2026-08-19,wikidata,domain
+mediaborough.com,Media,PA,City,Media,found,https://mediaborough.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ridgwayborough.com,Ridgway,PA,City,Ridgway,found,https://ridgwayborough.com/rfp,agency,2026-08-19,wikidata,domain
+somersetborough.com,Somerset,PA,City,Somerset,found,https://somersetborough.com/bids,agency,2026-08-19,wikidata,domain
+netherprovidence.org,Wallingford,PA,City,Wallingford,found,https://netherprovidence.org/rfps,agency,2026-08-19,wikidata,homepage
+west-chester.com,West Chester,PA,City,West Chester,found,https://west-chester.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+yorkcity.org,York,PA,City,York,found,https://yorkcity.org/rfp,agency,2026-08-19,wikidata,domain
+cityofnewport.com,Newport,RI,City,Newport,found,https://cityofnewport.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+pawtucketri.com,Pawtucket,RI,City,Pawtucket,found,https://pawtucketri.com/current-bids,agency,2026-08-19,wikidata,domain
+abbevillecitysc.com,Abbeville,SC,City,Abbeville,found,https://abbevillecitysc.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+bambergsc.com,Bamberg,SC,City,Bamberg,found,https://bambergsc.com/bids,agency,2026-08-19,wikidata,domain
+cityofbeaufort.org,Beaufort,SC,City,Beaufort,found,https://cityofbeaufort.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+bennettsvillesc.com,Bennettsville,SC,City,Bennettsville,found,https://bennettsvillesc.com/purchasing,agency,2026-08-19,wikidata,domain
+chestersc.org,Chester,SC,City,Chester,found,https://chestersc.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityoffollybeach.com,Folly Beach,SC,City,Folly Beach,found,https://cityoffollybeach.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+fountaininn.org,Fountain Inn,SC,City,Fountain Inn,found,https://fountaininn.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofhanahan.com,Hanahan,SC,City,Hanahan,found,https://cityofhanahan.com/rfps,agency,2026-08-19,wikidata,domain
+cityofinman.org,Inman,SC,City,Inman,found,https://cityofinman.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+kingstree.org,Kingstree,SC,City,Kingstree,found,https://kingstree.org/bids-and-rfps,agency,2026-08-19,wikidata,domain
+lancastercitysc.com,Lancaster,SC,City,Lancaster,found,https://lancastercitysc.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofloris.com,Loris,SC,City,Loris,found,https://cityofloris.com/bids,agency,2026-08-19,wikidata,domain
+northcharleston.org,North Charleston,SC,City,North Charleston,found,https://northcharleston.org/bids,agency,2026-08-19,wikidata,domain
+nmb.us,North Myrtle Beach,SC,City,North Myrtle Beach,found,https://nmb.us/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+simpsonville.com,Simpsonville,SC,City,Simpsonville,found,https://simpsonville.com/rfps,agency,2026-08-19,wikidata,domain
+cityofspartanburg.org,Spartanburg,SC,City,Spartanburg,found,https://cityofspartanburg.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+sumter-sc.com,Sumter,SC,City,Sumter,found,https://sumter-sc.com/purchasing,agency,2026-08-19,wikidata,domain
+travelersrestsc.com,Travelers Rest,SC,City,Travelers Rest,found,https://travelersrestsc.com/bids,agency,2026-08-19,wikidata,domain
+yorkcitysc.com,York,SC,City,York,found,https://yorkcitysc.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+aberdeen.sd.us,Aberdeen,SD,City,Aberdeen,found,https://aberdeen.sd.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofbrookings.org,Brookings,SD,City,Brookings,found,https://cityofbrookings.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+castlewoodcity.com,Castlewood,SD,City,Castlewood,found,https://castlewoodcity.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+custersd.com,Custer,SD,City,Custer,found,https://custersd.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+fortpierre.com,Fort Pierre,SD,City,Fort Pierre,found,https://fortpierre.com/invitation-to-bid,agency,2026-08-19,wikidata,domain
+hotsprings-sd.com,Hot Springs,SD,City,Hot Springs,found,https://hotsprings-sd.com/rfp,agency,2026-08-19,wikidata,domain
+cityofmitchell.org,Mitchell,SD,City,Mitchell,found,https://cityofmitchell.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofpierre.org,Pierre,SD,City,Pierre,found,https://cityofpierre.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+roscoesd.org,Roscoe,SD,City,Roscoe,found,https://roscoesd.org/bids,agency,2026-08-19,wikidata,domain
+vermillion.us,Vermillion,SD,City,Vermillion,found,https://vermillion.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+watertownsd.us,Watertown,SD,City,Watertown,found,https://watertownsd.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
 cityofbartlett.org,Bartlett,TN,City,Bartlett,found,https://cityofbartlett.org/Bids.aspx,civicplus,2026-08-18,wikidata,domain
 cityofbolivar.com,Bolivar,TN,City,Bolivar,found,https://cityofbolivar.com/business/bids,agency,2026-08-18,wikidata,domain
 cityofclarksville.com,Clarksville,TN,City,Clarksville,found,https://cityofclarksville.com/Bids.aspx,civicplus,2026-08-18,wikidata,domain
@@ -307,3 +1083,259 @@ somervilletn.org,Somerville,TN,City,Somerville,found,https://somervilletn.org/Bi
 springhilltn.org,Spring Hill,TN,City,Spring Hill,found,https://springhilltn.org/Bids.aspx,civicplus,2026-08-18,wikidata,domain
 springfield-tn.org,Springfield,TN,City,Springfield,found,https://springfield-tn.org/Bids.aspx,civicplus,2026-08-18,wikidata,domain
 cityoftownsend.com,Townsend,TN,City,Townsend,found,https://cityoftownsend.com/Bids.aspx,civicplus,2026-08-18,wikidata,domain
+cityofabernathy.org,Abernathy,TX,City,Abernathy,found,https://cityofabernathy.org/rfp,agency,2026-08-19,wikidata,domain
+cityofallen.org,Allen,TX,City,Allen,found,https://cityofallen.org/purchasing,agency,2026-08-19,wikidata,domain
+alliancetexas.com,Alliance,TX,City,Alliance,found,https://alliancetexas.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofalpine.com,Alpine,TX,City,Alpine,found,https://cityofalpine.com/bids,agency,2026-08-19,wikidata,domain
+cityofalvarado.org,Alvarado,TX,City,Alvarado,found,https://cityofalvarado.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+angleton.tx.us,Angleton,TX,City,Angleton,found,https://angleton.tx.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+arcolatexas.org,Arcola,TX,City,Arcola,found,https://arcolatexas.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+argyletx.com,Argyle,TX,City,Argyle,found,https://argyletx.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+arptx.com,Arp,TX,City,Arp,found,https://arptx.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofazle.org,Azle,TX,City,Azle,found,https://cityofazle.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+baytown.org,Baytown,TX,City,Baytown,found,https://baytown.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+bedias.com,Bedias,TX,City,Bedias,found,https://bedias.com/bids,agency,2026-08-19,wikidata,domain
+beevilletx.org,Beeville,TX,City,Beeville,found,https://beevilletx.org/bids,agency,2026-08-19,wikidata,domain
+bellmead.com,Bellmead,TX,City,Bellmead,found,https://bellmead.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+beverlyhillstexas.net,Beverly Hills,TX,City,Beverly Hills,found,https://beverlyhillstexas.net/bids,agency,2026-08-19,wikidata,domain
+mybigspring.com,Big Spring,TX,City,Big Spring,found,https://mybigspring.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+bluemoundtexas.us,Blue Mound,TX,City,Blue Mound,found,https://bluemoundtexas.us/procurement,agency,2026-08-19,wikidata,domain
+blueridgecity.com,Blue Ridge,TX,City,Blue Ridge,found,https://blueridgecity.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.boerne.tx.us,Boerne,TX,City,Boerne,found,https://ci.boerne.tx.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofbonham.org,Bonham,TX,City,Bonham,found,https://cityofbonham.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+bradytx.us,Brady,TX,City,Brady,found,https://bradytx.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofbrazoria.org,Brazoria,TX,City,Brazoria,found,https://cityofbrazoria.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofbrenham.org,Brenham,TX,City,Brenham,found,https://cityofbrenham.org/purchasing,agency,2026-08-19,wikidata,domain
+bridgeland.com,Bridgeland,TX,City,Bridgeland,found,https://bridgeland.com/bids,agency,2026-08-19,wikidata,domain
+cityofbridgeport.net,Bridgeport,TX,City,Bridgeport,found,https://cityofbridgeport.net/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.brownfield.tx.us,Brownfield,TX,City,Brownfield,found,https://ci.brownfield.tx.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+brownsborotx.com,Brownsboro,TX,City,Brownsboro,found,https://brownsborotx.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cob.us,Brownsville,TX,City,Brownsville,found,https://cob.us/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+burkburnett.org,Burkburnett,TX,City,Burkburnett,found,https://burkburnett.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+burlesontx.com,Burleson,TX,City,Burleson,found,https://burlesontx.com/purchasing,agency,2026-08-19,wikidata,domain
+cityofburnet.com,Burnet,TX,City,Burnet,found,https://cityofburnet.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofcaddomills.com,Caddo Mills,TX,City,Caddo Mills,found,https://cityofcaddomills.com/bids-and-rfps,agency,2026-08-19,wikidata,domain
+canyon-tx.com,Canyon,TX,City,Canyon,found,https://canyon-tx.com/rfps,agency,2026-08-19,wikidata,domain
+cityofcastlehills.com,Castle Hills,TX,City,Castle Hills,found,https://cityofcastlehills.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+centertexas.org,Center,TX,City,Center,found,https://centertexas.org/procurement,agency,2026-08-19,wikidata,domain
+chandlertx.com,Chandler,TX,City,Chandler,found,https://chandlertx.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+clarksvilletx.com,Clarksville City,TX,City,Clarksville City,found,https://clarksvilletx.com/invitation-to-bid,agency,2026-08-19,wikidata,homepage
+coloradocitytexas.org,Colorado City,TX,City,Colorado City,found,https://coloradocitytexas.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+commercetx.org,Commerce,TX,City,Commerce,found,https://commercetx.org/rfps,agency,2026-08-19,wikidata,domain
+cityofcoopertx.municipalimpact.com,Cooper,TX,City,Cooper,found,https://cityofcoopertx.municipalimpact.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cctexas.com,Corpus Christi,TX,City,Corpus Christi,found,https://cctexas.com/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+crandalltexas.com,Crandall,TX,City,Crandall,found,https://crandalltexas.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofdwg.net,Dalworthington Gardens,TX,City,Dalworthington Gardens,found,https://cityofdwg.net/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+decaturtx.org,Decatur,TX,City,Decatur,found,https://decaturtx.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofdenison.com,Denison,TX,City,Denison,found,https://cityofdenison.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofdenton.com,Denton,TX,City,Denton,found,https://cityofdenton.com/purchasing,agency,2026-08-19,wikidata,domain
+ci.dickinson.tx.us,Dickinson,TX,City,Dickinson,found,https://ci.dickinson.tx.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofdonna.org,Donna,TX,City,Donna,found,https://cityofdonna.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+duncanville.com,Duncanville,TX,City,Duncanville,found,https://duncanville.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+eaglepasstx.us,Eagle Pass,TX,City,Eagle Pass,found,https://eaglepasstx.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofedinburg.com,Edinburg,TX,City,Edinburg,found,https://cityofedinburg.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofemory.com,Emory,TX,City,Emory,found,https://cityofemory.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+foresthilltx.org,Forest Hill,TX,City,Forest Hill,found,https://foresthilltx.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+fbgtx.org,Fredericksburg,TX,City,Fredericksburg,found,https://fbgtx.org/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+ci.friendswood.tx.us,Friendswood,TX,City,Friendswood,found,https://ci.friendswood.tx.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+gainesville.tx.us,Gainesville,TX,City,Gainesville,found,https://gainesville.tx.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofganado.com,Ganado,TX,City,Ganado,found,https://cityofganado.com/invitation-to-bid,agency,2026-08-19,wikidata,domain
+ci.garden-ridge.tx.us,Garden Ridge,TX,City,Garden Ridge,found,https://ci.garden-ridge.tx.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+gilmer-tx.com,Gilmer,TX,City,Gilmer,found,https://gilmer-tx.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+visitgoldthwaite.com,Goldthwaite,TX,City,Goldthwaite,found,https://visitgoldthwaite.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+goliadtx.net,Goliad,TX,City,Goliad,found,https://goliadtx.net/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+granbury.org,Granbury,TX,City,Granbury,found,https://granbury.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+graniteshoals.org,Granite Shoals,TX,City,Granite Shoals,found,https://graniteshoals.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+hardintexas.com,Hardin,TX,City,Hardin,found,https://hardintexas.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+haslet.org,Haslet,TX,City,Haslet,found,https://haslet.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofhemphill.com,Hemphill,TX,City,Hemphill,found,https://cityofhemphill.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+hendersontx.us,Henderson,TX,City,Henderson,found,https://hendersontx.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofhewitt.com,Hewitt,TX,City,Hewitt,found,https://cityofhewitt.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+highlandvillage.org,Highland Village,TX,City,Highland Village,found,https://highlandvillage.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofhooks.org,Hooks,TX,City,Hooks,found,https://cityofhooks.org/RFP.aspx,agency,2026-08-19,wikidata,domain
+industry-tx.com,Industry,TX,City,Industry,found,https://industry-tx.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+irvingtexas.com,Irving,TX,City,Irving,found,https://irvingtexas.com/rfp,agency,2026-08-19,wikidata,domain
+cityofjewett.com,Jewett,TX,City,Jewett,found,https://cityofjewett.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofjustin.com,Justin,TX,City,Justin,found,https://cityofjustin.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+keenetx.com,Keene,TX,City,Keene,found,https://keenetx.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofkennedale.com,Kennedale,TX,City,Kennedale,found,https://cityofkennedale.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofkilgore.com,Kilgore,TX,City,Kilgore,found,https://cityofkilgore.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofkingsville.com,Kingsville,TX,City,Kingsville,found,https://cityofkingsville.com/departments/purchasing,agency,2026-08-19,wikidata,domain
+knollwoodvillage.com,Knollwood,TX,City,Knollwood,found,https://knollwoodvillage.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+lakedallas.com,Lake Dallas,TX,City,Lake Dallas,found,https://lakedallas.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+lakeworthtx.org,Lake Worth,TX,City,Lake Worth,found,https://lakeworthtx.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+lancaster-tx.com,Lancaster,TX,City,Lancaster,found,https://lancaster-tx.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+leaguecity.com,League City,TX,City,League City,found,https://leaguecity.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+liveoaktx.net,Live Oak,TX,City,Live Oak,found,https://liveoaktx.net/departments/finance/purchasing,agency,2026-08-19,wikidata,domain
+cityoflivingston-tx.com,Livingston,TX,City,Livingston,found,https://cityoflivingston-tx.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofllano.com,Llano,TX,City,Llano,found,https://cityofllano.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+lockhart-tx.org,Lockhart,TX,City,Lockhart,found,https://lockhart-tx.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.lorena.tx.us,Lorena,TX,City,Lorena,found,https://ci.lorena.tx.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.lubbock.tx.us,Lubbock,TX,City,Lubbock,found,https://ci.lubbock.tx.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofluling.net,Luling,TX,City,Luling,found,https://cityofluling.net/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofmanvel.com,Manvel,TX,City,Manvel,found,https://cityofmanvel.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+mcallen.net,McAllen,TX,City,McAllen,found,https://mcallen.net/bids,agency,2026-08-19,wikidata,domain
+mckinneytexas.org,McKinney,TX,City,McKinney,found,https://mckinneytexas.org/purchasing,agency,2026-08-19,wikidata,domain
+cityofmelissa.com,Melissa,TX,City,Melissa,found,https://cityofmelissa.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofmesquite.com,Mesquite,TX,City,Mesquite,found,https://cityofmesquite.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofmexia.com,Mexia,TX,City,Mexia,found,https://cityofmexia.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+midlothian.tx.us,Midlothian,TX,City,Midlothian,found,https://midlothian.tx.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+missiontexas.us,Mission,TX,City,Mission,found,https://missiontexas.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+mundaytexas.com,Munday,TX,City,Munday,found,https://mundaytexas.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+murphytx.org,Murphy,TX,City,Murphy,found,https://murphytx.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+nassaubay.com,Nassau Bay,TX,City,Nassau Bay,found,https://nassaubay.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+oakpointtexas.com,Oak Point,TX,City,Oak Point,found,https://oakpointtexas.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofomahatx.com,Omaha,TX,City,Omaha,found,https://cityofomahatx.com/bids,agency,2026-08-19,wikidata,domain
+cityofovilla.org,Ovilla,TX,City,Ovilla,found,https://cityofovilla.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofpalestinetx.com,Palestine,TX,City,Palestine,found,https://cityofpalestinetx.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+parkertexas.us,Parker,TX,City,Parker,found,https://parkertexas.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofpenitas.com,Peñitas,TX,City,Peñitas,found,https://cityofpenitas.com/bids,agency,2026-08-19,wikidata,homepage
+cityofpilotpoint.org,Pilot Point,TX,City,Pilot Point,found,https://cityofpilotpoint.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+plainstx.net,Plains,TX,City,Plains,found,https://plainstx.net/RFP.aspx,agency,2026-08-19,wikidata,domain
+plainviewtx.org,Plainview,TX,City,Plainview,found,https://plainviewtx.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofpoint.org,Point,TX,City,Point,found,https://cityofpoint.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+portisabel-texas.com,Port Isabel,TX,City,Port Isabel,found,https://portisabel-texas.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+portlavaca.org,Port Lavaca,TX,City,Port Lavaca,found,https://portlavaca.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+portlandtx.com,Portland,TX,City,Portland,found,https://portlandtx.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofrenotx.com,Reno,TX,City,Reno,found,https://cityofrenotx.com/solicitations,agency,2026-08-19,wikidata,domain
+richlandhills.com,Richland Hills,TX,City,Richland Hills,found,https://richlandhills.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.rowlett.tx.us,Rowlett,TX,City,Rowlett,found,https://ci.rowlett.tx.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+roysecity.com,Royse City,TX,City,Royse City,found,https://roysecity.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofsachse.com,Sachse,TX,City,Sachse,found,https://cityofsachse.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.saginaw.tx.us,Saginaw,TX,City,Saginaw,found,https://ci.saginaw.tx.us/bids,agency,2026-08-19,wikidata,domain
+cosatx.us,San Angelo,TX,City,San Angelo,found,https://cosatx.us/bids,agency,2026-08-19,wikidata,homepage
+cityofsanbenito.com,San Benito,TX,City,San Benito,found,https://cityofsanbenito.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+sansabatexas.com,San Saba,TX,City,San Saba,found,https://sansabatexas.com/bid-opportunities,agency,2026-08-19,wikidata,domain
+sangertexas.org,Sanger,TX,City,Sanger,found,https://sangertexas.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+schertz.com,Schertz,TX,City,Schertz,found,https://schertz.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+seagoville.us,Seagoville,TX,City,Seagoville,found,https://seagoville.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.sealy.tx.us,Sealy,TX,City,Sealy,found,https://ci.sealy.tx.us/purchasing,agency,2026-08-19,wikidata,domain
+ci.selma.tx.us,Selma,TX,City,Selma,found,https://ci.selma.tx.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.sherman.tx.us,Sherman,TX,City,Sherman,found,https://ci.sherman.tx.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.smithville.tx.us,Smithville,TX,City,Smithville,found,https://ci.smithville.tx.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.snyder.tx.us,Snyder,TX,City,Snyder,found,https://ci.snyder.tx.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+springvalleytx.com,Spring Valley Village,TX,City,Spring Valley Village,found,https://springvalleytx.com/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+cityofterrell.org,Terrell,TX,City,Terrell,found,https://cityofterrell.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+terrell-hills.com,Terrell Hills,TX,City,Terrell Hills,found,https://terrell-hills.com/rfps,agency,2026-08-19,wikidata,domain
+cityofuncertain.com,Uncertain,TX,City,Uncertain,found,https://cityofuncertain.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+uptexas.org,University Park,TX,City,University Park,found,https://uptexas.org/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+uvaldetx.com,Uvalde,TX,City,Uvalde,found,https://uvaldetx.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+oldhamcofc.org,Vega,TX,City,Vega,found,https://oldhamcofc.org/bids,agency,2026-08-19,wikidata,homepage
+waco-texas.com,Waco,TX,City,Waco,found,https://waco-texas.com/bids,agency,2026-08-19,wikidata,domain
+thc.texas.gov,Washington-on-the-Brazos,TX,City,Washington-on-the-Brazos,found,https://thc.texas.gov/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+waxahachie.com,Waxahachie,TX,City,Waxahachie,found,https://waxahachie.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.weatherford.tx.us,Weatherford,TX,City,Weatherford,found,https://ci.weatherford.tx.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+westlake-tx.org,Westlake,TX,City,Westlake,found,https://westlake-tx.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofwestworth.com,Westworth Village,TX,City,Westworth Village,found,https://cityofwestworth.com/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+wstx.us,White Settlement,TX,City,White Settlement,found,https://wstx.us/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+whitehousetx.org,Whitehouse,TX,City,Whitehouse,found,https://whitehousetx.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+whitesborotexas.com,Whitesboro,TX,City,Whitesboro,found,https://whitesborotexas.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofwilmer.net,Wilmer,TX,City,Wilmer,found,https://cityofwilmer.net/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofwimberley.com,Wimberley,TX,City,Wimberley,found,https://cityofwimberley.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.windcrest.tx.us,Windcrest,TX,City,Windcrest,found,https://ci.windcrest.tx.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofwinnsboro.org,Winnsboro,TX,City,Winnsboro,found,https://cityofwinnsboro.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+winonatexas.com,Winona,TX,City,Winona,found,https://winonatexas.com/rfp,agency,2026-08-19,wikidata,domain
+cedarcity.org,Cedar City,UT,City,Cedar City,found,https://cedarcity.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+centervilleut.net,Centerville,UT,City,Centerville,found,https://centervilleut.net/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+delta.utah.gov,Delta,UT,City,Delta,found,https://delta.utah.gov/rfps,agency,2026-08-19,wikidata,domain
+eurekautah.org,Eureka,UT,City,Eureka,found,https://eurekautah.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+farmington.utah.gov,Farmington,UT,City,Farmington,found,https://farmington.utah.gov/bid-opportunities,agency,2026-08-19,wikidata,domain
+fillmorecity.org,Fillmore,UT,City,Fillmore,found,https://fillmorecity.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.heber.ut.us,Heber City,UT,City,Heber City,found,https://ci.heber.ut.us/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+cityofhurricane.com,Hurricane,UT,City,Hurricane,found,https://cityofhurricane.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+magnautah.org,Magna,UT,City,Magna,found,https://magnautah.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+midwaycityut.org,Midway,UT,City,Midway,found,https://midwaycityut.org/rfp,agency,2026-08-19,wikidata,domain
+nephi.utah.gov,Nephi,UT,City,Nephi,found,https://nephi.utah.gov/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+nslcity.org,North Salt Lake,UT,City,North Salt Lake,found,https://nslcity.org/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+oakleycity.com,Oakley,UT,City,Oakley,found,https://oakleycity.com/rfps,agency,2026-08-19,wikidata,domain
+orem.org,Orem,UT,City,Orem,found,https://orem.org/bids,agency,2026-08-19,wikidata,domain
+pleasantviewcity.com,Pleasant View,UT,City,Pleasant View,found,https://pleasantviewcity.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+sandy.utah.gov,Sandy,UT,City,Sandy,found,https://sandy.utah.gov/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+sjc.utah.gov,South Jordan,UT,City,South Jordan,found,https://sjc.utah.gov/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+sgcity.org,St. George,UT,City,St. George,found,https://sgcity.org/bids,agency,2026-08-19,wikidata,homepage
+sunset-ut.com,Sunset,UT,City,Sunset,found,https://sunset-ut.com/rfp,agency,2026-08-19,wikidata,domain
+wt.govoffice.com,Washington Terrace,UT,City,Washington Terrace,found,https://wt.govoffice.com/business/bids,agency,2026-08-19,wikidata,homepage
+woodscross.com,Woods Cross,UT,City,Woods Cross,found,https://woodscross.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+charlottesville.org,Charlottesville,VA,City,Charlottesville,found,https://charlottesville.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+covington.va.us,Covington,VA,City,Covington,found,https://covington.va.us/rfps,agency,2026-08-19,wikidata,domain
+farmvilleva.com,Farmville,VA,City,Farmville,found,https://farmvilleva.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+madisonco.virginia.gov,Madison,VA,City,Madison,found,https://madisonco.virginia.gov/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+rockymountva.org,Rocky Mount,VA,City,Rocky Mount,found,https://rockymountva.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+spotsylvania.va.us,Spotsylvania County,VA,County,Spotsylvania County,found,https://spotsylvania.va.us/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+wytheville.org,Wytheville,VA,City,Wytheville,found,https://wytheville.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+barrecity.org,Barre,VT,City,Barre,found,https://barrecity.org/rfp,agency,2026-08-19,wikidata,domain
+montpelier-vt.org,Montpelier,VT,City,Montpelier,found,https://montpelier-vt.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+newfanevt.com,Newfane,VT,City,Newfane,found,https://newfanevt.com/invitation-to-bid,agency,2026-08-19,wikidata,domain
+cityofanacortes.org,Anacortes,WA,City,Anacortes,found,https://cityofanacortes.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofbg.org,Battle Ground,WA,City,Battle Ground,found,https://cityofbg.org/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+cob.org,Bellingham,WA,City,Bellingham,found,https://cob.org/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+ci.benton-city.wa.us,Benton City,WA,City,Benton City,found,https://ci.benton-city.wa.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.castle-rock.wa.us,Castle Rock,WA,City,Castle Rock,found,https://ci.castle-rock.wa.us/bids.html,agency,2026-08-19,wikidata,domain
+cityofcentralia.com,Centralia,WA,City,Centralia,found,https://cityofcentralia.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofchewelah.org,Chewelah,WA,City,Chewelah,found,https://cityofchewelah.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+clarkston-wa.com,Clarkston,WA,City,Clarkston,found,https://clarkston-wa.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+colfaxwa.org,Colfax,WA,City,Colfax,found,https://colfaxwa.org/bids,agency,2026-08-19,wikidata,domain
+colville.wa.us,Colville,WA,City,Colville,found,https://colville.wa.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofconnell.com,Connell,WA,City,Connell,found,https://cityofconnell.com/departments/purchasing,agency,2026-08-19,wikidata,domain
+ci.ellensburg.wa.us,Ellensburg,WA,City,Ellensburg,found,https://ci.ellensburg.wa.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofenumclaw.net,Enumclaw,WA,City,Enumclaw,found,https://cityofenumclaw.net/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofferndale.org,Ferndale,WA,City,Ferndale,found,https://cityofferndale.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+forkswashington.org,Forks,WA,City,Forks,found,https://forkswashington.org/bids,agency,2026-08-19,wikidata,domain
+cityofgoldbar.us,Gold Bar,WA,City,Gold Bar,found,https://cityofgoldbar.us/rfp,agency,2026-08-19,wikidata,domain
+go2kennewick.com,Kennewick,WA,City,Kennewick,found,https://go2kennewick.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityoflacey.org,Lacey,WA,City,Lacey,found,https://cityoflacey.org/bids,agency,2026-08-19,wikidata,domain
+cityofleavenworth.com,Leavenworth,WA,City,Leavenworth,found,https://cityofleavenworth.com/rfp,agency,2026-08-19,wikidata,domain
+mylongview.com,Longview,WA,City,Longview,found,https://mylongview.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+lyndenwa.org,Lynden,WA,City,Lynden,found,https://lyndenwa.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofmilton.net,Milton,WA,City,Milton,found,https://cityofmilton.net/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+visitmorton.com,Morton,WA,City,Morton,found,https://visitmorton.com/rfps,agency,2026-08-19,wikidata,domain
+cityofml.com,Moses Lake,WA,City,Moses Lake,found,https://cityofml.com/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+cityofmlt.com,Mountlake Terrace,WA,City,Mountlake Terrace,found,https://cityofmlt.com/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+cityofpa.us,Port Angeles,WA,City,Port Angeles,found,https://cityofpa.us/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+cityofpt.us,Port Townsend,WA,City,Port Townsend,found,https://cityofpt.us/rfps,agency,2026-08-19,wikidata,homepage
+cityofpoulsbo.com,Poulsbo,WA,City,Poulsbo,found,https://cityofpoulsbo.com/bids-and-rfps,agency,2026-08-19,wikidata,domain
+cityofprosser.com,Prosser,WA,City,Prosser,found,https://cityofprosser.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+quincywashington.us,Quincy,WA,City,Quincy,found,https://quincywashington.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ridgefieldwa.us,Ridgefield,WA,City,Ridgefield,found,https://ridgefieldwa.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofroywa.us,Roy,WA,City,Roy,found,https://cityofroywa.us/solicitations,agency,2026-08-19,wikidata,domain
+royalcitywa.org,Royal City,WA,City,Royal City,found,https://royalcitywa.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.sedro-woolley.wa.us,Sedro-Woolley,WA,City,Sedro-Woolley,found,https://ci.sedro-woolley.wa.us/bids,agency,2026-08-19,wikidata,domain
+cityofsumas.com,Sumas,WA,City,Sumas,found,https://cityofsumas.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+tekoawa.com,Tekoa,WA,City,Tekoa,found,https://tekoawa.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofup.com,University Place,WA,City,University Place,found,https://cityofup.com/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+cityofvancouver.us,Vancouver,WA,City,Vancouver,found,https://cityofvancouver.us/bids,agency,2026-08-19,wikidata,domain
+cityofwarden.org,Warden,WA,City,Warden,found,https://cityofwarden.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofwashougal.us,Washougal,WA,City,Washougal,found,https://cityofwashougal.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+westrichland.org,West Richland,WA,City,West Richland,found,https://westrichland.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+appleton.org,Appleton,WI,City,Appleton,found,https://appleton.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+coawi.org,Ashland,WI,City,Ashland,found,https://coawi.org/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+cityofbaraboo.com,Baraboo,WI,City,Baraboo,found,https://cityofbaraboo.com/departments/purchasing,agency,2026-08-19,wikidata,domain
+cityofbarron.com,Barron,WI,City,Barron,found,https://cityofbarron.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+chilton.govoffice.com,Chilton,WI,City,Chilton,found,https://chilton.govoffice.com/departments/purchasing,agency,2026-08-19,wikidata,domain
+de-pere.org,De Pere,WI,City,De Pere,found,https://de-pere.org/rfp,agency,2026-08-19,wikidata,domain
+cityofdodgeville.com,Dodgeville,WI,City,Dodgeville,found,https://cityofdodgeville.com/rfps,agency,2026-08-19,wikidata,domain
+villageofellsworth.org,Ellsworth,WI,City,Ellsworth,found,https://villageofellsworth.org/departments/purchasing,agency,2026-08-19,wikidata,domain
+fdl.wi.gov,Fond du Lac,WI,City,Fond du Lac,found,https://fdl.wi.gov/bids,agency,2026-08-19,wikidata,homepage
+ci.hudson.wi.us,Hudson,WI,City,Hudson,found,https://ci.hudson.wi.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+hurleywi.com,Hurley,WI,City,Hurley,found,https://hurleywi.com/bids-and-rfps,agency,2026-08-19,wikidata,domain
+cityofmadison.com,Madison,WI,City,Madison,found,https://cityofmadison.com/business/bids,agency,2026-08-19,wikidata,domain
+manitowoc.org,Manitowoc,WI,City,Manitowoc,found,https://manitowoc.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+marinette.wi.us,Marinette,WI,City,Marinette,found,https://marinette.wi.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.neenah.wi.us,Neenah,WI,City,Neenah,found,https://ci.neenah.wi.us/rfp,agency,2026-08-19,wikidata,domain
+newberlin.org,New Berlin,WI,City,New Berlin,found,https://newberlin.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofoconto.com,Oconto,WI,City,Oconto,found,https://cityofoconto.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofphillips.com,Phillips,WI,City,Phillips,found,https://cityofphillips.com/bids,agency,2026-08-19,wikidata,domain
+cityofshawano.com,Shawano,WI,City,Shawano,found,https://cityofshawano.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+ci.superior.wi.us,Superior,WI,City,Superior,found,https://ci.superior.wi.us/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofwaupaca.org,Waupaca,WI,City,Waupaca,found,https://cityofwaupaca.org/rfp,agency,2026-08-19,wikidata,domain
+wirapids.org,Wisconsin Rapids,WI,City,Wisconsin Rapids,found,https://wirapids.org/Bids.aspx,civicplus,2026-08-19,wikidata,homepage
+cityofclarksburgwv.com,Clarksburg,WV,City,Clarksburg,found,https://cityofclarksburgwv.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+coalcampusa.com,Keystone,WV,City,Keystone,found,https://coalcampusa.com/procurement,agency,2026-08-19,wikidata,homepage
+cityofmoundsville.com,Moundsville,WV,City,Moundsville,found,https://cityofmoundsville.com/departments/purchasing,agency,2026-08-19,wikidata,domain
+stalbanswv.com,St. Albans,WV,City,St. Albans,found,https://stalbanswv.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+vienna-wv.com,Vienna,WV,City,Vienna,found,https://vienna-wv.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofweirton.com,Weirton,WV,City,Weirton,found,https://cityofweirton.com/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+evanstonwy.org,Evanston,WY,City,Evanston,found,https://evanstonwy.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityofgreenriver.org,Green River,WY,City,Green River,found,https://cityofgreenriver.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+cityoflaramie.org,Laramie,WY,City,Laramie,found,https://cityoflaramie.org/Bids.aspx,civicplus,2026-08-19,wikidata,domain
+rswy.net,Rock Springs,WY,City,Rock Springs,found,https://rswy.net/bids,agency,2026-08-19,wikidata,homepage
