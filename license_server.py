@@ -3076,8 +3076,12 @@ def _ai_extract(area, text):
         "landscaping, or other unrelated trades -- even if they appear on the "
         "same page as real matches, and even though they're all technically "
         "\"construction.\" When in doubt, leave it out.\n\n"
+        "A contract that has ALREADY BEEN AWARDED is not a lead. News stories "
+        "reporting that a council awarded a contract, named a winning bid, or "
+        "selected a low bidder describe work that is gone -- mark any such item "
+        "\"Awarded\", never \"Open\", however recent it is.\n\n"
         "Respond ONLY with a JSON array. Each item has keys: \"title\", \"scope\", "
-        "\"status\" (\"Open\" or \"Closed\"), \"deadline\", \"contact\", \"email\", "
+        "\"status\" (\"Open\", \"Closed\" or \"Awarded\"), \"deadline\", \"contact\", \"email\", "
         "\"phone\", \"value\", \"url\", \"city\". \"city\" is the US city where the work "
         "will be performed, exactly as written in the text; if the location is not clearly "
         "stated, use \"\" and do NOT guess. \"value\" is a dollar amount only if stated. "
@@ -3102,7 +3106,16 @@ def _ai_extract(area, text):
         if s != -1 and e != -1 and e > s:
             out = out[s:e + 1]
         bids = json.loads(out)
-        return bids if isinstance(bids, list) else []
+        if not isinstance(bids, list):
+            return []
+        # Belt and braces: the prompt now says an awarded contract is Closed,
+        # but the model returning "Open" (or nothing) on an award story is
+        # exactly the failure that shipped, so decide it here too.
+        if _looks_awarded(text):
+            for b in bids:
+                if isinstance(b, dict) and _is_open_bid(b):
+                    b["status"] = "Awarded"
+        return bids
     except Exception:
         return None
 
@@ -3512,6 +3525,40 @@ def _run_local_queries(queries, ai_label, max_pages, grouped, center, radius, cd
 
 # Words that mean a solicitation can't be bid on right now — either it is over,
 # or (in /upcoming's case) it hasn't been let yet. Anything else counts as open.
+# Local news coverage of a council awarding a contract reads almost exactly
+# like a bid notice to the extraction model: same project, same agency, same
+# dollar figure. It is the opposite of a lead -- the work is already gone. A
+# real example that reached a customer: "The City Council awarded the contract
+# for a new sidewalk to be installed at Westwood Drive... The winning bid was
+# $748,908 from Cardenas Concrete". These phrases only exist once a winner does.
+_AWARD_PHRASES = (
+    "awarded the contract", "award the contract", "contract was awarded",
+    "contract awarded", "was awarded to", "awarded to ", "winning bid",
+    "winning bidder", "successful bidder", "apparent low bidder",
+    "low bidder was", "bid was accepted", "council awarded",
+    "commission awarded", "notice of award", "has been awarded",
+)
+
+# A live bid listing page routinely carries past awards next to current
+# solicitations, so award language on its own must never close a page that is
+# still plainly asking for bids.
+_OPEN_SOLICITATION_PHRASES = (
+    "bids due", "bid due", "proposals due", "due date", "accepting bids",
+    "now accepting", "sealed bids will be received", "will be received until",
+    "bid opening", "submit bids", "submittal deadline", "closes on",
+    "responses due", "questions due", "request for proposals due",
+    "bids will be accepted", "deadline for bids",
+)
+
+
+def _looks_awarded(text):
+    """True when this page is reporting a finished award, not soliciting one."""
+    low = (text or "").lower()
+    if not any(p in low for p in _AWARD_PHRASES):
+        return False
+    return not any(p in low for p in _OPEN_SOLICITATION_PHRASES)
+
+
 _CLOSED_STATUS_WORDS = ("closed", "close date", "awarded", "award to",
                         "cancel", "expired", "withdrawn", "archived",
                         "no longer", "not accepting", "complete",
