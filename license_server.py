@@ -3824,6 +3824,18 @@ def _place_bid(grouped, bid, center, radius, db, default_city="", city_coords=No
         candidates = [stated_state]
     else:
         candidates = [s for s in (default_state, center["state"]) if s]
+    # The model reads city names off page text and sometimes drops a
+    # character -- a real scan filed a Missouri bid under "Ashlan". That town
+    # does not exist, so it never geocodes, radius search never sees it, and
+    # it never groups with the rest of Ashland's work. Correct it against the
+    # towns we actually know, but only on an unambiguous single-edit match.
+    for st in candidates:
+        snapped = bid_portals.snap_city_name(city, st.upper())
+        if snapped != city:
+            city = snapped
+            _count("city_name_corrected")
+            break
+
     coords, used_state = None, ""
     tried = []
     for st in candidates:

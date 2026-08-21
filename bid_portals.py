@@ -187,6 +187,69 @@ def _coords():
     return coords
 
 
+_towns_by_state_cache = None
+
+
+def towns_by_state():
+    """{STATE: {lowercased town name: canonical name}} for every geocoded town."""
+    global _towns_by_state_cache
+    if _towns_by_state_cache is None:
+        out = {}
+        for (city, state) in _coords():
+            out.setdefault(state, {})[city.lower()] = city
+        _towns_by_state_cache = out
+    return _towns_by_state_cache
+
+
+def snap_city_name(city, state):
+    """Correct a near-miss town name against the towns we actually know.
+
+    The extraction model reads city names off page text and occasionally
+    drops a character -- a real scan filed a Missouri bid under "Ashlan".
+    That town does not exist, so it cannot geocode, which means radius search
+    never sees the bid at all, and it never groups with the rest of Ashland's
+    work.
+
+    Deliberately narrow. It only fires when the name is NOT already a town we
+    know, and exactly one known town in that same state is a single edit away.
+    Two candidates, or a name that is already valid, are left alone: silently
+    relocating a bid to the wrong town would be far worse than failing to
+    place one.
+    """
+    name = (city or "").strip()
+    st = (state or "").strip().upper()
+    if not name or not st:
+        return city
+    known = towns_by_state().get(st)
+    if not known or name.lower() in known:
+        return city  # already a town we know -- never second-guess it
+    matches = [canon for low, canon in known.items()
+               if _within_one_edit(name.lower(), low)]
+    return matches[0] if len(matches) == 1 else city
+
+
+def _within_one_edit(a, b):
+    """True if a and b differ by at most one insertion, deletion or swap."""
+    la, lb = len(a), len(b)
+    if abs(la - lb) > 1:
+        return False
+    if la == lb:
+        return sum(1 for x, y in zip(a, b) if x != y) == 1
+    short, long_ = (a, b) if la < lb else (b, a)
+    i = j = 0
+    skipped = False
+    while i < len(short) and j < len(long_):
+        if short[i] == long_[j]:
+            i += 1
+            j += 1
+        elif skipped:
+            return False
+        else:
+            skipped = True
+            j += 1
+    return True
+
+
 def towns_within_radius(directory, center_lat, center_lon, radius, exclude=()):
     """Every town in the known-portal directory (seed + national crawl +
     learned) with a real bid page AND known coordinates, within `radius`
