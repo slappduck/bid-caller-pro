@@ -2619,6 +2619,14 @@ def _score_bid(bid):
         score += 3
     if bid.get("value"):
         score += 1
+    # Distance, once the radius is wide enough for it to mean anything. Worth
+    # real weight but never as much as a deadline: a job closing in three days
+    # forty miles out still beats one closing in a month next door, because
+    # the near one will still be there tomorrow. Capped so a 125-mile bid is
+    # penalised, not buried.
+    miles = bid.get("miles")
+    if isinstance(miles, (int, float)):
+        score -= min(float(miles), 125.0) / 10.0
     return score
 
 
@@ -4516,9 +4524,16 @@ def _place_bid(grouped, bid, center, radius, db, default_city="", city_coords=No
         else:
             _count("unresolvable_place")
             return
-    if _miles_between(center["lat"], center["lon"], coords[0], coords[1]) > radius:
+    miles = _miles_between(center["lat"], center["lon"], coords[0], coords[1])
+    if miles > radius:
         _count("out_of_radius")
         return  # outside the chosen radius
+    # Keep it. The radius check has always computed this and thrown it away,
+    # which was survivable while the app defaulted to 25 miles and everything
+    # on the board was near. At 125 it is the first thing a contractor needs:
+    # a job 8 miles out and one 120 miles out are different propositions and
+    # the card had no way to tell them apart.
+    bid["miles"] = int(round(miles))
     _apply_deadline_status(bid)
     bid.pop("city", None)
     # Out-of-state towns keep their state in the label, both to disambiguate

@@ -347,6 +347,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
         <input id="feed-search" placeholder="Search title or scope..." />
         <select id="feed-sort">
           <option value="match">Best Match</option>
+          <option value="near">Nearest</option>
           <option value="new">Newest</option>
           <option value="deadline">Deadline</option>
           <option value="value">Est. Value</option>
@@ -2059,6 +2060,25 @@ function daysUntil(b){
   return Math.round((t-today)/86400000);
 }
 
+// Distance from the scan centre, in miles. The server attaches it to every
+// placed bid; anything without one sorts as far away rather than as nearest,
+// so a bid cached before this shipped cannot jump the queue on a missing field.
+function milesOf(b){
+  const m=b&&b.miles;
+  return Number.isFinite(m)?m:Number.MAX_SAFE_INTEGER;
+}
+// Mirrors _score_bid on the server. Higher is better.
+function fitScore(b){
+  let s=0;
+  const d=daysUntil(b);
+  if(d!=null)s+=d<0?-50:Math.max(0,30-Math.min(d,30));
+  const m=b&&b.miles;
+  if(Number.isFinite(m))s-=Math.min(m,125)/10;
+  if(b&&(b.email||b.phone))s+=3;
+  if(b&&b.value)s+=1;
+  return s;
+}
+
 // Merges freshly-scanned bids into the feed AND prunes stale ones.
 // `scannedCities` (from the scan response's city_coords) tells us which
 // towns we just got a current answer for — for those, whatever the server
@@ -2634,11 +2654,21 @@ function renderFeed(){
     // rows.reverse(), which just flipped city order and had nothing to do with
     // recency. Bids merged before _first_seen existed sort last.
     rows.sort((a,b)=>(b[1]._first_seen||0)-(a[1]._first_seen||0));
+  }else if(sortMode==="near"){
+    rows.sort((a,b)=>milesOf(a[1])-milesOf(b[1]));
+  }else{
+    // "Best Match". The server ranks each city's bids by fit, but it ranks
+    // them PER CITY -- so at 25 miles, where a board held one or two towns,
+    // leaving that order alone was right. At the 125-mile default a board
+    // spans twenty towns and the city order is whatever the scan happened to
+    // return, which put a job 120 miles out above one 8 miles away.
+    //
+    // Rank by fit here instead, mirroring the server's weighting: urgency
+    // first, then distance, then whether it can be acted on. A bid closing in
+    // three days forty miles out still beats one closing in a month next
+    // door, because the near one will still be there tomorrow.
+    rows.sort((a,b)=>fitScore(b[1])-fitScore(a[1]));
   }
-  // sortMode==="match" (default): leave rows in the order /scan returned them --
-  // the server already ranks each city's bids by fit (deadline urgency, niche
-  // keyword strength, contact completeness), so "Best Match" just means "don't
-  // re-sort what the server already ranked."
   lastFeedRows=rows;
   list.innerHTML=`<div class="feed-label">OPEN BIDS</div>`+rows.map(([c,b])=>bidCard(c,b)).join("");
   if(!rows.length)list.innerHTML=`<div class="empty"><h3>No matches</h3><p>Try a different search term.</p></div>`;
@@ -2686,7 +2716,7 @@ function bidCard(city,b){
       </div>
       ${b.scope?`<div class="bid-scope">${esc(b.scope)}</div>`:""}
       <div class="bid-meta">
-        <span class="chip">${esc(city)}</span>
+        <span class="chip">${esc(city)}${Number.isFinite(b.miles)?` \u00b7 ${b.miles} mi`:""}</span>
         ${b.value?`<span class="chip value">${esc(b.value)}</span>`:""}
         ${deadlineChip}
         ${pipeline[id]?`<span class="chip status-${esc(pipeline[id])}">${esc(String(pipeline[id]).toUpperCase())}</span>`:""}
