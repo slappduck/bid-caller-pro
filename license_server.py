@@ -3254,14 +3254,19 @@ def _resolve_bid_url(ai_url, page_url, source_text=""):
     return page_url
 
 
-def _fetch_text(url, timeout=None):
-    raw = _fetch_page(url, timeout=timeout)[0]
+def _html_to_text(raw):
+    """Visible text from html. Split out of _fetch_text so a caller that
+    needs the markup as well can fetch once and derive both."""
     if not raw:
         return ""
     raw = _SCRIPT_RE.sub(" ", raw)
     raw = _TAG_RE.sub(" ", raw)
     raw = re.sub(r"&[a-z#0-9]+;", " ", raw)
     return re.sub(r"\s+", " ", raw).strip()
+
+
+def _fetch_text(url, timeout=None):
+    return _html_to_text(_fetch_page(url, timeout=timeout)[0])
 
 
 # ── BidNet Direct: a real public source, queried directly (no key) ──
@@ -3777,7 +3782,11 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
                 with lock:
                     stats["civicplus_parse_miss"] = stats.get("civicplus_parse_miss", 0) + 1
 
-        text = _fetch_text(url, timeout=timeout)
+        # Fetch once and KEEP the html. _fetch_text discards it, which is
+        # why a non-CivicPlus portal's bids could never be given their own
+        # posting link: the model is shown text only and never sees an href.
+        page_html = _fetch_page(url, timeout=timeout)[0] or ""
+        text = _html_to_text(page_html)
         ok = len(text) >= 200
         with lock:
             bid_portals.record_result(pdb, city, state, url, ok)
@@ -3799,11 +3808,28 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
         bids = _ai_extract(ai_label, text)
         if not bids:
             return
+        # Bids that ended up with their own posting URL can be enriched the
+        # same way the CivicPlus path already is -- that recovers a deadline
+        # on 95% of postings and a phone on 81%. Ones still pointing at the
+        # listing page are skipped: re-reading the page we just read adds
+        # nothing.
+        own_pages = [b for b in bids if isinstance(b, dict)
+                     and bid_sources.link_for_title(page_html, url, b.get("title"))]
+        for b in own_pages:
+            b["url"] = bid_sources.link_for_title(page_html, url, b.get("title"))
+        if own_pages:
+            _enrich_from_detail_pages(own_pages[:DETAIL_PAGES_PER_PORTAL],
+                                      stats, lock)
         with lock:
             raw[0] += len(bids)
             for b in bids:
                 if isinstance(b, dict):
-                    b["url"] = _resolve_bid_url(b.get("url"), url, text)
+                    # Prefer this bid's own posting link, matched from the
+                    # page's anchors by title. Falling back to the listing
+                    # page is correct but lands the contractor on a list, and
+                    # leaves the enricher nothing per-posting to read.
+                    own = bid_sources.link_for_title(page_html, url, b.get("title"))
+                    b["url"] = own or _resolve_bid_url(b.get("url"), url, text)
                     # `or city`, matching the CivicPlus branch above. This is
                     # a known portal -- this town's OWN bid page -- so a bid
                     # on it that doesn't restate the town is still that

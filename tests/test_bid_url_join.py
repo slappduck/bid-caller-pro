@@ -92,3 +92,58 @@ class HomepageLinkTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TitleToPostingLinkTests(unittest.TestCase):
+    """On a non-CivicPlus portal the extraction model is shown text only --
+    _fetch_text strips every tag -- so it can never return a real href and
+    every bid ended up pointed at the listing page. Matching the model's
+    title back to the page's own anchors recovers the posting link, which is
+    also what makes those bids enrichable for contact and deadline.
+
+    Matching is strict on purpose: a wrong link is worse than the listing.
+    """
+
+    PAGE = ('<html><body>'
+            '<a href="/nav/bids">Bids</a>'
+            '<a href="/postings/17">2026 Sidewalk and ADA Ramp Replacement</a>'
+            '<a href="mailto:clerk@x.gov">2026 Sidewalk and ADA Ramp Replacement</a>'
+            '<a href="/postings/18">Roof Replacement at the Annex Building</a>'
+            '</body></html>')
+    BASE = "https://x.gov/purchasing/bids"
+
+    def _link(self, title):
+        return bs.link_for_title(self.PAGE, self.BASE, title)
+
+    def test_a_title_finds_its_own_posting(self):
+        self.assertEqual(self._link("2026 Sidewalk and ADA Ramp Replacement"),
+                         "https://x.gov/postings/17")
+
+    def test_a_mailto_is_never_returned_as_a_posting(self):
+        self.assertNotIn("mailto", self._link(
+            "2026 Sidewalk and ADA Ramp Replacement"))
+
+    def test_a_title_with_no_matching_anchor_returns_nothing(self):
+        """So the caller falls back to the listing page rather than guessing."""
+        self.assertEqual(self._link("Water Main Replacement Phase Four"), "")
+
+    def test_a_short_title_is_refused_rather_than_matched_loosely(self):
+        """'Bids' would otherwise match the navigation link."""
+        self.assertEqual(self._link("Bids"), "")
+
+    def test_the_tightest_match_wins(self):
+        page = ('<html><body>'
+                '<a href="/all">Index of every bid including Sidewalk Program 2026</a>'
+                '<a href="/p/9">Sidewalk Program 2026</a></body></html>')
+        self.assertEqual(bs.link_for_title(page, self.BASE, "Sidewalk Program 2026"),
+                         "https://x.gov/p/9")
+
+    def test_it_resolves_relative_hrefs_against_the_listing(self):
+        page = '<html><body><a href="detail.aspx?id=4">Sidewalk Program 2026</a></body></html>'
+        self.assertEqual(bs.link_for_title(page, self.BASE, "Sidewalk Program 2026"),
+                         "https://x.gov/purchasing/detail.aspx?id=4")
+
+    def test_missing_input_is_handled(self):
+        self.assertEqual(bs.link_for_title("", self.BASE, "Sidewalk Program 2026"), "")
+        self.assertEqual(bs.link_for_title(self.PAGE, "", "Sidewalk Program 2026"), "")
+        self.assertEqual(bs.link_for_title(self.PAGE, self.BASE, None), "")

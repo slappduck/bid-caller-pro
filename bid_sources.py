@@ -172,6 +172,39 @@ _HOMEPAGE_LINK_NOISE = ("facebook.com", "twitter.com", "x.com", "instagram.com",
                         "youtube.com", "linkedin.com", "mailto:", "tel:", "javascript:")
 
 
+def _slug_text(text):
+    return re.sub(r"[^a-z0-9]", "", str(text or "").lower())
+
+
+def link_for_title(html, base_url, title, min_len=12):
+    """The posting link whose anchor text matches this bid's title.
+
+    _fetch_text strips every tag before the page reaches the extraction
+    model, so on a non-CivicPlus portal the model never sees an href and
+    every bid ends up pointed at the listing page -- not a 404, but it drops
+    the contractor on a list to hunt through, and it leaves the enricher
+    nothing per-posting to read.
+
+    Matching is deliberately strict: one side's slug must CONTAIN the
+    other's, and short titles are refused outright. A wrong link is worse
+    than the listing page, so anything ambiguous returns "".
+    """
+    want = _slug_text(title)
+    if not html or not base_url or len(want) < min_len:
+        return ""
+    best, best_len = "", 0
+    for m in _HOMEPAGE_LINK_RE.finditer(html):
+        href, label = m.group(1), _slug_text(_clean(m.group(2)))
+        if not label or any(n in href.lower() for n in _HOMEPAGE_LINK_NOISE):
+            continue
+        if want in label or (len(label) >= min_len and label in want):
+            # Prefer the tightest match: a nav link whose text happens to
+            # contain a short title should lose to the posting itself.
+            if not best or len(label) < best_len:
+                best, best_len = href, len(label)
+    return urllib.parse.urljoin(base_url, _unescape(best)) if best else ""
+
+
 def extract_bid_link_candidates(html, base_url, max_candidates=3):
     """Links off a homepage whose href or label suggest a bid page, best
     first. Pure text-in/URLs-out, same discipline as the rest of this file --

@@ -517,11 +517,17 @@ class StructuredReadNeverLosesBidsTests(unittest.TestCase):
                  "will be received by the City Clerk. " * 6)
 
     def _run(self, page_html, ai_returns, page_text=None):
+        """One fetch feeds both branches.
+
+        The AI path used to call _fetch_text separately; it now derives its
+        text from the same _fetch_page result, so that the page's markup is
+        available to match each bid to its own posting link. The fixture has
+        to carry the body text inside the html for the same reason.
+        """
         import threading
         rec = None
-        with patch.object(ls, "_fetch_page", return_value=(page_html, "ok")), \
-             patch.object(ls, "_fetch_text",
-                          return_value=page_text or self.PAGE_TEXT), \
+        served = page_html + "<div>" + (page_text or self.PAGE_TEXT) + "</div>"
+        with patch.object(ls, "_fetch_page", return_value=(served, "ok")), \
              patch.object(ls, "_ai_extract", return_value=ai_returns) as ai, \
              patch.object(ls, "_geo_from_city", side_effect=_fake_geo), \
              patch.object(ls.bid_portals, "get_portals", return_value=[
