@@ -214,3 +214,71 @@ class BraveHealthTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CircuitBreakerTests(unittest.TestCase):
+    """A provider that has just answered 401/403/429 will answer the same way
+    for every remaining query in the scan. Asking it twelve more times costs a
+    round trip each -- and for Brave, 1.1s of pacing each -- before falling
+    through to the same fallback every time."""
+
+    def setUp(self):
+        ls._provider_down_until.clear()
+        self.addCleanup(ls._provider_down_until.clear)
+
+    def test_a_quota_refusal_benches_the_provider(self):
+        ls._provider_mark_down("brave", 429)
+        self.assertTrue(ls._provider_is_down("brave"))
+
+    def test_an_auth_refusal_benches_it_too(self):
+        for code in (401, 403):
+            ls._provider_down_until.clear()
+            ls._provider_mark_down("brave", code)
+            self.assertTrue(ls._provider_is_down("brave"), code)
+
+    def test_a_transient_error_does_not_bench_it(self):
+        """A 500 or a timeout may well succeed on the next query -- benching
+        on those would give away a working provider."""
+        for code in (500, 502, 0):
+            ls._provider_mark_down("brave", code)
+            self.assertFalse(ls._provider_is_down("brave"), code)
+
+    def test_benching_one_provider_leaves_the_other_alone(self):
+        ls._provider_mark_down("brave", 429)
+        self.assertFalse(ls._provider_is_down("tavily"))
+
+    def test_a_benched_provider_is_skipped_and_the_fallback_runs(self):
+        ls._provider_mark_down("brave", 429)
+        with patch.object(ls, "BRAVE_API_KEY", "b-key"), \
+             patch.object(ls, "TAVILY_API_KEY", "t-key"), \
+             patch.object(ls, "_brave_search") as b, \
+             patch.object(ls, "_tavily_search", return_value=HIT) as t:
+            results, _ = ls._web_search("q")
+        b.assert_not_called()
+        t.assert_called_once()
+        self.assertEqual(results, HIT)
+
+    def test_both_benched_falls_through_to_the_scraper(self):
+        ls._provider_mark_down("brave", 429)
+        ls._provider_mark_down("tavily", 429)
+        with patch.object(ls, "BRAVE_API_KEY", "b"), \
+             patch.object(ls, "TAVILY_API_KEY", "t"), \
+             patch.object(ls, "_brave_search") as b, \
+             patch.object(ls, "_tavily_search") as t, \
+             patch.object(ls, "_ddg_search", return_value=HIT):
+            results, used_scraper = ls._web_search("q")
+        b.assert_not_called()
+        t.assert_not_called()
+        self.assertTrue(used_scraper)
+
+    def test_the_bench_expires(self):
+        ls._provider_mark_down("brave", 429)
+        with patch.object(ls, "_provider_down_until", {"brave": 0}):
+            self.assertFalse(ls._provider_is_down("brave"))
+
+    def test_a_success_clears_the_bench_early(self):
+        """Tavily's credit renews monthly and Brave's cap is per-second, so a
+        provider can recover well before the cooldown is up."""
+        ls._provider_mark_down("brave", 429)
+        ls._provider_clear("brave")
+        self.assertFalse(ls._provider_is_down("brave"))

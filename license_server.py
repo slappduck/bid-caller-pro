@@ -75,7 +75,8 @@ import threading
 import urllib.request
 import urllib.parse
 import urllib.error
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import (ThreadPoolExecutor, as_completed,
+                                TimeoutError as FuturesTimeout)
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -2561,7 +2562,18 @@ MAX_ANCHOR_TOWNS = int(os.environ.get("SCAN_MAX_ANCHORS", "6"))
 # query, so this can be far more generous than MAX_ANCHOR_TOWNS without a
 # proportional cost increase -- capped so a scan centered in a very
 # densely-covered metro doesn't try to fetch every known town in the state.
-MAX_KNOWN_TOWNS = int(os.environ.get("SCAN_MAX_KNOWN_TOWNS", "40"))
+# How many already-verified bid pages a scan may read. This is the
+# GUARANTEED half of a scan -- no search engine involved, just fetching pages
+# the directory already knows serve bids -- so a low cap throws away the most
+# reliable coverage there is. 40 was set when the directory held ~750
+# agencies; it now holds 4,428, and at 40 a 125-mile scan of Emporia read 40
+# of 109 known towns and silently ignored the other 69.
+MAX_KNOWN_TOWNS = int(os.environ.get("SCAN_MAX_KNOWN_TOWNS", "120"))
+# Raising the cap without a clock is how a dense metro turns into a timeout.
+# Towns are ordered closest-first, so stopping on time keeps the nearest ones
+# and drops the furthest -- the right ones to lose.
+KNOWN_TOWN_BUDGET_SEC = float(os.environ.get("SCAN_KNOWN_TOWN_BUDGET", "40"))
+KNOWN_TOWN_WORKERS = int(os.environ.get("SCAN_KNOWN_TOWN_WORKERS", "16"))
 
 # Primary sources: the agency actually letting the work, rather than a site
 # re-listing it. Preferred when the budget is tight.
@@ -2722,6 +2734,7 @@ def _brave_search(query, max_results=5):
             pass
         print(f"[scan] Brave HTTP {e.code}: {detail[:160]}", flush=True)
         _brave_note(False, e.code, detail)
+        _provider_mark_down("brave", e.code)
         if e.code in (401, 403, 429):
             _alert_admin(
                 f"Brave Search returning HTTP {e.code} — local bid search degraded",
@@ -2736,6 +2749,7 @@ def _brave_search(query, max_results=5):
         _brave_note(False, 0, str(ex))
         return []
     _brave_note(True)
+    _provider_clear("brave")
     items = ((data.get("web") or {}).get("results")) or []
     print(f"[scan] Brave: {len(items)} results for {query!r}", flush=True)
     return [{"url": it.get("url") or "",
@@ -2770,6 +2784,8 @@ def _tavily_search(query, max_results=5):
             pass
         print(f"[scan] Tavily HTTP {e.code}: {detail}", flush=True)
         _tavily_note(False, e.code, detail)
+        # 402/432 are Tavily's "out of credit" codes, which no retry fixes.
+        _provider_mark_down("tavily", 429 if e.code in (402, 432) else e.code)
         if e.code in (401, 402, 429, 432):
             _alert_admin(
                 f"Tavily returning HTTP {e.code} — local bid search is degraded",
@@ -2785,6 +2801,7 @@ def _tavily_search(query, max_results=5):
         _tavily_note(False, 0, str(ex))
         return []
     _tavily_note(True)
+    _provider_clear("tavily")
     results = data.get("results") or []
     print(f"[scan] Tavily: {len(results)} results for {query!r}", flush=True)
     out = []
@@ -2794,6 +2811,36 @@ def _tavily_search(query, max_results=5):
             out.append({"url": url,
                         "content": r.get("raw_content") or r.get("content") or ""})
     return out
+
+
+# A provider that has just answered 401/403/429 will answer the same way for
+# every remaining query in this scan. Calling it twelve more times costs a
+# round trip each -- and for Brave, 1.1s of pacing each -- before falling
+# through to the same fallback every time. Once it has refused for a reason
+# that will not change in the next minute, stop asking until the cooldown.
+_PROVIDER_COOLDOWN_SEC = float(os.environ.get("SEARCH_PROVIDER_COOLDOWN", "300"))
+_provider_down_until = {}
+_provider_lock = threading.Lock()
+
+
+def _provider_is_down(name):
+    with _provider_lock:
+        return time.time() < _provider_down_until.get(name, 0)
+
+
+def _provider_mark_down(name, status):
+    """Bench a provider after a refusal that a retry will not fix."""
+    if status not in (401, 403, 429):
+        return
+    with _provider_lock:
+        _provider_down_until[name] = time.time() + _PROVIDER_COOLDOWN_SEC
+    print(f"[scan] {name} benched for {_PROVIDER_COOLDOWN_SEC:.0f}s "
+          f"after HTTP {status}", flush=True)
+
+
+def _provider_clear(name):
+    with _provider_lock:
+        _provider_down_until.pop(name, None)
 
 
 def _web_search(query, max_results=6):
@@ -2812,11 +2859,11 @@ def _web_search(query, max_results=6):
     the Custom Search JSON API and no longer lets a project enable it, so the
     integration was removed rather than left to fail 403 on every query.
     """
-    if BRAVE_API_KEY:
+    if BRAVE_API_KEY and not _provider_is_down("brave"):
         results = _brave_search(query, max_results=max_results)
         if results:
             return results, False
-    if TAVILY_API_KEY:
+    if TAVILY_API_KEY and not _provider_is_down("tavily"):
         results = _tavily_search(query, max_results=max_results)
         if results:
             return results, False
@@ -4259,10 +4306,28 @@ def _perform_scan(location, radius, force=False):
         # so there's no shared backend to overwhelm the way DuckDuckGo/Tavily
         # would be by running many at once.
         if known_towns:
-            with ThreadPoolExecutor(max_workers=10) as ex:
+            deadline = time.time() + KNOWN_TOWN_BUDGET_SEC
+            with ThreadPoolExecutor(max_workers=KNOWN_TOWN_WORKERS) as ex:
                 futures = [ex.submit(_run_known_town, t) for t in known_towns]
-                for f in as_completed(futures):
-                    local_raw += f.result()
+                try:
+                    for f in as_completed(futures,
+                                          timeout=max(1.0, deadline - time.time())):
+                        local_raw += f.result()
+                except FuturesTimeout:
+                    # Out of time. Cancel whatever has not started; the few
+                    # already in flight finish under their own request
+                    # timeouts. Their results are still collected below.
+                    skipped = sum(1 for f in futures if f.cancel())
+                    for f in futures:
+                        if f.done() and not f.cancelled():
+                            try:
+                                local_raw += f.result()
+                            except Exception:
+                                pass
+                    if skipped:
+                        drop_stats["known_towns_out_of_time"] = skipped
+                        print(f"[scan] known-town budget spent, {skipped} town(s) "
+                              f"not read", flush=True)
 
         print(f"[scan] {local_raw} raw local bids extracted total "
               f"({len(anchors)} anchor town(s), {len(known_towns)} known-portal "
