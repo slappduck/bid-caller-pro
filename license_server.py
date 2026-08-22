@@ -1112,10 +1112,43 @@ BID_AUDIT_KEY = "bidcaller:last_audit"
 BID_AUDIT_SAMPLE = int(os.environ.get("BID_AUDIT_SAMPLE", "40"))
 
 
-def _audit_portal(entry):
-    """Parse one portal the way a scan does; return per-row verdicts."""
-    out = {"rows": 0, "shown_open": 0, "no_status": 0,
-           "open_but_expired": 0, "awarded_shown_open": 0}
+def _url_is_alive(url, timeout=12):
+    """True if a bid link actually opens. None when we cannot tell.
+
+    HEAD first because it is free, but plenty of government stacks answer 405
+    or 404 to HEAD and 200 to GET, so a HEAD failure is retried as a GET
+    before anything is called dead. Calling a live link dead would be a worse
+    bug than the one this is measuring.
+    """
+    for method in ("HEAD", "GET"):
+        try:
+            req = urllib.request.Request(
+                url, method=method,
+                headers={"User-Agent": "BidCallerPro/2.0"})
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                if resp.status < 400:
+                    return True
+        except urllib.error.HTTPError as e:
+            if e.code in (403, 405, 501) and method == "HEAD":
+                continue          # server dislikes HEAD, not the URL
+            if e.code == 404:
+                return False
+            return None           # 5xx, rate limit: unknown, not dead
+        except Exception:
+            continue
+    return None
+
+
+def _audit_portal(entry, link_checks=2):
+    """Parse one portal the way a scan does; return per-row verdicts.
+
+    Measures what a customer would be handed, not what the page contains:
+    only rows the app would actually SHOW are judged on deadline, contact
+    reachability and whether the link opens.
+    """
+    out = {"rows": 0, "niche_rows": 0, "shown_open": 0, "no_status": 0,
+           "open_but_expired": 0, "awarded_shown_open": 0,
+           "shown_no_deadline": 0, "links_checked": 0, "links_dead": 0}
     html = _fetch_raw_html(entry["url"])
     if not html:
         out["unreachable"] = 1
@@ -1125,21 +1158,44 @@ def _audit_portal(entry):
     except Exception:
         return out
     today = datetime.datetime.now().date()
+    to_check = []
     for r in rows:
         out["rows"] += 1
         status = (r.get("status") or "").strip()
         bid = {"status": status, "deadline": r.get("deadline") or ""}
         if not status:
             out["no_status"] += 1
-        if _is_open_bid(bid):
-            out["shown_open"] += 1
-            d = _parse_deadline(bid["deadline"])
-            if d and d < today:
-                # Shown as open with a deadline already past: the exact
-                # failure this audit exists to catch.
-                out["open_but_expired"] += 1
-            if status.lower().startswith("award"):
-                out["awarded_shown_open"] += 1
+        # A listing page carries every trade the agency buys. The scan drops
+        # anything off-niche BEFORE it reaches a customer, so counting those
+        # as "shown" measured the wrong layer entirely -- the first live run
+        # reported 100% off-niche, which was this bug, not the feed.
+        if not bid_sources.looks_relevant(r.get("title"), r.get("scope")):
+            continue
+        out["niche_rows"] += 1
+        if not _is_open_bid(bid):
+            continue
+        out["shown_open"] += 1
+        d = _parse_deadline(bid["deadline"])
+        if d and d < today:
+            # Shown as open with a deadline already past: the exact failure
+            # this audit exists to catch.
+            out["open_but_expired"] += 1
+        elif not d:
+            # No date at all. Nothing can ever age this out, so it would sit
+            # in the feed indefinitely -- the remaining staleness hole.
+            out["shown_no_deadline"] += 1
+        if status.lower().startswith("award"):
+            out["awarded_shown_open"] += 1
+        if r.get("url"):
+            to_check.append(r["url"])
+
+    for url in to_check[:link_checks]:
+        alive = _url_is_alive(url)
+        if alive is None:
+            continue              # unknown is not evidence of a dead link
+        out["links_checked"] += 1
+        if not alive:
+            out["links_dead"] += 1
     return out
 
 
@@ -1177,8 +1233,10 @@ def _run_bid_audit(sample_size=None):
     random.shuffle(portals)
     portals = portals[:size]
 
-    totals = {"portals": 0, "unreachable": 0, "rows": 0, "shown_open": 0,
-              "no_status": 0, "open_but_expired": 0, "awarded_shown_open": 0}
+    totals = {"portals": 0, "unreachable": 0, "rows": 0, "niche_rows": 0,
+              "shown_open": 0, "no_status": 0, "open_but_expired": 0,
+              "awarded_shown_open": 0, "shown_no_deadline": 0,
+              "links_checked": 0, "links_dead": 0}
     with ThreadPoolExecutor(max_workers=10) as ex:
         for res in ex.map(_audit_portal, portals):
             totals["portals"] += 1
@@ -1188,18 +1246,30 @@ def _run_bid_audit(sample_size=None):
     shown = max(totals["shown_open"], 1)
     bad = totals["open_but_expired"] + totals["awarded_shown_open"]
     totals["stale_rate_pct"] = round(100.0 * bad / shown, 2)
+    # Undated rows are not stale today, but nothing can ever age them out.
+    totals["undated_pct"] = round(100.0 * totals["shown_no_deadline"] / shown, 2)
+    totals["dead_link_pct"] = round(
+        100.0 * totals["links_dead"] / max(totals["links_checked"], 1), 2)
     totals["at"] = datetime.datetime.now().isoformat(timespec="seconds")
     totals["ok"] = True
     kv_backend.set(BID_AUDIT_KEY, totals)
 
     # A feed that is a few percent wrong is worth knowing about; a feed that
     # is badly wrong is worth being woken for.
+    # Each threshold has a floor as well as a rate, so a tiny sample with one
+    # bad row cannot page anyone.
+    faults = []
     if totals["stale_rate_pct"] >= 5 and bad >= 3:
+        faults.append(f"{bad} of {totals['shown_open']} shown rows are already "
+                      f"expired or awarded ({totals['stale_rate_pct']}%)")
+    if totals["dead_link_pct"] >= 10 and totals["links_dead"] >= 3:
+        faults.append(f"{totals['links_dead']} of {totals['links_checked']} "
+                      f"checked links are dead ({totals['dead_link_pct']}%)")
+    if faults:
         _alert_admin(
-            f"Bid feed staleness at {totals['stale_rate_pct']}%",
-            f"Of {totals['shown_open']} rows the parser would show as open "
-            f"across {totals['portals']} sampled portals, {bad} are already "
-            f"expired or awarded.\n\n{json.dumps(totals, indent=2)}")
+            "Bid feed quality dropped: " + faults[0].split(" (")[0],
+            "The nightly feed audit found:\n  - " + "\n  - ".join(faults) +
+            f"\n\n{json.dumps(totals, indent=2)}")
     print(f"[audit] {json.dumps(totals)}", flush=True)
     return totals
 
