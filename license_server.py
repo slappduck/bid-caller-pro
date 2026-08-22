@@ -4085,6 +4085,45 @@ def _split_city_state(raw):
     return city, state
 
 
+# A bid with no stated deadline cannot be aged by _apply_deadline_status --
+# there is nothing to compare against today -- so it sits in the feed forever.
+# The nightly audit measured this at half of everything shown. Recording when
+# a dateless bid was first seen gives the only clock available.
+UNDATED_MAX_DAYS = int(os.environ.get("SCAN_UNDATED_MAX_DAYS", "60"))
+# Typical solicitations run two to four weeks, so 60 days is deliberately
+# generous: retiring a job that is genuinely still open costs a customer real
+# work, while showing a dead one costs them a wasted phone call.
+_UNDATED_STORE_MAX = 5000
+
+
+def _age_out_undated(bid, city, db, stats=None):
+    """Retire a dateless bid once it has been in the feed too long."""
+    if not _is_open_bid(bid) or _parse_deadline(bid.get("deadline")):
+        return
+    store = db.setdefault("undated_first_seen", {})
+    sig = _bid_sig(city, bid)
+    today = datetime.datetime.now().date()
+    first = store.get(sig)
+    if not first:
+        store[sig] = today.isoformat()
+        # Unbounded growth would eventually be the whole cache. Evict oldest
+        # first; a re-seen bid simply restarts its clock, which errs towards
+        # showing work rather than hiding it.
+        if len(store) > _UNDATED_STORE_MAX:
+            for old in sorted(store, key=store.get)[:len(store) - _UNDATED_STORE_MAX]:
+                store.pop(old, None)
+        return
+    try:
+        age = (today - datetime.date.fromisoformat(first)).days
+    except (ValueError, TypeError):
+        store[sig] = today.isoformat()
+        return
+    if age >= UNDATED_MAX_DAYS:
+        bid["status"] = "Closed"
+        if stats is not None:
+            stats["aged_out_undated"] = stats.get("aged_out_undated", 0) + 1
+
+
 def _place_bid(grouped, bid, center, radius, db, default_city="", city_coords=None,
                default_state="", fallback_coords=None, stats=None):
     """Keep a bid ONLY if its real city geocodes within the radius.
@@ -4208,6 +4247,10 @@ def _place_bid(grouped, bid, center, radius, db, default_city="", city_coords=No
     # client derives a bid's id from its city + title + scope, so the copies
     # came out as duplicate cards sharing one id: starring one appeared to
     # star the other. Same title and deadline in the same town is the same job.
+    # Before it can be shown: if it carries no date, has it been sitting in
+    # the feed since before anyone would still want it?
+    _age_out_undated(bid, label, db, stats)
+
     bucket = grouped.setdefault(label, [])
     key = _bid_dupe_key(bid)
     if key[0] and any(_bid_dupe_key(existing) == key for existing in bucket):
