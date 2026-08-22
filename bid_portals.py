@@ -411,11 +411,40 @@ def get_portals(directory, city, state):
     return [e for e in entries if e.get("fail_count", 0) < MAX_FAIL]
 
 
-def learn_portal(directory, city, state, url, platform="custom"):
+def is_city_scoped_portal_url(url):
+    """True for a hosted-platform URL that belongs to ONE agency.
+
+    is_aggregator_url exists to keep dynamic search-result pages out of the
+    directory, and it rejects a whole domain to do it. That is too blunt for
+    the case where a city has genuinely MOVED its bids onto one of these
+    platforms: procurement.opengov.com/portal/farmvilleva is that city's own
+    page and belongs in the directory exactly as much as farmvilleva.gov did.
+
+    Two or more path segments and no query string. A query is how every one of
+    these platforms expresses a search, which is the thing being excluded.
+    """
+    try:
+        parts = urllib.parse.urlparse(url or "")
+    except Exception:
+        return False
+    if parts.query:
+        return False
+    return len([s for s in parts.path.split("/") if s]) >= 2
+
+
+def learn_portal(directory, city, state, url, platform="custom",
+                 allow_hosted=False):
     """Record a newly-discovered per-agency bid page so future scans of this
     city can hit it directly instead of re-searching. No-ops for generic
-    aggregator/search-result URLs — those aren't a stable per-city page."""
-    if not url or is_aggregator_url(url):
+    aggregator/search-result URLs — those aren't a stable per-city page.
+
+    `allow_hosted` admits a city-scoped URL on a hosted procurement platform.
+    Off by default: only a caller that found the link on the city's OWN site,
+    and so knows whose page it is, may set it."""
+    if not url:
+        return
+    if is_aggregator_url(url) and not (allow_hosted
+                                       and is_city_scoped_portal_url(url)):
         return
     k = _key(city, state)
     entries = directory.setdefault(k, [])

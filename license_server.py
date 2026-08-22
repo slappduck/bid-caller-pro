@@ -2619,6 +2619,14 @@ def _score_bid(bid):
         score += 3
     if bid.get("value"):
         score += 1
+    # Distance, once the radius is wide enough for it to mean anything. Worth
+    # real weight but never as much as a deadline: a job closing in three days
+    # forty miles out still beats one closing in a month next door, because
+    # the near one will still be there tomorrow. Capped so a 125-mile bid is
+    # penalised, not buried.
+    miles = bid.get("miles")
+    if isinstance(miles, (int, float)):
+        score -= min(float(miles), 125.0) / 10.0
     return score
 
 
@@ -3874,19 +3882,24 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
                     bid_portals.record_result(pdb, city, state, url, True)
                     for row in keep:
                         raw[0] += 1
-                        _place_bid(grouped, {
-                            "title": row["title"], "scope": row.get("scope", ""),
-                            # The listing states its own status where it has
-                            # one; trust that over assuming everything on the
-                            # page is live.
-                            "status": row.get("status") or "Open",
-                            "deadline": row.get("deadline", ""),
-                            "contact": row.get("contact", ""),
-                            "email": row.get("email", ""),
-                            "phone": row.get("phone", ""),
-                            "value": "",
-                            "url": row["url"], "city": default_city or city,
-                        }, center, radius, cdb, default_city=default_city or city,
+                        # Pass the enriched row THROUGH rather than copying a
+                        # fixed list of fields out of it. The old allowlist
+                        # named nine keys and hardcoded value to "", so every
+                        # field the detail-page enricher had just recovered --
+                        # value, published, bid_number, prebid, addenda,
+                        # documents -- was read off the posting and then
+                        # dropped on the floor one line later. CivicPlus is
+                        # the platform behind ~2,400 of the portals in the
+                        # directory, so that silently emptied those six rows
+                        # of the bid card for most of the board.
+                        payload = dict(row)
+                        # The listing states its own status where it has one;
+                        # trust that over assuming everything on the page is
+                        # live.
+                        payload["status"] = row.get("status") or "Open"
+                        payload["city"] = default_city or city
+                        _place_bid(grouped, payload,
+                            center, radius, cdb, default_city=default_city or city,
                             city_coords=city_coords, default_state=state,
                             fallback_coords=town_coords, stats=stats)
                 return
@@ -3901,7 +3914,50 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
                         stats["civicplus_no_open_bids"] = \
                             stats.get("civicplus_no_open_bids", 0) + 1
                 return
-            if stats is not None:
+            if bid_sources.page_is_missing(page):
+                # Checked before the two below because it is the most
+                # specific answer: this is not a bid page with a layout we
+                # cannot read, it is a 404 or a lapsed domain. Same outcome,
+                # but the funnel should say which.
+                with lock:
+                    bid_portals.record_result(pdb, city, state, url, False)
+                    if stats is not None:
+                        stats["portal_page_missing"] = \
+                            stats.get("portal_page_missing", 0) + 1
+                return
+            # Before writing this off as a parser gap: the commonest reason a
+            # CivicPlus Bids page holds no bids is that the city has MOVED its
+            # solicitations to a hosted platform and left this page behind as
+            # a signpost -- "View Open Solicitations" pointing at BeaconBid,
+            # OpenGov, BidNet. Handing the signpost to the AI reads a page
+            # with no bids on it, every scan, forever. Follow it instead, and
+            # write the real address into the directory so the next scan goes
+            # straight there.
+            moved = bid_sources.hosted_portal_link(page, url)
+            if moved:
+                with lock:
+                    bid_portals.record_result(pdb, city, state, url, True)
+                    bid_portals.learn_portal(pdb, city, state, moved,
+                                             platform="custom",
+                                             allow_hosted=True)
+                    if stats is not None:
+                        stats["portal_moved_to_hosted"] = \
+                            stats.get("portal_moved_to_hosted", 0) + 1
+                url = moved
+                timeout = None
+            elif bid_sources.page_is_wrong_module(page):
+                # A /Bids.aspx URL serving "Home - Lake County, Ohio" or
+                # "Sitka Police Department". The bid module is gone and the
+                # site is answering with something else, so there is nothing
+                # here to parse and nothing worth an AI call. Let it fail
+                # towards MAX_FAIL like any other dead entry.
+                with lock:
+                    bid_portals.record_result(pdb, city, state, url, False)
+                    if stats is not None:
+                        stats["portal_wrong_module"] = \
+                            stats.get("portal_wrong_module", 0) + 1
+                return
+            elif stats is not None:
                 with lock:
                     stats["civicplus_parse_miss"] = stats.get("civicplus_parse_miss", 0) + 1
 
@@ -3910,6 +3966,20 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
         # posting link: the model is shown text only and never sees an href.
         page_html = _fetch_page(url, timeout=timeout)[0] or ""
         text = _html_to_text(page_html)
+        # "200 OK" is not proof the URL is right. Municipal sites overwhelmingly
+        # serve their not-found page with a 200, and a parked or lapsed domain
+        # serves a sales page the same way -- both are long enough to clear the
+        # length check below, so the entry was recorded as a SUCCESS on every
+        # scan and could never age out via bid_portals.MAX_FAIL. Sampling 400
+        # CivicPlus entries found 21 in that state, one of them a lapsed domain
+        # now serving an online-casino page to our customers.
+        if bid_sources.page_is_missing(page_html):
+            with lock:
+                bid_portals.record_result(pdb, city, state, url, False)
+                if stats is not None:
+                    stats["portal_page_missing"] = \
+                        stats.get("portal_page_missing", 0) + 1
+            return
         ok = len(text) >= 200
         with lock:
             bid_portals.record_result(pdb, city, state, url, ok)
@@ -4366,7 +4436,24 @@ def _place_bid(grouped, bid, center, radius, db, default_city="", city_coords=No
     if not isinstance(bid, dict):
         _count("malformed")
         return
-    city, stated_state = _split_city_state(bid.get("city") or default_city or "")
+    # Whether the bid named its OWN city, or we are about to lend it the town
+    # whose scan turned it up. That fallback exists because a town's own bid
+    # page is that town's by definition -- a posting there that doesn't
+    # restate the city is still local.
+    #
+    # An aggregator page is the opposite case. PlanetBids, BidNet, DemandStar
+    # and the rest host every agency in the country behind one domain, so the
+    # search town says nothing about where the work is. A live scan of
+    # Rollingwood, CA surfaced a City of DUARTE job -- 358 miles away, on the
+    # far side of the state -- and lending it Rollingwood's name and
+    # coordinates put it on the board as local, past the radius check, under
+    # the wrong town's heading.
+    stated_city = str(bid.get("city") or "").strip()
+    from_aggregator = bid_portals.is_aggregator_url(bid.get("url") or "")
+    if from_aggregator and not stated_city:
+        _count("aggregator_no_location")
+        return
+    city, stated_state = _split_city_state(stated_city or default_city or "")
     if not city:
         _count("no_location")
         return  # no stated location -> can't verify it's local -> drop
@@ -4447,16 +4534,26 @@ def _place_bid(grouped, bid, center, radius, db, default_city="", city_coords=No
             if len(elsewhere) == 1 and search_state not in elsewhere:
                 _count("authority_in_another_state")
                 return
-        if fallback_coords and anchorable \
+        # Same reasoning as above: an aggregator page's buyer may be anywhere,
+        # so a name we could not geocode must not be pinned to the search
+        # town's coordinates just because it looks like an authority.
+        if fallback_coords and anchorable and not from_aggregator \
                 and (not stated_state or stated_state == search_state):
             coords, used_state = fallback_coords, search_state
             _count("placed_by_search_town")
         else:
             _count("unresolvable_place")
             return
-    if _miles_between(center["lat"], center["lon"], coords[0], coords[1]) > radius:
+    miles = _miles_between(center["lat"], center["lon"], coords[0], coords[1])
+    if miles > radius:
         _count("out_of_radius")
         return  # outside the chosen radius
+    # Keep it. The radius check has always computed this and thrown it away,
+    # which was survivable while the app defaulted to 25 miles and everything
+    # on the board was near. At 125 it is the first thing a contractor needs:
+    # a job 8 miles out and one 120 miles out are different propositions and
+    # the card had no way to tell them apart.
+    bid["miles"] = int(round(miles))
     _apply_deadline_status(bid)
     bid.pop("city", None)
     # Out-of-state towns keep their state in the label, both to disambiguate

@@ -36,6 +36,7 @@ Design rules
   anything is spent on them.
 """
 
+import html
 import re
 import urllib.parse
 import xml.etree.ElementTree as ET
@@ -205,6 +206,86 @@ def link_for_title(html, base_url, title, min_len=12):
     return urllib.parse.urljoin(base_url, _unescape(best)) if best else ""
 
 
+# Third-party procurement platforms a city migrates its bids TO. Sampling the
+# directory found a recurring shape: the CivicPlus Bids module is left in
+# place as a signpost -- "View Open Solicitations" -- and every actual
+# solicitation now lives on one of these. The old page parses to zero rows and
+# is not empty, so it was counted as a parse miss and handed to the AI, which
+# read a page with no bids on it. 25 of ~180 portal reads in the benchmark
+# landed here.
+#
+# beaconbid.com is on the list because two sampled cities had moved there and
+# nothing in the codebase knew the platform existed.
+HOSTED_PORTAL_DOMAINS = (
+    "beaconbid.com", "procurement.opengov.com", "opengov.com",
+    "bidnetdirect.com", "bonfirehub.com", "planetbids.com", "questcdn.com",
+    "demandstar.com", "publicpurchase.com", "bidexpress.com",
+    "vendorregistry.com", "ionwave.net", "bidsandtenders.com",
+    "periscopeholdings.com", "bidbuy.illinois.gov",
+)
+_HOSTED_HREF_RE = re.compile(r'<a[^>]+href="(https?://[^"#]+)"[^>]*>(.{0,120}?)</a>',
+                             re.I | re.S)
+
+# These platforms put a sign-up page right next to the bid list, and the
+# sign-up link usually comes first in the markup. Chicopee's page offers
+# "Register for Alerts" (.../register) above "View Open Solicitations"
+# (.../open); taking the first hosted link on the page learned the
+# registration form as the city's bid portal.
+_NOT_A_LISTING_RE = re.compile(
+    r"\b(?:register|registration|signup|sign-up|sign\s*up|login|log-?in|"
+    r"account|subscribe|alerts?|notif\w*|help|support|faq|terms|privacy|"
+    r"contact|about|training|tutorial)\b", re.I)
+_IS_A_LISTING_RE = re.compile(
+    r"\b(?:open|current|active|solicitations?|bids?|opportunit\w*|"
+    r"proposals?|rfps?|projects?|portal|browse|view)\b", re.I)
+
+
+def hosted_portal_link(html, base_url=""):
+    """A link off this page to the city's OWN bid list on a hosted
+    procurement platform. "" if there is none.
+
+    Only city-scoped URLs qualify. "bidnetdirect.com" on its own is a search
+    engine for bids and means nothing; "bidnetdirect.com/mississippi/city-of-x"
+    is a stable page belonging to one agency, which is exactly what the portal
+    directory is for. The test is two or more path segments and no query
+    string -- a query is how every one of these platforms expresses a search.
+
+    Candidates are ranked rather than taken in document order, because the
+    registration link reliably comes first.
+    """
+    best, best_score = "", -99
+    for m in _HOSTED_HREF_RE.finditer(str(html or "")):
+        url = _unescape(m.group(1))
+        label = _clean(_unescape(m.group(2)))
+        try:
+            parts = urllib.parse.urlparse(url)
+        except ValueError:
+            continue
+        host = parts.netloc.lower()
+        host = host[4:] if host.startswith("www.") else host
+        if not any(host == d or host.endswith("." + d)
+                   for d in HOSTED_PORTAL_DOMAINS):
+            continue
+        if parts.query:
+            continue
+        segs = [s for s in parts.path.split("/") if s]
+        if len(segs) < 2:
+            continue
+        tail = segs[-1].replace("-", " ").replace("_", " ")
+        score = 0
+        if _NOT_A_LISTING_RE.search(tail) or _NOT_A_LISTING_RE.search(label):
+            score -= 10
+        if _IS_A_LISTING_RE.search(tail):
+            score += 3
+        if _IS_A_LISTING_RE.search(label):
+            score += 2
+        if score > best_score:
+            best, best_score = url, score
+    # Every candidate looked like a sign-up page: better to leave the entry
+    # alone than to learn a registration form as the city's bid portal.
+    return best if best_score > -10 else ""
+
+
 def extract_bid_link_candidates(html, base_url, max_candidates=3):
     """Links off a homepage whose href or label suggest a bid page, best
     first. Pure text-in/URLs-out, same discipline as the rest of this file --
@@ -248,6 +329,11 @@ NICHE_TERMS = (
     "intersection", "safe routes", "pedestrian", "walkway", "crosswalk",
     "parking lot", "slab", "curb ramp", "transition plan", "cdbg",
     "public works", "infrastructure", "reconstruction", "resurfacing",
+    # A street overlay programme is let with curb, gutter and ADA ramp repair
+    # as pay items, so it is squarely this trade's work -- and "2026 Asphalt
+    # Overlay Program" matched none of the terms above. "overlay" is not
+    # listed on its own: a zoning overlay district is not a paving job.
+    "asphalt", "mill and overlay", "milling and overlay", "microsurfacing",
 )
 # Only used to explain a skip in the logs; never the sole reason to drop.
 CLEARLY_UNRELATED = (
@@ -274,6 +360,70 @@ STRONG_NICHE_TERMS = (
 _ADA_RE = re.compile(r"\bada\b", re.I)
 
 
+# Consultant work, not construction work. This needs its own rule rather than
+# a CLEARLY_UNRELATED entry because these titles carry a STRONG term and so
+# skip that check entirely: "Pavement Management Program Engineering Services"
+# matches "pavement", "Cochituate Rail Trail Design" matches "trail". A
+# concrete contractor cannot bid any of them.
+#
+# Only phrases that name the profession qualify. A bare "Services" must not:
+# "Crack Sealing Services" and "On-Call Public Works Repair" are real work.
+_PRO_SERVICES_RE = re.compile(
+    r"\b(?:engineering|design|consulting|consultant|architectural|appraisal|"
+    r"surveying|inspection|planning)\s+(?:and\s+\w+\s+)?services\b"
+    r"|\bprofessional\s+services\b"
+    r"|\bfeasibility\s+study\b|\bmaster\s+plan\b"
+    r"|\bland\s+survey(?:ing)?\b|\bright[\s-]of[\s-]way\s+appraisal\b"
+    r"|\brfq?\s+for\s+(?:engineering|design|consulting)\b", re.I)
+
+
+# "<road name> ... Improvements" is one of the commonest ways a municipality
+# titles street work, and the exact substrings "street improvement" and
+# "road improvement" in NICHE_TERMS above cannot see it: any word in between
+# defeats them. Sampling the live board across six metros, this alone was
+# throwing away "Bear Creek Road Safety Improvements", "Lonedell Road Safety
+# Improvements", "Saline Road Safety Improvements", "Canton Ave Improvement
+# Project - Phase 2" and "Commercial Street (8th Ave to 10th Ave) Stormsewer
+# Improvements" -- five real jobs in one sweep, lost on word order.
+_ROADWAY = (r"street|st\.|road|rd\.|ave|avenue|drive|blvd|boulevard|"
+            r"highway|hwy|lane|parkway|pkwy|court|alley|corridor|intersection")
+_ROAD_WORK_RE = re.compile(
+    rf"\b(?:{_ROADWAY})\b[^.;:]{{0,45}}?\b(?:improvement|reconstruct|"
+    rf"rehabilitat|resurfac|widening|realign)"
+    rf"|\b(?:improvement|reconstruct|rehabilitat|resurfac|widening|realign)"
+    rf"\w*\s+(?:of\s+|to\s+)?[^.;:]{{0,45}}?\b(?:{_ROADWAY})\b", re.I)
+
+# Bare "parking" earns its place -- a parking lot is flatwork -- but only
+# where it means the surface. The meters and the permit software are not
+# this trade.
+_PARKING_RE = re.compile(
+    r"\bparking\b(?!\s+(?:meter|enforcement|permit|citation|ticket|"
+    r"management\s+(?:system|software)|study|garage\s+(?:audit|study)))", re.I)
+
+
+# "Public works" and "cdbg" are loose terms that earn their place when they
+# describe the WORK ("On-Call Public Works Services", a CDBG sidewalk
+# programme) and mislead when they name the buyer or the funding pot. Live
+# board sampling surfaced "BID - 2026 Roof Replacement at Public Works" and
+# "RFP-26-27-010-Public Works Office Addition" -- a roof and a building --
+# alongside "CDBG MAP Grantee Training Services", which is a training course.
+_DEPT_NOT_WORK_RE = re.compile(
+    r"\b(?:at|for|the)\s+(?:the\s+)?public\s+works\b"
+    r"|\bpublic\s+works\s+(?:office|building|facility|garage|shop|yard|"
+    r"department|director|complex|admin\w*)\b"
+    r"|\bcdbg\b[^.;:]{0,25}\b(?:training|administration|grantee|"
+    r"consultant|planning|program\s+management)\b", re.I)
+
+# A listing row that is really the page's own navigation. "Public Works Bids"
+# is a menu item, not a solicitation, and it reached the board as one.
+_NAV_TITLE_RE = re.compile(
+    r"^\s*(?:view\s+)?(?:all\s+)?(?:current\s+|open\s+|closed\s+)?"
+    r"(?:public\s+works\s+|purchasing\s+|engineering\s+)?"
+    r"(?:bids?|rfps?|rfqs?|solicitations?|bid\s+postings?|"
+    r"bids?\s*(?:&|and)\s*rfps?|opportunities|proposals?)"
+    r"(?:\s+(?:page|list|home|archive|and\s+rfps?))?\s*$", re.I)
+
+
 def _has_strong_term(blob):
     return _ADA_RE.search(blob) is not None or \
         any(t in blob for t in STRONG_NICHE_TERMS)
@@ -281,8 +431,21 @@ def _has_strong_term(blob):
 
 def looks_relevant(*texts):
     """True if a listing is worth spending an extraction call on."""
-    blob = " ".join(str(t or "") for t in texts).lower()
+    parts = [str(t or "") for t in texts]
+    blob = " ".join(parts).lower()
     if not blob.strip():
+        return False
+    # A menu item is not a solicitation. Tested against the title alone --
+    # a real bid whose SCOPE happens to read "bids and rfps" is still real.
+    if parts and _NAV_TITLE_RE.match(parts[0].strip()):
+        return False
+    # Checked before the strong term, deliberately: these titles all contain
+    # one and would otherwise pass unexamined.
+    if _PRO_SERVICES_RE.search(blob):
+        return False
+    # Same reasoning: these name the buyer or the funding source, not the job,
+    # and would sail past on "public works" or "cdbg" alone.
+    if _DEPT_NOT_WORK_RE.search(blob) and not _has_strong_term(blob):
         return False
     strong = _has_strong_term(blob)
     # A listing that names an unrelated trade needs a real trade word to
@@ -290,7 +453,9 @@ def looks_relevant(*texts):
     # services for an infrastructure project" is not.
     if not strong and any(t in blob for t in CLEARLY_UNRELATED):
         return False
-    return strong or any(term in blob for term in NICHE_TERMS)
+    return (strong or any(term in blob for term in NICHE_TERMS)
+            or _ROAD_WORK_RE.search(blob) is not None
+            or _PARKING_RE.search(blob) is not None)
 
 
 def rejection_reason(*texts):
@@ -312,11 +477,17 @@ def _clean(text):
 
 
 def _unescape(text):
-    out = str(text or "")
-    for a, b in (("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"),
-                 ("&quot;", '"'), ("&#39;", "'"), ("&nbsp;", " ")):
-        out = out.replace(a, b)
-    return out
+    """Decode HTML entities. The stdlib table, not a hand-picked six.
+
+    The six that used to be listed here did not include &rsquo; or &apos;,
+    which is how procurement pages overwhelmingly write the apostrophe in
+    "Engineer's Estimate". The raw entity survived into the cleaned text and
+    defeated the regex looking for it, so a page printing
+    "Engineer&rsquo;s Estimate: $1,000,000" reported no value at all. The same
+    gap silently damaged every title, contact name and date carrying a curly
+    quote, an em dash or a numeric reference.
+    """
+    return html.unescape(str(text or ""))
 
 
 _MONTHS = ("January|February|March|April|May|June|July|August|September|October|"
@@ -334,13 +505,72 @@ _DATE = (rf"(?:{_MONTHS})\.?\s+\d{{1,2}},?\s+\d{{4}}"
 #
 # The gap is capped and may not contain a digit, so the pattern can never skip
 # over one label to grab a neighbouring column's date.
-_CLOSE_RE = re.compile(
-    r"(?:bid\s+opening|bids?\s+due|clos(?:e|es|ed|ing)|due|deadline|"
-    r"submittals?|responses?\s+due|proposals?\s+due|open\s+until|"
-    r"accepted\s+until|received\s+until)"
+# Two tiers, tried in order. A posting page states a lot of dates and only
+# one of them is the bid's: a live sample had "no later than 08/19/2026"
+# meaning the day the DOCUMENTS became available, with the real "Closing
+# Date/Time: 9/2/2026" further down, and another had "Questions Due:
+# September 11" ahead of "Submission Deadline: September 29". Reading either
+# page with one flat pattern picked the wrong date, and a deadline that is
+# too early retires a live bid.
+#
+# Tier 1 is the labelled field every procurement platform prints. Tier 2 is
+# the prose a legal notice uses when there is no labelled field at all.
+_CLOSE_LABEL_RE = re.compile(
+    r"(?:clos(?:e|es|ing)|bid\s+opening|submission\s+deadline|"
+    r"bids?\s+due|proposals?\s+due|responses?\s+due|submittals?\s+due|"
+    r"due)\s*"
+    # "Information" is CivicPlus's own filler: the field is printed as "Bid
+    # Opening Information: 8/25/26" as often as "Bid Opening Date/Time:".
+    r"(?:date|information|info)?(?:\s*/\s*time|\s+and\s+time|\s*&\s*time)?\s*[:\-]\s*"
+    r"(?:\d{1,2}:\d{2}\s*(?:[ap]\.?m\.?)?\s*(?:on\s+)?)?"
+    rf"({_DATE})", re.I)
+_CLOSE_PROSE_RE = re.compile(
+    r"(?:no\s+later\s+than|must\s+be\s+received\s+by|received\s+until|"
+    r"accepted\s+until|open\s+until|deadline|clos(?:e|es|ed|ing)|"
+    # A bid opening is the effective deadline -- bids are due before it. Kept
+    # out of tier 1 without a label, because "Bid Opening Information: 19
+    # Moore Street" is an address, and only reached here when no labelled
+    # closing field exists anywhere on the page.
+    r"bid\s+opening|due)"
+    r"(?:[^\d<>]{0,20}?\d{1,2}:\d{2}\s*(?:[ap]\.?m\.?)?)?"
     r"[^\d<>]{0,20}?"
-    rf"({_DATE})",
-    re.I)
+    rf"({_DATE})", re.I)
+
+# Dates that sit behind a deadline-ish word but belong to something else on
+# the timetable. Every one of these was observed on a real posting;
+# "Questions Due: September 11" ahead of "Submission Deadline: September 29"
+# is the case that made this necessary.
+#
+# Anchored to the END of the lead-in, so it only fires when the disqualifying
+# word is what the label is actually attached to. An unanchored search over a
+# wider window read the previous field instead: "Publication Date/Time:
+# 7/1/2026 ... Closing Date/Time: 12/1/2026" threw away the real closing date
+# because "Publication" appeared 40 characters earlier. Only spaces and word
+# characters may sit between -- a slash, colon or digit means a different
+# field has started.
+_NOT_THE_DEADLINE_RE = re.compile(
+    r"(?:questions?|inquir\w*|clarificat\w*|rfi|addend\w*|"
+    r"pre-?bid|site\s+visit|walk-?(?:through|thru)|job\s+walk|"
+    r"documents?\s+available|plans?\s+available|publicat\w*|"
+    r"advertis\w*|award\w*|notice\s+to\s+proceed|substantial\s+completion|"
+    r"registrat\w*)[\s\w]{0,15}$", re.I)
+
+
+def _first_real_deadline(text, pattern):
+    """First match of `pattern` whose lead-in isn't about something else."""
+    for m in pattern.finditer(text):
+        if _NOT_THE_DEADLINE_RE.search(text[max(0, m.start() - 45):m.start()]):
+            continue
+        return m.group(1).strip()
+    return ""
+
+
+def _deadline_in(text):
+    """The bid's own closing date somewhere in this text. "" if none."""
+    text = str(text or "")
+    return (_first_real_deadline(text, _CLOSE_LABEL_RE)
+            or _first_real_deadline(text, _CLOSE_PROSE_RE))
+
 
 # CivicPlus prints the posting's own status on the listing row. It is the
 # authoritative answer to "is this still live?" and it is free — far better
@@ -352,6 +582,131 @@ _CLOSE_RE = re.compile(
 _STATUS_RE = re.compile(
     r"\bstatus\b\s*[:\-]?\s*(?:clos(?:e|es|ing)\s*(?:date)?\s*[:\-]?\s*)?"
     r"(open|closed|awarded|cancell?ed|withdrawn|pending|expired)\b", re.I)
+
+
+# A listing row's TITLE routinely announces that the row is not a solicitation
+# at all. CivicPlus sites keep their whole archive on the same page and simply
+# retitle the entry when the job is let: "Roadway Improvements 2019" becomes
+# "Award - Roadway Improvements 2019". Nothing else on the row changes -- no
+# Closes: date, and the Status chip is often still absent -- so a bid let in
+# 2019 arrived with status "Open" and was shown to the customer as live work.
+#
+# Measured on 400 real portals: of 88 niche rows that reached the feed, 88
+# were displayed as open, and the majority were awards, published bid results
+# or cancellations. This is exactly the "awarded jobs shown as open" the app
+# was reported for.
+_TITLE_AWARDED_RE = re.compile(
+    r"^\s*(?:notice\s+of\s+)?award(?:ed|s)?\b\s*[:\-–—]"      # "Award - X"
+    r"|^\s*award(?:ed)?\s*[:/]"                                  # "Award: X"
+    r"|\bnotice\s+of\s+award\b"
+    r"|\bhas\s+been\s+awarded\b", re.I)
+_TITLE_RESULTS_RE = re.compile(
+    r"\bbid\s+results\b|^\s*results\s*[:\-–—]"
+    r"|\bbid\s+tab(?:ulation)?s?\b"
+    r"|^\s*registry\s+of\s+proposals\b", re.I)
+_TITLE_CANCELLED_RE = re.compile(
+    r"^\s*cancell?(?:ation|ed|ation\s+of)\b|\bcancell?ed\b"
+    r"|^\s*cancellation\s+of\s+(?:bids?|procurement)\b", re.I)
+
+
+# A wrong portal URL is very often served with HTTP 200 and a not-found page
+# in the body, so _fetch_page reports "ok" and nothing downstream notices. The
+# entry is then RECORDED AS A SUCCESS on every scan, which defeats
+# bid_portals.MAX_FAIL entirely: the URL can never age out of the directory.
+#
+# Measured on 400 sampled CivicPlus entries, 21 were pages like this -- "404 |
+# City of Drayton", "Page not found - City of Sheffield Lake Ohio",
+# "CityOfPawnee.com is for sale | HugeDomains", and one lapsed domain now
+# serving an online-casino page. Roughly one entry in twenty, held forever.
+_MISSING_PAGE_RE = re.compile(
+    r"<title[^>]*>\s*404\b"
+    r"|<title[^>]*>[^<]{0,80}\b(?:page\s+not\s+found|404\s+(?:error|not\s+found)"
+    r"|status\s+code\s+404|error\s+404)"
+    r"|<h1[^>]*>\s*404\b"
+    r"|\bthe\s+page\s+you\s+(?:requested|are\s+looking\s+for)\s+"
+    r"(?:could\s+not\s+be\s+found|cannot\s+be\s+found|does\s+not\s+exist)"
+    # Lapsed domains. Two flavours, both seen on real directory entries: a
+    # broker's parking page, and a municipal domain someone re-registered and
+    # pointed at an offshore gambling site. The second matters more than a
+    # dead link -- forestparkga.org and lewistonmn.org are both in the
+    # directory and both now serve casino pages to our customers.
+    r"|<title[^>]*>[^<]{0,60}\bhugedomains(?:\.com)?\b"
+    r"|\bis\s+for\s+sale\s*\|\s*hugedomains"
+    r"|\bthis\s+domain\s+(?:name\s+)?is\s+for\s+sale\b"
+    r"|\b(?:buy|purchase)\s+this\s+domain\b"
+    r"|\bdomain\s+(?:is\s+)?(?:parked|for\s+sale)\b"
+    r"|\bsitus\s+(?:togel|slot|judi)\b|\bbandar\s+(?:togel|toto|slot)\b"
+    r"|\bslot\s+gacor\b|\bjudi\s+online\b", re.I)
+
+# Words a page about bids has in its title. A CivicPlus Bids.aspx URL that
+# serves something with none of them is not the bid page: sampling 500
+# directory entries turned up "Home - Lake County, Ohio", "News & Events |
+# City of Arlington, TX", "Sitka Police Department" and "Ethics Review Board
+# - City of New Orleans", all reached at /Bids.aspx, all recorded as healthy
+# on every scan and handed to the AI to read for bids they do not contain.
+_BID_TITLE_RE = re.compile(
+    r"\bbids?\b|\brf[pqi]s?\b|\bsolicitat\w*|\bprocure\w*|\bpurchas\w*"
+    r"|\bopportunit\w*|\bcontract\w*|\bvendor\w*|\btender\w*"
+    r"|\bquote\w*|\bproposal\w*", re.I)
+_TITLE_TAG_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.I | re.S)
+
+
+def page_title(html):
+    """The page's <title>, cleaned. "" if it has none."""
+    m = _TITLE_TAG_RE.search(str(html or "")[:20000])
+    return _clean(_unescape(m.group(1))) if m else ""
+
+
+def page_is_wrong_module(html):
+    """True if this page is plainly not about bids at all.
+
+    Narrower than it sounds, and deliberately so. The test is the page's own
+    <title>: a real bid page names bids, procurement, purchasing,
+    solicitations or opportunities in it -- "Purchasing | Taos County, NM",
+    "Portal - Open Opportunities - City of Norwich, CT" -- even when our
+    parser cannot read the body. A page titled "Home" or "News Archive" is
+    the site's homepage being served for a URL that no longer exists.
+
+    Only meaningful for a URL we expected to be a bid page, and only ever a
+    reason to let the entry fail towards MAX_FAIL, never to delete it.
+    """
+    title = page_title(html)
+    if not title:
+        return False            # no title is not evidence either way
+    if _BID_TITLE_RE.search(title):
+        return False
+    low = str(html or "").lower()
+    return "bids.aspx" not in low and "bid postings" not in low
+
+
+def page_is_missing(html):
+    """True if this page is a not-found or parked-domain page served with 200.
+
+    Distinct from civicplus_page_is_empty, which means "the right page, with
+    nothing posted today" -- that entry is healthy and must keep its place in
+    the directory. This one means the URL is wrong and should be allowed to
+    fail its way out.
+    """
+    return bool(_MISSING_PAGE_RE.search(str(html or "")[:20000]))
+
+
+def status_from_title(title):
+    """A non-solicitation status the row's own title declares. "" if none.
+
+    Deliberately anchored on label-shaped matches rather than the bare words:
+    "Award" appearing anywhere would catch "Award Winning Streetscape Design",
+    while "Award - ", "Award:" and "Notice of Award" are how an archived row
+    is actually retitled.
+    """
+    text = _clean(_unescape(str(title or "")))
+    if _TITLE_AWARDED_RE.search(text):
+        return "Awarded"
+    if _TITLE_CANCELLED_RE.search(text):
+        return "Cancelled"
+    if _TITLE_RESULTS_RE.search(text):
+        # Results are published once bidding has closed, by definition.
+        return "Closed"
+    return ""
 
 
 def _status_near(text):
@@ -381,10 +736,7 @@ def parse_civicplus_rss(xml_text):
         desc = _clean(_unescape(get("description")))
         if not title:
             continue
-        closes = ""
-        m = _CLOSE_RE.search(desc) or _CLOSE_RE.search(title)
-        if m:
-            closes = m.group(1)
+        closes = _deadline_in(desc) or _deadline_in(title)
         rows.append({"title": title, "url": link, "scope": desc,
                      "deadline": closes, "status": _status_near(desc),
                      "source": "civicplus-rss"})
@@ -465,10 +817,13 @@ def parse_civicplus_html(html, base_url=""):
         # instead, which is exactly this posting's own markup and no more.
         stop = posts[i + 1].start() if i + 1 < len(posts) else len(text)
         window = _clean(_unescape(text[m.end():min(stop, m.end() + 4000)]))
-        cm = _CLOSE_RE.search(window)
+        closes = _deadline_in(window)
+        # The title wins over the row's Status chip. An archived CivicPlus
+        # entry keeps whatever chip it had -- frequently none, which reads as
+        # open -- while the title is edited to say it was awarded.
         rows.append({"title": label, "url": url, "scope": "",
-                     "deadline": cm.group(1) if cm else "",
-                     "status": _status_near(window),
+                     "deadline": closes,
+                     "status": status_from_title(label) or _status_near(window),
                      "source": "civicplus"})
     return rows
 
@@ -554,8 +909,9 @@ def detail_deadline(html):
     urgency ranking, and — more expensively — cannot be recognised as expired,
     so last year's listing shows as open indefinitely.
     """
-    m = _CLOSE_RE.search(_clean(_unescape(html)))
-    return m.group(1).strip() if m else ""
+    text = _clean(_unescape(html))
+    return (_first_real_deadline(text, _CLOSE_LABEL_RE)
+            or _first_real_deadline(text, _CLOSE_PROSE_RE))
 
 
 # Only a LABELLED figure counts. A bid page is full of dollar amounts that
@@ -563,17 +919,44 @@ def detail_deadline(html):
 # liquidated damages per day -- and presenting any of those as the project
 # value would be worse than showing nothing, because a contractor would price
 # against it. Measured on live postings: about 4% state a labelled estimate.
+# The apostrophe class covers the straight quote, the curly one and the
+# backtick: pages write "Engineer's", "Engineer’s" and "ENGINEER`S", and only
+# the first was matched.
 _VALUE_LABEL_RE = re.compile(
-    r"(?:engineer'?s?\s+estimate|estimated\s+(?:cost|value|price|budget)|"
+    r"(?:engineer(?:ing)?['’ʼ`]?s?\s+estimate|"
+    # One optional word between "estimated" and the noun. PlanetBids labels
+    # the field "Estimated Bid Value" and the exact-adjacency pattern could
+    # not see it, so a posting stating $130,000.00 reached the customer with
+    # an empty Est. Value box. Same shape covers "Estimated Project Cost" and
+    # "Estimated Contract Value".
+    r"estimated\s+(?:\w+\s+)?(?:cost|value|price|budget|amount)|"
+    r"(?:bid|contract|project|construction)\s+value\s*(?:is|:)?|"
     r"project\s+estimate|opinion\s+of\s+probable\s+cost|"
     r"budget(?:ed)?\s+amount|estimated\s+project\s+cost|"
-    r"estimated\s+construction\s+cost)"
+    r"estimated\s+construction\s+cost|construction\s+estimate)"
     r"[^$\n]{0,60}?(\$\s?[\d,]{4,}(?:\.\d{2})?)", re.I)
 
 # Amounts that sit near a value-ish word but are definitely not the job.
-_NOT_A_VALUE_RE = re.compile(
-    r"bid\s+bond|plan\s+deposit|non-?refundable|liquidated\s+damages|"
-    r"per\s+day|filing\s+fee|application\s+fee", re.I)
+# Amounts that sit near a value-ish word but are definitely not the job.
+# The insurance limits are the commonest false positive by far: nearly every
+# construction solicitation carries "$1,000,000 each occurrence / $2,000,000
+# general aggregate", and reporting that as the project's value would have a
+# contractor pricing against a number the page never claimed.
+_NOT_A_VALUE = (r"bid\s+bond|plan\s+deposit|non-?refundable|"
+                r"liquidated\s+damages|filing\s+fee|application\s+fee|"
+                r"bid\s+security|performance\s+bond|payment\s+bond|"
+                r"each\s+occurrence|general\s+aggregate|"
+                r"combined\s+single\s+limit|liability\s+insurance|"
+                r"umbrella\s+(?:policy|coverage)")
+# Immediately BEFORE the label. Only spaces and word characters may sit
+# between -- a "$" or a digit means a different field has already started.
+_NOT_A_VALUE_LEAD_RE = re.compile(rf"(?:{_NOT_A_VALUE})[\s\w]{{0,15}}$", re.I)
+# Immediately AFTER the figure, which is where the rate qualifiers live:
+# "$1,000 per calendar day", "$500 per occurrence".
+_NOT_A_VALUE_TRAIL_RE = re.compile(
+    rf"\s*(?:per\s+(?:calendar\s+|working\s+|business\s+)?day"
+    rf"|per\s+(?:occurrence|unit|each|ton|sf|square\s+foot|linear\s+foot|lf)"
+    rf"|{_NOT_A_VALUE})", re.I)
 
 
 def detail_value(html):
@@ -582,8 +965,16 @@ def detail_value(html):
     if not text:
         return ""
     for m in _VALUE_LABEL_RE.finditer(text):
-        window = text[max(0, m.start() - 60):m.end() + 40]
-        if _NOT_A_VALUE_RE.search(window):
+        # Anchored either side of the match rather than searched over a
+        # 100-character window. The window version read the PREVIOUS field:
+        # a PlanetBids posting printing "Liquidated Damages $1,000 per
+        # calendar day  Estimated Bid Value $130,000.00" threw away the
+        # $130,000 because "Liquidated Damages" sat 40 characters earlier.
+        # A disqualifier only counts when it is what the amount is attached
+        # to -- immediately before the label, or immediately after the figure.
+        lead = text[max(0, m.start() - 45):m.start()]
+        trail = text[m.end():m.end() + 30]
+        if _NOT_A_VALUE_LEAD_RE.search(lead) or _NOT_A_VALUE_TRAIL_RE.match(trail):
             continue
         return re.sub(r"\s+", "", m.group(1))
     return ""
@@ -592,8 +983,20 @@ def detail_value(html):
 # Fields a posting carries that a listing row never does. Measured on 25 live
 # postings: publication date 92%, a linked packet 56%, bid number 40%, an
 # addendum 36%, a pre-bid meeting 20%.
+# "Publication Date" is CivicPlus's own label and was the only one matched.
+# Agencies on every other platform write the same fact a dozen other ways, so
+# a posting that plainly said "Posted: 11/03/2026" read as undated -- and an
+# undated bid waits out a 60-day first-seen clock instead of being aged on the
+# date it is printed with. The bare one-word labels require the colon; the
+# multi-word ones are specific enough without it.
 _PUBLISHED_RE = re.compile(
-    rf"publication\s+date(?:/time)?\s*:?\s*({_DATE})", re.I)
+    rf"(?:(?:publication|posting|issue|issued|release)\s+date(?:/time)?"
+    rf"|date\s+(?:published|posted|issued|released)"
+    rf"|(?:published|posted|issued|released)\s+on"
+    rf"|published|posted|issued)\s*:\s*({_DATE})"
+    rf"|(?:(?:publication|posting|issue|issued|release)\s+date(?:/time)?"
+    rf"|date\s+(?:published|posted|issued|released)"
+    rf"|(?:published|posted|issued|released)\s+on)\s+({_DATE})", re.I)
 _BID_NUMBER_RE = re.compile(
     r"bid\s*(?:number|no\.?|#)\s*:?\s*([A-Z0-9][A-Z0-9\-/]{2,24})", re.I)
 _PREBID_RE = re.compile(r"pre-?bid\s+(?:meeting|conference)", re.I)
@@ -611,7 +1014,9 @@ _DOC_LINK_RE = re.compile(
 def detail_published(html):
     """The date the posting says it went up. "" if absent."""
     m = _PUBLISHED_RE.search(_clean(_unescape(str(html or ""))))
-    return m.group(1).strip() if m else ""
+    if not m:
+        return ""
+    return (m.group(1) or m.group(2) or "").strip()
 
 
 def detail_bid_number(html):
