@@ -132,5 +132,56 @@ class NicheGateTests(unittest.TestCase):
             self.assertTrue(bs.looks_relevant(t), t)
 
 
+class RoadWorkRecallTests(unittest.TestCase):
+    """"<road name> ... Improvements" is how municipalities title street work.
+
+    NICHE_TERMS carries "street improvement" and "road improvement" as exact
+    substrings, so any word in between defeated them. Auditing what the gate
+    REJECTED across six metros on the live board turned up five real jobs lost
+    to nothing but word order, three of them from the same county in one
+    sweep. Every title here is verbatim from that audit.
+    """
+
+    def test_a_road_name_separated_from_improvements(self):
+        for t in ("2026 - RFQ - Bear Creek Road Safety Improvements - STBG-9902(609)",
+                  "2026 - RFQ - Lonedell Road Safety Improvements STBG-9902(610)",
+                  "2026 - RFQ - Saline Road Safety Improvements- Phase 4",
+                  "Canton Ave Improvement Project - Phase 2",
+                  "Commercial Street (8th Ave to 10th Ave) Stormsewer Improvements",
+                  "Hackett Boulevard Stormwater Improvements Project"):
+            self.assertTrue(bs.looks_relevant(t), t)
+
+    def test_the_reverse_word_order_too(self):
+        for t in ("Reconstruction of Maple Avenue",
+                  "Rehabilitation of the Elm Street Corridor",
+                  "Widening of Highway 60"):
+            self.assertTrue(bs.looks_relevant(t), t)
+
+    def test_work_with_no_roadway_in_it_is_still_rejected(self):
+        """The rule needs a roadway word AND a work word. Neither alone."""
+        for t in ("PFAS Treatment at Water Treatment Plant",
+                  "Community Center AHU 1 & 2 Replacement",
+                  "Shoal Creek Wastewater Treatment Plant Clarifier Addition",
+                  "Interior Renovations at Overland Police Department",
+                  "Request for Proposal - 101 West Main Street"):
+            self.assertFalse(bs.looks_relevant(t), t)
+
+
+class ParkingTests(unittest.TestCase):
+    """A parking lot is flatwork. The meters and the permit software are not."""
+
+    def test_a_parking_surface_is_this_trade(self):
+        for t in ("MOmentum Bike Park Parking and Concessions",
+                  "Public Safety Parking Lot Improvements"):
+            self.assertTrue(bs.looks_relevant(t), t)
+
+    def test_parking_administration_is_not(self):
+        for t in ("Parking Meter Replacement",
+                  "Parking Enforcement Management Software",
+                  "Downtown Parking Study",
+                  "Parking Permit Citation Processing"):
+            self.assertFalse(bs.looks_relevant(t), t)
+
+
 if __name__ == "__main__":
     unittest.main()

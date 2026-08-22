@@ -377,6 +377,30 @@ _PRO_SERVICES_RE = re.compile(
     r"|\brfq?\s+for\s+(?:engineering|design|consulting)\b", re.I)
 
 
+# "<road name> ... Improvements" is one of the commonest ways a municipality
+# titles street work, and the exact substrings "street improvement" and
+# "road improvement" in NICHE_TERMS above cannot see it: any word in between
+# defeats them. Sampling the live board across six metros, this alone was
+# throwing away "Bear Creek Road Safety Improvements", "Lonedell Road Safety
+# Improvements", "Saline Road Safety Improvements", "Canton Ave Improvement
+# Project - Phase 2" and "Commercial Street (8th Ave to 10th Ave) Stormsewer
+# Improvements" -- five real jobs in one sweep, lost on word order.
+_ROADWAY = (r"street|st\.|road|rd\.|ave|avenue|drive|blvd|boulevard|"
+            r"highway|hwy|lane|parkway|pkwy|court|alley|corridor|intersection")
+_ROAD_WORK_RE = re.compile(
+    rf"\b(?:{_ROADWAY})\b[^.;:]{{0,45}}?\b(?:improvement|reconstruct|"
+    rf"rehabilitat|resurfac|widening|realign)"
+    rf"|\b(?:improvement|reconstruct|rehabilitat|resurfac|widening|realign)"
+    rf"\w*\s+(?:of\s+|to\s+)?[^.;:]{{0,45}}?\b(?:{_ROADWAY})\b", re.I)
+
+# Bare "parking" earns its place -- a parking lot is flatwork -- but only
+# where it means the surface. The meters and the permit software are not
+# this trade.
+_PARKING_RE = re.compile(
+    r"\bparking\b(?!\s+(?:meter|enforcement|permit|citation|ticket|"
+    r"management\s+(?:system|software)|study|garage\s+(?:audit|study)))", re.I)
+
+
 def _has_strong_term(blob):
     return _ADA_RE.search(blob) is not None or \
         any(t in blob for t in STRONG_NICHE_TERMS)
@@ -397,7 +421,9 @@ def looks_relevant(*texts):
     # services for an infrastructure project" is not.
     if not strong and any(t in blob for t in CLEARLY_UNRELATED):
         return False
-    return strong or any(term in blob for term in NICHE_TERMS)
+    return (strong or any(term in blob for term in NICHE_TERMS)
+            or _ROAD_WORK_RE.search(blob) is not None
+            or _PARKING_RE.search(blob) is not None)
 
 
 def rejection_reason(*texts):
