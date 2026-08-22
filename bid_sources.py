@@ -188,11 +188,9 @@ def extract_bid_link_candidates(html, base_url, max_candidates=3):
         hits = sum(1 for term in _HOMEPAGE_LINK_HINTS if term in blob)
         if not hits:
             continue
-        url = _unescape(href)
-        if url.startswith("/"):
-            url = base + url
-        elif not url.lower().startswith("http"):
-            url = base + "/" + url.lstrip("/")
+        # Same reasoning as parse_civicplus_html: let urljoin resolve it
+        # against the page it was found on rather than gluing strings.
+        url = urllib.parse.urljoin(base_url, _unescape(href))
         if url in seen:
             continue
         seen.add(url)
@@ -414,11 +412,15 @@ def parse_civicplus_html(html, base_url=""):
         if not label or len(label) < 4:
             continue
         matches = posts
-        url = _unescape(href)
-        if url.startswith("/") and base_url:
-            url = base_url.rstrip("/") + url
-        elif not url.lower().startswith("http") and base_url:
-            url = base_url.rstrip("/") + "/" + url.lstrip("/")
+        # urljoin, not string concatenation. base_url is the LISTING page
+        # ("https://x.gov/Bids.aspx"), not the site root, so appending to it
+        # produced "https://x.gov/Bids.aspx/bids.aspx?bidID=415" -- a 404 for
+        # every posting on every CivicPlus site. That single join is why bid
+        # links 404'd, why contacts were missing and why half of all bids had
+        # no deadline: the enricher that reads contact, deadline and scope off
+        # a posting could never load one.
+        url = urllib.parse.urljoin(base_url, _unescape(href)) if base_url \
+            else _unescape(href)
         if url in seen:
             continue
         seen.add(url)
