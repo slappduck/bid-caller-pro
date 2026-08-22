@@ -524,6 +524,8 @@ def health_detail():
         # ...and the ones before it, so a change in recall reads as a trend
         # rather than a single number with nothing to compare it against.
         "recent_scans": _recent_scans(),
+        # What the last nightly accuracy audit measured.
+        "feed_audit": kv_backend.get(BID_AUDIT_KEY, None),
         "search_depth": TAVILY_DEPTH,
         # The recall knobs, so what's actually running is visible without
         # reading Render's env-var screen. All are env-tunable; raising them
@@ -1095,6 +1097,122 @@ def admin_export():
                     "row_counts": {k: len(v) for k, v in tables.items()},
                     "total_rows": total,
                     "errors": errors})
+
+
+# ── Feed accuracy audit ──────────────────────────────────────────────────
+# Every stale bid a customer has seen was found by the customer. An awarded
+# job presented as live work costs trust in a way a missing bid does not, and
+# the CivicPlus status bug that caused most of them sat there across ~2,400
+# portals until someone happened to recognise a job they had already won.
+#
+# This samples real portals the way a scan does and measures what the parser
+# would hand a customer. It changes nothing and stores a number, so a
+# regression shows up as the number moving instead of as a complaint.
+BID_AUDIT_KEY = "bidcaller:last_audit"
+BID_AUDIT_SAMPLE = int(os.environ.get("BID_AUDIT_SAMPLE", "40"))
+
+
+def _audit_portal(entry):
+    """Parse one portal the way a scan does; return per-row verdicts."""
+    out = {"rows": 0, "shown_open": 0, "no_status": 0,
+           "open_but_expired": 0, "awarded_shown_open": 0}
+    html = _fetch_raw_html(entry["url"])
+    if not html:
+        out["unreachable"] = 1
+        return out
+    try:
+        rows = bid_sources.parse_civicplus_html(html, entry["base"])
+    except Exception:
+        return out
+    today = datetime.datetime.now().date()
+    for r in rows:
+        out["rows"] += 1
+        status = (r.get("status") or "").strip()
+        bid = {"status": status, "deadline": r.get("deadline") or ""}
+        if not status:
+            out["no_status"] += 1
+        if _is_open_bid(bid):
+            out["shown_open"] += 1
+            d = _parse_deadline(bid["deadline"])
+            if d and d < today:
+                # Shown as open with a deadline already past: the exact
+                # failure this audit exists to catch.
+                out["open_but_expired"] += 1
+            if status.lower().startswith("award"):
+                out["awarded_shown_open"] += 1
+    return out
+
+
+def _fetch_raw_html(url, limit=250000, timeout=15):
+    try:
+        req = urllib.request.Request(
+            url, headers={"User-Agent": "BidCallerPro/2.0"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            if resp.status != 200:
+                return None
+            return resp.read(limit).decode("utf-8", "ignore")
+    except Exception:
+        return None
+
+
+def _run_bid_audit(sample_size=None):
+    """Sample CivicPlus portals and report what a customer would be shown."""
+    size = int(sample_size or BID_AUDIT_SAMPLE)
+    portals = []
+    for (city, state), entries in bid_portals._national_seeds().items():
+        for e in entries:
+            if e.get("platform") == "civicplus" and e.get("url"):
+                base = e["url"].split("/Bids.aspx")[0]
+                # Audit the show-everything view, not the default one. A scan
+                # reads both (see bid_sources.civicplus_endpoints), and the
+                # default page lists only open bids -- so auditing it would
+                # sample almost nothing and, worse, could never see the
+                # awarded-shown-as-open failure this exists to catch.
+                portals.append({
+                    "url": base + "/Bids.aspx?catID=All&txtSort=Category"
+                                  "&showAllBids=on",
+                    "base": base, "city": city, "state": state})
+    if not portals:
+        return {"ok": False, "reason": "no_portals"}
+    random.shuffle(portals)
+    portals = portals[:size]
+
+    totals = {"portals": 0, "unreachable": 0, "rows": 0, "shown_open": 0,
+              "no_status": 0, "open_but_expired": 0, "awarded_shown_open": 0}
+    with ThreadPoolExecutor(max_workers=10) as ex:
+        for res in ex.map(_audit_portal, portals):
+            totals["portals"] += 1
+            for k, v in res.items():
+                totals[k] = totals.get(k, 0) + v
+
+    shown = max(totals["shown_open"], 1)
+    bad = totals["open_but_expired"] + totals["awarded_shown_open"]
+    totals["stale_rate_pct"] = round(100.0 * bad / shown, 2)
+    totals["at"] = datetime.datetime.now().isoformat(timespec="seconds")
+    totals["ok"] = True
+    kv_backend.set(BID_AUDIT_KEY, totals)
+
+    # A feed that is a few percent wrong is worth knowing about; a feed that
+    # is badly wrong is worth being woken for.
+    if totals["stale_rate_pct"] >= 5 and bad >= 3:
+        _alert_admin(
+            f"Bid feed staleness at {totals['stale_rate_pct']}%",
+            f"Of {totals['shown_open']} rows the parser would show as open "
+            f"across {totals['portals']} sampled portals, {bad} are already "
+            f"expired or awarded.\n\n{json.dumps(totals, indent=2)}")
+    print(f"[audit] {json.dumps(totals)}", flush=True)
+    return totals
+
+
+@app.route("/run-bid-audit", methods=["POST"])
+def run_bid_audit():
+    """Nightly feed-accuracy check. Same CRON_SECRET gate as the alert jobs."""
+    data = request.get_json(force=True, silent=True) or {}
+    token = data.get("token") or request.headers.get("X-Cron-Secret", "")
+    if not CRON_SECRET or not hmac.compare_digest(token, CRON_SECRET):
+        return jsonify({"ok": False, "reason": "unauthorized"}), 403
+    result = _run_bid_audit(data.get("sample"))
+    return jsonify(result), (200 if result.get("ok") else 500)
 
 
 @app.route("/run-upcoming-alerts", methods=["POST"])

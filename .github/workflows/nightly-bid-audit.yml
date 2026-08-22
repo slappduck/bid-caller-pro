@@ -1,0 +1,54 @@
+name: Nightly bid-feed audit
+
+# Every stale bid a customer has seen was found by the customer. An awarded
+# job presented as live work costs trust in a way a missing bid does not, and
+# the CivicPlus status bug behind most of them sat across ~2,400 portals until
+# someone recognised a job they had already won.
+#
+# This pokes /run-bid-audit, which samples real portals the way a scan does
+# and measures what the parser would actually hand a customer: how many rows
+# it would show as open, and how many of those are already expired or awarded.
+# It writes nothing and changes nothing -- it produces a number, so the next
+# regression shows up as the number moving instead of as a complaint.
+#
+# Same two repo secrets the alert workflows already use:
+# BIDCALLER_SERVER_URL and CRON_SECRET. Without them the endpoint replies 403
+# and nothing happens.
+#
+# Run it any time without waiting: Actions tab -> this workflow -> Run workflow.
+
+on:
+  schedule:
+    # 09:00 UTC = ~4am US Central. After the alert jobs, before anyone looks.
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ask the server to audit its own feed
+        env:
+          SERVER: ${{ secrets.BIDCALLER_SERVER_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$SERVER" ] || [ -z "$CRON_SECRET" ]; then
+            echo "BIDCALLER_SERVER_URL or CRON_SECRET not set — skipping."
+            exit 0
+          fi
+          # Render free instances sleep; the first request wakes it and can
+          # take a while, so allow a generous timeout rather than failing the
+          # run on a cold start.
+          code=$(curl -sS -o /tmp/audit.json -w '%{http_code}' \
+            --max-time 600 \
+            -X POST "$SERVER/run-bid-audit" \
+            -H 'Content-Type: application/json' \
+            -H "X-Cron-Secret: $CRON_SECRET" \
+            -d '{}')
+          echo "HTTP $code"
+          cat /tmp/audit.json
+          echo
+          # A non-200 is worth failing on: it means the audit itself is
+          # broken, which is the one thing that would let staleness back in
+          # unnoticed.
+          [ "$code" = "200" ]
