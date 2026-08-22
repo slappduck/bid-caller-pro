@@ -1866,7 +1866,12 @@ async function loadHealth(){
   if(isOffline()){box.textContent="Offline — can't reach the server.";return;}
   box.textContent="Checking server...";
   try{
-    const r=await fetchWithTimeout(SERVER+"/health",{},45000);
+    // An admin token upgrades /health to the detailed view (scan history,
+    // provider error bodies). Without one the server returns the public
+    // summary, which is all a non-admin should ever see.
+    const tok=adminToken();
+    const r=await fetchWithTimeout(
+      SERVER+"/health", tok?{headers:{"X-Admin-Token":tok}}:{}, 45000);
     lastHealth=await r.json();
   }catch(e){
     box.textContent="Couldn't reach the server (it may be waking up — try again).";
@@ -1885,6 +1890,9 @@ async function loadHealth(){
       +problems.map(p=>`<div style="color:var(--accent);">• ${esc(p)}</div>`).join("")
       +`</div>`:"");
 }
+// Admin-only. It exposes how the pipeline behaved and, with an admin token,
+// the server's scan history -- useful to whoever runs the service, noise and
+// needless detail to a contractor looking for work.
 function renderDiagnostics(){
   const d=lastScanDebug;
   const f=(d&&d.debug&&d.debug.funnel)||{};
@@ -3185,7 +3193,7 @@ function renderAccount(){
         <a href="#" id="sync-now-link" style="color:var(--amber);">Sync now</a>
       </div>
     </div>
-    ${renderDiagnostics()}
+    ${isAdmin?renderDiagnostics():""}
     <div class="account-card" id="notif-card" style="cursor:pointer;">
       <div class="account-email hdr-ic" style="font-size:0.85rem;"><svg class="icon-svg"><use href="#i-bell"/></svg>Bid Alerts</div>
       <div class="account-status" id="notif-status">${esc(notifPermissionLabel())}</div>
@@ -3288,8 +3296,14 @@ function renderAccount(){
   if(adminCard)adminCard.onclick=openAdminPanel;
   loadReferralCard();
   loadReviewCard();
-  document.getElementById("diag-refresh").onclick=()=>loadHealth();
-  document.getElementById("diag-copy").onclick=async()=>{
+  // The Diagnostics card is admin-only, so these two are absent for everyone
+  // else. Addressing them unguarded threw a TypeError here, which would have
+  // aborted the rest of this function and left the Account screen's remaining
+  // buttons -- support, sign-out, notifications -- wired to nothing.
+  const diagRefresh=document.getElementById("diag-refresh");
+  if(diagRefresh)diagRefresh.onclick=()=>loadHealth();
+  const diagCopy=document.getElementById("diag-copy");
+  if(diagCopy)diagCopy.onclick=async()=>{
     const text=diagnosticsText();
     try{await navigator.clipboard.writeText(text);toast("Diagnostics copied");}
     catch(e){
@@ -3303,7 +3317,7 @@ function renderAccount(){
       document.getElementById("modal").classList.add("open");
     }
   };
-  loadHealth();
+  if(isAdmin)loadHealth();
   document.getElementById("support-send-btn").onclick=async()=>{
     const msgBox=document.getElementById("support-msg");
     const msg=msgBox.value.trim();

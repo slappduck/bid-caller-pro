@@ -90,6 +90,30 @@ class CompanyProfileSyncTests(unittest.TestCase):
         self.assertIn("COMPANY_FIELDS.some", body)
 
 
+class DiagnosticsGatingTests(unittest.TestCase):
+    """Diagnostics is admin-only. /health is unauthenticated by design, so the
+    card must not be the thing that hands a contractor the server's scan
+    history -- and its buttons must not exist for them either."""
+
+    def setUp(self):
+        self.app = _read(APP)
+
+    def test_the_card_only_renders_for_an_admin(self):
+        self.assertIn("${isAdmin?renderDiagnostics():\"\"}", self.app)
+
+    def test_the_health_check_only_runs_for_an_admin(self):
+        self.assertIn("if(isAdmin)loadHealth();", self.app)
+
+    def test_its_buttons_are_wired_defensively(self):
+        """Unguarded getElementById on an absent card throws, which would
+        abort the rest of renderAccount and leave support and sign-out dead."""
+        self.assertIn("if(diagRefresh)", self.app)
+        self.assertIn("if(diagCopy)", self.app)
+
+    def test_the_admin_token_upgrades_the_health_request(self):
+        self.assertIn('"X-Admin-Token":tok', self.app)
+
+
 class ServiceWorkerTests(unittest.TestCase):
     def setUp(self):
         self.sw = _read(SW)

@@ -483,7 +483,14 @@ def health_detail():
             "is wiped on every deploy and whenever a free instance sleeps. Set "
             "UPSTASH_REDIS_REST_URL/TOKEN, or apply supabase_kv_schema.sql to use "
             "the Supabase project already configured here.")
-    return jsonify({
+    # Public vs admin. /health is unauthenticated on purpose -- uptime checks
+    # and the keep-warm job need it, and "which backends are configured" is
+    # not a secret. But the scan history is: `recent_scans` is a list of the
+    # places this account's users have been prospecting, and at one or two
+    # customers that is simply their territory, published at a guessable URL.
+    # Provider error bodies can also echo request detail. Both move behind
+    # the admin token.
+    body = {
         "service": "Bid Caller Pro License Server",
         "status": "ok" if not problems else "degraded",
         # Which build is actually answering. Without this there is no way to
@@ -494,6 +501,21 @@ def health_detail():
         "version": _env_secret("RENDER_GIT_COMMIT", "")[:7],
         "backends": backends,
         "local_search": ddg,
+        # Counts and states, but not the provider's response body.
+        "brave_search": {k: brave[k] for k in
+                          ("ok", "failed", "last_status",
+                           "quota_or_auth_failure", "failing")},
+        "tavily": {k: tav[k] for k in
+                   ("ok", "failed", "last_status",
+                    "quota_or_auth_failure", "failing")},
+        "email": {k: email_health[k] for k in
+                  ("ok", "failed", "last_status", "failing")},
+        "problems": problems,
+    }
+    if not _admin_ok(request.headers.get("X-Admin-Token")):
+        return jsonify(body)
+
+    body.update({
         "storage": kv_backend.health(),
         # The most recent scan's funnel. This is the fastest way to tell a
         # genuinely quiet area from a pipeline dropping everything it found.
@@ -501,14 +523,6 @@ def health_detail():
         # ...and the ones before it, so a change in recall reads as a trend
         # rather than a single number with nothing to compare it against.
         "recent_scans": _recent_scans(),
-        "brave_search": {k: brave[k] for k in
-                          ("ok", "failed", "last_status", "last_error",
-                           "quota_or_auth_failure", "failing")},
-        "tavily": {k: tav[k] for k in
-                   ("ok", "failed", "last_status", "last_error",
-                    "quota_or_auth_failure", "failing")},
-        "email": {k: email_health[k] for k in
-                  ("ok", "failed", "last_status", "last_error", "failing")},
         "search_depth": TAVILY_DEPTH,
         # The recall knobs, so what's actually running is visible without
         # reading Render's env-var screen. All are env-tunable; raising them
@@ -523,10 +537,11 @@ def health_detail():
             "geo_miss_retry_hours": GEO_MISS_RETRY_HOURS,
             "model": OPENAI_MODEL,                    # OPENAI_MODEL
         },
-        "problems": problems,
     })
-
-
+    body["brave_search"]["last_error"] = brave["last_error"]
+    body["tavily"]["last_error"] = tav["last_error"]
+    body["email"]["last_error"] = email_health["last_error"]
+    return jsonify(body)
 # ═══════════════════════════════════════════════════════════
 # PAYMENTS: Stripe webhook -> auto-issue keys (survives restarts)
 # ═══════════════════════════════════════════════════════════

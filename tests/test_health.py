@@ -488,9 +488,48 @@ class ScanHistoryTests(unittest.TestCase):
     def test_health_reports_newest_first(self):
         for n in (1, 4, 9):
             ls._append_scan_history(self._record(n))
+        with patch.multiple(ls, **FULLY_CONFIGURED), \
+             patch.object(ls, "ADMIN_TOKEN", "tok"):
+            body = self.client.get(
+                "/health", headers={"X-Admin-Token": "tok"}).get_json()
+        self.assertEqual([r["kept"] for r in body["recent_scans"]], [9, 4, 1])
+
+    def test_the_scan_history_is_not_public(self):
+        """recent_scans is a list of the places this account's users have been
+        prospecting. At one or two customers that is their territory, and
+        /health is unauthenticated by design."""
+        ls._append_scan_history(self._record(3))
+        with patch.multiple(ls, **FULLY_CONFIGURED), \
+             patch.object(ls, "ADMIN_TOKEN", "tok"):
+            body = self.client.get("/health").get_json()
+        for key in ("recent_scans", "last_scan", "scan_config", "storage"):
+            self.assertNotIn(key, body, f"{key} must not be public")
+
+    def test_a_wrong_admin_token_gets_the_public_view(self):
+        ls._append_scan_history(self._record(3))
+        with patch.multiple(ls, **FULLY_CONFIGURED), \
+             patch.object(ls, "ADMIN_TOKEN", "tok"):
+            body = self.client.get(
+                "/health", headers={"X-Admin-Token": "wrong"}).get_json()
+        self.assertNotIn("recent_scans", body)
+
+    def test_the_public_view_still_answers_what_uptime_checks_need(self):
+        """Unauthenticated callers keep the operational summary -- the
+        keep-warm job and any monitor depend on it."""
         with patch.multiple(ls, **FULLY_CONFIGURED):
             body = self.client.get("/health").get_json()
-        self.assertEqual([r["kept"] for r in body["recent_scans"]], [9, 4, 1])
+        for key in ("service", "status", "version", "backends", "problems"):
+            self.assertIn(key, body)
+
+    def test_provider_error_bodies_are_not_public(self):
+        """A provider's response body can echo request detail back."""
+        prior = dict(ls._brave_state)
+        self.addCleanup(lambda: ls._brave_state.update(prior))
+        ls._brave_note(False, 403, "secret-ish response body")
+        with patch.multiple(ls, **FULLY_CONFIGURED):
+            body = self.client.get("/health").get_json()
+        self.assertNotIn("last_error", body["brave_search"])
+        self.assertIn("last_status", body["brave_search"])
 
     def test_corrupt_history_does_not_break_health_or_the_next_scan(self):
         for junk in ("not a list", 42, {"nope": 1}):
