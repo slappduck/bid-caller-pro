@@ -3906,7 +3906,27 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
                         stats["civicplus_no_open_bids"] = \
                             stats.get("civicplus_no_open_bids", 0) + 1
                 return
-            if stats is not None:
+            # Before writing this off as a parser gap: the commonest reason a
+            # CivicPlus Bids page holds no bids is that the city has MOVED its
+            # solicitations to a hosted platform and left this page behind as
+            # a signpost -- "View Open Solicitations" pointing at BeaconBid,
+            # OpenGov, BidNet. Handing the signpost to the AI reads a page
+            # with no bids on it, every scan, forever. Follow it instead, and
+            # write the real address into the directory so the next scan goes
+            # straight there.
+            moved = bid_sources.hosted_portal_link(page, url)
+            if moved:
+                with lock:
+                    bid_portals.record_result(pdb, city, state, url, True)
+                    bid_portals.learn_portal(pdb, city, state, moved,
+                                             platform="custom",
+                                             allow_hosted=True)
+                    if stats is not None:
+                        stats["portal_moved_to_hosted"] = \
+                            stats.get("portal_moved_to_hosted", 0) + 1
+                url = moved
+                timeout = None
+            elif stats is not None:
                 with lock:
                     stats["civicplus_parse_miss"] = stats.get("civicplus_parse_miss", 0) + 1
 

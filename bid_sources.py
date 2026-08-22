@@ -205,6 +205,56 @@ def link_for_title(html, base_url, title, min_len=12):
     return urllib.parse.urljoin(base_url, _unescape(best)) if best else ""
 
 
+# Third-party procurement platforms a city migrates its bids TO. Sampling the
+# directory found a recurring shape: the CivicPlus Bids module is left in
+# place as a signpost -- "View Open Solicitations" -- and every actual
+# solicitation now lives on one of these. The old page parses to zero rows and
+# is not empty, so it was counted as a parse miss and handed to the AI, which
+# read a page with no bids on it. 25 of ~180 portal reads in the benchmark
+# landed here.
+#
+# beaconbid.com is on the list because two sampled cities had moved there and
+# nothing in the codebase knew the platform existed.
+HOSTED_PORTAL_DOMAINS = (
+    "beaconbid.com", "procurement.opengov.com", "opengov.com",
+    "bidnetdirect.com", "bonfirehub.com", "planetbids.com", "questcdn.com",
+    "demandstar.com", "publicpurchase.com", "bidexpress.com",
+    "vendorregistry.com", "ionwave.net", "bidsandtenders.com",
+    "periscopeholdings.com", "bidbuy.illinois.gov",
+)
+_HOSTED_HREF_RE = re.compile(r'<a[^>]+href="(https?://[^"#]+)"', re.I)
+
+
+def hosted_portal_link(html, base_url=""):
+    """A link off this page to the city's OWN page on a hosted procurement
+    platform. "" if there is none.
+
+    Only city-scoped URLs qualify. "bidnetdirect.com" on its own is a search
+    engine for bids and means nothing; "bidnetdirect.com/mississippi/city-of-x"
+    is a stable page belonging to one agency, which is exactly what the portal
+    directory is for. The test is two or more path segments and no query
+    string -- a query is how every one of these platforms expresses a search.
+    """
+    for m in _HOSTED_HREF_RE.finditer(str(html or "")):
+        url = _unescape(m.group(1))
+        try:
+            parts = urllib.parse.urlparse(url)
+        except ValueError:
+            continue
+        host = parts.netloc.lower()
+        host = host[4:] if host.startswith("www.") else host
+        if not any(host == d or host.endswith("." + d)
+                   for d in HOSTED_PORTAL_DOMAINS):
+            continue
+        if parts.query:
+            continue
+        segs = [s for s in parts.path.split("/") if s]
+        if len(segs) < 2:
+            continue
+        return url
+    return ""
+
+
 def extract_bid_link_candidates(html, base_url, max_candidates=3):
     """Links off a homepage whose href or label suggest a bid page, best
     first. Pure text-in/URLs-out, same discipline as the rest of this file --

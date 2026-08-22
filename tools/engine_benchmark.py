@@ -20,6 +20,7 @@ import os
 import sys
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from collections import Counter
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -51,15 +52,25 @@ def run_location(city, state, lat, lon, radius, max_towns):
     towns.sort(key=lambda t: ls._miles_between(lat, lon, t[2], t[3]))
     todo = [(city, state, lat, lon)] + towns[:max_towns]
 
-    for tc, ts, tlat, tlon in todo:
+    # Concurrent, at production's own width. A serial loop is not just slower:
+    # it silently measures a much smaller scan than the app runs, because the
+    # town count is what a real scan trades its time budget for. Reading 7
+    # towns when production reads 40 understates yield by the same factor.
+    def _town(t):
+        tc, ts, tlat, tlon = t
         try:
             ls._run_known_portals(tc, ts, f"{tc}, {ts}", grouped, center,
                                   radius, {}, coords, lock, pdb,
                                   default_city=tc, town_coords=(tlat, tlon),
                                   stats=stats)
         except Exception as e:      # one town must never sink the run
-            stats["town_error"] = stats.get("town_error", 0) + 1
-            stats.setdefault("_errors", []).append(f"{tc}: {type(e).__name__}")
+            with lock:
+                stats["town_error"] = stats.get("town_error", 0) + 1
+                stats.setdefault("_errors", []).append(f"{tc}: {type(e).__name__}")
+
+    with ThreadPoolExecutor(max_workers=min(ls.KNOWN_TOWN_WORKERS,
+                                            len(todo))) as ex:
+        list(ex.map(_town, todo))
 
     bids = [b for v in grouped.values() for b in v]
     shown = [b for b in bids if ls._is_open_bid(b)]
@@ -82,8 +93,8 @@ def run_location(city, state, lat, lon, radius, max_towns):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--towns", type=int, default=6,
-                    help="known towns to read per location (plus the centre)")
+    ap.add_argument("--towns", type=int, default=40,
+                    help="known towns to read per location (plus the centre). The default matches what a 50mi scan actually reaches.")
     ap.add_argument("--only", default="", help="substring filter on city")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
