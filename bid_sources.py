@@ -223,21 +223,40 @@ HOSTED_PORTAL_DOMAINS = (
     "vendorregistry.com", "ionwave.net", "bidsandtenders.com",
     "periscopeholdings.com", "bidbuy.illinois.gov",
 )
-_HOSTED_HREF_RE = re.compile(r'<a[^>]+href="(https?://[^"#]+)"', re.I)
+_HOSTED_HREF_RE = re.compile(r'<a[^>]+href="(https?://[^"#]+)"[^>]*>(.{0,120}?)</a>',
+                             re.I | re.S)
+
+# These platforms put a sign-up page right next to the bid list, and the
+# sign-up link usually comes first in the markup. Chicopee's page offers
+# "Register for Alerts" (.../register) above "View Open Solicitations"
+# (.../open); taking the first hosted link on the page learned the
+# registration form as the city's bid portal.
+_NOT_A_LISTING_RE = re.compile(
+    r"\b(?:register|registration|signup|sign-up|sign\s*up|login|log-?in|"
+    r"account|subscribe|alerts?|notif\w*|help|support|faq|terms|privacy|"
+    r"contact|about|training|tutorial)\b", re.I)
+_IS_A_LISTING_RE = re.compile(
+    r"\b(?:open|current|active|solicitations?|bids?|opportunit\w*|"
+    r"proposals?|rfps?|projects?|portal|browse|view)\b", re.I)
 
 
 def hosted_portal_link(html, base_url=""):
-    """A link off this page to the city's OWN page on a hosted procurement
-    platform. "" if there is none.
+    """A link off this page to the city's OWN bid list on a hosted
+    procurement platform. "" if there is none.
 
     Only city-scoped URLs qualify. "bidnetdirect.com" on its own is a search
     engine for bids and means nothing; "bidnetdirect.com/mississippi/city-of-x"
     is a stable page belonging to one agency, which is exactly what the portal
     directory is for. The test is two or more path segments and no query
     string -- a query is how every one of these platforms expresses a search.
+
+    Candidates are ranked rather than taken in document order, because the
+    registration link reliably comes first.
     """
+    best, best_score = "", -99
     for m in _HOSTED_HREF_RE.finditer(str(html or "")):
         url = _unescape(m.group(1))
+        label = _clean(_unescape(m.group(2)))
         try:
             parts = urllib.parse.urlparse(url)
         except ValueError:
@@ -252,8 +271,19 @@ def hosted_portal_link(html, base_url=""):
         segs = [s for s in parts.path.split("/") if s]
         if len(segs) < 2:
             continue
-        return url
-    return ""
+        tail = segs[-1].replace("-", " ").replace("_", " ")
+        score = 0
+        if _NOT_A_LISTING_RE.search(tail) or _NOT_A_LISTING_RE.search(label):
+            score -= 10
+        if _IS_A_LISTING_RE.search(tail):
+            score += 3
+        if _IS_A_LISTING_RE.search(label):
+            score += 2
+        if score > best_score:
+            best, best_score = url, score
+    # Every candidate looked like a sign-up page: better to leave the entry
+    # alone than to learn a registration form as the city's bid portal.
+    return best if best_score > -10 else ""
 
 
 def extract_bid_link_candidates(html, base_url, max_candidates=3):

@@ -24,14 +24,25 @@ import license_server as ls
 
 SIGNPOST = ("https://chicopeema.gov/Bids.aspx")
 MOVED_TO = "https://www.beaconbid.com/solicitations/city-of-chicopee/open"
+REGISTER = "https://www.beaconbid.com/solicitations/city-of-chicopee/register"
+# Link order copied from the live page: the sign-up link comes FIRST.
 PAGE = (f'<html><head><title>Bid Opportunities | Chicopee, MA</title></head>'
-        f'<body><a href="{MOVED_TO}">View Open Solicitations</a>'
+        f'<body><a href="{REGISTER}">Register for Alerts</a>'
+        f'<a href="{MOVED_TO}">View Open Solicitations</a>'
         + "Bids are now posted on our new portal. " * 20 + '</body></html>')
 
 
 class LinkDiscoveryTests(unittest.TestCase):
-    def test_a_city_scoped_hosted_link_is_found(self):
+    def test_the_bid_list_is_preferred_over_the_sign_up_page(self):
+        """Both are city-scoped hosted URLs and the sign-up link comes first
+        in the markup. Taking document order learned the registration form as
+        Chicopee's bid portal."""
         self.assertEqual(bs.hosted_portal_link(PAGE), MOVED_TO)
+
+    def test_a_page_offering_only_a_sign_up_link_yields_nothing(self):
+        """Better no entry than a registration form as the city's portal."""
+        html = f'<a href="{REGISTER}">Register for Alerts</a>'
+        self.assertEqual(bs.hosted_portal_link(html), "")
 
     def test_opengov_is_found(self):
         html = '<a href="https://procurement.opengov.com/portal/farmvilleva">Bids</a>'
