@@ -1190,6 +1190,40 @@ function mapSettle(obj){
   if(!obj)return;
   requestAnimationFrame(()=>requestAnimationFrame(()=>obj.invalidateSize()));
   setTimeout(()=>obj.invalidateSize(),300);
+  observeMapSize(obj);
+}
+
+// Both calls above are guesses about when layout finishes, and on a cold load
+// over mobile data -- Leaflet's CSS still arriving, fonts still swapping --
+// the container can still be zero-height when the last one fires. Leaflet
+// then has a tile grid for a 0x0 viewport, requests nothing, and reports no
+// error: addTileRetry never hears about it because no tile ever failed. The
+// map just sits there blank, intermittently, which is exactly how it was
+// reported.
+//
+// A ResizeObserver replaces the guess with the actual event. It fires when
+// the container first gets real dimensions, however late that is, and again
+// on rotation or when the on-screen keyboard resizes the viewport.
+const _mapSizeObserved=new WeakSet();
+function observeMapSize(obj){
+  if(!obj||typeof ResizeObserver==="undefined")return;
+  if(_mapSizeObserved.has(obj))return;
+  const el=obj.getContainer&&obj.getContainer();
+  if(!el)return;
+  _mapSizeObserved.add(obj);
+  let lastW=0,lastH=0;
+  const ro=new ResizeObserver(()=>{
+    const w=el.clientWidth,h=el.clientHeight;
+    // Zero means still hidden -- invalidateSize() there would just re-cache
+    // the same useless grid. Wait for real dimensions.
+    if(!w||!h)return;
+    if(w===lastW&&h===lastH)return;
+    lastW=w;lastH=h;
+    // invalidateSize does not itself change the container's size, so this
+    // cannot feed back into the observer.
+    obj.invalidateSize();
+  });
+  try{ro.observe(el);}catch(e){/* observer unsupported -- timers still apply */}
 }
 
 // ── Nav ──
