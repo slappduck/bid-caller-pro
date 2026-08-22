@@ -36,6 +36,7 @@ Design rules
   anything is spent on them.
 """
 
+import html
 import re
 import urllib.parse
 import xml.etree.ElementTree as ET
@@ -388,11 +389,17 @@ def _clean(text):
 
 
 def _unescape(text):
-    out = str(text or "")
-    for a, b in (("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"),
-                 ("&quot;", '"'), ("&#39;", "'"), ("&nbsp;", " ")):
-        out = out.replace(a, b)
-    return out
+    """Decode HTML entities. The stdlib table, not a hand-picked six.
+
+    The six that used to be listed here did not include &rsquo; or &apos;,
+    which is how procurement pages overwhelmingly write the apostrophe in
+    "Engineer's Estimate". The raw entity survived into the cleaned text and
+    defeated the regex looking for it, so a page printing
+    "Engineer&rsquo;s Estimate: $1,000,000" reported no value at all. The same
+    gap silently damaged every title, contact name and date carrying a curly
+    quote, an em dash or a numeric reference.
+    """
+    return html.unescape(str(text or ""))
 
 
 _MONTHS = ("January|February|March|April|May|June|July|August|September|October|"
@@ -716,17 +723,29 @@ def detail_deadline(html):
 # liquidated damages per day -- and presenting any of those as the project
 # value would be worse than showing nothing, because a contractor would price
 # against it. Measured on live postings: about 4% state a labelled estimate.
+# The apostrophe class covers the straight quote, the curly one and the
+# backtick: pages write "Engineer's", "Engineer’s" and "ENGINEER`S", and only
+# the first was matched.
 _VALUE_LABEL_RE = re.compile(
-    r"(?:engineer'?s?\s+estimate|estimated\s+(?:cost|value|price|budget)|"
+    r"(?:engineer(?:ing)?['’ʼ`]?s?\s+estimate|"
+    r"estimated\s+(?:cost|value|price|budget|amount)|"
     r"project\s+estimate|opinion\s+of\s+probable\s+cost|"
     r"budget(?:ed)?\s+amount|estimated\s+project\s+cost|"
-    r"estimated\s+construction\s+cost)"
+    r"estimated\s+construction\s+cost|construction\s+estimate)"
     r"[^$\n]{0,60}?(\$\s?[\d,]{4,}(?:\.\d{2})?)", re.I)
 
 # Amounts that sit near a value-ish word but are definitely not the job.
+# Amounts that sit near a value-ish word but are definitely not the job.
+# The insurance limits are the commonest false positive by far: nearly every
+# construction solicitation carries "$1,000,000 each occurrence / $2,000,000
+# general aggregate", and reporting that as the project's value would have a
+# contractor pricing against a number the page never claimed.
 _NOT_A_VALUE_RE = re.compile(
     r"bid\s+bond|plan\s+deposit|non-?refundable|liquidated\s+damages|"
-    r"per\s+day|filing\s+fee|application\s+fee", re.I)
+    r"per\s+day|filing\s+fee|application\s+fee|bid\s+security|"
+    r"performance\s+bond|payment\s+bond|each\s+occurrence|"
+    r"general\s+aggregate|combined\s+single\s+limit|"
+    r"liability\s+insurance|umbrella\s+(?:policy|coverage)", re.I)
 
 
 def detail_value(html):
