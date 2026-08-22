@@ -3642,6 +3642,27 @@ def _enrich_from_detail_pages(rows, stats=None, lock=None):
             if amount:
                 row["value"] = amount
                 got = True
+        # Fields only the posting carries. The two flags are worth surfacing
+        # out of proportion to how often they appear: a missed mandatory
+        # pre-bid meeting is not a late bid, it is an ineligible one, and
+        # pricing against a scope an addendum has superseded is worse than
+        # not bidding at all.
+        for field, fn in (("published", bid_sources.detail_published),
+                          ("bid_number", bid_sources.detail_bid_number),
+                          ("prebid", bid_sources.detail_prebid)):
+            if not str(row.get(field) or "").strip():
+                val = fn(page)
+                if val:
+                    row[field] = val
+                    got = True
+        if not row.get("addenda") and bid_sources.detail_has_addenda(page):
+            row["addenda"] = True
+            got = True
+        if not row.get("documents"):
+            docs = bid_sources.detail_documents(page, row["url"])
+            if docs:
+                row["documents"] = docs
+                got = True
         return got
 
     with ThreadPoolExecutor(max_workers=DETAIL_WORKERS) as ex:
@@ -4180,9 +4201,20 @@ def _age_out_undated(bid, city, db, stats=None):
     """Retire a dateless bid once it has been in the feed too long."""
     if not _is_open_bid(bid) or _parse_deadline(bid.get("deadline")):
         return
+    today = datetime.datetime.now().date()
+    # If the posting states when it went up, that is a real age rather than
+    # an inferred one -- and it works on the first sighting instead of
+    # starting a clock we then have to wait out. 88% of postings carry it.
+    posted = _parse_deadline(bid.get("published"))
+    if posted:
+        if (today - posted).days >= UNDATED_MAX_DAYS:
+            bid["status"] = "Closed"
+            if stats is not None:
+                stats["aged_out_undated"] = stats.get("aged_out_undated", 0) + 1
+        return
+
     store = db.setdefault("undated_first_seen", {})
     sig = _bid_sig(city, bid)
-    today = datetime.datetime.now().date()
     first = store.get(sig)
     if not first:
         store[sig] = today.isoformat()

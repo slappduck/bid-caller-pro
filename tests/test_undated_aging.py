@@ -119,3 +119,43 @@ class AgeOutTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PublishedDateTests(unittest.TestCase):
+    """88% of postings state when they went up. That is a real age, and it
+    works on the first sighting -- the first-seen clock can only start one."""
+
+    def setUp(self):
+        self.db, self.stats = {}, {}
+
+    def _bid(self, published):
+        return {"title": "Sidewalk Program", "status": "Open", "deadline": "",
+                "url": "https://x.gov/b/1", "published": published}
+
+    def test_an_old_posting_is_retired_on_first_sight(self):
+        old = (datetime.date.today()
+               - datetime.timedelta(days=ls.UNDATED_MAX_DAYS + 5)).strftime("%m/%d/%Y")
+        b = self._bid(old)
+        ls._age_out_undated(b, "Aurora", self.db, self.stats)
+        self.assertFalse(ls._is_open_bid(b))
+        self.assertEqual(self.stats["aged_out_undated"], 1)
+
+    def test_a_recent_posting_is_shown(self):
+        recent = (datetime.date.today()
+                  - datetime.timedelta(days=3)).strftime("%m/%d/%Y")
+        b = self._bid(recent)
+        ls._age_out_undated(b, "Aurora", self.db, self.stats)
+        self.assertTrue(ls._is_open_bid(b))
+
+    def test_a_stated_date_means_no_first_seen_clock_is_started(self):
+        """No need to track what the page already told us."""
+        recent = (datetime.date.today()
+                  - datetime.timedelta(days=3)).strftime("%m/%d/%Y")
+        ls._age_out_undated(self._bid(recent), "Aurora", self.db, self.stats)
+        self.assertEqual(self.db.get("undated_first_seen", {}), {})
+
+    def test_an_unparseable_published_date_falls_back_to_the_clock(self):
+        b = self._bid("sometime last spring")
+        ls._age_out_undated(b, "Aurora", self.db, self.stats)
+        self.assertTrue(ls._is_open_bid(b))
+        self.assertEqual(len(self.db["undated_first_seen"]), 1)

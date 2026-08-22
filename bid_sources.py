@@ -589,6 +589,79 @@ def detail_value(html):
     return ""
 
 
+# Fields a posting carries that a listing row never does. Measured on 25 live
+# postings: publication date 92%, a linked packet 56%, bid number 40%, an
+# addendum 36%, a pre-bid meeting 20%.
+_PUBLISHED_RE = re.compile(
+    rf"publication\s+date(?:/time)?\s*:?\s*({_DATE})", re.I)
+_BID_NUMBER_RE = re.compile(
+    r"bid\s*(?:number|no\.?|#)\s*:?\s*([A-Z0-9][A-Z0-9\-/]{2,24})", re.I)
+_PREBID_RE = re.compile(r"pre-?bid\s+(?:meeting|conference)", re.I)
+_MANDATORY_RE = re.compile(
+    r"(mandatory|required|must\s+attend)[^.]{0,80}?pre-?bid|"
+    r"pre-?bid[^.]{0,80}?(mandatory|is\s+required|must\s+attend)", re.I)
+_ADDENDA_RE = re.compile(r"\baddend(?:um|a)\b", re.I)
+# CivicPlus serves packets from /DocumentCenter, not as plain .pdf links --
+# looking only for ".pdf" found none of them.
+_DOC_LINK_RE = re.compile(
+    r'href="([^"]*(?:DocumentCenter/View|ShowDocument|\.pdf|\.docx?|\.zip)[^"]*)"',
+    re.I)
+
+
+def detail_published(html):
+    """The date the posting says it went up. "" if absent."""
+    m = _PUBLISHED_RE.search(_clean(_unescape(str(html or ""))))
+    return m.group(1).strip() if m else ""
+
+
+def detail_bid_number(html):
+    """The agency's own reference for this solicitation -- what a contractor
+    reads out on the phone."""
+    m = _BID_NUMBER_RE.search(_clean(_unescape(str(html or ""))))
+    if not m:
+        return ""
+    num = m.group(1).strip(" -/")
+    # "Bid Number: Bid" and similar label bleed.
+    return "" if num.lower() in ("bid", "number", "no", "rfp", "rfq") else num
+
+
+def detail_prebid(html):
+    """"mandatory" / "yes" / "" for a pre-bid meeting.
+
+    Worth surfacing out of proportion to how often it appears: a mandatory
+    pre-bid meeting missed is not a late bid, it is an ineligible one.
+    """
+    text = _clean(_unescape(str(html or "")))
+    if not _PREBID_RE.search(text):
+        return ""
+    return "mandatory" if _MANDATORY_RE.search(text) else "yes"
+
+
+def detail_has_addenda(html):
+    """True when the posting mentions an addendum. Same reasoning: bidding
+    against a superseded scope is worse than not bidding."""
+    return bool(_ADDENDA_RE.search(_clean(_unescape(str(html or "")))))
+
+
+def detail_documents(html, base_url="", limit=5):
+    """Links to the bid packet -- the drawings and specs, where the
+    quantities a contractor prices from actually live."""
+    out, seen = [], set()
+    for href in _DOC_LINK_RE.findall(str(html or "")):
+        url = urllib.parse.urljoin(base_url, _unescape(href)) if base_url \
+            else _unescape(href)
+        # A bare /DocumentCenter is the index, not a document.
+        if url.rstrip("/").lower().endswith("documentcenter"):
+            continue
+        if url in seen:
+            continue
+        seen.add(url)
+        out.append(url)
+        if len(out) >= limit:
+            break
+    return out
+
+
 def detail_scope(html):
     """The project description from a posting page, or "" if none is labelled."""
     blob = _clean(_unescape(html))

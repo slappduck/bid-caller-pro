@@ -2734,6 +2734,18 @@ function openDetail(city,b){
       <input id="bid-value" class="input" style="margin-top:0.3rem;" placeholder="Not listed -- enter your own estimate, e.g. $45,000" value="${esc(b.value||"")}" />
     </div>
     ${row("Deadline",b.deadline||"Not listed")}
+    ${row("Posted",b.published)}
+    ${row("Bid Number",b.bid_number)}
+    ${b.prebid?`<div class="detail-row"><div class="detail-label">Pre-Bid Meeting</div>
+      <div class="detail-val"${b.prebid==="mandatory"?' style="color:var(--red);font-weight:700;"':""}>${
+        b.prebid==="mandatory"?"MANDATORY — you cannot bid without attending":"Yes — check the posting for date and place"}</div></div>`:""}
+    ${b.addenda?`<div class="detail-row"><div class="detail-label">Addenda</div>
+      <div class="detail-val" style="color:var(--accent);">This bid has addenda — read them before pricing</div></div>`:""}
+    ${(b.documents&&b.documents.length)?`<div class="detail-row">
+      <div class="detail-label">Bid Documents</div>
+      <div class="detail-val">${b.documents.slice(0,5).map((d,i)=>
+        safeUrl(d)?`<a href="${esc(safeUrl(d))}" target="_blank" rel="noopener noreferrer">Document ${i+1}</a>`:"")
+        .filter(Boolean).join(" &middot; ")}</div></div>`:""}
     ${row("Contact",b.contact)}${row("Email",b.email,b.email?"mailto:"+b.email:null)}
     ${row("Phone",b.phone,b.phone?"tel:"+b.phone:null)}${b.url?row("Original Posting",b.url,b.url)
       :row("Original Posting","Not linked \u2014 search for it",findUrl)}
