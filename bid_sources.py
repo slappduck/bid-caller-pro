@@ -447,13 +447,72 @@ _DATE = (rf"(?:{_MONTHS})\.?\s+\d{{1,2}},?\s+\d{{4}}"
 #
 # The gap is capped and may not contain a digit, so the pattern can never skip
 # over one label to grab a neighbouring column's date.
-_CLOSE_RE = re.compile(
-    r"(?:bid\s+opening|bids?\s+due|clos(?:e|es|ed|ing)|due|deadline|"
-    r"submittals?|responses?\s+due|proposals?\s+due|open\s+until|"
-    r"accepted\s+until|received\s+until)"
+# Two tiers, tried in order. A posting page states a lot of dates and only
+# one of them is the bid's: a live sample had "no later than 08/19/2026"
+# meaning the day the DOCUMENTS became available, with the real "Closing
+# Date/Time: 9/2/2026" further down, and another had "Questions Due:
+# September 11" ahead of "Submission Deadline: September 29". Reading either
+# page with one flat pattern picked the wrong date, and a deadline that is
+# too early retires a live bid.
+#
+# Tier 1 is the labelled field every procurement platform prints. Tier 2 is
+# the prose a legal notice uses when there is no labelled field at all.
+_CLOSE_LABEL_RE = re.compile(
+    r"(?:clos(?:e|es|ing)|bid\s+opening|submission\s+deadline|"
+    r"bids?\s+due|proposals?\s+due|responses?\s+due|submittals?\s+due|"
+    r"due)\s*"
+    # "Information" is CivicPlus's own filler: the field is printed as "Bid
+    # Opening Information: 8/25/26" as often as "Bid Opening Date/Time:".
+    r"(?:date|information|info)?(?:\s*/\s*time|\s+and\s+time|\s*&\s*time)?\s*[:\-]\s*"
+    r"(?:\d{1,2}:\d{2}\s*(?:[ap]\.?m\.?)?\s*(?:on\s+)?)?"
+    rf"({_DATE})", re.I)
+_CLOSE_PROSE_RE = re.compile(
+    r"(?:no\s+later\s+than|must\s+be\s+received\s+by|received\s+until|"
+    r"accepted\s+until|open\s+until|deadline|clos(?:e|es|ed|ing)|"
+    # A bid opening is the effective deadline -- bids are due before it. Kept
+    # out of tier 1 without a label, because "Bid Opening Information: 19
+    # Moore Street" is an address, and only reached here when no labelled
+    # closing field exists anywhere on the page.
+    r"bid\s+opening|due)"
+    r"(?:[^\d<>]{0,20}?\d{1,2}:\d{2}\s*(?:[ap]\.?m\.?)?)?"
     r"[^\d<>]{0,20}?"
-    rf"({_DATE})",
-    re.I)
+    rf"({_DATE})", re.I)
+
+# Dates that sit behind a deadline-ish word but belong to something else on
+# the timetable. Every one of these was observed on a real posting;
+# "Questions Due: September 11" ahead of "Submission Deadline: September 29"
+# is the case that made this necessary.
+#
+# Anchored to the END of the lead-in, so it only fires when the disqualifying
+# word is what the label is actually attached to. An unanchored search over a
+# wider window read the previous field instead: "Publication Date/Time:
+# 7/1/2026 ... Closing Date/Time: 12/1/2026" threw away the real closing date
+# because "Publication" appeared 40 characters earlier. Only spaces and word
+# characters may sit between -- a slash, colon or digit means a different
+# field has started.
+_NOT_THE_DEADLINE_RE = re.compile(
+    r"(?:questions?|inquir\w*|clarificat\w*|rfi|addend\w*|"
+    r"pre-?bid|site\s+visit|walk-?(?:through|thru)|job\s+walk|"
+    r"documents?\s+available|plans?\s+available|publicat\w*|"
+    r"advertis\w*|award\w*|notice\s+to\s+proceed|substantial\s+completion|"
+    r"registrat\w*)[\s\w]{0,15}$", re.I)
+
+
+def _first_real_deadline(text, pattern):
+    """First match of `pattern` whose lead-in isn't about something else."""
+    for m in pattern.finditer(text):
+        if _NOT_THE_DEADLINE_RE.search(text[max(0, m.start() - 45):m.start()]):
+            continue
+        return m.group(1).strip()
+    return ""
+
+
+def _deadline_in(text):
+    """The bid's own closing date somewhere in this text. "" if none."""
+    text = str(text or "")
+    return (_first_real_deadline(text, _CLOSE_LABEL_RE)
+            or _first_real_deadline(text, _CLOSE_PROSE_RE))
+
 
 # CivicPlus prints the posting's own status on the listing row. It is the
 # authoritative answer to "is this still live?" and it is free — far better
@@ -619,10 +678,7 @@ def parse_civicplus_rss(xml_text):
         desc = _clean(_unescape(get("description")))
         if not title:
             continue
-        closes = ""
-        m = _CLOSE_RE.search(desc) or _CLOSE_RE.search(title)
-        if m:
-            closes = m.group(1)
+        closes = _deadline_in(desc) or _deadline_in(title)
         rows.append({"title": title, "url": link, "scope": desc,
                      "deadline": closes, "status": _status_near(desc),
                      "source": "civicplus-rss"})
@@ -703,12 +759,12 @@ def parse_civicplus_html(html, base_url=""):
         # instead, which is exactly this posting's own markup and no more.
         stop = posts[i + 1].start() if i + 1 < len(posts) else len(text)
         window = _clean(_unescape(text[m.end():min(stop, m.end() + 4000)]))
-        cm = _CLOSE_RE.search(window)
+        closes = _deadline_in(window)
         # The title wins over the row's Status chip. An archived CivicPlus
         # entry keeps whatever chip it had -- frequently none, which reads as
         # open -- while the title is edited to say it was awarded.
         rows.append({"title": label, "url": url, "scope": "",
-                     "deadline": cm.group(1) if cm else "",
+                     "deadline": closes,
                      "status": status_from_title(label) or _status_near(window),
                      "source": "civicplus"})
     return rows
@@ -795,8 +851,9 @@ def detail_deadline(html):
     urgency ranking, and — more expensively — cannot be recognised as expired,
     so last year's listing shows as open indefinitely.
     """
-    m = _CLOSE_RE.search(_clean(_unescape(html)))
-    return m.group(1).strip() if m else ""
+    text = _clean(_unescape(html))
+    return (_first_real_deadline(text, _CLOSE_LABEL_RE)
+            or _first_real_deadline(text, _CLOSE_PROSE_RE))
 
 
 # Only a LABELLED figure counts. A bid page is full of dollar amounts that
