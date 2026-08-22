@@ -3769,7 +3769,16 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
             for b in bids:
                 if isinstance(b, dict):
                     b["url"] = _resolve_bid_url(b.get("url"), url, text)
-                    _place_bid(grouped, b, center, radius, cdb, default_city=default_city,
+                    # `or city`, matching the CivicPlus branch above. This is
+                    # a known portal -- this town's OWN bid page -- so a bid
+                    # on it that doesn't restate the town is still that
+                    # town's. Without the fallback _place_bid dropped it as
+                    # no_location, losing bids from the most reliable source
+                    # in the pipeline. The fix was applied to the CivicPlus
+                    # branch and missed here, which is where every non-
+                    # CivicPlus portal is read -- 1,260 of them.
+                    _place_bid(grouped, b, center, radius, cdb,
+                              default_city=default_city or city,
                               city_coords=city_coords, default_state=state,
                               fallback_coords=town_coords, stats=stats)
 
