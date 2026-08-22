@@ -690,6 +690,13 @@ async function pushCompanyProfile(){
   if(!currentUser){toast("Sign in again to save your company info");return;}
   const row={};
   COMPANY_FIELDS.forEach(k=>{row[k]=companyProfile[k]||"";});
+  // Send user_id explicitly rather than leaning on the column's DEFAULT
+  // auth.uid(). "create table if not exists" never alters an existing table,
+  // so a project whose company_profiles predates that default silently
+  // inserted NULL -- which then failed the RLS check auth.uid() = user_id and
+  // reported only "violates row-level security policy". Stating it is also
+  // simply more honest about what row we mean.
+  if(currentUser&&currentUser.id)row.user_id=currentUser.id;
   let err=null;
   try{const r=await sb.from("company_profiles").upsert(row,{onConflict:"user_id"});err=r&&r.error;}
   catch(e){err=e;}
@@ -703,6 +710,7 @@ async function pushCompanyProfile(){
   const rest={};
   COMPANY_FIELDS.filter(k=>k!=="avatar_url")
     .forEach(k=>{rest[k]=companyProfile[k]||"";});
+  if(currentUser&&currentUser.id)rest.user_id=currentUser.id;
   let err2=null;
   try{const r=await sb.from("company_profiles").upsert(rest,{onConflict:"user_id"});err2=r&&r.error;}
   catch(e){err2=e;}

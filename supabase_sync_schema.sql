@@ -59,6 +59,16 @@ create policy "Users manage their own saved searches" on saved_searches
 -- script any time — every statement below is idempotent.
 alter table company_profiles add column if not exists avatar_url text default '';
 
+-- "create table if not exists" above never ALTERS a table that already
+-- exists, so a project created against an older revision of this file can be
+-- missing the user_id default -- and an insert that omits user_id then stores
+-- NULL, which fails the RLS check auth.uid() = user_id with only "violates
+-- row-level security policy" to show for it. Idempotent; harmless if already
+-- set.
+alter table company_profiles alter column user_id set default auth.uid();
+alter table saved_bids       alter column user_id set default auth.uid();
+alter table saved_searches   alter column user_id set default auth.uid();
+
 insert into storage.buckets (id, name, public)
 values ('avatars', 'avatars', true)
 on conflict (id) do nothing;
@@ -100,6 +110,8 @@ alter table user_feeds enable row level security;
 drop policy if exists "Users manage their own feeds" on user_feeds;
 create policy "Users manage their own feeds" on user_feeds
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+-- Same repair as above, but it has to come after the table is created.
+alter table user_feeds alter column user_id set default auth.uid();
 
 -- Customer reviews, shown as testimonials on the marketing page.
 --
