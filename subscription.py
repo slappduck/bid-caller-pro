@@ -31,8 +31,8 @@ import auth_client
 
 # ── YOUR SERVER + STRIPE ──────────────────────────────────
 SERVER_URL = "https://bid-caller-pro.onrender.com"   # live license server
-STRIPE_MONTHLY_URL = "https://buy.stripe.com/5kQcN43YEbge0YafanejK01"  # $19/mo — matches web app
-STRIPE_ANNUAL_URL  = "https://buy.stripe.com/8x26oG7aQesqgX87HVejK03"  # $149/yr — matches web app
+STRIPE_MONTHLY_URL = "https://buy.stripe.com/aFa00idzefwuayK6DRejK05"  # $49/mo — matches web app
+STRIPE_ANNUAL_URL  = "https://buy.stripe.com/7sY5kC0Ms6ZYeP00ftejK04"  # $399/yr — matches web app
 STRIPE_PORTAL_URL  = "https://billing.stripe.com/p/login/3cIcN4an28420Yad2fejK00"
 SUPPORT_EMAIL      = "Yumiwave1@gmail.com"
 

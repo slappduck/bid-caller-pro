@@ -2832,8 +2832,8 @@ class BidCaller:
                      bg=ACCENT if highlight else CARD, fg="#000" if highlight else TEXT2,
                      px=20, py=8, font=F_BODY).pack()
 
-        card("Monthly", "$19", "per month", key="monthly")
-        card("Annual", "$149", "per year — save $79", highlight=True, key="annual")
+        card("Monthly", "$49", "per month", key="monthly")
+        card("Annual", "$399", "per year — save $189", highlight=True, key="annual")
         tk.Label(parent, text="Secure payment via Stripe  •  Cancel anytime",
                  font=F_SMALL, bg=BG, fg=TEXT3).pack(pady=14)
 

@@ -3121,13 +3121,13 @@ function renderAccount(){
     ?`Last synced ${lastSyncAt.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}`
     :"Not synced yet this session";
 
-  // tag stripe links with device id — these are the live $19/mo and $149/yr
+  // tag stripe links with device id — these are the live $49/mo and $399/yr
   // Payment Links (match the ones on index.html); update both files together
   // if pricing changes.
   const pendingRef=(()=>{try{return localStorage.getItem("pending_ref")||"";}catch(e){return"";}})();
   const refId=pendingRef?deviceId()+REFERRAL_SEP+pendingRef:deviceId();
-  const mLink=`https://buy.stripe.com/5kQcN43YEbge0YafanejK01?client_reference_id=${encodeURIComponent(refId)}`;
-  const aLink=`https://buy.stripe.com/8x26oG7aQesqgX87HVejK03?client_reference_id=${encodeURIComponent(refId)}`;
+  const mLink=`https://buy.stripe.com/aFa00idzefwuayK6DRejK05?client_reference_id=${encodeURIComponent(refId)}`;
+  const aLink=`https://buy.stripe.com/7sY5kC0Ms6ZYeP00ftejK04?client_reference_id=${encodeURIComponent(refId)}`;
 
   body.innerHTML=`
     <div class="account-card" style="display:flex;align-items:center;gap:0.9rem;">
@@ -3217,13 +3217,13 @@ function renderAccount(){
     <div id="upgrade-section">
       <div class="plan featured">
         <div class="plan-name">Pro Monthly</div>
-        <div class="plan-price">$19<span> / month</span></div>
+        <div class="plan-price">$49<span> / month</span></div>
         <ul><li>Unlimited nationwide bid scans</li><li>AI bid extraction</li><li>Federal + local bids</li><li>Save &amp; track leads</li><li>Cancel anytime</li></ul>
         <a class="btn-primary" style="text-decoration:none;" href="${mLink}" target="_blank">Subscribe Monthly</a>
       </div>
       <div class="plan">
-        <div class="plan-name">Pro Annual &mdash; best value, save $79</div>
-        <div class="plan-price">$149<span> / year</span></div>
+        <div class="plan-name">Pro Annual &mdash; best value, save $189</div>
+        <div class="plan-price">$399<span> / year</span></div>
         <ul><li>Everything in Monthly</li><li>About 4 months free</li><li>Priority support</li></ul>
         <a class="btn-ghost" style="text-decoration:none;display:block;text-align:center;" href="${aLink}" target="_blank">Subscribe Annual</a>
       </div>
