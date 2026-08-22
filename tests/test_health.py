@@ -34,6 +34,9 @@ FULLY_CONFIGURED = {
     "MAILING_ADDRESS": "CurbCall Pro, 123 Main St, Aurora MO 65605",
     # Google Programmable Search: the free-tier primary. Needs both halves.
     "BRAVE_API_KEY": SECRET,
+    # Bounce and complaint feedback. Part of a fully configured install:
+    # without it the campaign list never cleans itself.
+    "RESEND_WEBHOOK_SECRET": SECRET,
 }
 
 
