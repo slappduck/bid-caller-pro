@@ -141,5 +141,46 @@ class ServiceWorkerTests(unittest.TestCase):
         self.assertNotIn("admin.html", self.sw)
 
 
+class FindRadiusDefaultTests(unittest.TestCase):
+    """The default radius decides whether a new user sees a board or a blank.
+
+    Benchmarked over eight metros on one day: 25 miles reads 88 towns and
+    finds 2 bids, with SEVEN of eight metros returning nothing at all. 125
+    miles reads 616 towns and finds 32, with none empty. It is arithmetic --
+    a town lets about one job in this trade a year and 56% of municipal
+    portals have nothing posted on a given day -- so a five-town radius
+    cannot fill a board however well the engine reads it.
+
+    Pinned because it is a one-character regression that would look like the
+    scanner breaking.
+    """
+
+    def setUp(self):
+        here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(here, "curbcall_netlify_v4", "app.html"),
+                  encoding="utf-8") as fh:
+            self.app = fh.read()
+
+    def test_the_find_row_defaults_to_the_widest_radius(self):
+        row = re.search(r'id="radius-row">(.*?)</div>\s*</div>', self.app, re.S)
+        self.assertIsNotNone(row, "the Find radius row should be findable")
+        active = re.findall(r'radius-btn active" data-r="(\d+)"', row.group(1))
+        self.assertEqual(active, ["125"],
+                         "exactly one button is active and it must be 125mi")
+
+    def test_the_script_default_matches_the_highlighted_button(self):
+        """A mismatch scans one radius while the UI claims another."""
+        self.assertRegex(self.app, r"\blet radius=125;")
+
+    def test_only_one_radius_button_is_ever_preselected(self):
+        for row_id in ("radius-row", "up-radius-row", "leads-radius-row"):
+            block = re.search(rf'id="{row_id}">(.*?)</div>\s*</div>',
+                              self.app, re.S)
+            if not block:
+                continue
+            active = re.findall(r'radius-btn active', block.group(1))
+            self.assertEqual(len(active), 1, row_id)
+
+
 if __name__ == "__main__":
     unittest.main()
