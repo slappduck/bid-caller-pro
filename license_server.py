@@ -1644,27 +1644,83 @@ _DRAFTS_KEY = "bidcaller:campaign_drafts"
 DRAFT_TTL_HOURS = int(os.environ.get("CAMPAIGN_DRAFT_TTL_HOURS", "24"))
 
 
-def _render_campaign(body, addr):
+# Merge fields, written {{like_this}}. A campaign that cannot say "3 open
+# jobs within 125 miles of Grimes, the nearest 8 miles out and closing
+# September 2" is a generic pitch; one that can is a demonstration. The
+# numbers come from a real scan of the recipient's own market, so the claim
+# is checkable by the person reading it.
+_MERGE_FIELD_RE = re.compile(r"\{\{\s*([a-z0-9_]{1,40})\s*\}\}", re.I)
+# A merge value is a line or two of plain text, never a payload.
+MERGE_VALUE_MAX = int(os.environ.get("CAMPAIGN_MERGE_VALUE_MAX", "300"))
+
+
+def _merge_fields(body):
+    """The field names a body asks for, lowercased."""
+    return {m.group(1).lower() for m in _MERGE_FIELD_RE.finditer(str(body or ""))}
+
+
+def _render_body(body, variables):
+    """Substitute {{fields}}. Every field must be present -- callers check
+    with _missing_merge_fields first, and this asserts the same thing rather
+    than quietly shipping a literal {{city}} to a stranger."""
+    variables = {k.lower(): str(v) for k, v in (variables or {}).items()}
+
+    def sub(m):
+        key = m.group(1).lower()
+        if key not in variables:
+            raise KeyError(key)
+        return variables[key][:MERGE_VALUE_MAX]
+
+    return _MERGE_FIELD_RE.sub(sub, str(body or ""))
+
+
+def _missing_merge_fields(body, recipients):
+    """[(email, [missing field, ...]), ...] for recipients that cannot be
+    rendered. Checked at DRAFT time, which is the reviewable step: a
+    half-merged blast cannot be recalled, and "Hi {{company}}" reaching a
+    real contractor is worse than not sending at all."""
+    wanted = _merge_fields(body)
+    if not wanted:
+        return []
+    out = []
+    for addr, variables in recipients:
+        have = {k.lower() for k, v in (variables or {}).items()
+                if str(v or "").strip()}
+        gap = sorted(wanted - have)
+        if gap:
+            out.append((addr, gap))
+    return out
+
+
+def _render_campaign(body, addr, variables=None):
     """The exact text a recipient receives -- one function so the preview
     shown at draft time cannot drift from what approval actually sends."""
-    return (f"{body}\n\n---\n{MAILING_ADDRESS.strip()}\n"
+    return (f"{_render_body(body, variables)}\n\n---\n{MAILING_ADDRESS.strip()}\n"
             f"Don't want these? Unsubscribe: {_unsub_url(addr)}")
 
 
 def _clean_recipients(recipients):
-    """(queue, skipped_unsubscribed, over_limit). Deduped case-insensitively,
-    unsubscribes dropped, batch capped."""
+    """([(email, vars), ...], skipped_unsubscribed, over_limit). Deduped
+    case-insensitively, unsubscribes dropped, batch capped.
+
+    A recipient is either a bare address or {"email": ..., "vars": {...}}, so
+    an existing caller passing a flat list keeps working unchanged.
+    """
     suppressed = _suppression()
     seen, queue, skipped = set(), [], 0
     for raw in recipients or []:
-        addr = str(raw or "").strip().lower()
+        if isinstance(raw, dict):
+            addr = str(raw.get("email") or "").strip().lower()
+            variables = raw.get("vars") if isinstance(raw.get("vars"), dict) else {}
+        else:
+            addr, variables = str(raw or "").strip().lower(), {}
         if not addr or "@" not in addr or addr in seen:
             continue
         seen.add(addr)
         if addr in suppressed:
             skipped += 1
             continue
-        queue.append(addr)
+        queue.append((addr, variables))
     over = max(0, len(queue) - CAMPAIGN_MAX_PER_REQUEST)
     return queue[:CAMPAIGN_MAX_PER_REQUEST], skipped, over
 
@@ -1770,10 +1826,29 @@ def campaign_send():
         return jsonify({"ok": False, "reason": "no_recipients"}), 400
 
     queue, skipped, over = _clean_recipients(recipients)
+    # Refuse the whole draft if any recipient is missing a field the body
+    # asks for. Rejecting just those recipients would be friendlier and
+    # wrong: the usual cause is a column named differently from the
+    # placeholder, which silently halves the send. Fail here, where it is
+    # still reviewable, rather than mailing "Hi {{company}}" to a stranger.
+    gaps = _missing_merge_fields(body, queue)
+    if gaps:
+        return jsonify({
+            "ok": False, "reason": "missing_merge_fields", "sent": 0,
+            "detail": "Nothing was drafted. Every recipient must supply every "
+                      "{{field}} the body uses.",
+            "fields_used": sorted(_merge_fields(body)),
+            "recipients_missing": [{"email": a, "missing": m}
+                                   for a, m in gaps[:20]],
+            "recipients_missing_total": len(gaps),
+        }), 400
+
     draft_id = secrets.token_hex(6)
     drafts = _drafts()
     drafts[draft_id] = {
-        "subject": subject, "body": body, "recipients": queue,
+        "subject": subject, "body": body,
+        # Stored as [email, vars] pairs. json round-trips these as lists.
+        "recipients": [[a, v] for a, v in queue],
         "skipped_unsubscribed": skipped, "over_limit_not_sent": over,
         "created_at": datetime.datetime.now().isoformat(timespec="seconds"),
     }
@@ -1784,10 +1859,14 @@ def campaign_send():
         "ok": True, "status": "awaiting_approval", "sent": 0,
         "draft_id": draft_id,
         "would_send": len(queue), "skipped_unsubscribed": skipped,
-        "over_limit_not_sent": over, "sample": queue[:5],
+        "over_limit_not_sent": over, "sample": [a for a, _ in queue[:5]],
+        "merge_fields": sorted(_merge_fields(body)),
         # The full rendered message, footer and all -- what you approve is
-        # exactly what goes out, not a summary of it.
-        "preview": _render_campaign(body, queue[0]) if queue else "",
+        # exactly what goes out, not a summary of it. Merged for the FIRST
+        # recipient, so a preview of a personalised campaign shows the real
+        # numbers rather than the placeholders.
+        "preview": _render_campaign(body, queue[0][0], queue[0][1]) if queue else "",
+        "preview_for": queue[0][0] if queue else "",
         "expires_in_hours": DRAFT_TTL_HOURS,
         "next": ("Nothing has been sent. Review 'preview', then POST "
                  "/campaign/approve with this draft_id and confirm: true."),
@@ -1827,11 +1906,26 @@ def campaign_approve():
 
     # Re-check suppression at approval time, not just at draft time: someone
     # may have unsubscribed in between, and the draft could be hours old.
-    queue, skipped_now, _ = _clean_recipients(draft.get("recipients") or [])
+    stored = draft.get("recipients") or []
+    queue, skipped_now, _ = _clean_recipients(
+        [{"email": r[0], "vars": r[1]} if isinstance(r, (list, tuple)) else r
+         for r in stored])
+    # Checked again here, not only at draft time. The draft may be hours old
+    # and the body is re-read from storage, so this is the last point at
+    # which an unrenderable message can still be stopped.
+    gaps = _missing_merge_fields(draft.get("body"), queue)
+    if gaps:
+        return jsonify({"ok": False, "reason": "missing_merge_fields", "sent": 0,
+                        "detail": "Nothing was sent. Re-draft with the missing "
+                                  "fields supplied.",
+                        "recipients_missing": [{"email": a, "missing": m}
+                                               for a, m in gaps[:20]]}), 400
+
     sent, failed = 0, 0
-    for addr in queue:
+    for addr, variables in queue:
         unsub = _unsub_url(addr)
-        ok = _send_email(addr, draft["subject"], _render_campaign(draft["body"], addr),
+        ok = _send_email(addr, draft["subject"],
+                         _render_campaign(draft["body"], addr, variables),
                          headers={"List-Unsubscribe": f"<{unsub}>",
                                   "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"})
         sent += 1 if ok else 0

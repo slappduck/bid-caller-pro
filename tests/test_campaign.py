@@ -212,5 +212,112 @@ class CampaignTests(unittest.TestCase):
                                           json={"admin_token": "no"}).status_code, 403)
 
 
+class MergeFieldTests(CampaignTests):
+    """Per-recipient personalisation.
+
+    A campaign that cannot say "3 open jobs within 125 miles of Grimes, the
+    nearest 8 miles out and closing September 2" is a generic pitch. One that
+    can is a demonstration the reader can check. The numbers come from a real
+    scan of their own market, so the whole value of the feature depends on
+    each recipient getting THEIR numbers and never someone else's -- or,
+    worse, the raw placeholder.
+    """
+
+    RICH = ("Hi {{company}} -- there are {{bids}} open concrete jobs within "
+            "125 miles of {{city}} right now. Nearest is {{nearest}}.")
+
+    def _people(self):
+        return [
+            {"email": "a@x.com", "vars": {"company": "Ford Concrete",
+                                          "bids": "5", "city": "Kansas City",
+                                          "nearest": "51 miles out"}},
+            {"email": "b@x.com", "vars": {"company": "Kain's Concrete",
+                                          "bids": "7", "city": "Springfield",
+                                          "nearest": "38 miles out"}},
+        ]
+
+    def test_each_recipient_gets_their_own_numbers(self):
+        r = self._send(body=self.RICH, recipients=self._people())
+        self.assertEqual(r.get_json().get("sent"), 2, r.get_json())
+        by = {m["to"]: m["text"] for m in self.sent}
+        self.assertIn("Ford Concrete", by["a@x.com"])
+        self.assertIn("5 open concrete jobs", by["a@x.com"])
+        self.assertIn("Kansas City", by["a@x.com"])
+        self.assertIn("Kain's Concrete", by["b@x.com"])
+        self.assertIn("7 open concrete jobs", by["b@x.com"])
+        self.assertIn("Springfield", by["b@x.com"])
+
+    def test_nobody_gets_another_recipients_numbers(self):
+        self._send(body=self.RICH, recipients=self._people())
+        by = {m["to"]: m["text"] for m in self.sent}
+        self.assertNotIn("Springfield", by["a@x.com"])
+        self.assertNotIn("Kansas City", by["b@x.com"])
+
+    def test_no_raw_placeholder_ever_goes_out(self):
+        self._send(body=self.RICH, recipients=self._people())
+        for m in self.sent:
+            self.assertNotIn("{{", m["text"], m["to"])
+
+    def test_a_missing_field_refuses_the_whole_draft(self):
+        """Not just that recipient. The usual cause is a column named
+        differently from the placeholder, which would silently halve a send
+        that cannot be recalled."""
+        people = self._people()
+        del people[1]["vars"]["city"]
+        r = self._draft(body=self.RICH, recipients=people)
+        self.assertEqual(r.status_code, 400)
+        j = r.get_json()
+        self.assertEqual(j["reason"], "missing_merge_fields")
+        self.assertEqual(j["sent"], 0)
+        self.assertEqual(j["recipients_missing"][0]["missing"], ["city"])
+        self.assertEqual(self.sent, [], "nothing may be sent")
+
+    def test_a_blank_field_counts_as_missing(self):
+        people = self._people()
+        people[0]["vars"]["bids"] = "   "
+        r = self._draft(body=self.RICH, recipients=people)
+        self.assertEqual(r.status_code, 400)
+
+    def test_the_preview_shows_merged_text_not_placeholders(self):
+        j = self._draft(body=self.RICH, recipients=self._people()).get_json()
+        self.assertNotIn("{{", j["preview"])
+        self.assertIn("Ford Concrete", j["preview"])
+        self.assertEqual(j["preview_for"], "a@x.com")
+        self.assertEqual(j["merge_fields"],
+                         ["bids", "city", "company", "nearest"])
+
+    def test_the_preview_is_exactly_what_that_person_receives(self):
+        """The reason draft and send share one renderer."""
+        j = self._draft(body=self.RICH, recipients=self._people()).get_json()
+        self._approve(j["draft_id"])
+        first = [m for m in self.sent if m["to"] == "a@x.com"][0]
+        self.assertEqual(j["preview"], first["text"])
+
+    def test_a_plain_list_of_addresses_still_works(self):
+        """The existing caller shape, unchanged."""
+        r = self._send(recipients=["a@x.com", "b@x.com"])
+        self.assertEqual(r.get_json().get("sent"), 2)
+
+    def test_the_footer_and_unsubscribe_survive_personalisation(self):
+        self._send(body=self.RICH, recipients=self._people())
+        for m in self.sent:
+            self.assertIn(ADDRESS, m["text"])
+            self.assertIn("Unsubscribe:", m["text"])
+            self.assertIn("List-Unsubscribe", m.get("headers", {}))
+
+    def test_an_unsubscribed_recipient_is_still_dropped(self):
+        ls._suppress("b@x.com")
+        r = self._send(body=self.RICH, recipients=self._people())
+        self.assertEqual(r.get_json().get("sent"), 1)
+        self.assertEqual([m["to"] for m in self.sent], ["a@x.com"])
+
+    def test_a_merge_value_cannot_carry_an_essay(self):
+        people = self._people()
+        people[0]["vars"]["company"] = "A" * 5000
+        self._send(body=self.RICH, recipients=people)
+        first = [m for m in self.sent if m["to"] == "a@x.com"][0]
+        self.assertLess(len(first["text"]), 1500)
+
+
 if __name__ == "__main__":
     unittest.main()
