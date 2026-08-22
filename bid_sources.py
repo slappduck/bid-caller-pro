@@ -558,6 +558,37 @@ def detail_deadline(html):
     return m.group(1).strip() if m else ""
 
 
+# Only a LABELLED figure counts. A bid page is full of dollar amounts that
+# are not the job's value -- bid bonds, plan deposits, non-refundable fees,
+# liquidated damages per day -- and presenting any of those as the project
+# value would be worse than showing nothing, because a contractor would price
+# against it. Measured on live postings: about 4% state a labelled estimate.
+_VALUE_LABEL_RE = re.compile(
+    r"(?:engineer'?s?\s+estimate|estimated\s+(?:cost|value|price|budget)|"
+    r"project\s+estimate|opinion\s+of\s+probable\s+cost|"
+    r"budget(?:ed)?\s+amount|estimated\s+project\s+cost|"
+    r"estimated\s+construction\s+cost)"
+    r"[^$\n]{0,60}?(\$\s?[\d,]{4,}(?:\.\d{2})?)", re.I)
+
+# Amounts that sit near a value-ish word but are definitely not the job.
+_NOT_A_VALUE_RE = re.compile(
+    r"bid\s+bond|plan\s+deposit|non-?refundable|liquidated\s+damages|"
+    r"per\s+day|filing\s+fee|application\s+fee", re.I)
+
+
+def detail_value(html):
+    """The project's stated value, or "" when the page doesn't give one."""
+    text = _clean(_unescape(str(html or "")))
+    if not text:
+        return ""
+    for m in _VALUE_LABEL_RE.finditer(text):
+        window = text[max(0, m.start() - 60):m.end() + 40]
+        if _NOT_A_VALUE_RE.search(window):
+            continue
+        return re.sub(r"\s+", "", m.group(1))
+    return ""
+
+
 def detail_scope(html):
     """The project description from a posting page, or "" if none is labelled."""
     blob = _clean(_unescape(html))

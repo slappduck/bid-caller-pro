@@ -147,3 +147,53 @@ class TitleToPostingLinkTests(unittest.TestCase):
         self.assertEqual(bs.link_for_title("", self.BASE, "Sidewalk Program 2026"), "")
         self.assertEqual(bs.link_for_title(self.PAGE, "", "Sidewalk Program 2026"), "")
         self.assertEqual(bs.link_for_title(self.PAGE, self.BASE, None), "")
+
+
+class DetailValueTests(unittest.TestCase):
+    """A posting sometimes states an engineer's estimate. Both structured
+    paths hardcoded value to "" and nothing ever filled it, so a page saying
+    "$220,000" reached the customer blank -- while the card's Est. Value box
+    invited them to guess a number the page had already given them.
+
+    Only a LABELLED figure counts. A bid page is full of dollar amounts that
+    are not the job: bid bonds, plan deposits, fees, liquidated damages per
+    day. Presenting one of those as the project value is worse than showing
+    nothing, because a contractor would price against it.
+    """
+
+    def test_an_engineers_estimate_is_read(self):
+        self.assertEqual(bs.detail_value("<p>Engineers Estimate: $220,000</p>"),
+                         "$220,000")
+
+    def test_cents_are_preserved(self):
+        self.assertEqual(bs.detail_value("<p>Estimated Cost $1,450,000.00</p>"),
+                         "$1,450,000.00")
+
+    def test_other_labels_are_recognised(self):
+        for label in ("Estimated Value", "Project Estimate",
+                      "Opinion of Probable Cost", "Budgeted Amount",
+                      "Estimated Construction Cost"):
+            self.assertEqual(bs.detail_value(f"<p>{label}: $500,000</p>"),
+                             "$500,000", label)
+
+    def test_a_bid_bond_is_never_the_project_value(self):
+        self.assertEqual(
+            bs.detail_value("<p>A bid bond of $5,000 is required</p>"), "")
+
+    def test_a_plan_deposit_is_rejected_even_when_labelled(self):
+        self.assertEqual(bs.detail_value(
+            "<p>Plan deposit: estimated cost $50 non-refundable</p>"), "")
+
+    def test_liquidated_damages_are_rejected(self):
+        self.assertEqual(bs.detail_value(
+            "<p>Liquidated damages estimated cost $1,000 per day</p>"), "")
+
+    def test_an_unlabelled_amount_is_not_guessed_at(self):
+        self.assertEqual(bs.detail_value("<p>Mail a check for $12,500</p>"), "")
+
+    def test_a_page_with_no_amount_returns_nothing(self):
+        self.assertEqual(bs.detail_value("<p>Sidewalk replacement program</p>"), "")
+
+    def test_missing_input_is_handled(self):
+        self.assertEqual(bs.detail_value(""), "")
+        self.assertEqual(bs.detail_value(None), "")

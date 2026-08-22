@@ -3632,6 +3632,16 @@ def _enrich_from_detail_pages(rows, stats=None, lock=None):
             body = bid_sources.detail_scope(page)
             if body:
                 row["scope"] = body
+        # The posting sometimes states an engineer's estimate. The structured
+        # paths hardcoded value to "" and nothing ever filled it, so a page
+        # that said "$220,000" reached the customer blank -- and the card's
+        # Est. Value box invited them to guess a number the page had already
+        # given them.
+        if not str(row.get("value") or "").strip():
+            amount = bid_sources.detail_value(page)
+            if amount:
+                row["value"] = amount
+                got = True
         return got
 
     with ThreadPoolExecutor(max_workers=DETAIL_WORKERS) as ex:
