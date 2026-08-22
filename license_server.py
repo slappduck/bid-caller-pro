@@ -3874,19 +3874,24 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
                     bid_portals.record_result(pdb, city, state, url, True)
                     for row in keep:
                         raw[0] += 1
-                        _place_bid(grouped, {
-                            "title": row["title"], "scope": row.get("scope", ""),
-                            # The listing states its own status where it has
-                            # one; trust that over assuming everything on the
-                            # page is live.
-                            "status": row.get("status") or "Open",
-                            "deadline": row.get("deadline", ""),
-                            "contact": row.get("contact", ""),
-                            "email": row.get("email", ""),
-                            "phone": row.get("phone", ""),
-                            "value": "",
-                            "url": row["url"], "city": default_city or city,
-                        }, center, radius, cdb, default_city=default_city or city,
+                        # Pass the enriched row THROUGH rather than copying a
+                        # fixed list of fields out of it. The old allowlist
+                        # named nine keys and hardcoded value to "", so every
+                        # field the detail-page enricher had just recovered --
+                        # value, published, bid_number, prebid, addenda,
+                        # documents -- was read off the posting and then
+                        # dropped on the floor one line later. CivicPlus is
+                        # the platform behind ~2,400 of the portals in the
+                        # directory, so that silently emptied those six rows
+                        # of the bid card for most of the board.
+                        payload = dict(row)
+                        # The listing states its own status where it has one;
+                        # trust that over assuming everything on the page is
+                        # live.
+                        payload["status"] = row.get("status") or "Open"
+                        payload["city"] = default_city or city
+                        _place_bid(grouped, payload,
+                            center, radius, cdb, default_city=default_city or city,
                             city_coords=city_coords, default_state=state,
                             fallback_coords=town_coords, stats=stats)
                 return
@@ -3910,6 +3915,20 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
         # posting link: the model is shown text only and never sees an href.
         page_html = _fetch_page(url, timeout=timeout)[0] or ""
         text = _html_to_text(page_html)
+        # "200 OK" is not proof the URL is right. Municipal sites overwhelmingly
+        # serve their not-found page with a 200, and a parked or lapsed domain
+        # serves a sales page the same way -- both are long enough to clear the
+        # length check below, so the entry was recorded as a SUCCESS on every
+        # scan and could never age out via bid_portals.MAX_FAIL. Sampling 400
+        # CivicPlus entries found 21 in that state, one of them a lapsed domain
+        # now serving an online-casino page to our customers.
+        if bid_sources.page_is_missing(page_html):
+            with lock:
+                bid_portals.record_result(pdb, city, state, url, False)
+                if stats is not None:
+                    stats["portal_page_missing"] = \
+                        stats.get("portal_page_missing", 0) + 1
+            return
         ok = len(text) >= 200
         with lock:
             bid_portals.record_result(pdb, city, state, url, ok)
