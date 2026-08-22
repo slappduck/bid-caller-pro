@@ -3906,6 +3906,17 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
                         stats["civicplus_no_open_bids"] = \
                             stats.get("civicplus_no_open_bids", 0) + 1
                 return
+            if bid_sources.page_is_missing(page):
+                # Checked before the two below because it is the most
+                # specific answer: this is not a bid page with a layout we
+                # cannot read, it is a 404 or a lapsed domain. Same outcome,
+                # but the funnel should say which.
+                with lock:
+                    bid_portals.record_result(pdb, city, state, url, False)
+                    if stats is not None:
+                        stats["portal_page_missing"] = \
+                            stats.get("portal_page_missing", 0) + 1
+                return
             # Before writing this off as a parser gap: the commonest reason a
             # CivicPlus Bids page holds no bids is that the city has MOVED its
             # solicitations to a hosted platform and left this page behind as
@@ -3926,6 +3937,18 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
                             stats.get("portal_moved_to_hosted", 0) + 1
                 url = moved
                 timeout = None
+            elif bid_sources.page_is_wrong_module(page):
+                # A /Bids.aspx URL serving "Home - Lake County, Ohio" or
+                # "Sitka Police Department". The bid module is gone and the
+                # site is answering with something else, so there is nothing
+                # here to parse and nothing worth an AI call. Let it fail
+                # towards MAX_FAIL like any other dead entry.
+                with lock:
+                    bid_portals.record_result(pdb, city, state, url, False)
+                    if stats is not None:
+                        stats["portal_wrong_module"] = \
+                            stats.get("portal_wrong_module", 0) + 1
+                return
             elif stats is not None:
                 with lock:
                     stats["civicplus_parse_miss"] = stats.get("civicplus_parse_miss", 0) + 1

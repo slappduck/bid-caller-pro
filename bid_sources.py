@@ -503,12 +503,63 @@ _TITLE_CANCELLED_RE = re.compile(
 # serving an online-casino page. Roughly one entry in twenty, held forever.
 _MISSING_PAGE_RE = re.compile(
     r"<title[^>]*>\s*404\b"
-    r"|<title[^>]*>[^<]{0,80}\b(?:page\s+not\s+found|404\s+(?:error|not\s+found))"
+    r"|<title[^>]*>[^<]{0,80}\b(?:page\s+not\s+found|404\s+(?:error|not\s+found)"
+    r"|status\s+code\s+404|error\s+404)"
     r"|<h1[^>]*>\s*404\b"
     r"|\bthe\s+page\s+you\s+(?:requested|are\s+looking\s+for)\s+"
     r"(?:could\s+not\s+be\s+found|cannot\s+be\s+found|does\s+not\s+exist)"
+    # Lapsed domains. Two flavours, both seen on real directory entries: a
+    # broker's parking page, and a municipal domain someone re-registered and
+    # pointed at an offshore gambling site. The second matters more than a
+    # dead link -- forestparkga.org and lewistonmn.org are both in the
+    # directory and both now serve casino pages to our customers.
+    r"|<title[^>]*>[^<]{0,60}\bhugedomains(?:\.com)?\b"
     r"|\bis\s+for\s+sale\s*\|\s*hugedomains"
-    r"|\bthis\s+domain\s+(?:name\s+)?is\s+for\s+sale\b", re.I)
+    r"|\bthis\s+domain\s+(?:name\s+)?is\s+for\s+sale\b"
+    r"|\b(?:buy|purchase)\s+this\s+domain\b"
+    r"|\bdomain\s+(?:is\s+)?(?:parked|for\s+sale)\b"
+    r"|\bsitus\s+(?:togel|slot|judi)\b|\bbandar\s+(?:togel|toto|slot)\b"
+    r"|\bslot\s+gacor\b|\bjudi\s+online\b", re.I)
+
+# Words a page about bids has in its title. A CivicPlus Bids.aspx URL that
+# serves something with none of them is not the bid page: sampling 500
+# directory entries turned up "Home - Lake County, Ohio", "News & Events |
+# City of Arlington, TX", "Sitka Police Department" and "Ethics Review Board
+# - City of New Orleans", all reached at /Bids.aspx, all recorded as healthy
+# on every scan and handed to the AI to read for bids they do not contain.
+_BID_TITLE_RE = re.compile(
+    r"\bbids?\b|\brf[pqi]s?\b|\bsolicitat\w*|\bprocure\w*|\bpurchas\w*"
+    r"|\bopportunit\w*|\bcontract\w*|\bvendor\w*|\btender\w*"
+    r"|\bquote\w*|\bproposal\w*", re.I)
+_TITLE_TAG_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.I | re.S)
+
+
+def page_title(html):
+    """The page's <title>, cleaned. "" if it has none."""
+    m = _TITLE_TAG_RE.search(str(html or "")[:20000])
+    return _clean(_unescape(m.group(1))) if m else ""
+
+
+def page_is_wrong_module(html):
+    """True if this page is plainly not about bids at all.
+
+    Narrower than it sounds, and deliberately so. The test is the page's own
+    <title>: a real bid page names bids, procurement, purchasing,
+    solicitations or opportunities in it -- "Purchasing | Taos County, NM",
+    "Portal - Open Opportunities - City of Norwich, CT" -- even when our
+    parser cannot read the body. A page titled "Home" or "News Archive" is
+    the site's homepage being served for a URL that no longer exists.
+
+    Only meaningful for a URL we expected to be a bid page, and only ever a
+    reason to let the entry fail towards MAX_FAIL, never to delete it.
+    """
+    title = page_title(html)
+    if not title:
+        return False            # no title is not evidence either way
+    if _BID_TITLE_RE.search(title):
+        return False
+    low = str(html or "").lower()
+    return "bids.aspx" not in low and "bid postings" not in low
 
 
 def page_is_missing(html):
