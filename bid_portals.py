@@ -250,6 +250,68 @@ def _within_one_edit(a, b):
     return True
 
 
+_domain_town_cache = None
+
+
+def _domain_town_index():
+    """host -> (city, state) for every agency whose domain we know.
+
+    Built from the directory files rather than the seed maps because those
+    are keyed by town, and the question here runs the other way: a search
+    engine handed us a URL, whose town is it?
+    """
+    global _domain_town_cache
+    if _domain_town_cache is not None:
+        return _domain_town_cache
+    idx = {}
+    for path in (_NATIONAL_CSV, _WIKIDATA_CSV):
+        try:
+            with open(path, newline="", encoding="utf-8") as f:
+                for row in csv.DictReader(f):
+                    host = (row.get("domain") or "").strip().lower()
+                    city = (row.get("city") or "").strip()
+                    state = (row.get("state") or "").strip().upper()
+                    if not (host and city and state):
+                        continue
+                    if host.startswith("www."):
+                        host = host[4:]
+                    idx.setdefault(host, (city, state))
+        except OSError:
+            continue
+    _domain_town_cache = idx
+    return idx
+
+
+def town_for_url(url):
+    """(city, state) for a URL on an agency domain we know, else None.
+
+    Lets a search result be placed before it is fetched: a Missouri scan that
+    gets back a Colorado city's page can skip it instead of paying a fetch
+    and an extraction to discover the distance afterwards.
+    """
+    try:
+        host = (urllib.parse.urlparse(
+            url if "//" in str(url) else "//" + str(url)).hostname or "").lower()
+    except ValueError:
+        return None
+    if not host:
+        return None
+    if host.startswith("www."):
+        host = host[4:]
+    return _domain_town_index().get(host)
+
+
+def coords_for_town(city, state):
+    """Known coordinates for a town, or None."""
+    if not city or not state:
+        return None
+    want = (str(city).strip().lower(), str(state).strip().upper())
+    for (c, st), pt in _coords().items():
+        if (c.lower(), st) == want:
+            return pt
+    return None
+
+
 def towns_within_radius(directory, center_lat, center_lon, radius, exclude=()):
     """Every town in the known-portal directory (seed + national crawl +
     learned) with a real bid page AND known coordinates, within `radius`

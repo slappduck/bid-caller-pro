@@ -3669,12 +3669,21 @@ def _enrich_from_detail_pages(rows, stats=None, lock=None):
         results = list(ex.map(_one, targets))
 
     if stats is not None:
-        hits = sum(1 for r in results if r)
+        # These used to count "did the enricher fill ANY field", under names
+        # that read as "did we get a contact". With the enricher now also
+        # recovering deadline, value, publication date, bid number, pre-bid
+        # and documents, that gap made the numbers unreadable: a posting that
+        # yielded a deadline and no phone counted as a contact found.
+        reachable = sum(1 for r in targets if r.get("email") or r.get("phone"))
+        enriched = sum(1 for r in results if r)
         def _bump():
-            stats["contacts_found"] = stats.get("contacts_found", 0) + hits
-            missed = len(targets) - hits
+            stats["contacts_found"] = stats.get("contacts_found", 0) + reachable
+            missed = len(targets) - reachable
             if missed:
                 stats["contacts_missing"] = stats.get("contacts_missing", 0) + missed
+            stats["postings_enriched"] = \
+                stats.get("postings_enriched", 0) + enriched
+            stats["postings_read"] = stats.get("postings_read", 0) + len(targets)
         if lock is not None:
             with lock:
                 _bump()
@@ -3946,6 +3955,23 @@ def _run_local_queries(queries, ai_label, max_pages, grouped, center, radius, cd
                 if r["url"] in seen_urls:
                     continue
                 seen_urls.add(r["url"])
+            # Place the result before paying for it. A search for "Aurora MO
+            # sidewalk bid" reliably returns auroragov.org -- Aurora,
+            # COLORADO -- and the old order fetched the page and spent an AI
+            # extraction before _place_bid worked out it was 700 miles away.
+            # 21 of 38 extractions on a live Aurora scan died that way. Only
+            # acts on domains the directory can actually place; an unknown
+            # domain is still fetched, since absence proves nothing.
+            known = bid_portals.town_for_url(r["url"])
+            if known:
+                pt = bid_portals.coords_for_town(*known)
+                if pt and _miles_between(center["lat"], center["lon"],
+                                         pt[0], pt[1]) > radius:
+                    if stats is not None:
+                        with lock:
+                            stats["search_hit_out_of_area"] = \
+                                stats.get("search_hit_out_of_area", 0) + 1
+                    continue
             items.append(r)
         # The pause exists to avoid hammering DuckDuckGo, which is scraped and
         # will start blocking. It used to run after every query regardless, so
