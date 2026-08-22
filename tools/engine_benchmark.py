@@ -96,10 +96,14 @@ def main():
     ap.add_argument("--towns", type=int, default=40,
                     help="known towns to read per location (plus the centre). The default matches what a 50mi scan actually reaches.")
     ap.add_argument("--only", default="", help="substring filter on city")
+    ap.add_argument("--radius", type=int, default=0,
+                    help="override each location's radius, in miles")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
 
     picks = [l for l in LOCATIONS if args.only.lower() in l[0].lower()]
+    if args.radius:
+        picks = [(c, s, la, lo, args.radius) for c, s, la, lo, _r in picks]
     results, totals = [], Counter()
     for loc in picks:
         r = run_location(*loc, max_towns=args.towns)
