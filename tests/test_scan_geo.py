@@ -508,11 +508,20 @@ class StructuredReadNeverLosesBidsTests(unittest.TestCase):
         self.grouped, self.coords, self.stats = {}, {}, {}
         self.cdb, self.pdb = {}, {}
 
-    def _run(self, page_html, ai_returns):
+    # Realistic page text: the known-portal path now runs looks_relevant
+    # before spending an AI call (the search path always has), so a filler
+    # string of x's would be skipped as having no concrete work on it -- and
+    # this test is about the parser-miss fall-through, not about the gate.
+    PAGE_TEXT = ("Invitation to Bid — 2026 Sidewalk and ADA Ramp Replacement "
+                 "Program. Sealed bids for concrete curb and gutter work "
+                 "will be received by the City Clerk. " * 6)
+
+    def _run(self, page_html, ai_returns, page_text=None):
         import threading
         rec = None
         with patch.object(ls, "_fetch_page", return_value=(page_html, "ok")), \
-             patch.object(ls, "_fetch_text", return_value="x" * 500), \
+             patch.object(ls, "_fetch_text",
+                          return_value=page_text or self.PAGE_TEXT), \
              patch.object(ls, "_ai_extract", return_value=ai_returns) as ai, \
              patch.object(ls, "_geo_from_city", side_effect=_fake_geo), \
              patch.object(ls.bid_portals, "get_portals", return_value=[
@@ -532,6 +541,21 @@ class StructuredReadNeverLosesBidsTests(unittest.TestCase):
         ai.assert_called_once()
         titles = [b["title"] for v in self.grouped.values() for b in v]
         self.assertEqual(titles, ["Sidewalk repair"])
+
+    def test_a_page_with_no_concrete_work_never_reaches_the_ai(self):
+        """21 of 33 sampled agency portals have no niche term anywhere on
+        them. Extracting those spends a call, and seconds of the scan's town
+        budget, to find nothing."""
+        ai, _ = self._run("<html><body>Bids are listed below</body></html>", [],
+                          page_text="Janitorial services and copier leasing. " * 20)
+        ai.assert_not_called()
+        self.assertEqual(self.stats.get("portal_no_niche_content"), 1)
+
+    def test_a_skipped_page_is_still_a_working_portal(self):
+        _, rec = self._run("<html><body>Bids are listed below</body></html>", [],
+                           page_text="Janitorial services and copier leasing. " * 20)
+        self.assertTrue(rec.call_args[0][-1],
+                        "nothing for us today is not a dead source")
 
     def test_a_parser_miss_is_not_recorded_as_a_dead_portal(self):
         # Recording it as a failure would retire a perfectly good seeded URL

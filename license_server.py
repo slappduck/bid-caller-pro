@@ -3772,6 +3772,19 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
             bid_portals.record_result(pdb, city, state, url, ok)
         if not ok:
             return
+        # The same gate the search path applies before every extraction, which
+        # this path was missing. A bid page with no niche term anywhere on it
+        # has no concrete work on it, and 21 of 33 sampled agency portals are
+        # in that state at any moment -- each one an AI call, and seconds of
+        # the scan's town budget, spent to find nothing. The portal is still
+        # recorded above as a working source; there is simply nothing for us
+        # on it today.
+        if not bid_sources.looks_relevant(text):
+            if stats is not None:
+                with lock:
+                    stats["portal_no_niche_content"] = \
+                        stats.get("portal_no_niche_content", 0) + 1
+            return
         bids = _ai_extract(ai_label, text)
         if not bids:
             return

@@ -56,3 +56,38 @@ class EmptyPageTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class KnownPortalRelevanceGateTests(unittest.TestCase):
+    """The search path has always run looks_relevant before spending an AI
+    call. The known-portal path did not, so every one of the ~1,375 `agency`
+    portals got an extraction whether or not its page mentioned concrete at
+    all -- 21 of 33 sampled did not.
+
+    Structural, because the two paths drifting apart is exactly how this
+    happened: the gate exists, it was simply never applied here.
+    """
+
+    def setUp(self):
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(root, "license_server.py"), encoding="utf-8") as fh:
+            src = fh.read()
+        start = src.index("def _run_known_portals(")
+        self.body = src[start:src.index("\ndef ", start + 10)]
+
+    def test_the_gate_runs_before_the_extraction(self):
+        gate = self.body.index("looks_relevant(text)")
+        call = self.body.index("_ai_extract(ai_label, text)")
+        self.assertLess(gate, call,
+                        "the relevance gate must come before the AI call, or "
+                        "it saves nothing")
+
+    def test_a_skip_is_counted_rather_than_silent(self):
+        self.assertIn("portal_no_niche_content", self.body)
+
+    def test_the_portal_is_still_recorded_as_working(self):
+        """A page with nothing for us today is not a broken source, and must
+        not be aged out of the directory for it."""
+        record = self.body.index("record_result(pdb, city, state, url, ok)")
+        gate = self.body.index("looks_relevant(text)")
+        self.assertLess(record, gate)
