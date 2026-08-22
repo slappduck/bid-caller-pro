@@ -686,7 +686,19 @@ async function pushCompanyProfile(){
   if(!sb||!currentUser)return;
   const row={};
   COMPANY_FIELDS.forEach(k=>{row[k]=companyProfile[k]||"";});
-  try{await sb.from("company_profiles").upsert(row,{onConflict:"user_id"});}catch(e){}
+  let err=null;
+  try{const r=await sb.from("company_profiles").upsert(row,{onConflict:"user_id"});err=r&&r.error;}
+  catch(e){err=e;}
+  if(!err)return;
+  // avatar_url arrives with a later migration in supabase_sync_schema.sql.
+  // On a project that has not run it, PostgREST rejects the WHOLE row for the
+  // one unknown column -- so including the photo would stop the name, contact
+  // and phone syncing too. Retry without it: the photo stays local until the
+  // migration runs, everything else still follows the account.
+  const rest={};
+  COMPANY_FIELDS.filter(k=>k!=="avatar_url")
+    .forEach(k=>{rest[k]=companyProfile[k]||"";});
+  try{await sb.from("company_profiles").upsert(rest,{onConflict:"user_id"});}catch(e){}
 }
 async function syncPullCompanyProfile(){
   if(!sb||!currentUser)return;

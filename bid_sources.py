@@ -207,8 +207,11 @@ def extract_bid_link_candidates(html, base_url, max_candidates=3):
 # janitorial, insurance, software. Anything that might involve concrete gets
 # through and is judged properly later. A false negative here is a lost bid; a
 # false positive costs a fraction of a cent.
+# "ada" is deliberately NOT here: as a bare substring it matches Nevada,
+# Canada, Adams and Palisades. _has_strong_term matches it with a word
+# boundary instead, which is the only way it means the Act.
 NICHE_TERMS = (
-    "sidewalk", "side walk", "ada", "curb", "gutter", "concrete", "flatwork",
+    "sidewalk", "side walk", "curb", "gutter", "concrete", "flatwork",
     "paving", "pavement", "ramp", "driveway", "apron", "trail", "greenway",
     "street improvement", "streetscape", "roadway", "road improvement",
     "intersection", "safe routes", "pedestrian", "walkway", "crosswalk",
@@ -223,12 +226,40 @@ CLEARLY_UNRELATED = (
 )
 
 
+# The terms that name the trade itself. NICHE_TERMS is deliberately loose --
+# it is a cheap gate before an AI call -- but on the known-portal path there is
+# no AI call afterwards, so a weak contextual match is the ONLY thing standing
+# between a listing and the customer's feed. "Specialized Legal Services for a
+# Potential Large-Scale Digital Infrastructure Project" reached one, on
+# "infrastructure".
+STRONG_NICHE_TERMS = (
+    "sidewalk", "side walk", "curb", "gutter", "concrete", "flatwork",
+    "paving", "pavement", "crosswalk", "driveway", "apron", "slab",
+    "walkway", "curb ramp", "ada ramp",
+)
+
+# "ada" as a bare substring matches Nevada, Canada, Adams and Palisades. It
+# only means the Act when it stands alone.
+_ADA_RE = re.compile(r"\bada\b", re.I)
+
+
+def _has_strong_term(blob):
+    return _ADA_RE.search(blob) is not None or \
+        any(t in blob for t in STRONG_NICHE_TERMS)
+
+
 def looks_relevant(*texts):
     """True if a listing is worth spending an extraction call on."""
     blob = " ".join(str(t or "") for t in texts).lower()
     if not blob.strip():
         return False
-    return any(term in blob for term in NICHE_TERMS)
+    strong = _has_strong_term(blob)
+    # A listing that names an unrelated trade needs a real trade word to
+    # survive: "sidewalk replacement and landscaping" is our work, "legal
+    # services for an infrastructure project" is not.
+    if not strong and any(t in blob for t in CLEARLY_UNRELATED):
+        return False
+    return strong or any(term in blob for term in NICHE_TERMS)
 
 
 def rejection_reason(*texts):
@@ -283,8 +314,12 @@ _CLOSE_RE = re.compile(
 # CivicPlus prints the posting's own status on the listing row. It is the
 # authoritative answer to "is this still live?" and it is free — far better
 # than inferring it from a date we may have failed to parse.
+# CivicPlus lays the row out as LABELS then VALUES -- "Status: Closes: Closed
+# 3/11/2025 4:00 PM" -- so the status word does not follow "Status:" directly.
+# Requiring that it did meant every CivicPlus row parsed as status "", which
+# _place_bid then defaults to Open: an awarded job shown as live work.
 _STATUS_RE = re.compile(
-    r"\bstatus\b\s*[:\-]?\s*"
+    r"\bstatus\b\s*[:\-]?\s*(?:clos(?:e|es|ing)\s*(?:date)?\s*[:\-]?\s*)?"
     r"(open|closed|awarded|cancell?ed|withdrawn|pending|expired)\b", re.I)
 
 
@@ -325,6 +360,8 @@ def parse_civicplus_rss(xml_text):
     return rows
 
 
+_READ_ON_RE = re.compile(r"^\s*read\s*on\b", re.I)
+
 # A CivicPlus bid listing renders each posting as a link to Bids.aspx?bidID=N.
 _BID_LINK_RE = re.compile(
     r'<a[^>]+href="([^"]*Bids\.aspx\?bidID=\d+[^"]*)"[^>]*>(.*?)</a>',
@@ -339,10 +376,19 @@ def parse_civicplus_html(html, base_url=""):
     """
     rows, seen = [], set()
     text = str(html or "")
-    for m in _BID_LINK_RE.finditer(text):
+    # CivicPlus emits TWO links per posting: the title, then a "Read on:
+    # <title>" link. The second is the same bid -- taking it produced a
+    # duplicate row titled after the link text -- but the posting's Status and
+    # Closes values sit AFTER it, so it cannot simply be skipped over: it marks
+    # the middle of the posting, not the end.
+    all_matches = list(_BID_LINK_RE.finditer(text))
+    posts = [m for m in all_matches
+             if not _READ_ON_RE.match(_clean(_unescape(m.group(2))))]
+    for i, m in enumerate(posts):
         href, label = m.group(1), _clean(_unescape(m.group(2)))
         if not label or len(label) < 4:
             continue
+        matches = posts
         url = _unescape(href)
         if url.startswith("/") and base_url:
             url = base_url.rstrip("/") + url
@@ -352,8 +398,13 @@ def parse_civicplus_html(html, base_url=""):
             continue
         seen.add(url)
         # Closing dates and the posting status sit in the markup near the link
-        # rather than inside it.
-        window = _clean(_unescape(text[m.end():m.end() + 600]))
+        # rather than inside it -- but AFTER the posting's summary text, which
+        # can run to several hundred characters. A fixed 600-char window fell
+        # short of them on any posting with a real description, so the row came
+        # back with no status and no deadline. Read to the next posting's link
+        # instead, which is exactly this posting's own markup and no more.
+        stop = posts[i + 1].start() if i + 1 < len(posts) else len(text)
+        window = _clean(_unescape(text[m.end():min(stop, m.end() + 4000)]))
         cm = _CLOSE_RE.search(window)
         rows.append({"title": label, "url": url, "scope": "",
                      "deadline": cm.group(1) if cm else "",
