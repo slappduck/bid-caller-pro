@@ -401,6 +401,29 @@ _PARKING_RE = re.compile(
     r"management\s+(?:system|software)|study|garage\s+(?:audit|study)))", re.I)
 
 
+# "Public works" and "cdbg" are loose terms that earn their place when they
+# describe the WORK ("On-Call Public Works Services", a CDBG sidewalk
+# programme) and mislead when they name the buyer or the funding pot. Live
+# board sampling surfaced "BID - 2026 Roof Replacement at Public Works" and
+# "RFP-26-27-010-Public Works Office Addition" -- a roof and a building --
+# alongside "CDBG MAP Grantee Training Services", which is a training course.
+_DEPT_NOT_WORK_RE = re.compile(
+    r"\b(?:at|for|the)\s+(?:the\s+)?public\s+works\b"
+    r"|\bpublic\s+works\s+(?:office|building|facility|garage|shop|yard|"
+    r"department|director|complex|admin\w*)\b"
+    r"|\bcdbg\b[^.;:]{0,25}\b(?:training|administration|grantee|"
+    r"consultant|planning|program\s+management)\b", re.I)
+
+# A listing row that is really the page's own navigation. "Public Works Bids"
+# is a menu item, not a solicitation, and it reached the board as one.
+_NAV_TITLE_RE = re.compile(
+    r"^\s*(?:view\s+)?(?:all\s+)?(?:current\s+|open\s+|closed\s+)?"
+    r"(?:public\s+works\s+|purchasing\s+|engineering\s+)?"
+    r"(?:bids?|rfps?|rfqs?|solicitations?|bid\s+postings?|"
+    r"bids?\s*(?:&|and)\s*rfps?|opportunities|proposals?)"
+    r"(?:\s+(?:page|list|home|archive|and\s+rfps?))?\s*$", re.I)
+
+
 def _has_strong_term(blob):
     return _ADA_RE.search(blob) is not None or \
         any(t in blob for t in STRONG_NICHE_TERMS)
@@ -408,12 +431,21 @@ def _has_strong_term(blob):
 
 def looks_relevant(*texts):
     """True if a listing is worth spending an extraction call on."""
-    blob = " ".join(str(t or "") for t in texts).lower()
+    parts = [str(t or "") for t in texts]
+    blob = " ".join(parts).lower()
     if not blob.strip():
+        return False
+    # A menu item is not a solicitation. Tested against the title alone --
+    # a real bid whose SCOPE happens to read "bids and rfps" is still real.
+    if parts and _NAV_TITLE_RE.match(parts[0].strip()):
         return False
     # Checked before the strong term, deliberately: these titles all contain
     # one and would otherwise pass unexamined.
     if _PRO_SERVICES_RE.search(blob):
+        return False
+    # Same reasoning: these name the buyer or the funding source, not the job,
+    # and would sail past on "public works" or "cdbg" alone.
+    if _DEPT_NOT_WORK_RE.search(blob) and not _has_strong_term(blob):
         return False
     strong = _has_strong_term(blob)
     # A listing that names an unrelated trade needs a real trade word to

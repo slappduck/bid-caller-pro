@@ -183,5 +183,42 @@ class ParkingTests(unittest.TestCase):
             self.assertFalse(bs.looks_relevant(t), t)
 
 
+class NavigationAndBuyerNameTests(unittest.TestCase):
+    """Two ways a non-job reached the board, both seen on the live feed.
+
+    "Public Works Bids" is the page's own menu item, parsed as a posting and
+    shown to a contractor as a job. And "public works" / "cdbg" are loose
+    terms that describe the work in "On-Call Public Works Services" and name
+    the BUYER in "BID - 2026 Roof Replacement at Public Works" -- a roof --
+    or the funding pot in "CDBG MAP Grantee Training Services", a course.
+    """
+
+    def test_a_menu_item_is_not_a_solicitation(self):
+        for t in ("Public Works Bids", "Bid Postings", "View All Bids",
+                  "Bids & RFPs", "Current Solicitations", "Open Bids",
+                  "Purchasing Bids"):
+            self.assertFalse(bs.looks_relevant(t), t)
+
+    def test_the_department_named_as_a_place_is_not_the_work(self):
+        for t in ("BID - 2026 Roof Replacement at Public Works",
+                  "RFP-26-27-010-Public Works Office Addition",
+                  "CDBG MAP Grantee Training Services"):
+            self.assertFalse(bs.looks_relevant(t), t)
+
+    def test_real_work_naming_the_same_department_survives(self):
+        """The rule must not cost the jobs those terms exist to catch."""
+        for t in ("On-Call Public Works Services",
+                  "CDBG Sidewalk Improvement Program",
+                  "Public Works Sidewalk Reconstruction",
+                  "Concrete Repairs at Public Works Yard"):
+            self.assertTrue(bs.looks_relevant(t), t)
+
+    def test_a_real_bid_whose_scope_mentions_rfps_is_kept(self):
+        """The menu rule is matched against the TITLE, not the whole blob."""
+        self.assertTrue(bs.looks_relevant(
+            "2026 Sidewalk Replacement Program",
+            "See the Bids & RFPs page for addenda."))
+
+
 if __name__ == "__main__":
     unittest.main()
