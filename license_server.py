@@ -3751,6 +3751,17 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
                             city_coords=city_coords, default_state=state,
                             fallback_coords=town_coords, stats=stats)
                 return
+            if bid_sources.civicplus_page_is_empty(page):
+                # The right page, with nothing posted. Sending it to the AI
+                # would spend a call and seconds of the scan's town budget to
+                # discover the same nothing -- and that budget is what decides
+                # how many other towns get read at all.
+                with lock:
+                    bid_portals.record_result(pdb, city, state, url, True)
+                    if stats is not None:
+                        stats["civicplus_no_open_bids"] = \
+                            stats.get("civicplus_no_open_bids", 0) + 1
+                return
             if stats is not None:
                 with lock:
                     stats["civicplus_parse_miss"] = stats.get("civicplus_parse_miss", 0) + 1

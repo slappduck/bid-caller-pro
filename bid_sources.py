@@ -368,6 +368,31 @@ _BID_LINK_RE = re.compile(
     re.I | re.S)
 
 
+# Most municipal bid pages are empty most of the time -- 21 of 30 sampled
+# portals had nothing posted. An empty listing is not a parser failure, and
+# treating it as one sent the whole page to the AI extractor to discover the
+# same nothing, at real cost and, worse, real latency inside the scan's time
+# budget. These two strings appear on essentially every CivicPlus bid page
+# (20/21 and 19/21 of the empty sample); either is enough to say "this is the
+# right page, there is simply nothing on it".
+_CIVICPLUS_PAGE_MARKERS = ("bids.aspx", "bid postings")
+
+
+def civicplus_page_is_empty(html):
+    """True when this is recognisably a CivicPlus bid page with no postings.
+
+    Deliberately requires a positive marker rather than inferring emptiness
+    from the absence of bid links: a fetch that returned an error page, a
+    login wall or a redirect also has no bid links, and those DO deserve the
+    AI fallback.
+    """
+    text = str(html or "")
+    if not text or _BID_LINK_RE.search(text):
+        return False
+    low = text.lower()
+    return any(m in low for m in _CIVICPLUS_PAGE_MARKERS)
+
+
 def parse_civicplus_html(html, base_url=""):
     """Rows from a CivicPlus Bids.aspx listing page.
 
