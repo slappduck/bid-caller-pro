@@ -33,8 +33,7 @@ FULLY_CONFIGURED = {
     "ADMIN_TOKEN": SECRET,
     "MAILING_ADDRESS": "CurbCall Pro, 123 Main St, Aurora MO 65605",
     # Google Programmable Search: the free-tier primary. Needs both halves.
-    "GOOGLE_API_KEY": SECRET,
-    "GOOGLE_CSE_ID": "a1b2c3d4e5f6g7h8i",
+    "BRAVE_API_KEY": SECRET,
 }
 
 
@@ -81,11 +80,11 @@ class HealthTests(unittest.TestCase):
         """Scraping DDG alone is the fragile case -- and it is only reached
         when NEITHER keyed provider is configured, not merely when Tavily
         is missing."""
-        body = self._get(TAVILY_API_KEY="", GOOGLE_API_KEY="", GOOGLE_CSE_ID="")
+        body = self._get(TAVILY_API_KEY="", BRAVE_API_KEY="")
         self.assertTrue(body["local_search"]["is_sole_local_search"])
         self.assertTrue(any("solely on scraping DuckDuckGo" in p for p in body["problems"]))
 
-    def test_google_alone_is_enough_to_not_be_sole_search(self):
+    def test_brave_alone_is_enough_to_not_be_sole_search(self):
         """Dropping Tavily is now the expected configuration, not a warning."""
         body = self._get(TAVILY_API_KEY="")
         self.assertFalse(body["local_search"]["is_sole_local_search"])
@@ -93,7 +92,7 @@ class HealthTests(unittest.TestCase):
 
     def test_blocked_duckduckgo_with_no_search_api_reads_as_search_down(self):
         with patch.object(ls, "_ddg_fail_streak", ls.DDG_TRIP_THRESHOLD):
-            body = self._get(TAVILY_API_KEY="", GOOGLE_API_KEY="", GOOGLE_CSE_ID="")
+            body = self._get(TAVILY_API_KEY="", BRAVE_API_KEY="")
         self.assertTrue(body["local_search"]["degraded"])
         self.assertTrue(any("effectively down" in p for p in body["problems"]))
 
@@ -106,12 +105,20 @@ class HealthTests(unittest.TestCase):
         self.assertEqual(body["problems"], [])
         self.assertEqual(body["status"], "ok")
 
-    def test_half_configured_google_does_not_count_as_configured(self):
-        """A key without the engine id (or vice versa) cannot search -- it must
-        not suppress the 'no search API' warning."""
-        body = self._get(TAVILY_API_KEY="", GOOGLE_CSE_ID="")
-        self.assertFalse(body["backends"]["google_search"])
+    def test_an_empty_brave_key_does_not_count_as_configured(self):
+        """A blank value must not suppress the 'no search API' warning --
+        Render keeps the variable with an empty value when one is cleared."""
+        body = self._get(TAVILY_API_KEY="", BRAVE_API_KEY="")
+        self.assertFalse(body["backends"]["brave_search"])
         self.assertTrue(body["local_search"]["is_sole_local_search"])
+
+    def test_tavily_alone_still_carries_search_as_a_backup(self):
+        """Free tiers get rotated: Brave spent, Tavily's monthly credit
+        renewed, and vice versa. Either one alone must count as configured."""
+        body = self._get(BRAVE_API_KEY="")
+        self.assertTrue(body["backends"]["tavily"])
+        self.assertFalse(body["local_search"]["is_sole_local_search"])
+        self.assertEqual(body["problems"], [])
 
 
 if __name__ == "__main__":

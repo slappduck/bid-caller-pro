@@ -24,8 +24,8 @@ ENV VARS (set in Render → your service → Environment):
   STRIPE_WEBHOOK_SECRET    from Stripe -> Developers -> Webhooks (whsec_...)
   RESEND_API_KEY           OPTIONAL, emails the key to buyers (resend.com)
   FROM_EMAIL               OPTIONAL sender, e.g. "Bids <keys@yourdomain.com>"
-  GOOGLE_API_KEY           local bid search. Free: 100 queries/day.
-  GOOGLE_CSE_ID            the Programmable Search engine id that pairs
+  BRAVE_API_KEY            local bid search. Free tier ~1,000 queries/mo.
+  BRAVE_MIN_INTERVAL       seconds between Brave calls (default 1.1; the
                            with it. BOTH are required or Google is skipped.
   TAVILY_API_KEY           OPTIONAL paid fallback, tried only when Google
                            returns nothing. Scans work without it.
@@ -406,7 +406,7 @@ def health_detail():
     # free, and a hung upstream must not make the health check itself look down.
     backends = {
         "openai": bool(OPENAI_API_KEY),          # AI bid extraction — /scan is inert without it
-        "google_search": bool(GOOGLE_API_KEY and GOOGLE_CSE_ID),  # primary local search
+        "brave_search": bool(BRAVE_API_KEY),     # primary local search
         "tavily": bool(TAVILY_API_KEY),          # optional paid fallback
         "sam_gov": bool(SAM_API_KEY),            # federal bids
         "supabase": bool(SUPABASE_URL and SUPABASE_ANON_KEY),
@@ -425,7 +425,7 @@ def health_detail():
                                 and _admin_configured()),
     }
     tav = _tavily_health()
-    goo = _google_health()
+    brave = _brave_health()
     email_health = _email_health()
     with _ddg_lock:
         ddg_streak = _ddg_fail_streak
@@ -434,16 +434,16 @@ def health_detail():
     ddg = {
         "consecutive_empty_searches": ddg_streak,
         "degraded": ddg_streak >= DDG_TRIP_THRESHOLD,
-        "is_sole_local_search": not (backends["google_search"] or backends["tavily"]),
+        "is_sole_local_search": not (backends["brave_search"] or backends["tavily"]),
     }
     problems = []
     # A configured-but-rejected key is worse than an absent one: everything
     # keeps returning 200 and scans just quietly come back nearly empty.
-    if backends["google_search"] and goo["quota_or_auth_failure"]:
+    if backends["brave_search"] and brave["quota_or_auth_failure"]:
         problems.append(
-            f"Google Search is rejecting queries (HTTP {goo['last_status']}) — 429 means "
-            "the free 100-a-day cap is spent and clears at midnight Pacific; 403 usually "
-            "means the Custom Search API isn't enabled on the project. Local bid search "
+            f"Brave Search is rejecting queries (HTTP {brave['last_status']}) — 429 means "
+            "either the one-per-second limit or the monthly free credit is spent; "
+            "401/403 means the key is wrong or the subscription lapsed. Local bid search "
             "has fallen back to Tavily or scraping DuckDuckGo.")
     if backends["tavily"] and tav["quota_or_auth_failure"]:
         problems.append(
@@ -469,11 +469,11 @@ def health_detail():
         problems.append("OPENAI_API_KEY unset — /scan and /upcoming return no local bids at all")
     if ddg["is_sole_local_search"] and ddg["degraded"]:
         problems.append("DuckDuckGo appears blocked and no search API is configured — "
-                        "local bid search is effectively down. Set GOOGLE_API_KEY and "
-                        "GOOGLE_CSE_ID (free, 100 queries/day).")
+                        "local bid search is effectively down. Set BRAVE_API_KEY "
+                        "(free tier, roughly 1,000 queries a month).")
     elif ddg["is_sole_local_search"]:
         problems.append("No search API configured — local search depends solely on "
-                        "scraping DuckDuckGo. Set GOOGLE_API_KEY and GOOGLE_CSE_ID.")
+                        "scraping DuckDuckGo. Set BRAVE_API_KEY.")
     if not backends["sam_gov"]:
         problems.append("SAM_API_KEY unset — no federal bids in results")
     if not kv_backend.is_durable():
@@ -501,7 +501,7 @@ def health_detail():
         # ...and the ones before it, so a change in recall reads as a trend
         # rather than a single number with nothing to compare it against.
         "recent_scans": _recent_scans(),
-        "google_search": {k: goo[k] for k in
+        "brave_search": {k: brave[k] for k in
                           ("ok", "failed", "last_status", "last_error",
                            "quota_or_auth_failure", "failing")},
         "tavily": {k: tav[k] for k in
@@ -2631,84 +2631,101 @@ def _tavily_health():
 # documented API rather than a scrape.
 #
 # Two values, both from Google and both required:
-#   GOOGLE_API_KEY  console.cloud.google.com -> enable "Custom Search API"
-#   GOOGLE_CSE_ID   programmablesearchengine.google.com -> create an engine,
+#   BRAVE_API_KEY   api-dashboard.search.brave.com -> subscribe to the free
+#                   plan (card required as anti-fraud, not charged) and copy
 #                   turn ON "Search the entire web", copy the Search engine ID
-GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
-GOOGLE_CSE_ID = os.environ.get("GOOGLE_CSE_ID", "")
-GOOGLE_URL = "https://www.googleapis.com/customsearch/v1"
+BRAVE_API_KEY = _env_secret("BRAVE_API_KEY", "")
+BRAVE_URL = "https://api.search.brave.com/res/v1/web/search"
+# Brave's free tier allows one request per second.
+BRAVE_MIN_INTERVAL = float(os.environ.get("BRAVE_MIN_INTERVAL", "1.1"))
 
-_google_state = {"ok": 0, "failed": 0, "last_error": "", "last_status": 0}
+_brave_state = {"ok": 0, "failed": 0, "last_error": "", "last_status": 0}
 
 
-def _google_note(ok, status=0, detail=""):
+def _brave_note(ok, status=0, detail=""):
     with _tavily_lock:  # same lock: these counters are read together in /health
         if ok:
-            _google_state["ok"] += 1
+            _brave_state["ok"] += 1
         else:
-            _google_state["failed"] += 1
-            _google_state["last_status"] = status
-            _google_state["last_error"] = (detail or "")[:200]
+            _brave_state["failed"] += 1
+            _brave_state["last_status"] = status
+            _brave_state["last_error"] = (detail or "")[:200]
 
 
-def _google_health():
+def _brave_health():
     with _tavily_lock:
-        st = dict(_google_state)
-    # 429 = daily 100-query cap hit; 403 usually means the Custom Search API
-    # was never enabled on the project, or billing/quota is misconfigured.
+        st = dict(_brave_state)
+    # 429 = the per-second or monthly cap; 401/403 = a bad or unsubscribed key.
     st["quota_or_auth_failure"] = st["last_status"] in (401, 403, 429)
     st["failing"] = st["failed"] > 0 and st["ok"] == 0
     return st
 
 
-def _google_search(query, max_results=5):
-    """Search via Google Programmable Search; returns [{url, content}].
+# Brave's free tier is one request per second. Scans fan out across threads,
+# so without pacing here several land in the same second and come back 429 --
+# which looks exactly like the monthly quota being spent.
+_brave_pace_lock = threading.Lock()
+_brave_last_call = [0.0]
 
-    Deliberately returns only the snippet as `content`, never raw page text --
-    Google's API does not provide page bodies, so callers fall through to
-    _fetch_text on the URL exactly as they already do for a thin Tavily hit.
+
+def _brave_wait_turn():
+    with _brave_pace_lock:
+        gap = time.time() - _brave_last_call[0]
+        if gap < BRAVE_MIN_INTERVAL:
+            time.sleep(BRAVE_MIN_INTERVAL - gap)
+        _brave_last_call[0] = time.time()
+
+
+def _brave_search(query, max_results=5):
+    """Search via the Brave Search API; returns [{url, content}].
+
+    Like Google's, this returns only the snippet as `content` -- Brave does
+    not serve page bodies, so callers fall through to _fetch_text on the URL
+    exactly as they already do for a thin result.
     """
-    if not (GOOGLE_API_KEY and GOOGLE_CSE_ID):
+    if not BRAVE_API_KEY:
         return []
     params = urllib.parse.urlencode({
-        "key": GOOGLE_API_KEY,
-        "cx": GOOGLE_CSE_ID,
         "q": query,
-        # Google caps num at 10 per request and rejects anything higher.
-        "num": max(1, min(int(max_results or 5), 10)),
+        # Brave caps count at 20.
+        "count": max(1, min(int(max_results or 5), 20)),
+        "country": "us",
     })
-    req = urllib.request.Request(f"{GOOGLE_URL}?{params}", method="GET")
+    req = urllib.request.Request(
+        f"{BRAVE_URL}?{params}", method="GET",
+        headers={"X-Subscription-Token": BRAVE_API_KEY,
+                 "Accept": "application/json"})
+    _brave_wait_turn()
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             data = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         detail = ""
         try:
-            detail = e.read().decode("utf-8")[:300]
+            detail = e.read().decode("utf-8", "ignore")[:300]
         except Exception:
             pass
-        print(f"[scan] Google CSE HTTP {e.code}: {detail}", flush=True)
-        _google_note(False, e.code, detail)
+        print(f"[scan] Brave HTTP {e.code}: {detail[:160]}", flush=True)
+        _brave_note(False, e.code, detail)
         if e.code in (401, 403, 429):
             _alert_admin(
-                f"Google Search returning HTTP {e.code} — local bid search degraded",
-                "Google Programmable Search rejected a query. 429 means the free "
-                "100-queries-a-day cap is spent and it will clear on its own at "
-                "midnight Pacific; 403 usually means the Custom Search API isn't "
-                "enabled on the project; 401 means the key is wrong. Until it "
-                "clears, scans fall back to Tavily (if configured) and then to "
-                f"scraping DuckDuckGo.\n\nResponse: {detail}",
-            )
+                f"Brave Search returning HTTP {e.code} — local bid search degraded",
+                "Brave rejected a query. 429 means either the one-per-second "
+                "limit or the monthly free credit is spent; 401/403 means the "
+                "key is wrong or the subscription lapsed. Until it clears, "
+                "scans fall back to Tavily (if configured) and then to "
+                f"scraping DuckDuckGo.\n\nResponse: {detail}")
         return []
     except Exception as ex:
-        print(f"[scan] Google CSE error: {ex}", flush=True)
-        _google_note(False, 0, str(ex))
+        print(f"[scan] Brave error: {ex}", flush=True)
+        _brave_note(False, 0, str(ex))
         return []
-    _google_note(True)
-    items = data.get("items") or []
-    print(f"[scan] Google: {len(items)} results for {query!r}", flush=True)
-    return [{"url": it.get("link") or "", "content": it.get("snippet") or ""}
-            for it in items if it.get("link")]
+    _brave_note(True)
+    items = ((data.get("web") or {}).get("results")) or []
+    print(f"[scan] Brave: {len(items)} results for {query!r}", flush=True)
+    return [{"url": it.get("url") or "",
+             "content": it.get("description") or it.get("title") or ""}
+            for it in items if it.get("url")][:max_results]
 
 
 def _tavily_search(query, max_results=5):
@@ -2768,15 +2785,20 @@ def _web_search(query, max_results=6):
     """One search, whichever provider is available. Returns ([{url, content}],
     used_scraper).
 
-    Order is cheapest-reliable first: Google's free tier (100/day, real API),
-    then Tavily if a key is configured and still has credit, then scraping
-    DuckDuckGo as the last resort. Callers only need `used_scraper` so they
-    can apply DDG's pacing delay and skip it entirely otherwise -- the old
-    code inferred that from "did Tavily return nothing", which stopped being
-    true the moment there was more than one keyed provider.
+    Order is cheapest-reliable first: Brave's free tier (a real API, ~1,000
+    queries a month on the free credit), then Tavily if a key is configured
+    and still has credit, then scraping DuckDuckGo as the last resort.
+    Callers only need `used_scraper` so they can apply DDG's pacing delay and
+    skip it entirely otherwise -- the old code inferred that from "did Tavily
+    return nothing", which stopped being true the moment there was more than
+    one keyed provider.
+
+    Google Programmable Search used to lead this chain. Google is deprecating
+    the Custom Search JSON API and no longer lets a project enable it, so the
+    integration was removed rather than left to fail 403 on every query.
     """
-    if GOOGLE_API_KEY and GOOGLE_CSE_ID:
-        results = _google_search(query, max_results=max_results)
+    if BRAVE_API_KEY:
+        results = _brave_search(query, max_results=max_results)
         if results:
             return results, False
     if TAVILY_API_KEY:
