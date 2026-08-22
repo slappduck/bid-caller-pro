@@ -1154,7 +1154,13 @@ def _audit_portal(entry, link_checks=2):
         out["unreachable"] = 1
         return out
     try:
-        rows = bid_sources.parse_civicplus_html(html, entry["base"])
+        # entry["url"], not entry["base"]. The scanner passes the LISTING url
+        # here, and passing the site origin instead exercised a code path
+        # production never takes -- which is how this audit reported 0 dead
+        # links while every CivicPlus posting link was a 404. A monitor that
+        # does not call the code the way production calls it will confirm
+        # whatever you already believe.
+        rows = bid_sources.parse_civicplus_html(html, entry["url"])
     except Exception:
         return out
     today = datetime.datetime.now().date()
@@ -1172,6 +1178,13 @@ def _audit_portal(entry, link_checks=2):
         if not bid_sources.looks_relevant(r.get("title"), r.get("scope")):
             continue
         out["niche_rows"] += 1
+        # Collect the link before the open/closed split. Liveness tests how
+        # the URL was BUILT, not whether the bid is current -- a closed
+        # posting's page still exists. Sampling only open rows gave two links
+        # a night, far too thin to catch the construction regression that
+        # made every one of them a 404.
+        if r.get("url"):
+            to_check.append(r["url"])
         if not _is_open_bid(bid):
             continue
         out["shown_open"] += 1
@@ -1186,8 +1199,6 @@ def _audit_portal(entry, link_checks=2):
             out["shown_no_deadline"] += 1
         if status.lower().startswith("award"):
             out["awarded_shown_open"] += 1
-        if r.get("url"):
-            to_check.append(r["url"])
 
     for url in to_check[:link_checks]:
         alive = _url_is_alive(url)

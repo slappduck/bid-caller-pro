@@ -250,11 +250,19 @@ class ExtendedMetricTests(unittest.TestCase):
         self.assertEqual(r["shown_open"], 9)
         self.assertEqual(r["links_checked"], 2)
 
-    def test_closed_rows_are_never_link_checked(self):
-        """Only what a customer would actually be shown is judged."""
+    def test_a_closed_rows_link_is_still_checked(self):
+        """Liveness tests how the URL was built, not whether the bid is
+        current -- a closed posting's page still exists, and sampling only
+        open rows gave two links a night."""
         html = "<html>" + _row(1, "Old Sidewalk Job", "Closed", PAST) + "</html>"
         r = self._audit(html)
-        self.assertEqual(r["links_checked"], 0)
+        self.assertEqual(r["shown_open"], 0)
+        self.assertEqual(r["links_checked"], 1)
+
+    def test_an_off_niche_rows_link_is_not_checked(self):
+        """Still bounded to work we would ever surface."""
+        html = ("<html>" + _row(1, "Janitorial Services", "Open", FUTURE) + "</html>")
+        self.assertEqual(self._audit(html)["links_checked"], 0)
 
 
 class AuditRouteTests(unittest.TestCase):
@@ -283,3 +291,42 @@ class AuditRouteTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AuditCallsProductionsCodePathTests(unittest.TestCase):
+    """The audit reported 0 dead links while every CivicPlus posting link was
+    a 404, because it passed the site origin as base_url where the scanner
+    passes the listing url. A monitor that does not call the code the way
+    production calls it will confirm whatever you already believe."""
+
+    def test_the_listing_url_is_passed_as_the_parse_base(self):
+        seen = {}
+
+        def spy(html, base_url=""):
+            seen["base"] = base_url
+            return []
+
+        entry = {"url": "https://x.gov/Bids.aspx?showAllBids=on",
+                 "base": "https://x.gov", "city": "X", "state": "MO"}
+        with patch.object(ls.bid_sources, "parse_civicplus_html", spy), \
+             patch.object(ls, "_fetch_raw_html", return_value="<html></html>"):
+            ls._audit_portal(entry)
+        self.assertEqual(seen["base"], entry["url"],
+                         "the audit must parse the way the scanner does")
+
+    def test_a_malformed_link_would_now_be_seen_as_dead(self):
+        """End to end: the bug's own signature, caught."""
+        html = ('<html><body><a href="bids.aspx?bidID=1">Sidewalk Program</a>'
+                '<a href="bids.aspx?bidID=1">Read on: Sidewalk Program</a>'
+                '<span>Status:</span><span>Closes:</span>'
+                f'<span>Open</span><span>{FUTURE}</span></body></html>')
+        entry = {"url": "https://x.gov/Bids.aspx", "base": "https://x.gov",
+                 "city": "X", "state": "MO"}
+        checked = []
+        with patch.object(ls, "_fetch_raw_html", return_value=html), \
+             patch.object(ls, "_url_is_alive",
+                          side_effect=lambda u, **k: checked.append(u) or False):
+            r = ls._audit_portal(entry)
+        self.assertEqual(r["links_dead"], 1)
+        self.assertNotIn("/Bids.aspx/", checked[0],
+                         "a link built under the listing page is the bug")
