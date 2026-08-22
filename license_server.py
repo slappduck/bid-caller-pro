@@ -3610,9 +3610,17 @@ def _enrich_from_detail_pages(rows, stats=None, lock=None):
         try:
             page, outcome = _fetch_page(row["url"], timeout=PROBE_TIMEOUT)
             if outcome != "ok" or not page:
+                # Distinguished from "read it, found nothing new". A live scan
+                # enriched 3 of 16 postings where a sandbox sample managed
+                # 88%, and those are very different problems: one is the
+                # posting pages being unreachable from the server, the other
+                # is the extractors not matching what is on them. Guessing
+                # between them wasted a round already.
+                row["_fetch_failed"] = True
                 return False
             found = bid_sources.parse_contact(page)
         except Exception:
+            row["_fetch_failed"] = True
             return False
         got = False
         for field in ("contact", "email", "phone"):
@@ -3676,6 +3684,7 @@ def _enrich_from_detail_pages(rows, stats=None, lock=None):
         # yielded a deadline and no phone counted as a contact found.
         reachable = sum(1 for r in targets if r.get("email") or r.get("phone"))
         enriched = sum(1 for r in results if r)
+        unreachable = sum(1 for r in targets if r.pop("_fetch_failed", False))
         def _bump():
             stats["contacts_found"] = stats.get("contacts_found", 0) + reachable
             missed = len(targets) - reachable
@@ -3684,6 +3693,9 @@ def _enrich_from_detail_pages(rows, stats=None, lock=None):
             stats["postings_enriched"] = \
                 stats.get("postings_enriched", 0) + enriched
             stats["postings_read"] = stats.get("postings_read", 0) + len(targets)
+            if unreachable:
+                stats["postings_unreachable"] = \
+                    stats.get("postings_unreachable", 0) + unreachable
         if lock is not None:
             with lock:
                 _bump()

@@ -197,3 +197,40 @@ class DetailValueTests(unittest.TestCase):
     def test_missing_input_is_handled(self):
         self.assertEqual(bs.detail_value(""), "")
         self.assertEqual(bs.detail_value(None), "")
+
+
+class EnrichmentDiagnosticsTests(unittest.TestCase):
+    """A live scan enriched 3 of 16 postings where a sandbox sample managed
+    88%. "Could not fetch the posting" and "fetched it and found nothing new"
+    are different problems with different fixes, and the funnel could not
+    tell them apart -- so it could not say which one this is."""
+
+    def setUp(self):
+        import license_server as ls
+        self.ls = ls
+
+    def test_an_unreachable_posting_is_counted_separately(self):
+        from unittest.mock import patch
+        rows = [{"url": "https://x.gov/b/1", "title": "Sidewalk"}]
+        stats = {}
+        with patch.object(self.ls, "_fetch_page", return_value=("", "timeout")):
+            self.ls._enrich_from_detail_pages(rows, stats)
+        self.assertEqual(stats.get("postings_unreachable"), 1)
+        self.assertEqual(stats.get("postings_enriched", 0), 0)
+
+    def test_a_readable_posting_with_nothing_new_is_not_unreachable(self):
+        from unittest.mock import patch
+        rows = [{"url": "https://x.gov/b/1", "title": "Sidewalk"}]
+        stats = {}
+        with patch.object(self.ls, "_fetch_page",
+                          return_value=("<html>nothing useful</html>", "ok")):
+            self.ls._enrich_from_detail_pages(rows, stats)
+        self.assertIsNone(stats.get("postings_unreachable"))
+        self.assertEqual(stats.get("postings_read"), 1)
+
+    def test_the_marker_does_not_leak_onto_the_bid(self):
+        from unittest.mock import patch
+        rows = [{"url": "https://x.gov/b/1", "title": "Sidewalk"}]
+        with patch.object(self.ls, "_fetch_page", return_value=("", "timeout")):
+            self.ls._enrich_from_detail_pages(rows, {})
+        self.assertNotIn("_fetch_failed", rows[0])
