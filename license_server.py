@@ -3507,6 +3507,30 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
     return raw[0]
 
 
+# Aggregator platforms a city's own bid page structurally cannot show. Packed
+# into two OR-ed site: queries rather than one per domain: every engine we use
+# supports OR-ed site: filters, and eight separate searches for the same
+# question was the single biggest line item in a scan's search budget.
+_AGG_SITES = (
+    ("bidnetdirect.com", "demandstar.com", "planetbids.com", "publicpurchase.com"),
+    ("questcdn.com", "opengov.com", "bonfirehub.com", "bidexpress.com",
+     "bidsearch.com"),
+)
+
+# State procurement portals, folded into the packed query for that state
+# rather than costing a search of their own.
+_STATE_PORTALS = {"MO": "missouribuys.mo.gov"}
+
+
+def _agg_sites(group, state=""):
+    """An OR-ed site: filter for one group of aggregator domains."""
+    sites = list(_AGG_SITES[group])
+    extra = _STATE_PORTALS.get((state or "").upper())
+    if extra and group == len(_AGG_SITES) - 1:
+        sites.append(extra)
+    return " OR ".join("site:" + d for d in sites)
+
+
 def _run_local_queries(queries, ai_label, max_pages, grouped, center, radius, cdb,
                         city_coords, seen_urls, lock, pdb, default_city="", state="",
                         town_coords=None, stats=None):
@@ -4081,32 +4105,25 @@ def _perform_scan(location, radius, force=False):
         # worth running, known-portal hit or not.
         center_queries_always = [
             f"{c} {s} school district sidewalk ADA concrete project bid",
-            f"{c} {s} sidewalk ADA curb bid site:bidnetdirect.com OR site:demandstar.com",
-            f"{c} {s} sidewalk ADA curb bid site:planetbids.com OR site:publicpurchase.com",
-            f"{c} {s} sidewalk ADA curb bid site:questcdn.com OR site:opengov.com",
-            f"{c} {s} sidewalk ADA curb bid site:bonfirehub.com",
-            f"{c} {s} sidewalk ADA curb bid site:civicplus.com OR site:municode.com",
-            f"{c} {s} sidewalk ADA curb bid site:bidexpress.com",
+            f"{c} {s} sidewalk ADA curb bid {_agg_sites(0)}",
+            f"{c} {s} sidewalk ADA curb bid {_agg_sites(1, center['state'])}",
             f"{c} {s} county road department concrete curb bid notice",
             f"{c} {s} Safe Routes to School OR ADA transition plan sidewalk bid",
             f"{c} {s} CDBG sidewalk curb ramp bid notice to contractors",
-            f"{c} {s} sidewalk ADA curb bid site:bidsearch.com",
         ]
-        if center["state"] == "MO":
-            center_queries_always.append(f"{c} {s} sidewalk ADA curb bid site:missouribuys.mo.gov")
         # Generic re-phrasings of "does this city have a sidewalk bid" --
         # redundant once _run_known_portals already read the city's own bid
         # page directly and found something real there, since a working
         # direct source is the authoritative answer to that exact question.
         # Only worth the Tavily-credit cost when there's no working direct
         # source to trust instead.
+        # Six near-identical rephrasings returned heavily overlapping results;
+        # three distinct angles (the work, the process, the department) cover
+        # the same ground for half the queries.
         center_queries_generic = [
-            f"{c} {s} sidewalk replacement concrete construction bid invitation",
-            f"{c} {s} ADA ramp curb gutter concrete bid opportunities",
-            f"{c} {s} concrete flatwork sidewalk public works solicitation",
-            f"{c} {s} city county sidewalk curb concrete RFP",
-            f"{s} concrete sidewalk ADA curb bids near {c}",
-            f"{c} {s} invitation to bid concrete sidewalk 2026",
+            f"{c} {s} sidewalk replacement ADA ramp curb gutter concrete bid",
+            f"{c} {s} invitation to bid concrete sidewalk solicitation",
+            f"{c} {s} public works concrete flatwork RFP bid opportunities",
         ]
 
         anchors = _nearby_anchor_towns(center, radius, pdb)
@@ -4160,17 +4177,17 @@ def _perform_scan(location, radius, force=False):
 
         def _run_anchor(anchor):
             ac, ast, alat, alon = anchor
+            # Anchors get one query, not five. They used to be the main way a
+            # scan saw past the centre town, but the portal directory has
+            # since grown from ~750 agencies to 4,400+, so _run_known_portals
+            # above now reads most anchor towns' bid pages directly. What it
+            # structurally cannot see is an aggregator listing, so that is the
+            # one thing left worth searching for here.
             anchor_queries_always = [
-                f"{ac} {ast} sidewalk ADA curb bid site:bidnetdirect.com OR site:demandstar.com",
-                f"{ac} {ast} sidewalk ADA curb bid site:planetbids.com OR site:publicpurchase.com",
-                f"{ac} {ast} concrete curb gutter bid Bonfire OpenGov CivicPlus procurement",
-                f"{ac} {ast} sidewalk ADA curb bid site:bidsearch.com",
+                f"{ac} {ast} sidewalk ADA curb bid {_agg_sites(0)}",
             ]
-            if ast == "MO":
-                anchor_queries_always.append(f"{ac} {ast} sidewalk ADA curb bid site:missouribuys.mo.gov")
             anchor_queries_generic = [
                 f"{ac} {ast} sidewalk ADA curb concrete bid invitation",
-                f"{ac} {ast} invitation to bid concrete sidewalk ADA ramp 2026",
             ]
             got = _run_known_portals(ac, ast, f"{ac}, {ast}", grouped, center, radius,
                                       cdb, city_coords, lock, pdb, default_city=ac,
