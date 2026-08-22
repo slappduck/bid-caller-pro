@@ -683,7 +683,11 @@ async function syncPullSavedBids(){
 const COMPANY_FIELDS=["name","contact","phone","email","specialty","avatar_url"];
 
 async function pushCompanyProfile(){
-  if(!sb||!currentUser)return;
+  // Silence here is what made this so hard to diagnose: a profile that never
+  // reached the server looked identical to one that did. Every failure path
+  // now says something.
+  if(!sb){toast("Not connected to the account service");return;}
+  if(!currentUser){toast("Sign in again to save your company info");return;}
   const row={};
   COMPANY_FIELDS.forEach(k=>{row[k]=companyProfile[k]||"";});
   let err=null;
@@ -695,10 +699,17 @@ async function pushCompanyProfile(){
   // one unknown column -- so including the photo would stop the name, contact
   // and phone syncing too. Retry without it: the photo stays local until the
   // migration runs, everything else still follows the account.
+  console.warn("[curbcall] company profile push failed:", err);
   const rest={};
   COMPANY_FIELDS.filter(k=>k!=="avatar_url")
     .forEach(k=>{rest[k]=companyProfile[k]||"";});
-  try{await sb.from("company_profiles").upsert(rest,{onConflict:"user_id"});}catch(e){}
+  let err2=null;
+  try{const r=await sb.from("company_profiles").upsert(rest,{onConflict:"user_id"});err2=r&&r.error;}
+  catch(e){err2=e;}
+  if(!err2)return;
+  console.warn("[curbcall] retry without avatar_url also failed:", err2);
+  const msg=(err2&&(err2.message||err2.hint||err2.code))||"unknown error";
+  toast("Couldn't save company info: "+String(msg).slice(0,90));
 }
 async function syncPullCompanyProfile(){
   if(!sb||!currentUser)return;

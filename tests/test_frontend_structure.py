@@ -62,16 +62,30 @@ class CompanyProfileSyncTests(unittest.TestCase):
         block = self.app[self.app.index("const COMPANY_FIELDS="):]
         self.assertIn("avatar_url", block[:200])
 
+    def _fn(self, name):
+        """The source of one function, to the start of the next one.
+
+        Slicing at the first closing brace broke as soon as the function grew
+        an early-return guard -- the test should follow the function, not its
+        first statement."""
+        start = self.app.index(f"async function {name}(")
+        after = self.app.find("\nasync function ", start + 1)
+        return self.app[start:after if after != -1 else start + 4000]
+
     def test_the_push_builds_its_row_from_the_list(self):
-        body = self.app[self.app.index("async function pushCompanyProfile("):]
-        body = body[:body.index("}\n")]
-        self.assertIn("COMPANY_FIELDS", body)
+        self.assertIn("COMPANY_FIELDS", self._fn("pushCompanyProfile"))
+
+    def test_a_failed_push_is_not_swallowed(self):
+        """A profile that never reached the server looked identical to one
+        that did -- which is what made an empty table so hard to diagnose."""
+        body = self._fn("pushCompanyProfile")
+        self.assertIn("toast(", body)
+        self.assertNotIn("catch(e){}", body)
 
     def test_the_pull_does_not_gate_the_whole_profile_on_the_company_name(self):
         """Someone with a photo and a contact but no company name had their
         stored row ignored, then overwritten with the empty local copy."""
-        body = self.app[self.app.index("async function syncPullCompanyProfile("):]
-        body = body[:body.index("\n}")]
+        body = self._fn("syncPullCompanyProfile")
         self.assertNotIn("data&&data.name", body)
         self.assertIn("COMPANY_FIELDS.some", body)
 
