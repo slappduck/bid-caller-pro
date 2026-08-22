@@ -1016,6 +1016,77 @@ def _export_table(name):
     return rows, ""
 
 
+# ── Read-only diagnostics ────────────────────────────────────────────────
+# A second, deliberately weak credential. ADMIN_TOKEN can issue licences,
+# send campaigns and export the user table, so it is the wrong thing to hand
+# to anyone helping debug a scan -- the blast radius of a leak is the whole
+# business. This one reads scan telemetry and nothing else: no user data, no
+# licence keys, no email addresses, and no route that changes anything.
+DIAG_TOKEN = _env_secret("DIAG_TOKEN", "")
+
+
+def _diag_ok(supplied):
+    if not DIAG_TOKEN:
+        return False
+    # Refusing the admin token here is deliberate. If the two were
+    # interchangeable, "just use the admin one" would quietly become the
+    # habit and the separation would buy nothing.
+    if _admin_configured() and hmac.compare_digest(supplied or "", ADMIN_TOKEN):
+        return False
+    return hmac.compare_digest(supplied or "", DIAG_TOKEN)
+
+
+@app.route("/diag", methods=["GET"])
+def diag():
+    """Everything needed to debug a scan, and nothing else.
+
+    Read-only by construction: GET, no side effects, and the payload is
+    assembled field by field rather than by filtering something larger, so a
+    field added elsewhere cannot leak in here by default.
+    """
+    if not DIAG_TOKEN:
+        return jsonify({"ok": False, "reason": "diag_not_configured"}), 503
+    if not _diag_ok(request.headers.get("X-Diag-Token")):
+        return jsonify({"ok": False, "reason": "unauthorized"}), 403
+
+    brave, tav = _brave_health(), _tavily_health()
+    with _ddg_lock:
+        ddg_streak = _ddg_fail_streak
+    return jsonify({
+        "ok": True,
+        "version": _env_secret("RENDER_GIT_COMMIT", "")[:7],
+        "providers": {
+            "brave": {k: brave[k] for k in
+                      ("ok", "failed", "last_status", "last_error")},
+            "tavily": {k: tav[k] for k in
+                       ("ok", "failed", "last_status", "last_error")},
+            "ddg": {"consecutive_empty_searches": ddg_streak,
+                    "degraded": ddg_streak >= DDG_TRIP_THRESHOLD},
+            "benched_until": {k: round(v - time.time(), 1)
+                              for k, v in _provider_down_until.items()},
+        },
+        "last_scan": kv_backend.get("bidcaller:last_scan", None),
+        "recent_scans": _recent_scans(),
+        "feed_audit": kv_backend.get(BID_AUDIT_KEY, None),
+        "scan_config": {
+            "max_pages_per_town": MAX_PAGES,
+            "max_anchor_towns": MAX_ANCHOR_TOWNS,
+            "max_known_towns": MAX_KNOWN_TOWNS,
+            "known_town_budget_sec": KNOWN_TOWN_BUDGET_SEC,
+            "detail_pages_per_portal": DETAIL_PAGES_PER_PORTAL,
+            "probe_timeout": PROBE_TIMEOUT,
+            "fetch_timeout": FETCH_TIMEOUT,
+            "undated_max_days": UNDATED_MAX_DAYS,
+            "model": OPENAI_MODEL,
+        },
+        "directory": {
+            "portals": sum(len(v) for v in bid_portals._national_seeds().values()),
+            "wikidata_portals": sum(len(v) for v in bid_portals._wikidata_seeds().values()),
+            "geocoded_towns": len(bid_portals._coords()),
+        },
+    })
+
+
 @app.route("/admin/whoami", methods=["POST"])
 def admin_whoami():
     """Tells the caller, and only the caller, whether their signed-in account
