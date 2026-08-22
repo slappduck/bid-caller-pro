@@ -676,23 +676,36 @@ async function syncPullSavedBids(){
   if(document.getElementById("screen-saved").classList.contains("active"))renderSaved();
 }
 
+// Every field the Account screen owns. Kept as one list so push and pull
+// cannot drift: avatar_url was added to the table and to the UI but to
+// neither of these, so a profile photo lived only in localStorage on the
+// device that uploaded it and never appeared anywhere else.
+const COMPANY_FIELDS=["name","contact","phone","email","specialty","avatar_url"];
+
 async function pushCompanyProfile(){
   if(!sb||!currentUser)return;
-  const row={name:companyProfile.name||"",contact:companyProfile.contact||"",
-             phone:companyProfile.phone||"",email:companyProfile.email||"",
-             specialty:companyProfile.specialty||""};
+  const row={};
+  COMPANY_FIELDS.forEach(k=>{row[k]=companyProfile[k]||"";});
   try{await sb.from("company_profiles").upsert(row,{onConflict:"user_id"});}catch(e){}
 }
 async function syncPullCompanyProfile(){
   if(!sb||!currentUser)return;
   const{data,error}=await sb.from("company_profiles").select("*").maybeSingle();
   if(error)return;
-  if(data&&data.name){
-    companyProfile={name:data.name||"",contact:data.contact||"",phone:data.phone||"",
-                     email:data.email||"",specialty:data.specialty||""};
+  // Any field counts, not just name. Gating on name meant someone who set a
+  // photo and a contact but left the company name blank had the stored row
+  // ignored on every other device -- and the else-branch then pushed the
+  // empty local copy back over it.
+  const hasRemote=data&&COMPANY_FIELDS.some(k=>data[k]);
+  const hasLocal=COMPANY_FIELDS.some(k=>companyProfile[k]);
+  if(hasRemote){
+    const next={};
+    COMPANY_FIELDS.forEach(k=>{next[k]=data[k]||"";});
+    companyProfile=next;
     store.set("company_profile",companyProfile);
+    updateUserChip();
     if(document.getElementById("screen-account").classList.contains("active"))renderAccount();
-  }else if(companyProfile.name){
+  }else if(hasLocal){
     pushCompanyProfile();
   }
 }

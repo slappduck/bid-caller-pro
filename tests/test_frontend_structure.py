@@ -45,6 +45,37 @@ class MapSizingTests(unittest.TestCase):
         self.assertIn('typeof ResizeObserver==="undefined"', body[:400])
 
 
+class CompanyProfileSyncTests(unittest.TestCase):
+    """Account fields synced through Supabase but the profile photo did not:
+    avatar_url was added to the table and to the UI, and to neither the push
+    nor the pull. It lived in localStorage on the device that uploaded it and
+    appeared nowhere else. One shared field list is what stops that drifting
+    again."""
+
+    def setUp(self):
+        self.app = _read(APP)
+
+    def test_push_and_pull_share_one_field_list(self):
+        self.assertIn("const COMPANY_FIELDS=", self.app)
+
+    def test_the_avatar_is_in_that_list(self):
+        block = self.app[self.app.index("const COMPANY_FIELDS="):]
+        self.assertIn("avatar_url", block[:200])
+
+    def test_the_push_builds_its_row_from_the_list(self):
+        body = self.app[self.app.index("async function pushCompanyProfile("):]
+        body = body[:body.index("}\n")]
+        self.assertIn("COMPANY_FIELDS", body)
+
+    def test_the_pull_does_not_gate_the_whole_profile_on_the_company_name(self):
+        """Someone with a photo and a contact but no company name had their
+        stored row ignored, then overwritten with the empty local copy."""
+        body = self.app[self.app.index("async function syncPullCompanyProfile("):]
+        body = body[:body.index("\n}")]
+        self.assertNotIn("data&&data.name", body)
+        self.assertIn("COMPANY_FIELDS.some", body)
+
+
 class ServiceWorkerTests(unittest.TestCase):
     def setUp(self):
         self.sw = _read(SW)
