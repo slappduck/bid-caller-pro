@@ -78,5 +78,59 @@ class ValueTests(unittest.TestCase):
         self.assertEqual(bs.detail_value("Sealed bids will be received."), "")
 
 
+class PlanetBidsValueTests(unittest.TestCase):
+    """The field a customer photographed and asked about.
+
+    A City of Duarte posting on PlanetBids printed "Estimated Bid Value
+    $130,000.00" and the app showed an empty Est. Value box. Two separate
+    faults, both here:
+
+    The label. "Estimated Bid Value" has a word between "estimated" and the
+    noun, and the pattern required them adjacent.
+
+    The exclusion window. It searched 60 characters back from the match and
+    hit "Liquidated Damages $1,000 per calendar day" -- the PREVIOUS field --
+    so even once the label matched, the amount was thrown away. A
+    disqualifier now only counts where it is attached to the figure:
+    immediately before the label, or immediately after the number, which is
+    where the rate qualifiers actually sit.
+    """
+
+    # Verbatim, in page order, from the posting in the screenshot.
+    DUARTE = ("Offer Valid Liquidated Damages $1,000 per calendar day "
+              "Estimated Bid Value $130,000.00 Start/Delivery Date "
+              "Project Duration 25 Working Days")
+
+    def test_the_estimated_bid_value_is_read(self):
+        self.assertEqual(bs.detail_value(self.DUARTE), "$130,000.00")
+
+    def test_the_liquidated_damages_on_the_same_page_are_not(self):
+        self.assertNotIn("1,000", bs.detail_value(self.DUARTE))
+
+    def test_a_word_between_estimated_and_the_noun(self):
+        for text, want in (("Estimated Project Cost: $85,000", "$85,000"),
+                           ("Estimated Contract Value $1,250,000", "$1,250,000"),
+                           ("Estimated Bid Value $95,000", "$95,000")):
+            self.assertEqual(bs.detail_value(text), want, text)
+
+    def test_a_rate_immediately_after_the_figure_is_not_a_project_value(self):
+        for text in ("Liquidated damages estimated cost $1,500 per calendar day",
+                     "Estimated cost $500 per occurrence",
+                     "Estimated amount $12 per linear foot"):
+            self.assertEqual(bs.detail_value(text), "", text)
+
+    def test_a_disqualifier_immediately_before_the_label_still_wins(self):
+        for text in ("Bid Bond estimated amount $25,000",
+                     "Bid security estimated value $20,000"):
+            self.assertEqual(bs.detail_value(text), "", text)
+
+    def test_a_previous_field_no_longer_disqualifies_the_next_one(self):
+        """The exact regression: an unrelated earlier field killed a real
+        value 40 characters later."""
+        text = ("Publication Date/Time: 7/1/2026 8:00 AM "
+                "Estimated Bid Value $95,000")
+        self.assertEqual(bs.detail_value(text), "$95,000")
+
+
 if __name__ == "__main__":
     unittest.main()

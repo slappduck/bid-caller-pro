@@ -4436,7 +4436,24 @@ def _place_bid(grouped, bid, center, radius, db, default_city="", city_coords=No
     if not isinstance(bid, dict):
         _count("malformed")
         return
-    city, stated_state = _split_city_state(bid.get("city") or default_city or "")
+    # Whether the bid named its OWN city, or we are about to lend it the town
+    # whose scan turned it up. That fallback exists because a town's own bid
+    # page is that town's by definition -- a posting there that doesn't
+    # restate the city is still local.
+    #
+    # An aggregator page is the opposite case. PlanetBids, BidNet, DemandStar
+    # and the rest host every agency in the country behind one domain, so the
+    # search town says nothing about where the work is. A live scan of
+    # Rollingwood, CA surfaced a City of DUARTE job -- 358 miles away, on the
+    # far side of the state -- and lending it Rollingwood's name and
+    # coordinates put it on the board as local, past the radius check, under
+    # the wrong town's heading.
+    stated_city = str(bid.get("city") or "").strip()
+    from_aggregator = bid_portals.is_aggregator_url(bid.get("url") or "")
+    if from_aggregator and not stated_city:
+        _count("aggregator_no_location")
+        return
+    city, stated_state = _split_city_state(stated_city or default_city or "")
     if not city:
         _count("no_location")
         return  # no stated location -> can't verify it's local -> drop
@@ -4517,7 +4534,10 @@ def _place_bid(grouped, bid, center, radius, db, default_city="", city_coords=No
             if len(elsewhere) == 1 and search_state not in elsewhere:
                 _count("authority_in_another_state")
                 return
-        if fallback_coords and anchorable \
+        # Same reasoning as above: an aggregator page's buyer may be anywhere,
+        # so a name we could not geocode must not be pinned to the search
+        # town's coordinates just because it looks like an authority.
+        if fallback_coords and anchorable and not from_aggregator \
                 and (not stated_state or stated_state == search_state):
             coords, used_state = fallback_coords, search_state
             _count("placed_by_search_town")

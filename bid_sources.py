@@ -924,7 +924,13 @@ def detail_deadline(html):
 # the first was matched.
 _VALUE_LABEL_RE = re.compile(
     r"(?:engineer(?:ing)?['’ʼ`]?s?\s+estimate|"
-    r"estimated\s+(?:cost|value|price|budget|amount)|"
+    # One optional word between "estimated" and the noun. PlanetBids labels
+    # the field "Estimated Bid Value" and the exact-adjacency pattern could
+    # not see it, so a posting stating $130,000.00 reached the customer with
+    # an empty Est. Value box. Same shape covers "Estimated Project Cost" and
+    # "Estimated Contract Value".
+    r"estimated\s+(?:\w+\s+)?(?:cost|value|price|budget|amount)|"
+    r"(?:bid|contract|project|construction)\s+value\s*(?:is|:)?|"
     r"project\s+estimate|opinion\s+of\s+probable\s+cost|"
     r"budget(?:ed)?\s+amount|estimated\s+project\s+cost|"
     r"estimated\s+construction\s+cost|construction\s+estimate)"
@@ -936,12 +942,21 @@ _VALUE_LABEL_RE = re.compile(
 # construction solicitation carries "$1,000,000 each occurrence / $2,000,000
 # general aggregate", and reporting that as the project's value would have a
 # contractor pricing against a number the page never claimed.
-_NOT_A_VALUE_RE = re.compile(
-    r"bid\s+bond|plan\s+deposit|non-?refundable|liquidated\s+damages|"
-    r"per\s+day|filing\s+fee|application\s+fee|bid\s+security|"
-    r"performance\s+bond|payment\s+bond|each\s+occurrence|"
-    r"general\s+aggregate|combined\s+single\s+limit|"
-    r"liability\s+insurance|umbrella\s+(?:policy|coverage)", re.I)
+_NOT_A_VALUE = (r"bid\s+bond|plan\s+deposit|non-?refundable|"
+                r"liquidated\s+damages|filing\s+fee|application\s+fee|"
+                r"bid\s+security|performance\s+bond|payment\s+bond|"
+                r"each\s+occurrence|general\s+aggregate|"
+                r"combined\s+single\s+limit|liability\s+insurance|"
+                r"umbrella\s+(?:policy|coverage)")
+# Immediately BEFORE the label. Only spaces and word characters may sit
+# between -- a "$" or a digit means a different field has already started.
+_NOT_A_VALUE_LEAD_RE = re.compile(rf"(?:{_NOT_A_VALUE})[\s\w]{{0,15}}$", re.I)
+# Immediately AFTER the figure, which is where the rate qualifiers live:
+# "$1,000 per calendar day", "$500 per occurrence".
+_NOT_A_VALUE_TRAIL_RE = re.compile(
+    rf"\s*(?:per\s+(?:calendar\s+|working\s+|business\s+)?day"
+    rf"|per\s+(?:occurrence|unit|each|ton|sf|square\s+foot|linear\s+foot|lf)"
+    rf"|{_NOT_A_VALUE})", re.I)
 
 
 def detail_value(html):
@@ -950,8 +965,16 @@ def detail_value(html):
     if not text:
         return ""
     for m in _VALUE_LABEL_RE.finditer(text):
-        window = text[max(0, m.start() - 60):m.end() + 40]
-        if _NOT_A_VALUE_RE.search(window):
+        # Anchored either side of the match rather than searched over a
+        # 100-character window. The window version read the PREVIOUS field:
+        # a PlanetBids posting printing "Liquidated Damages $1,000 per
+        # calendar day  Estimated Bid Value $130,000.00" threw away the
+        # $130,000 because "Liquidated Damages" sat 40 characters earlier.
+        # A disqualifier only counts when it is what the amount is attached
+        # to -- immediately before the label, or immediately after the figure.
+        lead = text[max(0, m.start() - 45):m.start()]
+        trail = text[m.end():m.end() + 30]
+        if _NOT_A_VALUE_LEAD_RE.search(lead) or _NOT_A_VALUE_TRAIL_RE.match(trail):
             continue
         return re.sub(r"\s+", "", m.group(1))
     return ""
