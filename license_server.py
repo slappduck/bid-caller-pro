@@ -5173,8 +5173,14 @@ def _enrich_placed_bids(grouped, stats=None):
     # Only a phone or an email makes a bid callable, so only those count as
     # done; a name already present is preserved either way, since
     # _enrich_from_detail_pages only fills fields that are empty.
+    # A state letting row's url is the LETTING PAGE, shared by every row on it,
+    # not that job's own posting. Enriching them would fetch one page up to
+    # fourteen times to learn nothing -- the listing carries no per-job contact
+    # -- and would spend the whole budget doing it. Same reasoning the AI path
+    # already applies to bids still pointing at the listing they came from.
     todo = [b for bids in (grouped or {}).values() for b in bids
             if isinstance(b, dict) and b.get("url")
+            and b.get("source") != "state_dot"
             and not (b.get("email") or b.get("phone"))]
     # Undated bids first (a missing deadline is worse than a missing phone
     # number, because it also stops an expired listing being recognised), then

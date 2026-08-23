@@ -970,6 +970,9 @@ function toast(msg){
   clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),2600);
 }
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+// County names arrive normalised for matching ("st clair", "de kalb"), which
+// is right for a lookup key and wrong on a card.
+function titleCase(s){return String(s==null?"":s).replace(/\b[a-z]/g,c=>c.toUpperCase());}
 
 // Returns the URL only if it uses a scheme we actually intend to open, else "".
 // A bid's url/email/phone are extracted by the AI out of whatever page a search
@@ -2890,6 +2893,14 @@ function openDetail(city,b){
         :"<b>Pre-bid meeting.</b> Check the posting for date and place."}</span></div>`:""}
     ${b.addenda?`<div class="alert alert-amber">
       <span><b>This bid has addenda.</b> Read them before pricing \u2014 the scope may have changed.</span></div>`:""}
+    ${b.source==="state_dot"?`<div class="alert alert-amber">
+      <span><b>State highway job.</b> Most states require prequalification to bid
+      one of these as prime, and the whole contract is usually bigger than a
+      concrete crew takes on alone. The usual way in is as a sub: the letting
+      page lists the contractors who pulled plans, and those are the people
+      who need your ramps and sidewalks priced.${b.also_in&&b.also_in.length
+        ?` This job also covers ${esc(b.also_in.slice(0,4).map(titleCase).join(", "))}${b.also_in.length>4?" and more":""}.`
+        :""}</span></div>`:""}
     ${row("Scope of Work",b.scope)}
     <div class="detail-grid">
       ${row("Posted",b.published)}
