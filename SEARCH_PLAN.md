@@ -460,3 +460,84 @@ So this is not a new adapter — it is one more hop plus a state-domain corpus.
 - **Newspaper legal classifieds** — BidPrime names these explicitly. Note the
   statutory public-notice network is already ruled out above on robots.txt
   grounds; individual papers are a separate question.
+
+### Phase 6 result — built, measured, 2 states live (2026-08-23)
+
+Built: `counties.py` (3,215 Census population-weighted county centroids),
+`tools/state_fetch.py` (polite fetcher), `tools/discover_state_sources.py`
+(two-hop crawler), `tools/verify_state_sources.py` (yield measurement),
+`bid_sources.parse_state_letting`, `data/county_coords.csv`,
+`data/state_bid_sources.csv`.
+
+**The crawl found "convincing listings" in 22 of 50 states. Running the real
+parser over them, 2 states actually yield placeable, concrete-relevant rows:
+Florida (75) and Missouri (6).** The gap between 22 and 2 is the whole lesson
+and the reason the verifier exists.
+
+| Scan centre | +bids at 50mi | +bids at 125mi |
+|---|---|---|
+| Tampa, FL | 23 | 51 |
+| Orlando, FL | 16 | 51 |
+| Jacksonville, FL | 1 | 13 |
+| Springfield, MO | 1 | 4 |
+| Aurora, MO | 1 | 3 |
+| Kansas City, MO | 0 | 3 |
+
+#### What the other 48 states are blocked on, precisely
+
+- **20 states: no listing found at all.** 10 have no page the crawler could
+  recognise, 6 refuse our honest agent, 2 disallow via robots.txt, 2 error.
+- **8 states: landing page only** (RI DE IA OR PA WY CT HI) — the crawler
+  reached the menu, not the table. A third hop or a hand-supplied URL.
+- **~18 states: wrong page found, or right page with no location column.**
+  This is the real ceiling. Louisiana's advertisement table has columns for
+  project number, name, contract manager, dates and scope — and **no parish
+  column anywhere**. There is nothing to parse; the location simply is not
+  published on that page.
+
+#### Four false positives worth never repeating
+
+Every one of these scored well and was wrong. They are now regression tests
+in `tests/test_state_letting.py`.
+
+- **South Dakota, 294 dated rows** — a fuel price index.
+- **Washington, 13 "usable" rows** — search-facet chips, e.g. "Public Works
+  Awarded Pierce County".
+- **Arkansas, 633 rows / 32 passing the trade filter** — the site nav: "ADA",
+  "Asphalt Binder Price Index", "Historic Structures Bridge Demolition Movie
+  Clips".
+- **Texas, 3 placed rows** — a facilities table whose DISTRICT column holds
+  county names. A building at "6601 Boucher Drive Edmond, **OK**" was tagged
+  Houston County, Texas. This is the dangerous class: a bid pinned to the
+  wrong place is worse than one never found, because the contractor drives to
+  it. The rule now is explicit evidence — a column the table's own header
+  calls "County", or a name followed by the word County/Parish/Borough — and
+  nothing else.
+
+#### Legal and access posture — do not quietly change this
+
+- The fetcher identifies itself (`CurbCallBot/1.0` with a contact address),
+  respects robots.txt, and rate-limits to one request per host with a 1.5s gap.
+- **Five states (KS, MA, ME, NH, NV) reject any agent that does not claim to
+  be a browser.** They are recorded as blocked. We do not spoof a browser
+  User-Agent to get past them — a site that turned away non-browser agents
+  made a choice. Their bids have to reach us another way.
+- Arkansas was rejecting *incomplete headers*, not our identity; it answers
+  fine once Accept-Language and the Sec-Fetch-* set are present.
+- **Bid Express (bidx.com), the letting platform for ~44 state agencies, is a
+  JS shell and has required an account since Oct 2023.** Free registration
+  exists. Automated access under an account is a terms question, not an
+  engineering one — read the ToS before writing any code against it.
+
+#### Plan holder lists — a bigger prize than the bids, with a hard rule
+
+MoDOT publishes, per project, the contractors who pulled plans: company,
+named contact, address, phone, direct email (`/BidLettingPlansRoom/PlanHolder/
+Call/{letting}?call={call}`, ~3 per project this far out, 8 on one). Two of
+eight on one job were concrete companies, so subs already work this list. It
+turns a highway job a small crew cannot win as prime into a list of GCs who
+need a concrete sub.
+
+**Rule: these are named individuals' business emails on a government page.
+Surface them in the context of the job they are bidding. Never export them to
+a campaign list.** Not built yet.

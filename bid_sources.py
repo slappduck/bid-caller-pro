@@ -890,6 +890,166 @@ _JUNK_EMAIL_PARTS = ("webmaster", "postmaster", "no-reply", "noreply", "donotrep
                      "example.com", "sentry.io", "@2x", "civicplus.com")
 
 
+# ── State DOT letting listings ──────────────────────────────────────────────
+# A state letting page is not shaped like a city bid page. A town's page lists
+# that town's solicitations and the location is implied by whose site it is.
+# A state page carries work from every corner of the state on one table, and
+# says where each job is only inside the description ("Route K VERNON County.
+# Resurface from I-49 near Nevada..."). So the row matters more than the page,
+# and the county name inside the row is the only thing that can place it.
+#
+# The hazard here is navigation. A state site's main menu is dozens of <li>
+# elements, and a generous row extractor happily reports Arkansas's nav as 633
+# "rows" of which 32 pass the relevance filter -- "ADA", "Asphalt Binder Price
+# Index", "Historic Structures Bridge Demolition Movie Clips". Every one is a
+# menu entry. A row therefore has to look like a *record*, not merely like text
+# containing a trade word.
+
+_LETTING_ID_RE = re.compile(r"\b[A-Z]{0,3}[-\s]?\d{3,}[A-Z0-9\-]*\b")
+_ROW_DATE_RE = re.compile(
+    r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b|"
+    r"\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4}\b")
+# Menu entries that keep slipping through on trade words alone.
+_NAV_ROW_RE = re.compile(
+    r"^(?:home|about|contact|search|menu|news|events|careers|employment|"
+    r"login|sign\s*in|espa\w*ol|skip to|read more|learn more|view all|"
+    r"privacy|accessibility|site\s*map|faq)\b", re.I)
+
+
+def _row_is_a_record(text, cells):
+    """True if this row reads like one solicitation, not a menu entry.
+
+    Three ways to qualify, any one of which is enough: it carries a date, it
+    carries something shaped like a project/call number, or it is a multi-cell
+    row with a real sentence of description in it. A bare trade word in a
+    two-word <li> qualifies as none of them.
+    """
+    blob = str(text or "").strip()
+    if len(blob) < 12 or _NAV_ROW_RE.match(blob):
+        return False
+    if _ROW_DATE_RE.search(blob):
+        return True
+    if len(cells) >= 2 and _LETTING_ID_RE.search(cells[0] or ""):
+        return True
+    # A description long enough to be a scope, in a row that has structure.
+    return len(cells) >= 2 and max((len(c) for c in cells), default=0) >= 40
+
+
+_COUNTY_HEADER_RE = re.compile(r"^\s*(?:county|parish|borough)\s*$", re.I)
+
+
+def _county_column(header_cells):
+    """Index of the column a table's own header says holds counties, or None.
+
+    This is the only thing that makes a bare "Duval" in a cell trustworthy.
+    Without it there is no way to tell Florida's County column from TxDOT's
+    District column, whose values are also county names.
+    """
+    for i, cell in enumerate(header_cells or ()):
+        if _COUNTY_HEADER_RE.match(str(cell or "")):
+            return i
+    return None
+
+
+def letting_rows(html):
+    """Record-shaped rows from a state letting page.
+
+    Returns [(joined_text, cells, county_column)] -- the column index travels
+    with the row because a page can carry several tables and only one of them
+    has a County header.
+
+    Tables first, because that is what every state that works uses. List items
+    are a fallback for the handful that render cards, and they are held to the
+    same record test -- which is precisely what keeps a nav menu out.
+    """
+    body = re.sub(r"(?is)<(script|style|noscript)[^>]*>.*?</\1>", " ",
+                  str(html or ""))
+    out = []
+    tables = re.findall(r"(?is)<table[^>]*>(.*?)</table>", body) or [body]
+    for table in tables:
+        chunks = re.findall(r"(?is)<tr[^>]*>(.*?)</tr>", table)
+        col = None
+        for chunk in chunks:
+            cells = [_clean(_unescape(c)) for c in
+                     re.findall(r"(?is)<t[dh][^>]*>(.*?)</t[dh]>", chunk)]
+            cells = [c for c in cells if c]
+            if len(cells) < 2:
+                continue
+            if col is None:
+                col = _county_column(cells)
+                if col is not None:
+                    continue          # that row was the header, not a record
+            text = " | ".join(cells)
+            if _row_is_a_record(text, cells):
+                out.append((text, cells, col))
+    if out:
+        return out
+    # Only when the page has no record-shaped table at all. An earlier version
+    # tried the list fallback whenever the table pass returned fewer than
+    # three rows AND reset the accumulator to do it, which silently threw away
+    # a one- or two-row table -- exactly the shape a small state's letting has.
+    for chunk in re.findall(r"(?is)<li[^>]*>(.{40,700}?)</li>", body):
+        text = _clean(_unescape(chunk))
+        if _row_is_a_record(text, [text]):
+            out.append((text, [text], None))
+    return out
+
+
+def parse_state_letting(html, state, base_url="", county_finder=None):
+    """Concrete-relevant, placeable rows from a state DOT letting page.
+
+    `county_finder` is injected rather than imported so this module stays pure
+    text-in/rows-out and testable without the county table on disk. Production
+    passes counties.counties_named, which takes the row's CELLS and demands
+    explicit evidence -- a dedicated county column, or a name followed by the
+    word County. A loose search over the joined row text is not good enough
+    here: TxDOT's district column is full of county names that have nothing to
+    do with where the job is.
+
+    A row has to clear both bars to come back: it must pass the same
+    looks_relevant() filter every city bid goes through, and it must name a
+    county we can put on a map. A statewide row we cannot place is worse than
+    no row -- it would be shown to every contractor in the state regardless of
+    distance.
+    """
+    rows = []
+    seen = set()
+    for text, cells, county_column in letting_rows(html):
+        if not looks_relevant(text):
+            continue
+        places = county_finder(cells, state, county_column) \
+            if county_finder else []
+        if not places:
+            continue
+        # The longest cell is the description on every state layout checked;
+        # the first short one is the call/project number.
+        desc = max(cells, key=len) if cells else text
+        ident = ""
+        for c in cells:
+            if c is not desc and len(c) <= 24 and _LETTING_ID_RE.search(c):
+                ident = c
+                break
+        key = (ident, desc[:120])
+        if key in seen:
+            continue
+        seen.add(key)
+        county, lat, lon = places[0]
+        rows.append({
+            "title": (("%s — %s" % (ident, desc)) if ident else desc)[:300],
+            "scope": desc[:1200],
+            "url": base_url,
+            "deadline": _deadline_in(text) or "",
+            "status": status_from_title(desc) or _status_near(text) or "Open",
+            "county": county,
+            "lat": lat,
+            "lon": lon,
+            "state": state,
+            "source": "state_dot",
+            "all_counties": [p[0] for p in places],
+        })
+    return rows
+
+
 def parse_contact(text):
     """Pull a name / email / phone out of a bid posting. Missing parts are "".
 
