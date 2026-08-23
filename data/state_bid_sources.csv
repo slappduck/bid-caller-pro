@@ -1,16 +1,16 @@
 state,url,status,score,note,rows,usable
-AK,,URLError,0,root URLError,0,0
+AK,https://dot.alaska.gov/procurement/bidding/,ok,1,d0 Contracting dates=0 rows=0 niche=0,0,0
 AL,https://alletting.dot.state.al.us/DW_Pages/NTC/2026/NTC_August_28_2026.html,ok,4,d1 Project Letting List dates=3 rows=0 niche=17,7,0
 AR,https://ardot.gov/divisions/local-programs/currently-advertised-local-projects/,ok,4,d0 Currently Advertised Local Project dates=3 rows=0 niche=43,0,0
 AZ,,no_listing,0,,0,0
 CA,https://dot.ca.gov/programs/procurement-and-contracts/bid-opening-schedule,ok,6,d1 Bid Opening Schedule dates=130 rows=34 niche=3,33,0
 CO,https://docs.google.com/spreadsheets/d/1Rt5KRPWVhstqbOEmFjTe0EuHpAHVIsrymLmgiL_8mrI/edit?usp=sharing,ok,6,d1 Solicitation Log dates=286 rows=103 niche=6,93,0
 CT,https://portal.ct.gov/dot/business/contractor-resources,ok,1,d0 Contractor dates=0 rows=1 niche=0,0,0
-DE,https://deldot.gov/Business/bids/index.shtml?dc=asphalt_cement_english,ok,2,d0 Delaware Posted Asphalt Price dates=0 rows=14 niche=1,0,0
+DE,https://deldot.gov/Business/bids/index.shtml?dc=asphalt_cement_english,ok,2,d0 Delaware Posted Asphalt Price dates=0 rows=14 niche=1,1,0
 FL,https://www.fdot.gov/contracts/lettings/letting-project-info.shtm,ok,6,d1 Central Office Letting and Project dates=153 rows=289 niche=127,244,75
 GA,,no_listing,0,,0,0
 HI,https://hidot.hawaii.gov/administration/con/,ok,1,d0 Contracts dates=1 rows=0 niche=0,1,0
-IA,https://iowadot.gov/consultants-contractors,ok,2,d0 Consultants & Contractors dates=1 rows=0 niche=3,0,0
+IA,https://iowadot.gov/consultants-contractors/traffic-safety/traffic-safety-resource-guide/traffic-safety-improvement-program-tsip,ok,3,d2 Traffic Safety Improvement Program dates=3 rows=0 niche=2,0,0
 ID,https://itd.idaho.gov/facility-bidding/,ok,6,d0 Facility Bidding dates=202 rows=110 niche=4,109,0
 IL,https://idot.illinois.gov/procurement/procurement-opportunities/land-acquisition-bulletin.html,ok,4,d1 Land Acquisition Bulletin dates=16 rows=6 niche=0,5,0
 IN,,no_listing,0,,0,0
@@ -22,22 +22,22 @@ MD,https://roads.maryland.gov/mdotsha/pages/ContractAdSchedule.aspx?pageid=24,ok
 ME,,blocked,0,root blocked,0,0
 MI,,blocked,0,root blocked,0,0
 MN,,no_listing,0,,0,0
-MO,https://modotweb.modot.mo.gov/BidLettingPlansRoom/Letting,ok,6,d0 Online Plans Room dates=306 rows=22 niche=27,28,6
-MS,,no_listing,0,,0,0
+MO,https://modotweb.modot.mo.gov/BidLettingPlansRoom/Letting,ok,6,d0 Online Plans Room dates=306 rows=22 niche=27,28,18
+MS,,RemoteDisconnected,0,root RemoteDisconnected,0,0
 MT,https://www.mdt.mt.gov/business/contracting/advertised-bid-packages.aspx,ok,4,d1 Advertised Bid Packages dates=3 rows=0 niche=3,0,0
 NC,,no_listing,0,,0,0
 ND,https://www.dot.nd.gov/dot/eplans/,ok,6,d1 Bid Opening - Plans and Proposals dates=55 rows=6 niche=5,4,0
 NE,https://dot.nebraska.gov/business-center/procurement/policies-and-procedures/,ok,5,d1 Policies and Forms dates=40 rows=36 niche=0,30,0
 NH,,blocked,0,root blocked,0,0
 NJ,,no_listing,0,,0,0
-NM,https://www.dot.nm.gov/business-support/procurement-services/nmdot-sole-source-postings-for-30-days/,ok,4,d1 NMDOT Sole Source Postings for 30  dates=4 rows=3 niche=0,0,0
+NM,https://www.dot.nm.gov/business-support/procurement-services/nmdot-sole-source-postings-for-30-days/,ok,4,d1 NMDOT Sole Source Postings for 30  dates=4 rows=3 niche=0,2,0
 NV,,blocked,0,root blocked,0,0
 NY,,robots_disallow,0,root robots_disallow,0,0
 OH,,http_404,0,root http_404,0,0
 OK,,no_listing,0,,0,0
 OR,https://www.oregon.gov/odot/Business/Procurement/Pages/Letting_Schedules.aspx,ok,2,d1 Letting Schedules dates=0 rows=0 niche=3,0,0
 PA,https://www.penndot.pa.gov/agencies/penndot/about-penndot/equal-opportunity-equity/contract-compliance,ok,2,d0 Contract Compliance dates=0 rows=0 niche=176,0,0
-RI,https://www.pmp.dot.ri.gov/PMP/DesktopDefault.aspx?aM=ubid&podid=-1&oM=reports&cI=1&cp=waup&appindex=0&appid=0,ok,3,d1 Weighted Average Unit Prices dates=1 rows=223 niche=76,213,0
+RI,https://www.pmp.dot.ri.gov/PMP/DesktopDefault.aspx?aM=ubid&podid=-1&oM=reports&cI=1&cp=bidtabs&appindex=0&appid=0,ok,5,d2 Bid Tabs dates=7 rows=22 niche=5,8,0
 SC,,no_listing,0,,0,0
 SD,https://dot.sd.gov/doing-business/contractors/fuel-price-index/,ok,6,d1 Fuel Price Index dates=294 rows=294 niche=14,293,0
 TN,https://www.tn.gov/tdot/tdot-construction-division/bid-lettings/hurricane-helene-emergency-contracts.html,ok,5,d1 Hurricane Helene Emergency Contrac dates=131 rows=0 niche=5,115,0
@@ -48,4 +48,4 @@ VT,https://vtrans.vermont.gov/contract-admin/bids-requests/services,ok,4,d1 Cont
 WA,https://wsdot.wa.gov/business-wsdot/contracts/search-contracting-opportunities,ok,5,d0 Search contracting opportunities dates=60 rows=0 niche=59,0,0
 WI,https://wisconsindot.gov/Pages/doing-bus/contractors/hcci/default.aspx,ok,5,d0 HCCI dates=25 rows=0 niche=4,8,0
 WV,https://transportation.wv.gov/contract-administration-contracts,ok,6,d1 Contract Administration Contracts dates=42 rows=33 niche=22,32,0
-WY,https://www.dot.state.wy.us/home/business_with_wydot/contractors/design-plans.html,ok,2,d1 Design Plans dates=0 rows=0 niche=5,0,0
+WY,https://drive.google.com/drive/folders/1EtJmogo0pA_FUlQ38Xrp8Fgpxk-wxVGs,ok,6,d2 Contractor Testing Forms dates=32 rows=33 niche=5,33,0

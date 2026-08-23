@@ -401,8 +401,24 @@ _PRO_SERVICES_RE = re.compile(
 # Improvements", "Saline Road Safety Improvements", "Canton Ave Improvement
 # Project - Phase 2" and "Commercial Street (8th Ave to 10th Ave) Stormsewer
 # Improvements" -- five real jobs in one sweep, lost on word order.
+# The first line is how a city writes an address. The second is how a state
+# DOT writes one, and it was missing entirely -- which quietly cost us real
+# work: "Coldmill and resurface on Route 32" failed the road-work test while
+# the otherwise identical "on Ohio Street" passed. State lettings are written
+# in route numbers almost exclusively.
+#
+# "route" alone is the one risky word here, since a bus route is not this
+# trade, so it is admitted only as a numbered designation ("Route 32",
+# "Route K", "State Route 45") and the transit senses are excluded outright.
 _ROADWAY = (r"street|st\.|road|rd\.|ave|avenue|drive|blvd|boulevard|"
-            r"highway|hwy|lane|parkway|pkwy|court|alley|corridor|intersection")
+            r"highway|hwy|lane|parkway|pkwy|court|alley|corridor|intersection|"
+            r"interstate|freeway|expressway|"
+            r"(?:state\s+|county\s+|us\s+|sr\s+|fm\s+)?route\s+[A-Z0-9]+|"
+            r"i-\d+|us-?\s?\d+|sr-?\s?\d+|mile\s+marker")
+# A bus route being "improved" is a transit study, not concrete.
+_TRANSIT_ROUTE_RE = re.compile(
+    r"\b(?:bus|transit|shuttle|delivery|snow|mail|paratransit|bike)\s+route\b",
+    re.I)
 _ROAD_WORK_RE = re.compile(
     rf"\b(?:{_ROADWAY})\b[^.;:]{{0,45}}?\b(?:improvement|reconstruct|"
     rf"rehabilitat|resurfac|widening|realign)"
@@ -469,8 +485,11 @@ def looks_relevant(*texts):
     # services for an infrastructure project" is not.
     if not strong and any(t in blob for t in CLEARLY_UNRELATED):
         return False
+    road_work = _ROAD_WORK_RE.search(blob) is not None
+    if road_work and _TRANSIT_ROUTE_RE.search(blob) and not strong:
+        road_work = False
     return (strong or any(term in blob for term in NICHE_TERMS)
-            or _ROAD_WORK_RE.search(blob) is not None
+            or road_work
             or _PARKING_RE.search(blob) is not None)
 
 
@@ -995,6 +1014,30 @@ def letting_rows(html):
     return out
 
 
+# A state "call" is a procurement unit, not a job. MoDOT bundles several jobs
+# into one and numbers them inside a single cell: "(1): Job JSR0028 Route 18
+# HENRY County. Coldmill... (2): Job JSR0033 Route 54 CEDAR, ST CLAIR County."
+# Read whole, that row names four counties and gets placed at whichever is
+# nearest -- so a Springfield contractor saw a card headed "Polk County, 28mi"
+# whose description was about work in Henry. Each numbered job is its own
+# piece of work in its own place and has to be split out.
+_BUNDLED_JOB_RE = re.compile(r"\(\s*\d+\s*\)\s*:\s*(?=Job\b)", re.I)
+
+
+def split_bundled_jobs(desc):
+    """One description per job. Unbundled text comes back as a single item."""
+    text = str(desc or "").strip()
+    if not text:
+        return []
+    parts = [p.strip() for p in _BUNDLED_JOB_RE.split(text) if p.strip()]
+    if len(parts) > 1:
+        return parts
+    # A single "(1): Job ..." is still a bundle marker -- a call that happens
+    # to hold one job. The numbering is MoDOT's bookkeeping, not something a
+    # contractor should read on a card, so drop a leading marker either way.
+    return [_BUNDLED_JOB_RE.sub("", text, count=1).strip() or text]
+
+
 def parse_state_letting(html, state, base_url="", county_finder=None):
     """Concrete-relevant, placeable rows from a state DOT letting page.
 
@@ -1017,37 +1060,56 @@ def parse_state_letting(html, state, base_url="", county_finder=None):
     for text, cells, county_column in letting_rows(html):
         if not looks_relevant(text):
             continue
-        places = county_finder(cells, state, county_column) \
-            if county_finder else []
-        if not places:
+        if not county_finder:
             continue
         # The longest cell is the description on every state layout checked;
         # the first short one is the call/project number.
-        desc = max(cells, key=len) if cells else text
+        full_desc = max(cells, key=len) if cells else text
         ident = ""
         for c in cells:
-            if c is not desc and len(c) <= 24 and _LETTING_ID_RE.search(c):
+            if c is not full_desc and len(c) <= 24 and _LETTING_ID_RE.search(c):
                 ident = c
                 break
-        key = (ident, desc[:120])
-        if key in seen:
-            continue
-        seen.add(key)
-        county, lat, lon = places[0]
-        rows.append({
-            "title": (("%s — %s" % (ident, desc)) if ident else desc)[:300],
-            "scope": desc[:1200],
-            "url": base_url,
-            "deadline": _deadline_in(text) or "",
-            "status": status_from_title(desc) or _status_near(text) or "Open",
-            "county": county,
-            "lat": lat,
-            "lon": lon,
-            "state": state,
-            "source": "state_dot",
-            "all_counties": [p[0] for p in places],
-        })
+        jobs = split_bundled_jobs(full_desc)
+        for desc in jobs:
+            if len(jobs) > 1 and not looks_relevant(desc):
+                # One bundle can mix a sidewalk job with a signal upgrade.
+                continue
+            if county_column is not None:
+                # A dedicated county column describes the whole row, so it
+                # stays authoritative however the description is split.
+                places = county_finder(cells, state, county_column)
+            else:
+                places = county_finder([desc], state)
+            if not places:
+                continue
+            key = (ident, desc[:120])
+            if key in seen:
+                continue
+            seen.add(key)
+            rows.append(_state_row(ident, desc, text, places, state, base_url))
     return rows
+
+
+def _state_row(ident, desc, text, places, state, base_url):
+    county, lat, lon = places[0]
+    return {
+        "title": (("%s — %s" % (ident, desc)) if ident else desc)[:300],
+        "scope": desc[:1200],
+        "url": base_url,
+        "deadline": _deadline_in(text) or "",
+        "status": status_from_title(desc) or _status_near(text) or "Open",
+        "county": county,
+        "lat": lat,
+        "lon": lon,
+        "state": state,
+        "source": "state_dot",
+        "all_counties": [p[0] for p in places],
+        # Every county this JOB names, with coordinates. Placement picks the
+        # one nearest the scan centre -- the work really is in all of them, so
+        # nearest is both true and the only useful answer to "how far is it".
+        "places": list(places),
+    }
 
 
 def parse_contact(text):

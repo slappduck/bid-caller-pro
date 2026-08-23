@@ -63,6 +63,7 @@ customer volume, not required to ship.
 
 import os
 import re
+import csv
 import json
 import math
 import base64
@@ -85,6 +86,7 @@ from werkzeug.exceptions import HTTPException
 
 import bid_portals
 import bid_sources
+import counties
 import kv_backend
 import gov_directory
 import residential_permits
@@ -4949,6 +4951,166 @@ def _place_bid(grouped, bid, center, radius, db, default_city="", city_coords=No
         city_coords[label] = {"lat": coords[0], "lon": coords[1]}
 
 
+# ═══════════════════════════════════════════════════════════
+# State DOT lettings
+#
+# Every source above is a city or county: the page belongs to one place, so
+# the place is known before a single row is read. A state letting page is the
+# opposite -- one table carrying work from every corner of the state, where
+# the only location is a county named inside the row. That is why these get
+# their own reader and their own placement, and why counties.py exists.
+#
+# The yield is worth the separate path. A random live sample of 90 CivicPlus
+# city portals produced 8 concrete-relevant bids between them; Florida's
+# letting page alone produces 75, and a 50-mile scan from Tampa picks up 23 of
+# them. Missouri adds 6 statewide, 4 of them inside 125 miles of Springfield.
+#
+# Only two states are wired today, and that is a supply fact rather than a
+# missing feature -- see SEARCH_PLAN.md Phase 6 for what the other 48 are
+# blocked on, and for the four false positives that make the strictness here
+# non-negotiable.
+# ═══════════════════════════════════════════════════════════
+
+STATE_SOURCES_CSV = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                 "data", "state_bid_sources.csv")
+STATE_SOURCE_MIN_USABLE = int(os.environ.get("STATE_SOURCE_MIN_USABLE", "2"))
+STATE_SOURCE_TIMEOUT = float(os.environ.get("STATE_SOURCE_TIMEOUT", "20"))
+_state_sources_cache = {"at": 0.0, "rows": None}
+
+
+def _state_sources():
+    """{state: url} for states whose page is VERIFIED to yield usable rows.
+
+    Gated on the measured `usable` column, not on whether a URL was found. The
+    discovery crawl reported convincing listings in 22 states; running the real
+    parser over them, 2 produce placeable concrete-relevant rows. Shipping the
+    other 20 would mean fetching South Dakota's fuel price index on every scan
+    of the region and showing a contractor nothing for it.
+    """
+    now = time.time()
+    if _state_sources_cache["rows"] is not None and \
+            now - _state_sources_cache["at"] < 600:
+        return _state_sources_cache["rows"]
+    out = {}
+    try:
+        with open(STATE_SOURCES_CSV, newline="") as f:
+            for row in csv.DictReader(f):
+                try:
+                    usable = int(row.get("usable") or 0)
+                except (TypeError, ValueError):
+                    usable = 0
+                url = (row.get("url") or "").strip()
+                st = (row.get("state") or "").strip().upper()
+                if st and url and usable >= STATE_SOURCE_MIN_USABLE:
+                    out[st] = url
+    except OSError:
+        out = {}
+    _state_sources_cache.update({"at": now, "rows": out})
+    return out
+
+
+def _place_state_bid(grouped, row, center, radius, city_coords=None, stats=None):
+    """Place a state letting row, which already knows exactly where it is.
+
+    _place_bid resolves a city name against a gazetteer because that is all a
+    municipal posting gives you. A state row has been matched to a county
+    centroid already, so running it through name resolution could only lose
+    it -- "Cole" is not a city.
+
+    The bucket is labelled "<County> County, ST" rather than a town, because
+    that is the truth about the work: a resurfacing job spanning eleven miles
+    of Route 163 is not in any one town, and inventing one would put it on the
+    map in the wrong spot.
+    """
+    def _count(reason):
+        if stats is not None:
+            stats[reason] = stats.get(reason, 0) + 1
+
+    # A row can name several counties, because a state "call" bundles several
+    # jobs. Place it at the one NEAREST the contractor: the work really is in
+    # all of them, so the nearest is both true and the only useful answer to
+    # "how far is this". Picking any other way is arbitrary -- an earlier
+    # version took the most populous and labelled a Henry County job as Polk.
+    places = row.get("places") or []
+    if not places and row.get("lat") is not None:
+        places = [(row.get("county") or "", row["lat"], row["lon"])]
+    if not places:
+        _count("state_row_unplaceable")
+        return
+    county, lat, lon = min(
+        places,
+        key=lambda p: _miles_between(center["lat"], center["lon"], p[1], p[2]))
+    miles = _miles_between(center["lat"], center["lon"], lat, lon)
+    if miles > radius:
+        _count("out_of_radius")
+        return
+    bid = {k: row[k] for k in
+           ("title", "scope", "url", "deadline", "status", "source")
+           if k in row}
+    bid["miles"] = int(round(miles))
+    bid["county"] = county
+    others = [c for c in (row.get("all_counties") or []) if c != county]
+    if others:
+        bid["also_in"] = others
+    _apply_deadline_status(bid)
+    label = "%s County, %s" % (str(county).title(),
+                               row.get("state") or center["state"])
+    bucket = grouped.setdefault(label, [])
+    key = _bid_dupe_key(bid)
+    if key[0] and any(_bid_dupe_key(x) == key for x in bucket):
+        _count("duplicate")
+        return
+    bucket.append(bid)
+    _count("kept")
+    _count("state_dot_kept")
+    if city_coords is not None:
+        city_coords[label] = {"lat": lat, "lon": lon}
+
+
+def _run_state_sources(center, radius, grouped, city_coords=None, stats=None):
+    """Read the letting page of every verified state the radius touches.
+
+    Cheap by construction: one fetch per state, and a 125-mile scan touches at
+    most four. Failure is per-state and silent -- a state page that is down
+    costs its own rows, never the scan.
+    """
+    sources = _state_sources()
+    if not sources:
+        return 0
+    try:
+        states = counties.states_within(center["lat"], center["lon"], radius)
+    except Exception:
+        states = [center.get("state", "").upper()]
+    todo = [(st, sources[st]) for st in states if st in sources]
+    if not todo:
+        return 0
+
+    placed = 0
+    for st, url in todo:
+        try:
+            page, outcome = _fetch_page(url, timeout=STATE_SOURCE_TIMEOUT)
+            if outcome != "ok" or not page:
+                if stats is not None:
+                    k = "state_fetch_%s" % outcome
+                    stats[k] = stats.get(k, 0) + 1
+                continue
+            rows = bid_sources.parse_state_letting(
+                page, st, url, counties.counties_named)
+            if stats is not None:
+                stats["state_rows_read"] = \
+                    stats.get("state_rows_read", 0) + len(rows)
+            for row in rows:
+                before = sum(len(v) for v in grouped.values())
+                _place_state_bid(grouped, row, center, radius,
+                                 city_coords, stats)
+                placed += (sum(len(v) for v in grouped.values()) > before)
+        except Exception as ex:      # never let a state page break a scan
+            print("[scan] state source %s failed: %s" % (st, ex), flush=True)
+    print("[scan] %d bids from %d state letting page(s)"
+          % (placed, len(todo)), flush=True)
+    return placed
+
+
 ENRICH_MAX = int(os.environ.get("SCAN_ENRICH_MAX", "14"))
 
 SCAN_HISTORY_KEY = "bidcaller:scan_history"
@@ -5258,6 +5420,12 @@ def _perform_scan(location, radius, force=False):
                 "tier) as a fallback search backend, or investigate whether "
                 "Render's outbound IP has been blocked by DuckDuckGo.",
             )
+
+    # ---- STATE: DOT letting pages for every state the radius touches ----
+    # Placed before SAM.gov and before enrichment so state rows go through the
+    # same deadline, dedupe and enrichment passes as everything else. One
+    # fetch per state, at most four states in a 125-mile circle.
+    _run_state_sources(center, radius, grouped, city_coords, drop_stats)
 
     # ---- FEDERAL: SAM.gov for the state, radius-filtered ----
     if SAM_API_KEY:

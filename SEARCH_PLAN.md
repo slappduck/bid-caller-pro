@@ -541,3 +541,49 @@ need a concrete sub.
 **Rule: these are named individuals' business emails on a government page.
 Surface them in the context of the job they are bidding. Never export them to
 a campaign list.** Not built yet.
+
+### Phase 6, second pass — wired into /scan, and a filter gap worth more than the crawl
+
+**Live in `/scan` now.** `_run_state_sources` reads the letting page of every
+verified state the radius touches (one fetch per state, at most four in a
+125-mile circle) and places rows through `_place_state_bid`, before SAM.gov
+and before enrichment so they get the same deadline, dedupe and enrichment
+passes as everything else.
+
+Three corrections came out of wiring it up, each caught by running it rather
+than by reading it:
+
+1. **A state "call" is not a job.** MoDOT numbers several jobs inside one
+   cell: "(1): Job JSR0028 Route 18 HENRY County... (2): Job JSR0033 Route 54
+   CEDAR, ST CLAIR County." Read whole, the row names four counties and got
+   placed at whichever was nearest — so a Springfield scan showed a card
+   headed "Polk County, 28mi" whose description was about Henry County work.
+   `split_bundled_jobs` now emits one bid per job.
+2. **A multi-county job is placed at the county nearest the contractor**, not
+   the most populous. The work really is in all of them, so nearest is both
+   true and the only useful answer to "how far is it". From Clinton the Henry
+   County job now reads 3mi; from Springfield the Cedar one reads 51mi.
+3. **The roadway word list had no state-route designations in it.** It was
+   written for municipal postings — street, road, avenue, boulevard — so
+   "Coldmill and resurface on Ohio Street" passed and the identical
+   "...on Route 32" did not. State lettings are written in route numbers
+   almost exclusively. Adding Route/I-nn/US nn/SR nn (with bus, transit,
+   shuttle, delivery, snow and bike routes excluded) took **Missouri from 6
+   usable rows to 18, and a 125-mile Springfield scan from 4 state bids to
+   9.** This is a change to `looks_relevant`, so it applies to every source,
+   not just state pages.
+
+Measured after all three:
+
+| Scan centre | state bids at 125mi |
+|---|---|
+| Tampa, FL | 51 across 20 counties |
+| Springfield, MO | 9 across 7 counties |
+
+**Still 2 states.** A third crawl hop across the other 48 added nothing — the
+blockers are the ones already listed above, not crawl depth.
+
+`tools/discover_state_sources.py` now MERGES its output instead of replacing
+it. A `--state` run used to write only the states it touched, which silently
+deleted Florida and Missouri from the checked-in file the first time the
+other 48 were re-crawled.

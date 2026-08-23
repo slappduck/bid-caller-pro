@@ -169,6 +169,36 @@ def counties_named(cells, state, county_column=None):
     return [(k, lat, lon) for k, lat, lon, _ in found]
 
 
+def _miles(lat1, lon1, lat2, lon2):
+    import math
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = (math.sin(dlat / 2) ** 2
+         + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2))
+         * math.sin(dlon / 2) ** 2)
+    return 7917.5 * math.asin(min(1.0, math.sqrt(a)))
+
+
+def states_within(lat, lon, radius):
+    """Every state with at least one county centre inside the radius.
+
+    A 125-mile scan from Joplin reaches Kansas, Oklahoma and Arkansas as well
+    as Missouri, and each of those has its own state letting page. Asking
+    "which states does this circle touch" off the county table is exact enough
+    and costs one pass over 3,215 rows.
+    """
+    _load()
+    hit = set()
+    for st, table in _by_state.items():
+        if st in hit:
+            continue
+        for clat, clon, _pop in table.values():
+            if _miles(lat, lon, clat, clon) <= radius:
+                hit.add(st)
+                break
+    return sorted(hit)
+
+
 def loaded_states():
     _load()
     return sorted(_by_state)

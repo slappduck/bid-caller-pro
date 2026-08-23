@@ -171,3 +171,126 @@ class ParseStateLettingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BundledJobTests(unittest.TestCase):
+    """A state "call" is a procurement unit, not a job.
+
+    MoDOT numbers several jobs inside one cell: "(1): Job JSR0028 Route 18
+    HENRY County... (2): Job JSR0033 Route 54 CEDAR, ST CLAIR County." Read
+    whole, that row names four counties and gets placed at whichever is
+    nearest the contractor -- so a Springfield scan showed a card headed
+    "Polk County, 28mi" whose description was about work in Henry.
+    """
+
+    def test_bundle_splits_into_one_job_each(self):
+        got = bid_sources.split_bundled_jobs(
+            "(1): Job A HENRY County. Resurface. (2): Job B CEDAR County. Mill.")
+        self.assertEqual(len(got), 2)
+        self.assertTrue(got[0].startswith("Job A"))
+
+    def test_single_marker_is_stripped(self):
+        self.assertEqual(
+            bid_sources.split_bundled_jobs("(1): Job X COLE County. Repair."),
+            ["Job X COLE County. Repair."])
+
+    def test_unnumbered_text_is_untouched(self):
+        self.assertEqual(bid_sources.split_bundled_jobs("Resurfacing"),
+                         ["Resurfacing"])
+
+    def test_empty_is_empty(self):
+        self.assertEqual(bid_sources.split_bundled_jobs(""), [])
+        self.assertEqual(bid_sources.split_bundled_jobs(None), [])
+
+    def test_each_split_job_keeps_its_own_county(self):
+        html = table([["G02",
+                       "(1): Job JSR0028 Route 18 HENRY County. Coldmill and "
+                       "resurface on Ohio Street, 2.059 miles. "
+                       "(2): Job JSR0442 Route 32 CEDAR County. Coldmill and "
+                       "resurface on Route 32, 4.1 miles.",
+                       "9/18/2026"]])
+        rows = bid_sources.parse_state_letting(
+            html, "MO", "u", counties.counties_named)
+        by_county = {r["county"]: r for r in rows}
+        self.assertEqual(sorted(by_county), ["cedar", "henry"])
+        self.assertIn("HENRY", by_county["henry"]["scope"])
+        self.assertNotIn("CEDAR", by_county["henry"]["scope"])
+
+    def test_off_trade_half_of_a_bundle_is_dropped(self):
+        html = table([["G03",
+                       "(1): Job A Route 5 HENRY County. Sidewalk and curb "
+                       "ramp replacement along Main Street. "
+                       "(2): Job B Route 9 CEDAR County. Legal services for "
+                       "right of way acquisition consulting.",
+                       "9/18/2026"]])
+        rows = bid_sources.parse_state_letting(
+            html, "MO", "u", counties.counties_named)
+        self.assertEqual([r["county"] for r in rows], ["henry"])
+
+    def test_county_column_survives_a_split(self):
+        # Florida's county lives in its own column, so it stays authoritative
+        # no matter how the description is broken up.
+        html = table([["T1922", "Manatee", "Resurfacing", "9/1/2026"]],
+                     header=["Project", "County", "Work", "Letting"])
+        rows = bid_sources.parse_state_letting(
+            html, "FL", "u", counties.counties_named)
+        self.assertEqual([r["county"] for r in rows], ["manatee"])
+
+    def test_places_carries_every_county_for_nearest_pick(self):
+        html = table([["D07", "Route Various CALLAWAY, CAMDEN, OSAGE County. "
+                       "ADA improvements at 10 locations.", "9/18/2026"]])
+        rows = bid_sources.parse_state_letting(
+            html, "MO", "u", counties.counties_named)
+        self.assertEqual(len(rows[0]["places"]), 3)
+        for _name, lat, lon in rows[0]["places"]:
+            self.assertTrue(lat and lon)
+
+
+class StateRouteLanguageTests(unittest.TestCase):
+    """State DOTs write addresses as route numbers, and the filter did not.
+
+    The roadway word list was written for municipal postings -- street, road,
+    avenue, boulevard -- and had no state-route designations in it at all. So
+    "Coldmill and resurface on Ohio Street" passed and the otherwise identical
+    "Coldmill and resurface on Route 32" did not. Missouri's letting page went
+    from 6 usable rows to 18 when that was fixed; a 125-mile Springfield scan
+    went from 4 state bids to 9.
+    """
+
+    def test_numbered_state_route(self):
+        self.assertTrue(bid_sources.looks_relevant(
+            "Coldmill and resurface on Route 32, 4.1 miles"))
+
+    def test_lettered_state_route(self):
+        self.assertTrue(bid_sources.looks_relevant(
+            "Resurface Route K from I-49 near Nevada to County Road 1800"))
+
+    def test_interstate(self):
+        self.assertTrue(bid_sources.looks_relevant(
+            "Rehabilitation of I-70 mainline pavement"))
+
+    def test_us_highway(self):
+        self.assertTrue(bid_sources.looks_relevant(
+            "Widening of US 63 through the county"))
+
+    def test_a_multi_digit_route_number_is_not_cut_short(self):
+        # The first version matched a single character after "Route" and then
+        # required a word boundary, so "Route K" passed and "Route 32" failed
+        # on its second digit.
+        for n in ("5", "32", "160", "1800"):
+            self.assertTrue(
+                bid_sources.looks_relevant("Resurfacing of Route %s" % n),
+                "Route %s should be road work" % n)
+
+    def test_bus_route_is_not_this_trade(self):
+        self.assertFalse(bid_sources.looks_relevant(
+            "Bus route improvement study for the transit authority"))
+
+    def test_transit_words_do_not_block_a_real_concrete_job(self):
+        # The transit guard must not veto a job that names concrete outright.
+        self.assertTrue(bid_sources.looks_relevant(
+            "Concrete bus pad and sidewalk replacement along the bus route"))
+
+    def test_route_optimisation_is_not_road_work(self):
+        self.assertFalse(bid_sources.looks_relevant(
+            "Route optimization consulting services"))

@@ -213,12 +213,33 @@ def main():
                   % (flag, res["state"], res["score"], res["note"],
                      res["url"] or "(none)"), flush=True)
 
-    rows.sort(key=lambda r: r["state"])
+    # MERGE, never replace. A --state run used to write only the states it
+    # touched, so re-crawling the 48 unresolved ones silently deleted the two
+    # verified rows that were the whole point of the exercise.
+    merged = {}
+    if os.path.exists(OUT):
+        with open(OUT, newline="") as f:
+            for prev in csv.DictReader(f):
+                merged[prev["state"]] = prev
+    for r in rows:
+        prior = merged.get(r["state"], {})
+        # A fresh crawl knows nothing about yield. Keep the measured columns
+        # only if it landed on the same URL; a new URL makes them stale.
+        same = prior.get("url") == r["url"]
+        merged[r["state"]] = dict(
+            r,
+            rows=(prior.get("rows", "") if same else ""),
+            usable=(prior.get("usable", "") if same else ""))
+    fields = ["state", "url", "status", "score", "note", "rows", "usable"]
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["state", "url", "status", "score", "note"])
+        w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
         w.writeheader()
-        w.writerows(rows)
+        for st in sorted(merged):
+            row = merged[st]
+            for k in fields:
+                row.setdefault(k, "")
+            w.writerow(row)
     good = sum(1 for r in rows if r["score"] >= 4)
     blocked = sum(1 for r in rows if r["status"] == "root blocked")
     print("\n%d/%d states with a convincing listing; %d blocked us; wrote %s"
