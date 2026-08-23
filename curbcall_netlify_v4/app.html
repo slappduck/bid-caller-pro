@@ -300,19 +300,26 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .map-card-head .t{font-size:var(--fs-sm);font-weight:800;letter-spacing:0.03em;display:flex;align-items:center;gap:0.4rem;}
 .map-card-head .x{background:none;border:none;color:var(--text2);font-size:var(--fs-base);cursor:pointer;padding:0.2rem 0.4rem;}
 .map-legend{display:flex;gap:0.8rem;flex-wrap:wrap;font-size:var(--fs-sm);color:var(--text2);padding:0.6rem 0.9rem 0.75rem;}
-#find-map-view,#leads-map-view{height:clamp(180px,26vh,280px);background:var(--card);}
+#find-map-view,#leads-map-view{height:clamp(180px,26vh,280px);background:#f2efe9;}
 .map-legend span{display:inline-flex;align-items:center;gap:0.3rem;}
 /* Popups stay dark on purpose: against the light basemap they read as a panel
    floating above the map rather than part of it, and they match the app. */
 /* Leaflet ships its controls light. On the dark basemap the zoom buttons
    were a white box in the corner -- the same "pasted in" problem as the
    basemap itself, just smaller. */
+/* App-dark controls on the pale basemap: they read as our chrome sitting on
+   the map rather than as Leaflet's own furniture. */
 .leaflet-bar{border:1px solid var(--border)!important;box-shadow:none!important;}
 .leaflet-bar a,.leaflet-bar a:hover{background:var(--card);color:var(--text);
   border-bottom-color:var(--border);}
 .leaflet-bar a:hover{background:var(--surface);}
 .leaflet-bar a.leaflet-disabled{background:var(--surface);color:var(--text3);}
-.leaflet-container{background:var(--card);}
+/* Attribution is required, so make it legible and unobtrusive rather than
+   something to be tempted into hiding. */
+.leaflet-control-attribution{background:rgba(19,22,42,0.82)!important;
+  color:var(--text2)!important;font-size:0.6rem!important;padding:2px 6px!important;}
+.leaflet-control-attribution a{color:var(--text)!important;}
+.leaflet-container{background:#f2efe9;}
 .leaflet-popup-content-wrapper{background:var(--surface);color:var(--text);}
 .leaflet-popup-tip{background:var(--surface);}
 /* Leaflet's default link blue is close to unreadable on that dark panel. */
@@ -1603,18 +1610,27 @@ async function checkSavedSearches(){
 // on top of it — which are the entire point of the map — and street names went
 // grey-on-grey at the zoom levels people actually use. Defined once here
 // rather than repeated at each of the three maps.
-// dark_all, not light_all. The app is #0d0f18 and a white basemap read as a
-// hole punched in the screen -- the single thing that made the map look
-// pasted in rather than part of the app.
-const MAP_TILE_URL="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
-// Inverted along with the basemap. The ring existed to separate a coloured
-// pin from pale streets; on dark tiles it has to do the opposite job, so it
-// is now light and the fill stays the colour that carries the meaning.
-const PIN_RING="#e8ecf5";
-// Solid amber with a light ring. It used to be inverted -- dark fill, amber
-// ring -- to tell it apart from the amber "closing soon" job pins on the bid
-// map. That map is gone, so the only pins left are your location and the
-// nearby towns, and the inversion now just made the centre pin harder to see.
+// OpenStreetMap's standard style. Their tile usage policy allows this --
+// there is no bar on production apps -- but it does set conditions, and all
+// of them are met here:
+//
+//   * exactly this URL, no {s} subdomains and no {r}: they do not serve @2x;
+//   * visible licence attribution, enabled on every map below;
+//   * HTTPS, never the http:// form;
+//   * a real Referer, which a browser sends and nothing in this app strips
+//     (no Referrer-Policy meta, no _headers file);
+//   * tiles cached per their headers, which Leaflet and the browser do;
+//   * no prefetching, no bulk download, no offline "save this area".
+//
+// Availability is best-effort with no SLA, so keep this a single constant:
+// switching provider should never need more than editing this line.
+const MAP_TILE_URL="https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+const MAP_ATTRIB='&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors &middot; <a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener">report a map issue</a>';
+
+// Back to a dark ring. The ring's job is to separate a coloured pin from the
+// basemap, so it inverts whenever the basemap does: light ring on dark
+// tiles, dark ring on OSM's pale streets.
+const PIN_RING="#1b2233";
 const CENTER_PIN={radius:9,color:PIN_RING,fillColor:"#f5b400",fillOpacity:1,weight:3};
 
 function addTileRetry(layer){
@@ -1643,9 +1659,9 @@ function updateFindMap(lat,lon,label){
     // relying on that is the standard fix for "tapping the map does nothing"
     // reports. (Not independently reproduced on a physical device here --
     // please confirm this actually fixes it on your phone.)
-    findMap=L.map(mv,{attributionControl:false,tap:false}).setView([lat,lon],11);
+    findMap=L.map(mv,{attributionControl:true,tap:false}).setView([lat,lon],11);
     const findTiles=L.tileLayer(MAP_TILE_URL,{
-      maxZoom:20,subdomains:"abcd"
+      maxZoom:19,attribution:MAP_ATTRIB
     }).addTo(findMap);
     addTileRetry(findTiles);
     findMap.on("click",e=>pickFindLocation(e.latlng.lat,e.latlng.lng,null));
@@ -1882,9 +1898,9 @@ function createLocationPicker(containerId,inputId){
     const mv=document.getElementById(containerId);
     if(!mv||!HAS_MAPS)return;
     if(!st.map){
-      st.map=L.map(mv,{attributionControl:false,tap:false}).setView([lat,lon],11);
+      st.map=L.map(mv,{attributionControl:true,tap:false}).setView([lat,lon],11);
       const tiles=L.tileLayer(MAP_TILE_URL,{
-        maxZoom:20,subdomains:"abcd"
+        maxZoom:19,attribution:MAP_ATTRIB
       }).addTo(st.map);
       addTileRetry(tiles);
       st.map.on("click",e=>pick(e.latlng.lat,e.latlng.lng));
