@@ -256,7 +256,9 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .alert-amber{background:rgba(245,158,11,0.10);border-color:rgba(245,158,11,0.40);color:#fcd34d;}
 .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:0.7rem 0.8rem;margin-top:1rem;}
 .detail-grid .detail-row{margin-top:0;min-width:0;}
-.detail-grid .detail-val{overflow-wrap:anywhere;}
+/* Every detail value, not just the ones inside the grid. The Original
+   Posting row is rendered outside it, so a long URL ran off the card. */
+.detail-val{overflow-wrap:anywhere;}
 /* The customer's own data, grouped so it reads as theirs rather than as
    more of the agency's. */
 .workspace{margin-top:1.2rem;padding-top:1rem;border-top:1px solid var(--border);}
@@ -2842,6 +2844,19 @@ function toggleSave(city,id){
 // Shown here and only here, on the card for the job they are bidding. These
 // are real people's work emails off a government plan-holder list, so they
 // are not in the CSV export and must not be (see exportCSV).
+// A posting URL is often 120 characters of folders and percent-encoding.
+// What a contractor needs to know is whose site it is -- they recognise
+// their own city's domain -- and the file at the end of it.
+function prettyUrl(u){
+  try{
+    const p=new URL(u);
+    const host=p.hostname.replace(/^www\./,"");
+    const last=decodeURIComponent(p.pathname.split("/").filter(Boolean).pop()||"");
+    if(!last)return host;
+    return host+" / "+(last.length>44?last.slice(0,44)+"\u2026":last);
+  }catch(e){ return String(u||""); }
+}
+
 function holderBlock(b){
   const hs=(b&&b.plan_holders)||[];
   if(!hs.length)return"";
@@ -2958,7 +2973,7 @@ function openDetail(city,b){
       <div class="detail-val">${b.documents.slice(0,5).map((d,i)=>
         safeUrl(d)?`<a href="${esc(safeUrl(d))}" target="_blank" rel="noopener noreferrer">Document ${i+1}</a>`:"")
         .filter(Boolean).join(" &middot; ")}</div></div>`:""}
-    ${post?row("Original Posting",b.url,b.url)
+    ${post?row("Original Posting",prettyUrl(b.url),b.url)
       :row("Original Posting","Not linked \u2014 search for it",findUrl)}
     <div class="workspace">
       <div class="workspace-title">Your tracking \u2014 private, only you see this</div>
