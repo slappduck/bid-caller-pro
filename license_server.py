@@ -2081,6 +2081,14 @@ def resend_webhook():
                               request.headers.get("svix-id"),
                               request.headers.get("svix-timestamp"),
                               raw, request.headers.get("svix-signature")):
+        # Counted, because from our side a mistyped secret and a webhook
+        # nobody has pointed at us yet look identical: both leave the event
+        # counters empty. One is a five-second fix and the other needs no
+        # action at all, and without this there is no way to tell which --
+        # until months later when the list turns out never to have cleaned
+        # itself. A signed request that fails is the loudest possible signal
+        # that the secret does not match; it should not be silent.
+        _record_email_event("rejected_bad_signature")
         return jsonify({"ok": False, "reason": "bad_signature"}), 401
 
     try:

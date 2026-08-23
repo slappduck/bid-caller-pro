@@ -176,6 +176,15 @@ class WebhookTests(unittest.TestCase):
         self.assertEqual(counts.get("email.delivered"), 1)
         self.assertEqual(counts.get("suppressed"), 1)
 
+    def test_a_rejected_signature_is_counted(self):
+        """A mistyped secret and a webhook nobody has configured yet both
+        leave the counters empty, and only one of them needs fixing. The
+        rejection has to be visible or the difference is unknowable."""
+        self._post(self._event("email.complained"), secret_ok=False)
+        counts = self.store.get(ls._EMAIL_EVENTS_KEY) or {}
+        self.assertEqual(counts.get("rejected_bad_signature"), 1)
+        self.assertEqual(ls._suppression(), set(), "still suppresses nobody")
+
 
 class SenderRespectsItTests(unittest.TestCase):
     """The whole point: a bounced address never gets mailed again."""
