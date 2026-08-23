@@ -31,17 +31,27 @@ import license_server as ls
 
 # Deliberately not derived from scan data or permit records: the list is
 # whatever the operator supplies, same rule the sender itself follows.
-SUBJECT = "{{bids}} open concrete jobs near {{city}} right now"
+SUBJECT = "{{bids}} concrete jobs open near {{city}} -- from {{towns}} bid pages"
 
+# Volume is the wrong pitch and measuring it honestly proved why: public
+# municipal concrete work runs 3-12 open jobs inside 125 miles at any moment,
+# and that is the market, not a gap in the index. Probing state DOTs, the
+# aggregators, and 160 uncrawled city and county domains added essentially
+# nothing -- so the number will not grow by trying harder.
+#
+# What IS true and worth paying for is the labour: those few jobs are spread
+# across seventy-odd separate city and county bid pages that nobody has time
+# to check every week. So the copy leads with the work avoided and the single
+# nearest job, not with a count that invites "only three?".
 BODY = """{{greeting}},
 
-I built a tool that watches every city bid page around {{city}} and pulls out the concrete work -- curb, sidewalk, ADA ramps, flatwork, paving.
+I check every city and county bid page around {{city}} -- {{towns}} of them this morning -- and pull out the concrete work: curb, sidewalk, ADA ramps, flatwork, paving.
 
-Right now it's showing {{bids}} open jobs within {{radius}} miles of you. The nearest is "{{nearest_title}}", {{nearest_miles}} miles out, closing {{nearest_due}}.
+{{bids}} are open right now. The nearest is "{{nearest_title}}", {{nearest_miles}} miles out, closing {{nearest_due}}.
 
-Every one comes with the closing date and the buyer's phone number, so you can call and ask for the plans the same day.
+That's the point of it. Not a pile of leads -- just the handful in your area that are actually open, with the closing date and the buyer's phone number, so you can call for the plans today instead of finding out next month that it closed.
 
-Free to try, no card: {{link}}
+It runs every morning. Free to try, no card: {{link}}
 
 -- Josh
 CurbCall Pro"""
@@ -71,7 +81,7 @@ def scan_city(city, state, lat, lon, radius, max_towns=120):
         list(ex.map(one, todo))
     bids = [b for v in grouped.values() for b in v if ls._is_open_bid(b)]
     bids.sort(key=lambda b: (b.get("miles") if b.get("miles") is not None else 9999))
-    return bids
+    return bids, len(todo)
 
 
 # A row sourced from a web search carries the Google Business listing title,
@@ -206,7 +216,7 @@ def main():
         if not coords:
             dropped.append((city, state, "could not geocode", len(members)))
             continue
-        bids = scan_city(city, state, coords[0], coords[1], args.radius)
+        bids, town_count = scan_city(city, state, coords[0], coords[1], args.radius)
         print(f"  {city + ', ' + state:24s} {len(bids):3d} open  "
               f"({len(members)} prospect(s))", file=sys.stderr)
         if len(bids) < args.min_bids:
@@ -223,6 +233,7 @@ def main():
                 "nearest_title": near.get("title", "")[:80],
                 "nearest_miles": str(near.get("miles", "")),
                 "nearest_due": near.get("deadline", "") or "no stated date",
+                "towns": str(town_count),
                 "link": args.link,
             }})
 
