@@ -240,6 +240,28 @@ _IS_A_LISTING_RE = re.compile(
     r"proposals?|rfps?|projects?|portal|browse|view)\b", re.I)
 
 
+_CANONICAL_RE = re.compile(
+    r'<(?:link[^>]+rel=["\']canonical["\'][^>]+href|'
+    r'meta[^>]+(?:property|name)=["\']og:url["\'][^>]+content)'
+    r'=["\']([^"\']+)["\']', re.I)
+
+
+def _is_hosted_agency_url(url):
+    """A hosted-platform URL that belongs to ONE agency, not a search page."""
+    try:
+        parts = urllib.parse.urlparse(str(url or ""))
+    except ValueError:
+        return False
+    host = parts.netloc.lower()
+    host = host[4:] if host.startswith("www.") else host
+    if not any(host == d or host.endswith("." + d)
+               for d in HOSTED_PORTAL_DOMAINS):
+        return False
+    if parts.query:
+        return False
+    return len([s for s in parts.path.split("/") if s]) >= 2
+
+
 def hosted_portal_link(html, base_url=""):
     """A link off this page to the city's OWN bid list on a hosted
     procurement platform. "" if there is none.
@@ -252,9 +274,21 @@ def hosted_portal_link(html, base_url=""):
 
     Candidates are ranked rather than taken in document order, because the
     registration link reliably comes first.
+    Checked before the anchors: a page that has been taken over by a hosted
+    platform usually declares its real address in <link rel="canonical">. That
+    is the site telling us where it actually lives, which beats any link on
+    it. Canon City's /Bids.aspx serves BidNet Direct's page and names
+    bidnetdirect.com/colorado/cityofcanoncity in its canonical tag while
+    carrying no anchor to it at all, so the anchor-only search found nothing
+    and the portal counted as a parse miss on every scan forever.
     """
+    text = str(html or "")
+    for m in _CANONICAL_RE.finditer(text):
+        url = _unescape(m.group(1))
+        if _is_hosted_agency_url(url):
+            return url
     best, best_score = "", -99
-    for m in _HOSTED_HREF_RE.finditer(str(html or "")):
+    for m in _HOSTED_HREF_RE.finditer(text):
         url = _unescape(m.group(1))
         label = _clean(_unescape(m.group(2)))
         try:

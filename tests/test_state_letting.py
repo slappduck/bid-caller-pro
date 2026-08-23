@@ -855,3 +855,51 @@ class StateTitleTests(unittest.TestCase):
             code = r["call"]
             self.assertLessEqual(r["title"].upper().count(code.upper()), 1,
                                  r["title"])
+
+
+class CanonicalHostedPortalTests(unittest.TestCase):
+    """A page taken over by a hosted platform declares where it really lives.
+
+    Canon City's /Bids.aspx serves BidNet Direct's page. It names
+    bidnetdirect.com/colorado/cityofcanoncity in <link rel="canonical"> and
+    carries no anchor to it at all, so an anchor-only search found nothing and
+    the portal counted as a parse miss on every scan, forever.
+    """
+
+    CANON = ('<link rel="canonical" '
+             'href="https://www.bidnetdirect.com/colorado/cityofcanoncity" />')
+
+    def test_the_canonical_address_is_used(self):
+        self.assertEqual(bid_sources.hosted_portal_link(self.CANON),
+                         "https://www.bidnetdirect.com/colorado/cityofcanoncity")
+
+    def test_og_url_works_too(self):
+        html = ('<meta property="og:url" '
+                'content="https://www.bidnetdirect.com/colorado/cityofx" />')
+        self.assertEqual(bid_sources.hosted_portal_link(html),
+                         "https://www.bidnetdirect.com/colorado/cityofx")
+
+    def test_a_canonical_on_the_citys_own_domain_is_not_a_move(self):
+        html = '<link rel="canonical" href="https://springfieldmo.gov/Bids.aspx" />'
+        self.assertEqual(bid_sources.hosted_portal_link(html), "")
+
+    def test_a_platform_search_page_is_not_an_agency_page(self):
+        # A query string is how these platforms express a search.
+        html = ('<link rel="canonical" '
+                'href="https://www.bidnetdirect.com/search?q=concrete" />')
+        self.assertEqual(bid_sources.hosted_portal_link(html), "")
+
+    def test_a_bare_platform_root_is_not_an_agency_page(self):
+        html = '<link rel="canonical" href="https://www.bidnetdirect.com/" />'
+        self.assertEqual(bid_sources.hosted_portal_link(html), "")
+
+    def test_anchors_still_work_when_there_is_no_canonical(self):
+        html = ('<a href="https://www.bidnetdirect.com/colorado/cityofy">'
+                'View Open Solicitations</a>')
+        self.assertEqual(bid_sources.hosted_portal_link(html),
+                         "https://www.bidnetdirect.com/colorado/cityofy")
+
+    def test_canonical_wins_over_a_registration_anchor(self):
+        html = self.CANON + ('<a href="https://www.bidnetdirect.com/colorado/'
+                             'register">Register</a>')
+        self.assertIn("cityofcanoncity", bid_sources.hosted_portal_link(html))
