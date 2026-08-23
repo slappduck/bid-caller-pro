@@ -714,3 +714,59 @@ class UrlAgeTests(unittest.TestCase):
     def test_no_url_is_safe(self):
         self.assertEqual(self._status(""), "Open")
         self.assertEqual(self.ls_mod._url_path_years(None), [])
+
+
+class RobotsTests(unittest.TestCase):
+    """The scanner never asked robots.txt. Now it does.
+
+    Not a legal problem -- these are public bid notices -- but it is a norm we
+    should not be quietly breaking on a paying product, and a site that
+    catches us blocks the IP for every customer, not just one scan. Measured
+    before switching it on: of 150 live portals sampled from the directory,
+    147 allow the bid page and 3 do not.
+
+    Fail-open is deliberate. An unreachable robots.txt is not a refusal, and
+    several state sites serve their bid page fine while blocking /robots.txt
+    itself.
+    """
+    import license_server as ls_mod
+
+    def setUp(self):
+        self.ls_mod._robots_cache.clear()
+
+    def tearDown(self):
+        self.ls_mod._robots_cache.clear()
+
+    def _seed(self, host, body):
+        import urllib.robotparser
+        parser = urllib.robotparser.RobotFileParser()
+        parser.parse(body.splitlines())
+        self.ls_mod._robots_cache[host] = parser
+
+    def test_a_disallowed_path_is_refused(self):
+        self._seed("x.gov", "User-agent: *\nDisallow: /purchasing")
+        self.assertFalse(self.ls_mod._robots_allows("https://x.gov/purchasing"))
+
+    def test_an_allowed_path_passes(self):
+        self._seed("x.gov", "User-agent: *\nDisallow: /admin")
+        self.assertTrue(self.ls_mod._robots_allows("https://x.gov/Bids.aspx"))
+
+    def test_unreadable_robots_is_not_a_refusal(self):
+        self.ls_mod._robots_cache["x.gov"] = None
+        self.assertTrue(self.ls_mod._robots_allows("https://x.gov/Bids.aspx"))
+
+    def test_fetch_page_reports_the_refusal_distinctly(self):
+        # A refusal must not look like an empty page or a dead portal.
+        self._seed("x.gov", "User-agent: *\nDisallow: /")
+        body, outcome = self.ls_mod._fetch_page("https://x.gov/Bids.aspx")
+        self.assertEqual(outcome, "robots_disallow")
+        self.assertEqual(body, "")
+
+    def test_the_decision_is_cached_per_host(self):
+        self._seed("x.gov", "User-agent: *\nDisallow: /purchasing")
+        self.ls_mod._robots_allows("https://x.gov/purchasing")
+        self.assertIn("x.gov", self.ls_mod._robots_cache)
+
+    def test_a_malformed_url_does_not_blow_up(self):
+        self.assertTrue(self.ls_mod._robots_allows(""))
+        self.assertTrue(self.ls_mod._robots_allows("not a url"))

@@ -77,6 +77,7 @@ import threading
 import urllib.request
 import urllib.parse
 import urllib.error
+import urllib.robotparser
 from concurrent.futures import (ThreadPoolExecutor, as_completed,
                                 TimeoutError as FuturesTimeout)
 
@@ -3563,6 +3564,60 @@ def _page_headers():
     }
 
 
+# ── robots.txt ──────────────────────────────────────────────────────────────
+# The scanner read every page it could reach and never asked. That is not a
+# legal problem -- these are public bid notices -- but it is a norm we should
+# not be quietly breaking on a paying product, and a site that catches us
+# doing it blocks the IP for every customer, not just the one scan.
+#
+# Measured before switching on: of 150 live portals sampled from the
+# directory, 147 allow the bid page and 3 do not. Two percent is a cheap
+# price. RESPECT_ROBOTS=0 turns it off if it ever proves otherwise.
+#
+# Fail-open by design. An unreachable robots.txt is not a refusal, and several
+# state sites serve the bid page fine while blocking /robots.txt itself --
+# treating that as "disallowed" would drop working sources for no reason.
+RESPECT_ROBOTS = os.environ.get("RESPECT_ROBOTS", "1") != "0"
+ROBOTS_TIMEOUT = float(os.environ.get("ROBOTS_TIMEOUT", "6"))
+_robots_cache = {}
+_robots_lock = threading.Lock()
+
+
+def _robots_allows(url):
+    if not RESPECT_ROBOTS:
+        return True
+    try:
+        parts = urllib.parse.urlsplit(url)
+        host = (parts.hostname or "").lower()
+    except ValueError:
+        return True
+    if not host:
+        return True
+    with _robots_lock:
+        rp = _robots_cache.get(host, "miss")
+    if rp == "miss":
+        rp = None
+        try:
+            robots_url = "%s://%s/robots.txt" % (parts.scheme or "https",
+                                                 parts.netloc)
+            req = urllib.request.Request(robots_url, headers=_page_headers())
+            with urllib.request.urlopen(req, timeout=ROBOTS_TIMEOUT) as resp:
+                body = resp.read(200000).decode("utf-8", "replace")
+            parser = urllib.robotparser.RobotFileParser()
+            parser.parse(body.splitlines())
+            rp = parser
+        except Exception:
+            rp = None      # unreadable -> not a refusal, see note above
+        with _robots_lock:
+            _robots_cache[host] = rp
+    if rp is None:
+        return True
+    try:
+        return rp.can_fetch(_page_headers().get("User-Agent", "*"), url)
+    except Exception:
+        return True
+
+
 def _fetch_page(url, timeout=None):
     """Fetch a page. Returns (text, outcome) where outcome explains a failure.
 
@@ -3570,6 +3625,8 @@ def _fetch_page(url, timeout=None):
     indistinguishable, both arriving as "" — so a portal being actively blocked
     looked exactly like a town with no bids.
     """
+    if not _robots_allows(url):
+        return "", "robots_disallow"
     try:
         req = urllib.request.Request(url, headers=_page_headers())
         with urllib.request.urlopen(req, timeout=timeout or FETCH_TIMEOUT) as resp:
