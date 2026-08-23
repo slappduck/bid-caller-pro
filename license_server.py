@@ -4745,9 +4745,22 @@ def _scan_sample(grouped, limit=8):
 
 
 def _bid_dupe_key(bid):
-    """Identity of a solicitation for de-duplication: title + deadline."""
-    title = re.sub(r"\s+", " ", str((bid or {}).get("title") or "")).strip().lower()
-    return title, str((bid or {}).get("deadline") or "").strip().lower()
+    """Identity of a solicitation for de-duplication: title + deadline.
+
+    Both halves are normalised, because the same job routinely arrives twice
+    -- once off the agency's own page and once via search or an aggregator --
+    written slightly differently each time. Comparing the deadline as raw text
+    meant "9/3/2026" and "09/03/2026" were different bids, as were
+    "09/03/2026" and "09/03/2026 02:00 PM EDT", so the contractor got two
+    cards for one job and starring one did nothing to the other.
+    """
+    raw = (bid or {}).get("title") or ""
+    title = re.sub(r"\s+", " ", str(raw)).strip().lower().strip(" .,-\u2013\u2014:;")
+    due = str((bid or {}).get("deadline") or "").strip()
+    parsed = _parse_deadline(due)
+    # An unparseable deadline keeps its text, so two genuinely different
+    # free-text dates still separate two genuinely different bids.
+    return title, (parsed.isoformat() if parsed else due.lower())
 
 
 # Bodies that let concrete work but are not places a gazetteer can find:
