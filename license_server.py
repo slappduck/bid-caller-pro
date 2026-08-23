@@ -5319,6 +5319,38 @@ def _count_kept_closed(grouped, stats):
         stats["kept_but_closed"] = closed
 
 
+def _flag_misplaced_bids(grouped, pdb, stats=None):
+    """Count bids whose own URL names a town other than the one they sit under.
+
+    A self-check, not a filter. The guard in _place_bid stops the known way a
+    bid gets lent the wrong town, and this counts anything that still slips
+    through by some other route -- so the next instance of this class shows up
+    in /diag instead of waiting for a customer to notice a card claiming a job
+    is 16 miles away when it is in another state.
+
+    Deliberately does not drop anything. A counter that is wrong costs a line
+    in a funnel; a filter that is wrong costs real work.
+    """
+    if stats is None or not pdb:
+        return 0
+    bad = 0
+    for label, bids in (grouped or {}).items():
+        town = str(label or "").split(",")[0].strip()
+        # County buckets come from state lettings and are placed by centroid,
+        # not by a town name, so the URL has nothing to agree with.
+        if not town or town.lower().endswith(" county"):
+            continue
+        for bid in bids:
+            try:
+                if bid_portals.url_names_other_place(bid.get("url"), town, pdb):
+                    bad += 1
+            except Exception:
+                pass
+    if bad:
+        stats["placed_url_town_mismatch"] = bad
+    return bad
+
+
 def _enrich_placed_bids(grouped, stats=None):
     """Fill in contacts and deadlines for bids that survived the radius filter.
 
@@ -5656,6 +5688,7 @@ def _perform_scan(location, radius, force=False):
     _add_agency_bids(grouped, center, radius, cdb, city_coords, drop_stats)
 
     _enrich_placed_bids(grouped, drop_stats)
+    _flag_misplaced_bids(grouped, pdb, drop_stats)
 
     for city_bids in grouped.values():
         city_bids.sort(key=_score_bid, reverse=True)

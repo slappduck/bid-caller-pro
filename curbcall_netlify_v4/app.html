@@ -2914,7 +2914,10 @@ function openDetail(city,b){
       <div class="fact ${urg}">
         <div class="k">Closes</div>
         <div class="v">${esc(b.deadline||"\u2014")}</div>
-        ${dnote?`<div class="n" style="color:${dcol};">${dnote}</div>`:""}
+        ${dnote?`<div class="n" style="color:${dcol};">${dnote}</div>`
+          // A third of postings never state a closing date. A bare dash reads
+          // as a bug; saying so, and saying where to look, does not.
+          :(b.deadline?"":`<div class="n" style="color:var(--text2);">not stated \u2014 check the posting</div>`)}
       </div>
       <div class="fact">
         <div class="k">Distance</div>
