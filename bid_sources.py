@@ -390,7 +390,48 @@ _PRO_SERVICES_RE = re.compile(
     r"|\bprofessional\s+services\b"
     r"|\bfeasibility\s+study\b|\bmaster\s+plan\b"
     r"|\bland\s+survey(?:ing)?\b|\bright[\s-]of[\s-]way\s+appraisal\b"
-    r"|\brfq?\s+for\s+(?:engineering|design|consulting)\b", re.I)
+    r"|\brfq?\s+for\s+(?:engineering|design|consulting)\b"
+    # Construction Engineering & Inspection. The agency hires a firm to watch
+    # somebody else build it -- it is the opposite end of the job from the
+    # crew pouring the concrete, and it reads as concrete work because the
+    # scope describes concrete work. Written every possible way, and the
+    # parenthetical in "Inspection (CEI) Services" defeats the adjacency the
+    # rule above needs, which is how it reached a live Nashville board.
+    r"|\bce\s?&\s?i\b|\(\s*ce\s?&?\s?i\s*\)"
+    r"|\bconstruction\s+engineering\s+(?:and|&)\s+inspection\b"
+    r"|\bconstruction\s+inspection\s+services\b"
+    r"|\bmaterials?\s+testing\s+services\b"
+    r"|\binspection\s*\([^)]{1,12}\)\s*services\b", re.I)
+
+
+# Buying the stuff is not doing the work. "Emulsified Asphalt for the Wilson
+# County Road Commission" and "Metal Culverts for the Wilson County Road
+# Commission" both reached a live Nashville board: they name this trade's
+# materials, so every keyword fires, but the contract is a commodity order and
+# a concrete crew has nothing to bid.
+#
+# The test is deliberately two-sided. A supply shape alone is not enough --
+# "furnish and install 400 LF of curb" is exactly our work -- so a real
+# construction verb anywhere in the text rescues it.
+_COMMODITY = (r"emulsified\s+asphalt|asphalt\s+(?:emulsion|cement|binder)|"
+              r"bituminous\s+material|cold\s+mix|hot\s+mix|"
+              r"ready[\s-]?mix(?:ed)?\s+concrete|"
+              r"(?:metal|plastic|hdpe|corrugated|concrete)\s+(?:culvert|pipe)s?|"
+              r"culvert\s+pipes?|aggregate|crushed\s+(?:stone|rock)|"
+              r"sand\s+and\s+gravel|road\s+salt|de[\s-]?icing|rip[\s-]?rap|"
+              r"reinforcing\s+steel|rebar|guardrail\s+material|"
+              r"traffic\s+(?:paint|sign)s?|fuel|lubricants?")
+_SUPPLY_SHAPE_RE = re.compile(
+    r"\b(?:purchase|procurement|acquisition|supply|supplying)\s+of\b"
+    r"|\bannual\s+(?:supply|materials?|purchase)\b"
+    r"|\bmaterials?\s+(?:bid|contract|purchase|supply)\b"
+    r"|\b(?:%s)\s+for\s+(?:the\s+)?\w" % _COMMODITY
+    + r"|\bbid\s+for\s+(?:the\s+)?(?:purchase|supply)\b", re.I)
+# Verbs that mean somebody is building something, not shipping it.
+_BUILD_VERB_RE = re.compile(
+    r"\b(?:construct|install|replace|repair|rehabilitat|reconstruct|resurfac|"
+    r"mill(?:ing)?|pave|paving|overlay|remove|demolish|excavat|grade|grading|"
+    r"widen|realign|build|erect|pour)\w*", re.I)
 
 
 # "<road name> ... Improvements" is one of the commonest ways a municipality
@@ -474,6 +515,10 @@ def looks_relevant(*texts):
     # Checked before the strong term, deliberately: these titles all contain
     # one and would otherwise pass unexamined.
     if _PRO_SERVICES_RE.search(blob):
+        return False
+    # Buying materials is not doing the work -- unless the text also says
+    # somebody is building with them.
+    if _SUPPLY_SHAPE_RE.search(blob) and not _BUILD_VERB_RE.search(blob):
         return False
     # Same reasoning: these name the buyer or the funding source, not the job,
     # and would sail past on "public works" or "cdbg" alone.
@@ -970,12 +1015,57 @@ def _county_column(header_cells):
     return None
 
 
+_PAGE_LETTING_DATE_RES = (
+    # MoDOT: "Bid Opening Date 09/18/2026"
+    re.compile(r"(?i)bid\w*\s+(?:open\w*|due)[^.]{0,40}?"
+               r"(\d{1,2}/\d{1,2}/\d{2,4})"),
+    # "September 18, 2026 Letting" / "Letting: September 18, 2026"
+    re.compile(r"(?i)letting\s*(?:date)?\s*[:\-]?\s*"
+               r"([A-Z][a-z]+\s+\d{1,2},?\s+\d{4})"),
+    re.compile(r"(?i)([A-Z][a-z]+\s+\d{1,2},?\s+\d{4})\s+letting"),
+)
+
+
+def page_letting_date(html, url=""):
+    """The one letting date a whole page is about, as text, or "".
+
+    Used for pages that hold a single letting -- Missouri states it as a bid
+    opening date in the body, Alabama only in the URL. Pages that hold many
+    lettings (Florida) must not use this: see letting_rows, which pairs each
+    table with the date heading above it.
+    """
+    text = _clean(_unescape(re.sub(
+        r"(?is)<(script|style|noscript)[^>]*>.*?</\1>", " ", str(html or ""))))
+    for pattern in _PAGE_LETTING_DATE_RES:
+        m = pattern.search(text)
+        if m:
+            return m.group(1)
+    when = _date_in(url)
+    return "%d/%d/%d" % (when[1], when[2], when[0]) if when else ""
+
+
+# A date heading standing on its own above a table -- how Florida separates
+# one letting from the next. Deliberately anchored to a short standalone
+# string so a date buried in a sentence is not mistaken for a section break.
+_DATE_HEADING_RE = re.compile(
+    r"(?i)(?:^|>)\s*([A-Z][a-z]+\s+\d{1,2},?\s+\d{4})\s*(?:letting)?\s*(?:<|$)")
+
+
+def _heading_date_before(body, pos, floor=0):
+    """The last standalone date heading before `pos`, or ""."""
+    best = ""
+    for m in _DATE_HEADING_RE.finditer(body, floor, pos):
+        best = m.group(1)
+    return best
+
+
 def letting_rows(html):
     """Record-shaped rows from a state letting page.
 
-    Returns [(joined_text, cells, county_column)] -- the column index travels
-    with the row because a page can carry several tables and only one of them
-    has a County header.
+    Returns [(joined_text, cells, county_column, letting_date)] -- both the
+    column index and the date travel with the row, because a page can carry
+    several tables and only one has a County header, while each may belong to
+    a different letting.
 
     Tables first, because that is what every state that works uses. List items
     are a fallback for the handful that render cards, and they are held to the
@@ -984,8 +1074,23 @@ def letting_rows(html):
     body = re.sub(r"(?is)<(script|style|noscript)[^>]*>.*?</\1>", " ",
                   str(html or ""))
     out = []
-    tables = re.findall(r"(?is)<table[^>]*>(.*?)</table>", body) or [body]
-    for table in tables:
+    matches = list(re.finditer(r"(?is)<table[^>]*>(.*?)</table>", body))
+    spans = [(m.group(1), m.start(), (matches[i - 1].end() if i else 0))
+             for i, m in enumerate(matches)] or [(body, 0, 0)]
+    current_date = ""
+    for table, start, prev_end in spans:
+        # Florida puts one letting per section and the whole page spans
+        # January to September, so a table-only reader treats a February
+        # letting as current work. The date is a heading, and it does not sit
+        # directly above the projects table: each section runs
+        #   <heading date> -> a one-row "Important Letting Documents" table
+        #   -> the projects table.
+        # So the date is carried forward from the last heading seen rather
+        # than looked for immediately above each table.
+        seen_here = _heading_date_before(body, start, prev_end)
+        if seen_here:
+            current_date = seen_here
+        table_date = current_date
         chunks = re.findall(r"(?is)<tr[^>]*>(.*?)</tr>", table)
         col = None
         for chunk in chunks:
@@ -1000,7 +1105,7 @@ def letting_rows(html):
                     continue          # that row was the header, not a record
             text = " | ".join(cells)
             if _row_is_a_record(text, cells):
-                out.append((text, cells, col))
+                out.append((text, cells, col, table_date))
     if out:
         return out
     # Only when the page has no record-shaped table at all. An earlier version
@@ -1010,7 +1115,7 @@ def letting_rows(html):
     for chunk in re.findall(r"(?is)<li[^>]*>(.{40,700}?)</li>", body):
         text = _clean(_unescape(chunk))
         if _row_is_a_record(text, [text]):
-            out.append((text, [text], None))
+            out.append((text, [text], None, ""))
     return out
 
 
@@ -1149,6 +1254,7 @@ def parse_notice_to_contractors(html, state, base_url="", county_finder=None):
     """Rows from a Notice to Contractors prose page (no table involved)."""
     text = _clean(_unescape(re.sub(
         r"(?is)<(script|style|noscript)[^>]*>.*?</\1>", " ", str(html or ""))))
+    notice_date = page_letting_date(html, base_url)
     rows, seen = [], set()
     for ident, body in notice_to_contractors_items(text):
         if not looks_relevant(body):
@@ -1171,7 +1277,8 @@ def parse_notice_to_contractors(html, state, base_url="", county_finder=None):
         # project id is already carried as the title prefix.
         shown = re.sub(r"^\d{1,3}\.\s*", "", body).strip()
         rows.append(_state_row(ident, shown[:1200], body, places, state,
-                               base_url, call=ident))
+                               base_url, call=ident,
+                               letting_date=notice_date))
     return rows
 
 
@@ -1194,7 +1301,8 @@ def parse_state_letting(html, state, base_url="", county_finder=None):
     """
     rows = []
     seen = set()
-    for text, cells, county_column in letting_rows(html):
+    page_date = page_letting_date(html, base_url)
+    for text, cells, county_column, table_date in letting_rows(html):
         if not looks_relevant(text):
             continue
         if not county_finder:
@@ -1224,8 +1332,10 @@ def parse_state_letting(html, state, base_url="", county_finder=None):
             if key in seen:
                 continue
             seen.add(key)
-            rows.append(_state_row(ident, desc, text, places, state, base_url,
-                                   call=(cells[0] if cells else "")))
+            rows.append(_state_row(
+                ident, desc, text, places, state, base_url,
+                call=(cells[0] if cells else ""),
+                letting_date=(table_date or page_date)))
     if not rows:
         # No table and no list gave us anything placeable. Some states publish
         # the letting as prose instead -- see parse_notice_to_contractors.
@@ -1233,13 +1343,17 @@ def parse_state_letting(html, state, base_url="", county_finder=None):
     return rows
 
 
-def _state_row(ident, desc, text, places, state, base_url, call=""):
+def _state_row(ident, desc, text, places, state, base_url, call="",
+               letting_date=""):
     county, lat, lon = places[0]
     return {
         "title": (("%s — %s" % (ident, desc)) if ident else desc)[:300],
         "scope": desc[:1200],
         "url": base_url,
-        "deadline": _deadline_in(text) or "",
+        # A state row rarely states its own due date -- the letting date IS
+        # the deadline, and without it every state bid arrived undated, could
+        # never be recognised as expired, and sat on the board forever.
+        "deadline": _deadline_in(text) or letting_date or "",
         "status": status_from_title(desc) or _status_near(text) or "Open",
         "county": county,
         "lat": lat,

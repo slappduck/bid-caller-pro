@@ -5076,6 +5076,14 @@ def _place_state_bid(grouped, row, center, radius, city_coords=None, stats=None)
     if others:
         bid["also_in"] = others
     _apply_deadline_status(bid)
+    # A letting that has already happened cannot be bid, and unlike a city
+    # posting somebody may have saved, a state row is re-read from scratch on
+    # every scan -- so a closed one has no purpose at all. Florida publishes
+    # every letting from January onward on one page, which put 43 dead jobs
+    # on a Tampa board against 8 live ones.
+    if not _is_open_bid(bid):
+        _count("state_letting_already_held")
+        return None
     label = "%s County, %s" % (str(county).title(),
                                row.get("state") or center["state"])
     bucket = grouped.setdefault(label, [])

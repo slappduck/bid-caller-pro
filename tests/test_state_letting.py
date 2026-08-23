@@ -496,3 +496,117 @@ class LettingIndexTests(unittest.TestCase):
         html = '<a href="/l?letting=9/18/2026">Letting Details</a>'
         self.assertIn("9/18/2026", bid_sources.newest_letting_link(
             html, "https://x.gov/", today=(2026, 8, 23)))
+
+
+class LettingDateTests(unittest.TestCase):
+    """A state row rarely states a due date -- the letting date IS the deadline.
+
+    Without it every state bid arrived undated, could never be recognised as
+    expired, and sat on the board forever. Worse, Florida publishes every
+    letting from January onward on ONE page, so a Tampa scan was showing 51
+    state jobs of which 43 had already been held.
+    """
+
+    def test_missouri_states_it_as_a_bid_opening(self):
+        self.assertEqual(
+            bid_sources.page_letting_date(
+                "<p>Bid Opening Date: 09/18/2026</p>"), "09/18/2026")
+
+    def test_alabama_states_it_only_in_the_url(self):
+        self.assertEqual(
+            bid_sources.page_letting_date(
+                "<p>Notice to Contractors</p>",
+                "https://x.al.gov/NTC/2026/NTC_August_28_2026.html"),
+            "8/28/2026")
+
+    def test_letting_wording(self):
+        self.assertEqual(
+            bid_sources.page_letting_date("<h2>September 30, 2026 Letting</h2>"),
+            "September 30, 2026")
+
+    def test_no_date_anywhere_is_empty(self):
+        self.assertEqual(bid_sources.page_letting_date("<p>Bids</p>"), "")
+
+    def test_the_date_becomes_the_deadline(self):
+        html = ("<p>Bid Opening Date: 09/18/2026</p>" +
+                table([["D05", "Route 163 BOONE County. Resurface from Route K "
+                        "to Route 63 outer road, 5.916 miles.", "x"]]))
+        rows = bid_sources.parse_state_letting(
+            html, "MO", "u", counties.counties_named)
+        self.assertEqual(rows[0]["deadline"], "09/18/2026")
+
+    def test_a_row_with_its_own_date_keeps_it(self):
+        html = ("<p>Bid Opening Date: 09/18/2026</p>" +
+                table([["D05", "Route 163 BOONE County. Resurface Route K to "
+                        "Route 63, 5.916 miles. Bids due 10/02/2026", "x"]]))
+        self.assertEqual(bid_sources.parse_state_letting(
+            html, "MO", "u", counties.counties_named)[0]["deadline"],
+            "10/02/2026")
+
+    def test_each_letting_section_gets_its_own_date(self):
+        # Florida's shape: a date heading, then a one-row documents table,
+        # then the projects table. The date does NOT sit directly above the
+        # projects table, so it has to carry forward from the last heading.
+        section = ('<h2>%s</h2>' + table([["Important Letting Documents"]]) +
+                   table([["T19%d2", "Manatee", "Resurfacing"]],
+                         header=["Proposal ID", "County", "Major Work Type"]))
+        html = (section % ("February 25, 2026", 1)) + \
+               (section % ("September 30, 2026", 2))
+        rows = bid_sources.parse_state_letting(
+            html, "FL", "u", counties.counties_named)
+        self.assertEqual(sorted(r["deadline"] for r in rows),
+                         ["February 25, 2026", "September 30, 2026"])
+
+
+class SupplyAndServicesTests(unittest.TestCase):
+    """Two kinds of thing that read as concrete work and are not.
+
+    Both reached a live Nashville board. "Emulsified Asphalt for the Wilson
+    County Road Commission" is a commodity order -- it names this trade's
+    materials so every keyword fires, but there is nothing to build. And
+    Construction Engineering & Inspection is the agency hiring a firm to WATCH
+    somebody else build it; its scope describes concrete work in detail.
+    """
+
+    def test_material_orders_are_not_work(self):
+        for t in ("Emulsified Asphalt for the Wilson County Road Commission",
+                  "Metal Culverts for the Wilson County Road Commission",
+                  "Purchase of Ready Mix Concrete for the Street Department",
+                  "Annual Materials Contract - crushed stone",
+                  "Supply of aggregate for the county"):
+            self.assertFalse(bid_sources.looks_relevant(t), t)
+
+    def test_furnish_and_install_is_work(self):
+        # The supply shape alone must not veto a real job.
+        self.assertTrue(bid_sources.looks_relevant(
+            "Furnish and install 400 LF of curb and gutter on Main Street"))
+
+    def test_buying_materials_to_build_with_is_work(self):
+        self.assertTrue(bid_sources.looks_relevant(
+            "Purchase of Ready Mix Concrete and installation of new sidewalk ramps"))
+
+    def test_replacing_a_culvert_is_work(self):
+        self.assertTrue(bid_sources.looks_relevant(
+            "Replace corrugated metal culvert and restore roadway"))
+
+    def test_cei_in_parentheses_is_caught(self):
+        # "Inspection (CEI) Services" -- the parenthetical defeats the
+        # adjacency the professional-services rule needs.
+        self.assertFalse(bid_sources.looks_relevant(
+            "Drakes Creek Road Widening - Construction Engineering & "
+            "Inspection (CEI) Services"))
+
+    def test_ce_and_i_shorthand_is_caught(self):
+        self.assertFalse(bid_sources.looks_relevant(
+            "CE&I services to construct sidewalks along both sides of "
+            "St. Mary Street"))
+
+    def test_construction_inspection_services_is_caught(self):
+        self.assertFalse(bid_sources.looks_relevant(
+            "Construction Inspection Services for the 2026 program"))
+
+    def test_a_real_sidewalk_job_still_passes(self):
+        for t in ("OLIVE ROAD SIDEWALK PROJECT",
+                  "On-call contracting services for concrete sidewalk and curb work",
+                  "ADA improvements, 10 Locations at various sites"):
+            self.assertTrue(bid_sources.looks_relevant(t), t)
