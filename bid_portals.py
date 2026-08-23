@@ -25,6 +25,7 @@ import csv
 import os
 import datetime
 import urllib.request
+import re
 import urllib.parse
 
 import kv_backend
@@ -430,6 +431,98 @@ def is_city_scoped_portal_url(url):
     if parts.query:
         return False
     return len([s for s in parts.path.split("/") if s]) >= 2
+
+
+# Words that appear in a bid URL and are never a place name.
+_URL_NOISE = {
+    "www", "cms", "cms2", "cms3", "cms4", "revize", "civicplus", "civicweb",
+    "sites", "site", "default", "files", "file", "media", "assets", "uploads",
+    "upload", "documents", "document", "documentcenter", "archive", "archives",
+    "content", "images", "img", "static", "public", "portal", "home", "index",
+    "en", "us", "gov", "org", "com", "net", "the", "clerk",
+    "bids", "bid", "rfp", "rfps", "rfq", "purchasing", "procurement",
+    "solicitations", "solicitation", "business", "government", "departments",
+    "department", "dept", "services", "news", "pages", "page", "view",
+    "city", "cityof", "town", "townof", "township", "village", "county",
+    "borough", "parish", "district", "co", "twp",
+}
+_STATE_SUFFIXES = tuple(sorted(
+    {"al", "ak", "az", "ar", "ca", "co", "ct", "de", "fl", "ga", "hi", "id",
+     "il", "in", "ia", "ks", "ky", "la", "me", "md", "ma", "mi", "mn", "ms",
+     "mo", "mt", "ne", "nv", "nh", "nj", "nm", "ny", "nc", "nd", "oh", "ok",
+     "or", "pa", "ri", "sc", "sd", "tn", "tx", "ut", "vt", "va", "wa", "wv",
+     "wi", "wy"}))
+_PREFIXES = ("cityof", "townof", "villageof", "countyof", "city", "town",
+             "village", "borough")
+
+
+def _place_tokens(url):
+    """Place-shaped words in a URL's host and first path segments.
+
+    "cms3.revize.com/revize/fairfield/Purchasing/2025/..." -> {"fairfield"}
+    "cityofcharlestown.com/Bids.aspx"                      -> {"charlestown"}
+    """
+    try:
+        parts = urllib.parse.urlparse(str(url or ""))
+    except ValueError:
+        return set()
+    raw = [p for p in (parts.hostname or "").lower().split(".")]
+    raw += [p.lower() for p in (parts.path or "").split("/")[:4]]
+    out = set()
+    for token in raw:
+        token = re.sub(r"[^a-z]", "", token)
+        if not token or token in _URL_NOISE or len(token) < 4:
+            continue
+        out.add(token)
+        for prefix in _PREFIXES:
+            if token.startswith(prefix) and len(token) > len(prefix) + 3:
+                out.add(token[len(prefix):])
+        for suffix in _STATE_SUFFIXES:
+            if token.endswith(suffix) and len(token) > len(suffix) + 3:
+                out.add(token[:-len(suffix)])
+    return out - _URL_NOISE
+
+
+def url_names_other_place(url, city, directory=None):
+    """True when the URL plainly belongs to a DIFFERENT municipality.
+
+    A bid found by searching Charlestown, IN and extracted from
+    cms3.revize.com/revize/fairfield/... is not Charlestown's. It used to be
+    lent Charlestown's name AND coordinates, so it reached the board reading
+    "Charlestown - 16 mi" for work in a Fairfield hundreds of miles away.
+
+    Conservative on purpose: it only fires when a token in the URL is a town
+    name we actually know AND no token matches the town being searched. A URL
+    that names nowhere is no evidence either way, and gets the benefit of the
+    doubt exactly as before.
+    """
+    tokens = _place_tokens(url)
+    if not tokens:
+        return False
+    want = re.sub(r"[^a-z]", "", str(city or "").lower())
+    if want and (want in tokens or any(t.startswith(want) or want.startswith(t)
+                                       for t in tokens)):
+        return False
+    known = _known_town_names(directory)
+    if not known:
+        return False
+    return any(t in known for t in tokens)
+
+
+_known_names_cache = {"src": None, "names": frozenset()}
+
+
+def _known_town_names(directory):
+    """Every town name in the portal directory, as a lookup set."""
+    if directory is None:
+        return frozenset()
+    if _known_names_cache["src"] is directory:
+        return _known_names_cache["names"]
+    names = frozenset(
+        re.sub(r"[^a-z]", "", str(k).split("|")[0].lower())
+        for k in directory if isinstance(k, str))
+    _known_names_cache.update({"src": directory, "names": names})
+    return names
 
 
 def learn_portal(directory, city, state, url, platform="custom",

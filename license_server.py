@@ -4378,7 +4378,7 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
                     # in the pipeline. The fix was applied to the CivicPlus
                     # branch and missed here, which is where every non-
                     # CivicPlus portal is read -- 1,260 of them.
-                    _place_bid(grouped, b, center, radius, cdb,
+                    _place_bid(grouped, b, center, radius, cdb, pdb=pdb,
                               default_city=default_city or city,
                               city_coords=city_coords, default_state=state,
                               fallback_coords=town_coords, stats=stats)
@@ -4518,7 +4518,8 @@ def _run_local_queries(queries, ai_label, max_pages, grouped, center, radius, cd
                 if isinstance(b, dict):
                     b["url"] = _resolve_bid_url(b.get("url"), it["url"], text)
                     bid_city = (b.get("city") or default_city or "").split(",")[0].strip()
-                    _place_bid(grouped, b, center, radius, cdb, default_city=default_city,
+                    _place_bid(grouped, b, center, radius, cdb, pdb=pdb,
+                               default_city=default_city,
                               city_coords=city_coords, default_state=state,
                               fallback_coords=town_coords, stats=stats)
                     if bid_city and state:
@@ -4839,7 +4840,7 @@ def _age_out_undated(bid, city, db, stats=None):
 
 
 def _place_bid(grouped, bid, center, radius, db, default_city="", city_coords=None,
-               default_state="", fallback_coords=None, stats=None):
+               default_state="", fallback_coords=None, stats=None, pdb=None):
     """Keep a bid ONLY if its real city geocodes within the radius.
 
     The city is resolved against the most specific state we have: the one the
@@ -4875,6 +4876,20 @@ def _place_bid(grouped, bid, center, radius, db, default_city="", city_coords=No
     from_aggregator = bid_portals.is_aggregator_url(bid.get("url") or "")
     if from_aggregator and not stated_city:
         _count("aggregator_no_location")
+        return
+    # Same failure, on an ordinary municipal CMS rather than a bid platform.
+    # A bid found while searching Charlestown, IN and read off
+    # cms3.revize.com/revize/fairfield/... is not Charlestown's work. With no
+    # city of its own it was lent the search town's name, geocoded cleanly
+    # because "Charlestown" is a real place, and reached a live board reading
+    # "Charlestown - 16 mi" for a job in a Fairfield hundreds of miles away.
+    # Note this is checked BEFORE the coordinate lookup, not in the
+    # unresolvable-place fallback further down: that fallback only runs when
+    # the borrowed name fails to geocode, and a borrowed name that geocodes
+    # perfectly is precisely the dangerous case.
+    if not stated_city and bid_portals.url_names_other_place(
+            bid.get("url"), default_city, pdb):
+        _count("url_names_another_town")
         return
     city, stated_state = _split_city_state(stated_city or default_city or "")
     if not city:
