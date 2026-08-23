@@ -182,7 +182,68 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .modal-grip{width:40px;height:4px;background:var(--border);border-radius:2px;margin:0.7rem auto;}
 .modal-content{padding:0 1.2rem 1.5rem;}
 .modal h2{font-size:1.2rem;margin-bottom:0.5rem;}
+/* ── Bid detail sheet ────────────────────────────────────────────────────
+   Rebuilt around the decision a contractor is actually making: can I get to
+   it, when does it close, and who do I call. Those three used to be plain
+   rows indistinguishable from the bid number.
+
+   The label colour was --text3 (#475569), which is 2.36:1 against the sheet
+   -- barely half the WCAG AA minimum, and this is a tool used on a phone in
+   daylight on a job site. --text2 is 6.97:1. */
 .detail-row{margin-top:1rem;}
+.sheet-head{position:sticky;top:0;z-index:2;background:var(--surface);
+  padding:0.2rem 0 0.7rem;margin-bottom:0.2rem;
+  box-shadow:0 8px 12px -10px rgba(0,0,0,0.9);}
+.sheet-head h2{margin:0 0 0.35rem;font-size:1.15rem;line-height:1.3;}
+.sheet-sub{display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;}
+/* Three tiles, because these are the three facts that decide a bid. */
+.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-top:0.9rem;}
+.fact{background:var(--card);border:1px solid var(--border);border-radius:10px;
+  padding:0.6rem 0.5rem;text-align:center;min-width:0;}
+.fact .k{color:var(--text2);font-size:0.6rem;font-weight:700;
+  text-transform:uppercase;letter-spacing:0.06em;}
+.fact .v{color:var(--text);font-size:1rem;font-weight:800;margin-top:0.2rem;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.fact .n{font-size:0.65rem;font-weight:700;margin-top:0.1rem;}
+.fact.urgent{border-color:var(--red);}
+.fact.soon{border-color:var(--accent);}
+/* Facts that disqualify you if missed, not just useful to know. */
+.alert{display:flex;gap:0.5rem;align-items:flex-start;margin-top:0.7rem;
+  padding:0.6rem 0.7rem;border-radius:10px;font-size:0.8rem;line-height:1.4;
+  border:1px solid;}
+.alert-red{background:rgba(239,68,68,0.10);border-color:rgba(239,68,68,0.45);color:#fca5a5;}
+.alert-amber{background:rgba(245,158,11,0.10);border-color:rgba(245,158,11,0.40);color:#fcd34d;}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:0.7rem 0.8rem;margin-top:1rem;}
+.detail-grid .detail-row{margin-top:0;min-width:0;}
+.detail-grid .detail-val{overflow-wrap:anywhere;}
+/* The customer's own data, grouped so it reads as theirs rather than as
+   more of the agency's. */
+.workspace{margin-top:1.2rem;padding-top:1rem;border-top:1px solid var(--border);}
+.workspace-title{color:var(--text2);font-size:0.65rem;font-weight:700;
+  text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.6rem;}
+/* Six actions never fitted one flex row -- "Add to Calendar" ran off the
+   screen. Primary is full width and thumb-reachable; the rest wrap. */
+.act-primary{display:grid;gap:0.5rem;margin-top:1.2rem;grid-template-columns:1fr 1fr;}
+/* The call button spans the row. 91% of bids carry a phone number and
+   ringing the buyer is the whole job, so it gets the width. When there is
+   no phone, Email inherits the gold and the same full-width slot. */
+.act-primary .ma-gold{grid-column:1/-1;}
+/* With no phone there are only two buttons and the second would sit
+   orphaned at half width. */
+.act-primary > :last-child:nth-child(2){grid-column:1/-1;}
+.act-more{display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-top:0.5rem;}
+.act-more button{font-size:0.75rem;padding:0.7rem 0.25rem;}
+/* Header chips sat on --surface inside a --surface sheet, so they read as
+   plain text rather than as chips. */
+.sheet-sub .chip{background:var(--card);border:1px solid var(--border);
+  padding:0.25rem 0.55rem;font-weight:700;}
+.act-primary a,.act-primary button,.act-more button,.act-more a{
+  display:flex;align-items:center;justify-content:center;gap:0.3rem;
+  min-height:44px;padding:0.7rem 0.6rem;border-radius:10px;border:1px solid var(--border);
+  font-size:0.82rem;font-weight:700;font-family:var(--ui);cursor:pointer;
+  text-decoration:none;text-align:center;}
+.act-primary .ma-gold{border-color:var(--accent);font-size:0.9rem;}
+
 .detail-label{color:var(--text3);font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;}
 .detail-val{color:var(--text);font-size:0.95rem;margin-top:0.2rem;line-height:1.5;}
 .detail-val a{color:var(--blue);text-decoration:none;}
@@ -2767,48 +2828,96 @@ function openDetail(city,b){
   // link: a plausible-looking URL that 404s is worse than no URL.
   const findUrl="https://www.google.com/search?q="+encodeURIComponent(
     `"${b.title||""}" ${city||""} bid`.trim());
-  mc.innerHTML=`<h2>${esc(b.title||"Untitled Project")}</h2>
-    <div class="bid-meta"><span class="chip">${esc(city)}</span><span class="chip"${live?"":' style="color:var(--red);"'}>${esc(statusLabel)}</span></div>
-    ${row("Scope of Work",b.scope)}
-    <div class="detail-row">
-      <div class="detail-label">Est. Value</div>
-      <input id="bid-value" class="input" style="margin-top:0.3rem;" placeholder="Not listed -- enter your own estimate, e.g. $45,000" value="${esc(b.value||"")}" />
+  const dleft=daysUntil(b);
+  // Urgency belongs on the screen where the bid/no-bid call gets made, not
+  // only on the feed card. "9/3/26" told a contractor nothing about whether
+  // they had a fortnight or two days.
+  const urg=dleft==null?"":dleft<0?"urgent":dleft<=2?"urgent":dleft<=7?"soon":"";
+  const dnote=dleft==null?"":dleft<0?"closed":dleft===0?"closes today"
+    :dleft===1?"1 day left":dleft+" days left";
+  const dcol=dleft==null?"var(--text2)":dleft<=2?"var(--red)"
+    :dleft<=7?"var(--accent)":"var(--green)";
+  // Guard on the field, not just on safeUrl. safeUrl("tel:") returns "tel:"
+  // -- the scheme test passes on a bare scheme with nothing after it -- so a
+  // bid with no phone rendered a gold "Call" button wired to a dead link.
+  // The same was already true of Email: every bid without an address has
+  // been showing an Email button that opens a blank compose window.
+  const tel=b.phone?safeUrl("tel:"+b.phone):"";
+  const mail=b.email?safeUrl("mailto:"+b.email):"";
+  const post=safeUrl(b.url);
+  mc.innerHTML=`<div class="sheet-head">
+      <h2>${esc(b.title||"Untitled Project")}</h2>
+      <div class="sheet-sub">
+        <span class="chip">${esc(city)}${Number.isFinite(b.miles)?` \u00b7 ${b.miles} mi`:""}</span>
+        <span class="chip"${live?"":' style="color:var(--red);"'}>${esc(statusLabel)}</span>
+      </div>
     </div>
-    ${row("Deadline",b.deadline||"Not listed")}
-    ${row("Posted",b.published)}
-    ${row("Bid Number",b.bid_number)}
-    ${b.prebid?`<div class="detail-row"><div class="detail-label">Pre-Bid Meeting</div>
-      <div class="detail-val"${b.prebid==="mandatory"?' style="color:var(--red);font-weight:700;"':""}>${
-        b.prebid==="mandatory"?"MANDATORY — you cannot bid without attending":"Yes — check the posting for date and place"}</div></div>`:""}
-    ${b.addenda?`<div class="detail-row"><div class="detail-label">Addenda</div>
-      <div class="detail-val" style="color:var(--accent);">This bid has addenda — read them before pricing</div></div>`:""}
+    <div class="facts">
+      <div class="fact ${urg}">
+        <div class="k">Closes</div>
+        <div class="v">${esc(b.deadline||"\u2014")}</div>
+        ${dnote?`<div class="n" style="color:${dcol};">${dnote}</div>`:""}
+      </div>
+      <div class="fact">
+        <div class="k">Distance</div>
+        <div class="v">${Number.isFinite(b.miles)?b.miles+" mi":"\u2014"}</div>
+        <div class="n" style="color:var(--text2);">from you</div>
+      </div>
+      <div class="fact">
+        <div class="k">Est. Value</div>
+        <div class="v">${b.value?esc(b.value):"\u2014"}</div>
+        <div class="n" style="color:var(--text2);">${b.value?"stated":"not listed"}</div>
+      </div>
+    </div>
+    ${b.prebid?`<div class="alert ${b.prebid==="mandatory"?"alert-red":"alert-amber"}">
+      <span>${b.prebid==="mandatory"
+        ?"<b>Mandatory pre-bid meeting.</b> You cannot bid without attending \u2014 check the posting for date and place."
+        :"<b>Pre-bid meeting.</b> Check the posting for date and place."}</span></div>`:""}
+    ${b.addenda?`<div class="alert alert-amber">
+      <span><b>This bid has addenda.</b> Read them before pricing \u2014 the scope may have changed.</span></div>`:""}
+    ${row("Scope of Work",b.scope)}
+    <div class="detail-grid">
+      ${row("Posted",b.published)}
+      ${row("Bid Number",b.bid_number)}
+      ${row("Contact",b.contact)}
+      ${row("Email",b.email,b.email?"mailto:"+b.email:null)}
+      ${row("Phone",b.phone,b.phone?"tel:"+b.phone:null)}
+    </div>
     ${(b.documents&&b.documents.length)?`<div class="detail-row">
       <div class="detail-label">Bid Documents</div>
       <div class="detail-val">${b.documents.slice(0,5).map((d,i)=>
         safeUrl(d)?`<a href="${esc(safeUrl(d))}" target="_blank" rel="noopener noreferrer">Document ${i+1}</a>`:"")
         .filter(Boolean).join(" &middot; ")}</div></div>`:""}
-    ${row("Contact",b.contact)}${row("Email",b.email,b.email?"mailto:"+b.email:null)}
-    ${row("Phone",b.phone,b.phone?"tel:"+b.phone:null)}${b.url?row("Original Posting",b.url,b.url)
+    ${post?row("Original Posting",b.url,b.url)
       :row("Original Posting","Not linked \u2014 search for it",findUrl)}
-    <div class="detail-row">
-      <div class="detail-label">Bid Status</div>
-      <div class="pipeline-row">
-        ${statuses.map(([k,label])=>`<button class="pchip ${pStatus===k?"active-"+k:""}" data-pstatus="${esc(pStatus===k?"":k)}">${label}</button>`).join("")}
+    <div class="workspace">
+      <div class="workspace-title">Your tracking \u2014 private, only you see this</div>
+      <div class="detail-row">
+        <div class="detail-label">Your estimate</div>
+        <input id="bid-value" class="input" style="margin-top:0.3rem;" placeholder="e.g. $45,000" value="${esc(b.value||"")}" />
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">Bid Status</div>
+        <div class="pipeline-row">
+          ${statuses.map(([k,label])=>`<button class="pchip ${pStatus===k?"active-"+k:""}" data-pstatus="${esc(pStatus===k?"":k)}">${label}</button>`).join("")}
+        </div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">Notes</div>
+        <textarea id="bid-notes" class="input" style="min-height:70px;resize:vertical;margin-top:0.3rem;font-family:inherit;" placeholder="Who you talked to, next steps...">${esc(notes[id]||"")}</textarea>
       </div>
     </div>
-    <div class="detail-row">
-      <div class="detail-label">Notes (private, just for you)</div>
-      <textarea id="bid-notes" class="input" style="min-height:70px;resize:vertical;margin-top:0.3rem;font-family:inherit;" placeholder="Estimate, who you talked to, next steps...">${esc(notes[id]||"")}</textarea>
+    <div class="act-primary">
+      ${tel?`<a class="ma-gold" href="${esc(tel)}">Call ${esc(b.phone)}</a>`:""}
+      ${mail?`<a class="${tel?"ma-ghost":"ma-gold"}" href="${esc(mail)}">Email</a>`:""}
+      ${post?`<a class="ma-ghost" href="${esc(post)}" target="_blank" rel="noopener noreferrer">Open posting</a>`
+            :`<a class="ma-ghost" href="${esc(findUrl)}" target="_blank" rel="noopener noreferrer">Find posting</a>`}
     </div>
-    <div class="modal-actions">
-      ${safeUrl("mailto:"+b.email)?`<a class="ma-gold" href="${esc(safeUrl("mailto:"+b.email))}">Email</a>`:""}
-      ${safeUrl(b.url)
-        ?`<a class="ma-ghost" href="${esc(safeUrl(b.url))}" target="_blank" rel="noopener noreferrer">Open</a>`
-        :`<a class="ma-ghost" href="${esc(findUrl)}" target="_blank" rel="noopener noreferrer">Find Posting</a>`}
+    <div class="act-more">
+      <button class="ma-ghost" data-act="save">${saved[id]?"\u2605 Saved":"\u2606 Save"}</button>
       <button class="ma-ghost" data-act="share">Share</button>
-      <button class="ma-ghost" data-act="save">${saved[bidId(city,b)]?"\u2605 Saved":"\u2606 Save"}</button>
-      ${b.deadline?`<button class="ma-ghost" data-act="calendar">Add to Calendar</button>`:""}
-      <button class="ma-ghost" data-act="draft">Draft Proposal</button>
+      ${b.deadline?`<button class="ma-ghost" data-act="calendar">Calendar</button>`:""}
+      <button class="ma-ghost" data-act="draft">Proposal</button>
     </div>`;
   // Wired as real listeners instead of onclick="fn('${id}')" attributes. A bid
   // id is built from its city + title text, so a bid anywhere like O'Fallon
