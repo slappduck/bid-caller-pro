@@ -5294,6 +5294,33 @@ _YEAR_RE = re.compile(r"(?<!\d)(20\d{2})(?!\d)")
 # issued and closing it is right.
 _PROJECT_CODE_RE = re.compile(r"\b[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)+\b")
 
+# Where a posting is FILED is often the only statement of how old it is. A
+# live board showed "Concrete Sidewalks and ADA Ramps Project" as open with no
+# closing date; neither its title nor its scope named a year, and the only
+# evidence it was from July 2025 sat in the URL:
+#   .../fairfield/Purchasing/2025/2025-07 ITB Southport Community...
+#
+# Only DATE-SHAPED PATH SEGMENTS count -- a segment that is a year, or that
+# begins with year-month. Not the query string and not stray digits: a
+# CivicPlus posting is addressed "Bids.aspx?bidID=2024", where 2024 is a row
+# id, and reading that as a year would close a brand new bid.
+_PATH_YEAR_RE = re.compile(r"^(20\d{2})(?:[-_/]\d{1,2})?(?:\b|_|$)")
+
+
+def _url_path_years(url):
+    """Years stated by a URL's path segments, e.g. ".../2025/2025-07 ITB..."."""
+    try:
+        path = urllib.parse.urlsplit(str(url or "")).path
+        path = urllib.parse.unquote(path)
+    except ValueError:
+        return []
+    out = []
+    for segment in path.split("/"):
+        m = _PATH_YEAR_RE.match(segment.strip())
+        if m:
+            out.append(int(m.group(1)))
+    return out
+
 
 def _apply_stale_year(bid):
     """Close an undated bid whose own title is from a past year.
@@ -5312,6 +5339,7 @@ def _apply_stale_year(bid):
     blob = _PROJECT_CODE_RE.sub(
         " ", f"{bid.get('title') or ''} {bid.get('scope') or ''}")
     years = [int(y) for y in _YEAR_RE.findall(blob)]
+    years += _url_path_years(bid.get("url"))
     if years and max(years) < datetime.datetime.now().year:
         bid["status"] = "Closed"
     return bid

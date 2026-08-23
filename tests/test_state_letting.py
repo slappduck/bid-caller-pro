@@ -659,3 +659,58 @@ class ProjectCodeIsNotAYearTests(unittest.TestCase):
                "deadline": "12/01/2026", "status": "Open"}
         self.ls_mod._apply_stale_year(bid)
         self.assertEqual(bid["status"], "Open")
+
+
+class UrlAgeTests(unittest.TestCase):
+    """Where a posting is FILED is often the only statement of how old it is.
+
+    A live board showed "Concrete Sidewalks and ADA Ramps Project" as OPEN
+    with no closing date. Neither its title nor its scope named a year. The
+    only evidence it was from July 2025 sat in the URL:
+        .../fairfield/Purchasing/2025/2025-07 ITB Southport Community...
+    """
+    import license_server as ls_mod
+
+    def _status(self, url, title="Concrete Sidewalks and ADA Ramps Project"):
+        bid = {"title": title, "scope": "new concrete sidewalks, curbs, "
+               "ADA compliant ramps", "deadline": "", "status": "Open",
+               "url": url}
+        self.ls_mod._apply_stale_year(bid)
+        return bid["status"]
+
+    def test_the_reported_listing_closes(self):
+        self.assertEqual(self._status(
+            "https://cms3.revize.com/revize/fairfield/Purchasing/2025/"
+            "2025-07%20ITB%20Southport%20Community%20Connectivity.pdf"),
+            "Closed")
+
+    def test_this_years_folder_stays_open(self):
+        self.assertEqual(self._status(
+            "https://cms3.revize.com/revize/fairfield/Purchasing/2026/"
+            "2026-03%20ITB%20Curb.pdf"), "Open")
+
+    def test_a_bid_id_is_not_a_year(self):
+        # CivicPlus addresses a posting as Bids.aspx?bidID=2024, where 2024 is
+        # a row id. Reading that as a year would close a brand new bid.
+        self.assertEqual(self._status("https://x.gov/Bids.aspx?bidID=2024"),
+                         "Open")
+
+    def test_only_date_shaped_path_segments_count(self):
+        self.assertEqual(self._status("https://x.gov/bids/2026-street-program"),
+                         "Open")
+        self.assertEqual(self._status("https://x.gov/purchasing/current/rfp.pdf"),
+                         "Open")
+
+    def test_a_year_folder_alone_is_enough(self):
+        self.assertEqual(self._status("https://x.gov/bids/2024/sidewalk.pdf"),
+                         "Closed")
+
+    def test_a_dated_bid_is_never_touched(self):
+        bid = {"title": "x", "scope": "", "deadline": "12/01/2026",
+               "status": "Open", "url": "https://x.gov/bids/2020/old.pdf"}
+        self.ls_mod._apply_stale_year(bid)
+        self.assertEqual(bid["status"], "Open")
+
+    def test_no_url_is_safe(self):
+        self.assertEqual(self._status(""), "Open")
+        self.assertEqual(self.ls_mod._url_path_years(None), [])
