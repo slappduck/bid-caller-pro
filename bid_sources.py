@@ -497,6 +497,35 @@ _NAV_TITLE_RE = re.compile(
     r"(?:\s+(?:page|list|home|archive|and\s+rfps?))?\s*$", re.I)
 
 
+# Page furniture that gets scraped as a title. _NAV_TITLE_RE above only fires
+# when a title is ENTIRELY navigation, so "Concrete Bid Information" -- the
+# heading of a page, not a job -- sails through on the word "Concrete".
+#
+# The test is what is LEFT once the furniture is removed. "Concrete Bid
+# Information" leaves "Concrete", which names a trade and no project. "Union
+# 2026 Street Repair Program Concrete Bid Information" leaves the whole
+# programme name and is a real solicitation.
+_PAGE_LABEL_TAIL_RE = re.compile(
+    r"\s*[-\u2013\u2014:|]?\s*(?:"
+    r"bid(?:ding)?\s+information|bid\s+opportunit(?:y|ies)|"
+    r"solicitation\s+information|contract\s+information|"
+    r"click\s+here(?:\s+for\s+(?:more\s+)?(?:information|details?))?|"
+    r"(?:for\s+)?more\s+information|view\s+(?:details?|more)|"
+    r"read\s+more|learn\s+more|details?"
+    r")\s*$", re.I)
+# Long enough to name a project, not just a trade. "Concrete" is 8.
+_MIN_TITLE_CORE = 12
+
+
+def _title_minus_page_furniture(title):
+    text = str(title or "").strip()
+    prev = None
+    while prev != text:
+        prev = text
+        text = _PAGE_LABEL_TAIL_RE.sub("", text).strip(" -\u2013\u2014:|")
+    return text
+
+
 def _has_strong_term(blob):
     return _ADA_RE.search(blob) is not None or \
         any(t in blob for t in STRONG_NICHE_TERMS)
@@ -512,6 +541,12 @@ def looks_relevant(*texts):
     # a real bid whose SCOPE happens to read "bids and rfps" is still real.
     if parts and _NAV_TITLE_RE.match(parts[0].strip()):
         return False
+    # A trade word plus page furniture is a heading, not a job.
+    if parts:
+        head = parts[0].strip()
+        core = _title_minus_page_furniture(head)
+        if core != head and len(core) < _MIN_TITLE_CORE:
+            return False
     # Checked before the strong term, deliberately: these titles all contain
     # one and would otherwise pass unexamined.
     if _PRO_SERVICES_RE.search(blob):

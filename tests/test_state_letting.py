@@ -770,3 +770,47 @@ class RobotsTests(unittest.TestCase):
     def test_a_malformed_url_does_not_blow_up(self):
         self.assertTrue(self.ls_mod._robots_allows(""))
         self.assertTrue(self.ls_mod._robots_allows("not a url"))
+
+
+class PageFurnitureTitleTests(unittest.TestCase):
+    """A trade word plus page furniture is a heading, not a job.
+
+    _NAV_TITLE_RE only fires when a title is ENTIRELY navigation, so
+    "Concrete Bid Information" -- the heading of a page -- sailed through on
+    the word "Concrete". The test is what is LEFT once the furniture is
+    stripped: "Concrete" names a trade and no project, while "Union 2026
+    Street Repair Program Concrete Bid Information" leaves the whole
+    programme name and is a real solicitation.
+    """
+
+    def test_headings_are_rejected(self):
+        for t in ("Concrete Bid Information", "Curb Bid Information",
+                  "Sidewalk Bidding Information", "Concrete Details",
+                  "Sidewalk Bid Opportunities"):
+            self.assertFalse(bid_sources.looks_relevant(t), t)
+
+    def test_a_real_programme_survives_the_same_suffix(self):
+        self.assertTrue(bid_sources.looks_relevant(
+            "Union 2026 Street Repair Program Concrete Bid Information"))
+
+    def test_a_link_label_on_a_real_project_survives(self):
+        self.assertTrue(bid_sources.looks_relevant(
+            "Sidewalk Program - Click here for more information"))
+
+    def test_ordinary_titles_are_untouched(self):
+        for t in ("Concrete Sidewalks and ADA Ramps Project",
+                  "2026 Sidewalk and Curb Replacement Program",
+                  "Tap River Sidewalk Project",
+                  "Triple Crown Subdivision Concrete Replacement"):
+            self.assertTrue(bid_sources.looks_relevant(t), t)
+
+    def test_stripping_is_repeated_until_stable(self):
+        self.assertEqual(
+            bid_sources._title_minus_page_furniture(
+                "Concrete Bid Information - Click here for more information"),
+            "Concrete")
+
+    def test_a_title_with_no_furniture_is_returned_unchanged(self):
+        self.assertEqual(
+            bid_sources._title_minus_page_furniture("Tap River Sidewalk Project"),
+            "Tap River Sidewalk Project")
