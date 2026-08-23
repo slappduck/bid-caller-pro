@@ -1378,11 +1378,26 @@ def parse_state_letting(html, state, base_url="", county_finder=None):
     return rows
 
 
+def _compose_state_title(ident, desc):
+    """"CODE — description", without repeating the code when the description
+    already opens with it."""
+    body = str(desc or "").strip()
+    code = str(ident or "").strip()
+    if code and body.upper().startswith(code.upper()):
+        body = body[len(code):].lstrip(" ,-\u2013\u2014:")
+    if not body:
+        return code[:300]
+    return (("%s \u2014 %s" % (code, body)) if code else body)[:300]
+
+
 def _state_row(ident, desc, text, places, state, base_url, call="",
                letting_date=""):
     county, lat, lon = places[0]
     return {
-        "title": (("%s — %s" % (ident, desc)) if ident else desc)[:300],
+        # The description on a notice page opens with the same project code we
+        # use as the identifier, so composing "CODE — CODE , COUNTY ..." said
+        # it twice. Drop the leading copy.
+        "title": _compose_state_title(ident, desc),
         "scope": desc[:1200],
         "url": base_url,
         # A state row rarely states its own due date -- the letting date IS

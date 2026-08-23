@@ -814,3 +814,44 @@ class PageFurnitureTitleTests(unittest.TestCase):
         self.assertEqual(
             bid_sources._title_minus_page_furniture("Tap River Sidewalk Project"),
             "Tap River Sidewalk Project")
+
+
+class StateTitleTests(unittest.TestCase):
+    """A notice's description opens with the same project code we use as its
+    identifier, so composing "CODE - description" said the code twice:
+    "HRRR-3626(250) - HRRR-3626(250), JACKSON COUNTY Contract Time: ..."
+    """
+
+    def test_a_repeated_code_is_dropped(self):
+        self.assertEqual(
+            bid_sources._compose_state_title(
+                "HRRR-3626(250)",
+                "HRRR-3626(250) , JACKSON COUNTY Contract Time: 20 Working Days"),
+            "HRRR-3626(250) — JACKSON COUNTY Contract Time: 20 Working Days")
+
+    def test_a_code_that_is_not_repeated_is_kept(self):
+        self.assertEqual(bid_sources._compose_state_title("T1922", "Resurfacing"),
+                         "T1922 — Resurfacing")
+
+    def test_no_code_leaves_the_description_alone(self):
+        self.assertEqual(
+            bid_sources._compose_state_title("", "Route 163 BOONE County."),
+            "Route 163 BOONE County.")
+
+    def test_a_description_that_is_only_the_code(self):
+        self.assertEqual(bid_sources._compose_state_title("D07", "D07"), "D07")
+
+    def test_matching_is_case_insensitive(self):
+        self.assertEqual(
+            bid_sources._compose_state_title("t1922", "T1922 Resurfacing"),
+            "t1922 — Resurfacing")
+
+    def test_live_shape_has_no_repeat(self):
+        html = table([["G02", "HRRR-3626(250) , JACKSON COUNTY Coldmill and "
+                       "resurface on Ohio Street, 2.059 miles.", "9/18/2026"]])
+        rows = bid_sources.parse_state_letting(
+            html, "AL", "u", counties.counties_named)
+        for r in rows:
+            code = r["call"]
+            self.assertLessEqual(r["title"].upper().count(code.upper()), 1,
+                                 r["title"])
