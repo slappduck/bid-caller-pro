@@ -37,6 +37,18 @@
   --r:10px;       /* buttons, inputs, tiles */
   --r-lg:14px;    /* cards and panels */
   --r-pill:999px; /* anything genuinely pill-shaped */
+  /* One type scale. There were twenty-five different font sizes in this
+     file, six of them between 0.60 and 0.68rem -- close enough to be
+     indistinguishable, far enough apart to never line up. That is the same
+     class of problem as the eleven border radii: nothing looks broken, it
+     just never quite settles.
+
+     --fs-lg is exactly 1rem and inputs use it, deliberately. Below 16px iOS
+     Safari zooms the page when a field takes focus, which on a form-first
+     screen throws the whole layout sideways. */
+  --fs-xs:0.66rem;  --fs-sm:0.75rem;  --fs-base:0.85rem; --fs-md:0.95rem;
+  --fs-lg:1rem;     --fs-xl:1.15rem;  --fs-2xl:1.35rem;  --fs-3xl:1.8rem;
+  --fs-4xl:2.4rem;
   --ui:'Inter',sans-serif;--mono:'DM Mono',monospace;
 }
 html,body{height:100%;}
@@ -49,15 +61,15 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   padding:2rem 1.5rem;
 }
-.auth-logo{font-family:'Bebas Neue',sans-serif;font-size:2.2rem;letter-spacing:0.06em;margin-bottom:0.2rem;}
+.auth-logo{font-family:'Bebas Neue',sans-serif;font-size:var(--fs-4xl);letter-spacing:0.06em;margin-bottom:0.2rem;}
 .auth-logo span{color:var(--accent);}
-.auth-tagline{color:var(--text2);font-size:0.9rem;margin-bottom:2.2rem;text-align:center;}
+.auth-tagline{color:var(--text2);font-size:var(--fs-md);margin-bottom:2.2rem;text-align:center;}
 .auth-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:1.5rem;width:100%;max-width:360px;}
-.auth-title{font-size:1.1rem;font-weight:800;margin-bottom:0.3rem;}
-.auth-sub{color:var(--text2);font-size:0.82rem;margin-bottom:1.4rem;}
+.auth-title{font-size:var(--fs-xl);font-weight:800;margin-bottom:0.3rem;}
+.auth-sub{color:var(--text2);font-size:var(--fs-base);margin-bottom:1.4rem;}
 .social-btn{
   width:100%;display:flex;align-items:center;justify-content:center;gap:0.7rem;
-  padding:0.85rem;border-radius:var(--r);font-weight:700;font-size:0.95rem;
+  padding:0.85rem;border-radius:var(--r);font-weight:700;font-size:var(--fs-md);
   cursor:pointer;border:none;font-family:var(--ui);margin-bottom:0.7rem;
   background:var(--card);color:var(--text);border:1px solid var(--border);
   transition:border-color .15s;
@@ -66,53 +78,53 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .social-btn img{width:20px;height:20px;}
 .divider{display:flex;align-items:center;gap:0.7rem;margin:0.5rem 0 1rem;}
 .divider::before,.divider::after{content:"";flex:1;height:1px;background:var(--border);}
-.divider span{color:var(--text3);font-size:0.75rem;}
-.field-label{color:var(--accent);font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 0.4rem;}
-.input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:0.85rem 1rem;color:var(--text);font-size:1rem;font-family:var(--ui);}
+.divider span{color:var(--text3);font-size:var(--fs-sm);}
+.field-label{color:var(--accent);font-size:var(--fs-sm);font-weight:700;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 0.4rem;}
+.input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:0.85rem 1rem;color:var(--text);font-size:var(--fs-lg);font-family:var(--ui);}
 .input:focus{outline:none;border-color:var(--accent);}
-.btn-primary{width:100%;background:var(--accent);color:#000;border:none;border-radius:var(--r);padding:0.95rem;font-size:1rem;font-weight:800;cursor:pointer;margin-top:0.8rem;font-family:var(--ui);display:flex;align-items:center;justify-content:center;gap:0.5rem;}
+.btn-primary{width:100%;background:var(--accent);color:#000;border:none;border-radius:var(--r);padding:0.95rem;font-size:var(--fs-lg);font-weight:800;cursor:pointer;margin-top:0.8rem;font-family:var(--ui);display:flex;align-items:center;justify-content:center;gap:0.5rem;}
 .btn-primary:disabled{opacity:0.55;}
-.btn-ghost{width:100%;background:transparent;color:var(--text2);border:1px solid var(--border);border-radius:var(--r);padding:0.8rem;font-size:0.9rem;font-weight:600;cursor:pointer;margin-top:0.6rem;font-family:var(--ui);}
-.auth-toggle{text-align:center;margin-top:1rem;font-size:0.82rem;color:var(--text2);}
+.btn-ghost{width:100%;background:transparent;color:var(--text2);border:1px solid var(--border);border-radius:var(--r);padding:0.8rem;font-size:var(--fs-md);font-weight:600;cursor:pointer;margin-top:0.6rem;font-family:var(--ui);}
+.auth-toggle{text-align:center;margin-top:1rem;font-size:var(--fs-base);color:var(--text2);}
 .auth-toggle a{color:var(--accent);cursor:pointer;font-weight:600;}
-.auth-msg{font-size:0.82rem;margin-top:0.7rem;min-height:1rem;text-align:center;}
+.auth-msg{font-size:var(--fs-base);margin-top:0.7rem;min-height:1rem;text-align:center;}
 .auth-msg.err{color:var(--red);}
 .auth-msg.ok{color:var(--green);}
-.auth-trial-note{text-align:center;color:var(--text3);font-size:0.75rem;margin-top:1.2rem;}
+.auth-trial-note{text-align:center;color:var(--text3);font-size:var(--fs-sm);margin-top:1.2rem;}
 
 /* ── Main app ── */
 .topbar{background:var(--surface);padding:calc(env(safe-area-inset-top) + 0.8rem) 1rem 0.8rem;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);flex-shrink:0;}
 .brand{display:flex;align-items:center;gap:0.5rem;}
-.brand-name{font-family:'Bebas Neue',sans-serif;font-size:1.25rem;letter-spacing:0.06em;}
+.brand-name{font-family:'Bebas Neue',sans-serif;font-size:var(--fs-2xl);letter-spacing:0.06em;}
 .brand-name span{color:var(--accent);}
 /* Reads as a button, not a status badge: a border and a chevron give it an
    affordance, and min-height meets the 44px touch target a gloved hand needs.
    It used to be a bare 27px-tall pill showing an email address, which nobody
    recognised as the way into Account. */
-.user-chip{font-family:var(--ui);font-size:0.68rem;font-weight:700;color:var(--accent);background:rgba(245,166,35,0.12);border:1px solid rgba(245,166,35,0.35);padding:0.3rem 0.6rem;border-radius:var(--r-pill);min-height:44px;box-sizing:border-box;max-width:52vw;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;gap:0.35rem;}
+.user-chip{font-family:var(--ui);font-size:var(--fs-xs);font-weight:700;color:var(--accent);background:rgba(245,166,35,0.12);border:1px solid rgba(245,166,35,0.35);padding:0.3rem 0.6rem;border-radius:var(--r-pill);min-height:44px;box-sizing:border-box;max-width:52vw;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;gap:0.35rem;}
 .user-chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
 .user-chip .who{overflow:hidden;text-overflow:ellipsis;min-width:0;}
-.user-chip .chev{opacity:0.75;flex-shrink:0;font-size:0.95rem;line-height:1;}
+.user-chip .chev{opacity:0.75;flex-shrink:0;font-size:var(--fs-md);line-height:1;}
 .user-chip img{width:18px;height:18px;border-radius:50%;object-fit:cover;flex-shrink:0;}
 .avatar-lg{width:56px;height:56px;border-radius:50%;object-fit:cover;flex-shrink:0;}
-.avatar-placeholder{width:56px;height:56px;border-radius:50%;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:1.4rem;flex-shrink:0;}
+.avatar-placeholder{width:56px;height:56px;border-radius:50%;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:var(--fs-2xl);flex-shrink:0;}
 
 .screens{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;}
 .screen{display:none;padding:1rem 1rem 5.5rem;animation:fade 0.25s;}
 .screen.active{display:block;}
 @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 
-.screen-title{font-family:'Bebas Neue',sans-serif;font-size:1.8rem;letter-spacing:0.03em;margin-bottom:0.2rem;}
-.screen-sub{color:var(--text2);font-size:0.85rem;margin-bottom:1.2rem;}
+.screen-title{font-family:'Bebas Neue',sans-serif;font-size:var(--fs-3xl);letter-spacing:0.03em;margin-bottom:0.2rem;}
+.screen-sub{color:var(--text2);font-size:var(--fs-base);margin-bottom:1.2rem;}
 .radius-row{display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.2rem;}
-.radius-btn{flex:1;min-width:56px;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:0.7rem 0.3rem;color:var(--text2);font-size:0.85rem;font-weight:600;cursor:pointer;text-align:center;}
+.radius-btn{flex:1;min-width:56px;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:0.7rem 0.3rem;color:var(--text2);font-size:var(--fs-base);font-weight:600;cursor:pointer;text-align:center;}
 .radius-btn.active{background:var(--accent);color:#000;border-color:var(--accent);}
 
-.scan-status{color:var(--text2);font-size:0.85rem;text-align:center;margin-top:1.2rem;min-height:20px;}
+.scan-status{color:var(--text2);font-size:var(--fs-base);text-align:center;margin-top:1.2rem;min-height:20px;}
 .progress{height:4px;background:var(--border);border-radius:var(--r-hair);overflow:hidden;margin-top:0.7rem;}
 .progress-bar{height:100%;width:0;background:var(--accent);transition:width 0.4s ease;}
 
-.feed-label{color:var(--green);font-size:0.68rem;font-weight:700;letter-spacing:0.06em;margin:1.2rem 0 0.6rem;display:flex;align-items:center;gap:0.4rem;}
+.feed-label{color:var(--green);font-size:var(--fs-xs);font-weight:700;letter-spacing:0.06em;margin:1.2rem 0 0.6rem;display:flex;align-items:center;gap:0.4rem;}
 .feed-label::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--border),transparent);}
 .bid{background:var(--card);border-radius:var(--r-lg);padding:0;margin-bottom:0.7rem;overflow:hidden;display:flex;cursor:pointer;animation:fade 0.3s;box-shadow:0 2px 10px rgba(0,0,0,0.18);border:1px solid var(--border);transition:transform .12s,border-color .12s;}
 .bid:active{transform:scale(0.98);border-color:var(--accent);}
@@ -121,43 +133,43 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .bid-bar.soon{background:var(--accent) !important;}
 .bid-body{padding:0.9rem 1rem;flex:1;min-width:0;}
 .bid-top{display:flex;justify-content:space-between;align-items:flex-start;gap:0.5rem;margin-bottom:0.3rem;}
-.bid-title{font-weight:700;font-size:0.95rem;line-height:1.3;}
-.bid-scope{color:var(--text2);font-size:0.8rem;line-height:1.45;margin-bottom:0.5rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.bid-title{font-weight:700;font-size:var(--fs-md);line-height:1.3;}
+.bid-scope{color:var(--text2);font-size:var(--fs-base);line-height:1.45;margin-bottom:0.5rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
 .bid-meta{display:flex;gap:0.4rem;flex-wrap:wrap;}
-.chip{font-size:0.66rem;padding:0.2rem 0.5rem;border-radius:var(--r-sm);background:var(--surface);color:var(--text2);}
+.chip{font-size:var(--fs-xs);padding:0.2rem 0.5rem;border-radius:var(--r-sm);background:var(--surface);color:var(--text2);}
 .chip.value{color:var(--green);}
-.star{font-size:1.2rem;color:var(--text3);flex-shrink:0;padding-left:0.4rem;}
+.star{font-size:var(--fs-xl);color:var(--text3);flex-shrink:0;padding-left:0.4rem;}
 .star.on{color:var(--accent);}
 
 .tiles{display:flex;gap:0.5rem;overflow-x:auto;padding-bottom:0.5rem;margin-bottom:0.3rem;-webkit-overflow-scrolling:touch;}
 .tile{flex-shrink:0;background:var(--card);border-radius:var(--r);padding:0.6rem 0.9rem;text-align:center;cursor:pointer;min-width:64px;}
 .tile.active{background:var(--accent);}
-.tile .n{font-size:1.2rem;font-weight:800;}
+.tile .n{font-size:var(--fs-xl);font-weight:800;}
 .tile.active .n,.tile.active .l{color:#000;}
-.tile .l{font-size:0.65rem;color:var(--text3);}
+.tile .l{font-size:var(--fs-xs);color:var(--text3);}
 
 .stats-grid{display:flex;gap:0.6rem;margin-bottom:0.9rem;}
 .stat-box{flex:1;background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:0.8rem 0.6rem;text-align:center;}
-.stat-box .n{font-size:1.35rem;font-weight:800;color:var(--accent);}
-.stat-box .l{font-size:0.64rem;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-top:0.15rem;}
+.stat-box .n{font-size:var(--fs-2xl);font-weight:800;color:var(--accent);}
+.stat-box .l{font-size:var(--fs-xs);color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-top:0.15rem;}
 
 .empty{text-align:center;padding:3.5rem 1rem;}
-.empty .icon{font-size:2.6rem;opacity:0.4;}
-.empty h3{font-size:1.1rem;color:var(--text2);margin:0.7rem 0 0.3rem;}
-.empty p{color:var(--text3);font-size:0.85rem;}
+.empty .icon{font-size:var(--fs-4xl);opacity:0.4;}
+.empty h3{font-size:var(--fs-xl);color:var(--text2);margin:0.7rem 0 0.3rem;}
+.empty p{color:var(--text3);font-size:var(--fs-base);}
 
 .plan{background:var(--card);border:1.5px solid var(--border);border-radius:var(--r-lg);padding:1.2rem;margin-bottom:0.9rem;}
 .plan.featured{border-color:var(--accent);}
-.plan-name{font-size:0.75rem;color:var(--text2);text-transform:uppercase;letter-spacing:0.08em;}
-.plan-price{font-family:'Bebas Neue',sans-serif;font-size:2.4rem;line-height:1;margin:0.3rem 0;}
-.plan-price span{font-family:var(--ui);font-size:0.85rem;color:var(--text2);}
+.plan-name{font-size:var(--fs-sm);color:var(--text2);text-transform:uppercase;letter-spacing:0.08em;}
+.plan-price{font-family:'Bebas Neue',sans-serif;font-size:var(--fs-4xl);line-height:1;margin:0.3rem 0;}
+.plan-price span{font-family:var(--ui);font-size:var(--fs-base);color:var(--text2);}
 .plan ul{list-style:none;margin:0.7rem 0 1rem;}
-.plan li{font-size:0.82rem;color:var(--text2);padding:0.25rem 0;}
+.plan li{font-size:var(--fs-base);color:var(--text2);padding:0.25rem 0;}
 .plan li::before{content:"\2713 ";color:var(--accent);font-weight:700;}
 
 .account-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:1.2rem;margin-bottom:1rem;}
 .account-email{font-weight:700;margin-bottom:0.3rem;word-break:break-all;}
-.account-status{font-size:0.82rem;color:var(--text2);}
+.account-status{font-size:var(--fs-base);color:var(--text2);}
 
 /* Shared icon set (see the <symbol> defs right after <body>). Sized off
    font-size so an icon dropped into any text context scales with it; nav
@@ -181,14 +193,13 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
    overflowing; nowrap stops "Upcoming" and "Account" breaking onto two lines. */
 .nav-btn{flex:1;min-width:0;background:none;border:none;padding:0.6rem 0.15rem 0.7rem;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:0.25rem;color:var(--text2);font-family:var(--ui);}
 .nav-btn .icon-svg{width:1.3rem;height:1.3rem;stroke-width:1.8;vertical-align:0;}
-.nav-btn .lb{font-size:0.66rem;font-weight:600;white-space:nowrap;letter-spacing:0.01em;}
+.nav-btn .lb{font-size:var(--fs-xs);font-weight:600;white-space:nowrap;letter-spacing:0.01em;}
 /* Inactive labels were --text3 (#475569), which is 2.4:1 against the nav bar —
    well under the 4.5:1 floor, and this is a tool read outdoors in daylight.
    --text2 is an existing token and measures ~7:1. */
 .nav-btn.active{color:var(--accent);}
 /* Active state must not rest on colour alone. */
 .nav-btn.active::after{content:"";position:absolute;left:50%;transform:translateX(-50%);bottom:0.2rem;width:1.1rem;height:2px;border-radius:var(--r-hair);background:var(--accent);}
-@media (max-width:340px){.nav-btn .lb{font-size:0.68rem;}}
 
 .modal-back{position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:50;display:none;animation:fade 0.2s;}
 .modal-back.open{display:block;}
@@ -196,7 +207,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .modal.open{transform:translateY(0);}
 .modal-grip{width:40px;height:4px;background:var(--border);border-radius:var(--r-hair);margin:0.7rem auto;}
 .modal-content{padding:0 1.2rem 1.5rem;}
-.modal h2{font-size:1.2rem;margin-bottom:0.5rem;}
+.modal h2{font-size:var(--fs-xl);margin-bottom:0.5rem;}
 /* ── Bid detail sheet ────────────────────────────────────────────────────
    Rebuilt around the decision a contractor is actually making: can I get to
    it, when does it close, and who do I call. Those three used to be plain
@@ -209,22 +220,22 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .sheet-head{position:sticky;top:0;z-index:2;background:var(--surface);
   padding:0.2rem 0 0.7rem;margin-bottom:0.2rem;
   box-shadow:0 8px 12px -10px rgba(0,0,0,0.9);}
-.sheet-head h2{margin:0 0 0.35rem;font-size:1.15rem;line-height:1.3;}
+.sheet-head h2{margin:0 0 0.35rem;font-size:var(--fs-xl);line-height:1.3;}
 .sheet-sub{display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;}
 /* Three tiles, because these are the three facts that decide a bid. */
 .facts{display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-top:0.9rem;}
 .fact{background:var(--card);border:1px solid var(--border);border-radius:var(--r);
   padding:0.6rem 0.5rem;text-align:center;min-width:0;}
-.fact .k{color:var(--text2);font-size:0.6rem;font-weight:700;
+.fact .k{color:var(--text2);font-size:var(--fs-xs);font-weight:700;
   text-transform:uppercase;letter-spacing:0.06em;}
-.fact .v{color:var(--text);font-size:1rem;font-weight:800;margin-top:0.2rem;
+.fact .v{color:var(--text);font-size:var(--fs-lg);font-weight:800;margin-top:0.2rem;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.fact .n{font-size:0.65rem;font-weight:700;margin-top:0.1rem;}
+.fact .n{font-size:var(--fs-xs);font-weight:700;margin-top:0.1rem;}
 .fact.urgent{border-color:var(--red);}
 .fact.soon{border-color:var(--accent);}
 /* Facts that disqualify you if missed, not just useful to know. */
 .alert{display:flex;gap:0.5rem;align-items:flex-start;margin-top:0.7rem;
-  padding:0.6rem 0.7rem;border-radius:var(--r);font-size:0.8rem;line-height:1.4;
+  padding:0.6rem 0.7rem;border-radius:var(--r);font-size:var(--fs-base);line-height:1.4;
   border:1px solid;}
 .alert-red{background:rgba(239,68,68,0.10);border-color:rgba(239,68,68,0.45);color:#fca5a5;}
 .alert-amber{background:rgba(245,158,11,0.10);border-color:rgba(245,158,11,0.40);color:#fcd34d;}
@@ -234,7 +245,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 /* The customer's own data, grouped so it reads as theirs rather than as
    more of the agency's. */
 .workspace{margin-top:1.2rem;padding-top:1rem;border-top:1px solid var(--border);}
-.workspace-title{color:var(--text2);font-size:0.65rem;font-weight:700;
+.workspace-title{color:var(--text2);font-size:var(--fs-xs);font-weight:700;
   text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.6rem;}
 /* Six actions never fitted one flex row -- "Add to Calendar" ran off the
    screen. Primary is full width and thumb-reachable; the rest wrap. */
@@ -247,7 +258,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
    orphaned at half width. */
 .act-primary > :last-child:nth-child(2){grid-column:1/-1;}
 .act-more{display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-top:0.5rem;}
-.act-more button{font-size:0.75rem;padding:0.7rem 0.25rem;}
+.act-more button{font-size:var(--fs-sm);padding:0.7rem 0.25rem;}
 /* Header chips sat on --surface inside a --surface sheet, so they read as
    plain text rather than as chips. */
 .sheet-sub .chip{background:var(--card);border:1px solid var(--border);
@@ -255,19 +266,19 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .act-primary a,.act-primary button,.act-more button,.act-more a{
   display:flex;align-items:center;justify-content:center;gap:0.3rem;
   min-height:44px;padding:0.7rem 0.6rem;border-radius:var(--r);border:1px solid var(--border);
-  font-size:0.82rem;font-weight:700;font-family:var(--ui);cursor:pointer;
+  font-size:var(--fs-base);font-weight:700;font-family:var(--ui);cursor:pointer;
   text-decoration:none;text-align:center;}
-.act-primary .ma-gold{border-color:var(--accent);font-size:0.9rem;}
+.act-primary .ma-gold{border-color:var(--accent);font-size:var(--fs-md);}
 
-.detail-label{color:var(--text3);font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;}
-.detail-val{color:var(--text);font-size:0.95rem;margin-top:0.2rem;line-height:1.5;}
+.detail-label{color:var(--text3);font-size:var(--fs-xs);font-weight:700;text-transform:uppercase;letter-spacing:0.05em;}
+.detail-val{color:var(--text);font-size:var(--fs-md);margin-top:0.2rem;line-height:1.5;}
 .detail-val a{color:var(--blue);text-decoration:none;}
 .modal-actions{display:flex;gap:0.6rem;margin-top:1.5rem;}
-.modal-actions button,.modal-actions a{flex:1;padding:0.85rem;border-radius:var(--r);font-weight:700;font-size:0.9rem;text-align:center;border:none;cursor:pointer;font-family:var(--ui);text-decoration:none;}
+.modal-actions button,.modal-actions a{flex:1;padding:0.85rem;border-radius:var(--r);font-weight:700;font-size:var(--fs-md);text-align:center;border:none;cursor:pointer;font-family:var(--ui);text-decoration:none;}
 .ma-gold{background:var(--accent);color:#000;}
 .ma-ghost{background:var(--card);color:var(--text);}
 
-.toast{position:fixed;bottom:5rem;left:50%;transform:translateX(-50%) translateY(20px);background:var(--card);color:var(--text);padding:0.8rem 1.3rem;border-radius:var(--r);font-size:0.85rem;opacity:0;transition:all 0.3s;z-index:60;border:1px solid var(--border);pointer-events:none;max-width:90%;text-align:center;}
+.toast{position:fixed;bottom:5rem;left:50%;transform:translateX(-50%) translateY(20px);background:var(--card);color:var(--text);padding:0.8rem 1.3rem;border-radius:var(--r);font-size:var(--fs-base);opacity:0;transition:all 0.3s;z-index:60;border:1px solid var(--border);pointer-events:none;max-width:90%;text-align:center;}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 .spin{display:inline-block;width:16px;height:16px;border:2px solid rgba(0,0,0,0.3);border-top-color:#000;border-radius:50%;animation:spin 0.7s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
@@ -278,9 +289,9 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .map-card{display:none;border-radius:var(--r-lg);overflow:hidden;margin-bottom:1.1rem;border:1px solid var(--border);background:var(--surface);box-shadow:0 6px 20px rgba(0,0,0,0.28);}
 .map-card.show{display:block;animation:fade 0.3s;}
 .map-card-head{display:flex;align-items:center;justify-content:space-between;padding:0.7rem 0.9rem;background:linear-gradient(90deg,rgba(245,158,11,0.14),transparent);border-bottom:1px solid var(--border);}
-.map-card-head .t{font-size:0.78rem;font-weight:800;letter-spacing:0.03em;display:flex;align-items:center;gap:0.4rem;}
-.map-card-head .x{background:none;border:none;color:var(--text2);font-size:0.85rem;cursor:pointer;padding:0.2rem 0.4rem;}
-.map-legend{display:flex;gap:0.8rem;flex-wrap:wrap;font-size:0.72rem;color:var(--text2);padding:0.6rem 0.9rem 0.75rem;}
+.map-card-head .t{font-size:var(--fs-sm);font-weight:800;letter-spacing:0.03em;display:flex;align-items:center;gap:0.4rem;}
+.map-card-head .x{background:none;border:none;color:var(--text2);font-size:var(--fs-base);cursor:pointer;padding:0.2rem 0.4rem;}
+.map-legend{display:flex;gap:0.8rem;flex-wrap:wrap;font-size:var(--fs-sm);color:var(--text2);padding:0.6rem 0.9rem 0.75rem;}
 #find-map-view,#leads-map-view{height:170px;background:#e8eaed;}
 .map-legend span{display:inline-flex;align-items:center;gap:0.3rem;}
 /* Popups stay dark on purpose: against the light basemap they read as a panel
@@ -299,7 +310,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .chip.status-lost{color:var(--red);}
 .chip.status-passed{color:var(--text3);}
 .pipeline-row{display:flex;gap:0.4rem;flex-wrap:wrap;margin-top:0.4rem;}
-.pchip{flex:1;min-width:68px;padding:0.55rem 0.3rem;border-radius:var(--r-sm);background:var(--card);border:1px solid var(--border);color:var(--text2);font-size:0.72rem;font-weight:700;cursor:pointer;font-family:var(--ui);}
+.pchip{flex:1;min-width:68px;padding:0.55rem 0.3rem;border-radius:var(--r-sm);background:var(--card);border:1px solid var(--border);color:var(--text2);font-size:var(--fs-sm);font-weight:700;cursor:pointer;font-family:var(--ui);}
 .pchip.active-submitted{background:var(--blue);color:#fff;border-color:var(--blue);}
 .pchip.active-won{background:var(--green);color:#000;border-color:var(--green);}
 .pchip.active-lost{background:var(--red);color:#fff;border-color:var(--red);}
@@ -310,26 +321,26 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 
 /* ── Filter/sort row (Bids tab) ── */
 .filter-row{display:flex;gap:0.5rem;margin-bottom:0.8rem;}
-.filter-row input,.filter-row select{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:0.6rem 0.8rem;color:var(--text);font-size:0.85rem;font-family:var(--ui);}
+.filter-row input,.filter-row select{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:0.6rem 0.8rem;color:var(--text);font-size:var(--fs-base);font-family:var(--ui);}
 .filter-row input{flex:1;min-width:0;}
 .filter-row select{flex-shrink:0;max-width:130px;}
 
 /* ── Saved searches (Find tab) ── */
 .ss-row{display:flex;align-items:center;gap:0.6rem;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:0.7rem 0.9rem;margin-top:0.6rem;}
 .ss-row .ss-info{flex:1;min-width:0;}
-.ss-row .ss-loc{font-weight:700;font-size:0.85rem;}
-.ss-row .ss-radius{color:var(--text3);font-size:0.72rem;}
-.ss-row button{background:none;border:none;color:var(--text2);cursor:pointer;font-size:1rem;padding:0.3rem;font-family:var(--ui);}
-.ss-row .ss-scan{color:var(--accent);font-weight:700;font-size:0.78rem;}
+.ss-row .ss-loc{font-weight:700;font-size:var(--fs-base);}
+.ss-row .ss-radius{color:var(--text3);font-size:var(--fs-sm);}
+.ss-row button{background:none;border:none;color:var(--text2);cursor:pointer;font-size:var(--fs-lg);padding:0.3rem;font-family:var(--ui);}
+.ss-row .ss-scan{color:var(--accent);font-weight:700;font-size:var(--fs-sm);}
 
 /* ── Nav badge ── */
 .nav-btn{position:relative;}
 .nav-badge{position:absolute;top:2px;right:calc(50% - 20px);width:8px;height:8px;border-radius:50%;background:var(--red);box-shadow:0 0 0 2px var(--surface);}
 
 /* ── Offline banner ── */
-#offline-bar{display:none;background:#3a2a08;color:var(--accent);font-size:0.78rem;font-weight:600;text-align:center;padding:0.5rem 1rem;border-bottom:1px solid var(--border);flex-shrink:0;}
+#offline-bar{display:none;background:#3a2a08;color:var(--accent);font-size:var(--fs-sm);font-weight:600;text-align:center;padding:0.5rem 1rem;border-bottom:1px solid var(--border);flex-shrink:0;}
 #offline-bar.show{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:0.5rem;}
-#offline-reconnect{background:none;border:1px solid var(--accent);color:var(--accent);border-radius:var(--r-sm);padding:0.15rem 0.6rem;font-size:0.72rem;font-weight:700;font-family:var(--ui);cursor:pointer;flex-shrink:0;}
+#offline-reconnect{background:none;border:1px solid var(--accent);color:var(--accent);border-radius:var(--r-sm);padding:0.15rem 0.6rem;font-size:var(--fs-sm);font-weight:700;font-family:var(--ui);cursor:pointer;flex-shrink:0;}
 #offline-reconnect:disabled{opacity:0.6;cursor:default;}
 .map-card.offline{display:none !important;}
 </style>
@@ -403,7 +414,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
       </div>
       <div class="scan-status" id="scan-status"></div>
       <div class="progress" id="progress-wrap" style="display:none;"><div class="progress-bar" id="progress-bar"></div></div>
-      <button class="btn-ghost" id="force-scan-btn" style="margin-top:0.6rem;font-size:0.8rem;">Force a fresh scan (ignore today&#39;s cached result)</button>
+      <button class="btn-ghost" id="force-scan-btn" style="margin-top:0.6rem;font-size:var(--fs-base);">Force a fresh scan (ignore today&#39;s cached result)</button>
       <button class="btn-ghost" id="save-search-btn" style="margin-top:1.2rem;">Save this search for auto-alerts</button>
       <div id="saved-searches-wrap"></div>
     </div>
@@ -1995,7 +2006,7 @@ function renderDiagnostics(){
                       .reduce((n,k)=>n+f[k],0);
   return `
     <div class="account-card">
-      <div class="account-email hdr-ic" style="font-size:0.85rem;"><svg class="icon-svg"><use href="#i-activity"/></svg>Diagnostics</div>
+      <div class="account-email hdr-ic" style="font-size:var(--fs-base);"><svg class="icon-svg"><use href="#i-activity"/></svg>Diagnostics</div>
       <div class="account-status" style="margin-bottom:0.7rem;">
         What the last search actually did, and whether the server has everything it needs.
         Handy when a search returns less than you expected.
@@ -2478,7 +2489,7 @@ function leadCard(city,l){
         ${safeUrl("tel:"+l.contractor_phone)?`<a class="chip" href="${esc(safeUrl("tel:"+l.contractor_phone))}">${esc(l.contractor_phone)}</a>`:""}
       </div>`:""}
       ${safeUrl(l.url)?`<div class="bid-meta" style="margin-top:0.4rem;"><a class="chip" href="${esc(safeUrl(l.url))}" target="_blank" rel="noopener noreferrer">Permit Record</a></div>`:""}
-      ${l.lead_type==="builder"?`<div style="background:var(--surface);color:var(--text2);font-size:0.78rem;line-height:1.4;padding:0.5rem 0.6rem;border-radius:8px;margin-top:0.5rem;">ℹ️ A general contractor already holds this project. Worth a call only if you already have a relationship with them as a subcontractor.</div>`:""}
+      ${l.lead_type==="builder"?`<div style="background:var(--surface);color:var(--text2);font-size:var(--fs-sm);line-height:1.4;padding:0.5rem 0.6rem;border-radius:8px;margin-top:0.5rem;">ℹ️ A general contractor already holds this project. Worth a call only if you already have a relationship with them as a subcontractor.</div>`:""}
       ${pid?`<div class="lead-pipeline-row">
         ${LEAD_STATUSES.map(([k,label])=>`<button class="pchip ${curStatus===k?"active-"+k:""}" data-lead-id="${esc(pid)}" data-lead-status="${esc(curStatus===k?"":k)}">${label}</button>`).join("")}
       </div>`:""}
@@ -2719,7 +2730,7 @@ function bidCard(city,b){
   // that are just labels (city, "OPEN").
   const urgent=dleft!=null&&dleft<=7;
   const deadlineChip=b.deadline
-    ?`<span class="chip" style="${dleft!=null&&dleft<=2?'color:var(--red);':dleft!=null&&dleft<=7?'color:var(--accent);':''}${urgent?'font-weight:800;font-size:0.72rem;':''}">${esc(b.deadline)}${dleft!=null&&dleft>=0?` \u2022 ${dleft===0?"today":dleft+"d left"}`:""}</span>`
+    ?`<span class="chip" style="${dleft!=null&&dleft<=2?'color:var(--red);':dleft!=null&&dleft<=7?'color:var(--accent);':''}${urgent?'font-weight:800;font-size:var(--fs-sm);':''}">${esc(b.deadline)}${dleft!=null&&dleft>=0?` \u2022 ${dleft===0?"today":dleft+"d left"}`:""}</span>`
     :"";
   return `<div class="bid" data-id="${esc(id)}" data-city="${esc(city)}">
     <div class="bid-bar ${barClass}" style="${barClass?"":"background:var(--green)"}"></div>
@@ -3257,8 +3268,8 @@ async function loadReferralCard(){
     if(!code){el.textContent="Couldn't load your referral link right now.";return;}
     const link=`${location.origin}/?ref=${encodeURIComponent(code)}`;
     el.innerHTML=`<div class="input" style="display:flex;align-items:center;gap:0.5rem;overflow:hidden;padding:0.6rem 0.8rem;">
-      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.78rem;color:var(--text2);">${esc(link)}</span>
-      <button class="btn-ghost" id="referral-copy-btn" style="flex-shrink:0;width:auto;margin:0;padding:0.35rem 0.7rem;font-size:0.78rem;">Copy</button>
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--fs-sm);color:var(--text2);">${esc(link)}</span>
+      <button class="btn-ghost" id="referral-copy-btn" style="flex-shrink:0;width:auto;margin:0;padding:0.35rem 0.7rem;font-size:var(--fs-sm);">Copy</button>
     </div>`;
     document.getElementById("referral-copy-btn").onclick=async()=>{
       try{await navigator.clipboard.writeText(link);toast("Referral link copied");}
@@ -3291,12 +3302,12 @@ function renderAccount(){
       <div style="flex:1;min-width:0;">
         <div class="account-email">${esc(email)}</div>
         <div class="account-status">Signed in with ${currentUser?.app_metadata?.provider||"email"}${created?` &middot; Member since ${esc(created)}`:""}</div>
-        <label class="btn-ghost" for="avatar-input" style="display:inline-block;margin-top:0.5rem;padding:0.4rem 0.8rem;font-size:0.78rem;cursor:pointer;">Change Photo</label>
+        <label class="btn-ghost" for="avatar-input" style="display:inline-block;margin-top:0.5rem;padding:0.4rem 0.8rem;font-size:var(--fs-sm);cursor:pointer;">Change Photo</label>
         <input type="file" id="avatar-input" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none;" />
       </div>
     </div>
     <div class="account-card">
-      <div class="account-email hdr-ic" style="font-size:0.85rem;margin-bottom:0.6rem;"><svg class="icon-svg"><use href="#i-bar-chart"/></svg>Your Stats</div>
+      <div class="account-email hdr-ic" style="font-size:var(--fs-base);margin-bottom:0.6rem;"><svg class="icon-svg"><use href="#i-bar-chart"/></svg>Your Stats</div>
       <div class="stats-grid">
         <div class="stat-box"><div class="n">${stats.count}</div><div class="l">Active Bids</div></div>
         <div class="stat-box"><div class="n">${stats.winRate}</div><div class="l">Win Rate</div></div>
@@ -3310,13 +3321,13 @@ function renderAccount(){
     </div>
     ${isAdmin?renderDiagnostics():""}
     <div class="account-card" id="notif-card" style="cursor:pointer;">
-      <div class="account-email hdr-ic" style="font-size:0.85rem;"><svg class="icon-svg"><use href="#i-bell"/></svg>Bid Alerts</div>
+      <div class="account-email hdr-ic" style="font-size:var(--fs-base);"><svg class="icon-svg"><use href="#i-bell"/></svg>Bid Alerts</div>
       <div class="account-status" id="notif-status">${esc(notifPermissionLabel())}</div>
     </div>
     <div class="account-card">
-      <div style="font-size:0.85rem;font-weight:700;display:flex;flex-wrap:wrap;gap:0.5rem;justify-content:space-between;align-items:center;">
+      <div style="font-size:var(--fs-base);font-weight:700;display:flex;flex-wrap:wrap;gap:0.5rem;justify-content:space-between;align-items:center;">
         <span class="hdr-ic" style="white-space:nowrap;"><svg class="icon-svg"><use href="#i-briefcase"/></svg>Company Info</span>
-        ${companyEditMode?"":`<button class="btn-ghost hdr-ic" id="co-edit-btn" style="padding:0.35rem 0.8rem;font-size:0.78rem;flex-shrink:0;justify-content:center;"><svg class="icon-svg"><use href="#i-pencil"/></svg>Edit</button>`}
+        ${companyEditMode?"":`<button class="btn-ghost hdr-ic" id="co-edit-btn" style="padding:0.35rem 0.8rem;font-size:var(--fs-sm);flex-shrink:0;justify-content:center;"><svg class="icon-svg"><use href="#i-pencil"/></svg>Edit</button>`}
       </div>
       <div class="account-status" style="margin-bottom:0.7rem;">Used to personalize AI-drafted bid proposals, and Contact Person is shown in the corner up top instead of your email. Nothing here is shared beyond that.</div>
       ${companyEditMode?`
@@ -3343,29 +3354,29 @@ function renderAccount(){
       `}
     </div>
     <div class="account-card">
-      <div class="account-email hdr-ic" style="font-size:0.85rem;"><svg class="icon-svg"><use href="#i-life-buoy"/></svg>Support</div>
+      <div class="account-email hdr-ic" style="font-size:var(--fs-base);"><svg class="icon-svg"><use href="#i-life-buoy"/></svg>Support</div>
       <div class="account-status" style="margin-bottom:0.7rem;">Send us a message and we'll get back to you, or email <a href="mailto:${SUPPORT_EMAIL}" style="color:var(--amber);">${SUPPORT_EMAIL}</a> directly.</div>
       <textarea class="input" id="support-msg" rows="4" placeholder="What's going on?" style="resize:vertical;margin-bottom:0.6rem;"></textarea>
       <button class="btn-ghost" id="support-send-btn">Send Message</button>
       <div class="account-status" id="support-status" style="margin-top:0.5rem;"></div>
     </div>
     <div class="account-card" id="referral-card">
-      <div class="account-email hdr-ic" style="font-size:0.85rem;"><svg class="icon-svg"><use href="#i-users"/></svg>Refer a Contractor</div>
+      <div class="account-email hdr-ic" style="font-size:var(--fs-base);"><svg class="icon-svg"><use href="#i-users"/></svg>Refer a Contractor</div>
       <div class="account-status" style="margin-bottom:0.7rem;">Give a free month, get a free month — when someone you refer subscribes, you both get bonus time added automatically.</div>
       <div id="referral-body" class="account-status">Loading your link&hellip;</div>
     </div>
     <div class="account-card" id="review-card">
-      <div class="account-email hdr-ic" style="font-size:0.85rem;"><svg class="icon-svg"><use href="#i-star"/></svg>Rate CurbCall Pro</div>
+      <div class="account-email hdr-ic" style="font-size:var(--fs-base);"><svg class="icon-svg"><use href="#i-star"/></svg>Rate CurbCall Pro</div>
       <div class="account-status" style="margin-bottom:0.7rem;">How's it working for you? With your OK we may quote this on the site — nothing appears publicly until it's reviewed.</div>
       <div id="review-body" class="account-status">Loading&hellip;</div>
     </div>
     ${isAdmin?`
     <div class="account-card" id="admin-card" style="cursor:pointer;border-color:var(--amber);">
-      <div class="account-email hdr-ic" style="font-size:0.85rem;"><svg class="icon-svg"><use href="#i-lock"/></svg>Admin</div>
+      <div class="account-email hdr-ic" style="font-size:var(--fs-base);"><svg class="icon-svg"><use href="#i-lock"/></svg>Admin</div>
       <div class="account-status">Reviews, agency notices, campaign drafts, backups &rarr;</div>
     </div>
     `:""}
-    <div class="account-email hdr-ic" style="font-size:0.85rem;margin:0.4rem 0 0.5rem;"><svg class="icon-svg"><use href="#i-credit-card"/></svg>Billing</div>
+    <div class="account-email hdr-ic" style="font-size:var(--fs-base);margin:0.4rem 0 0.5rem;"><svg class="icon-svg"><use href="#i-credit-card"/></svg>Billing</div>
     <div class="plan" id="status-card"><div class="plan-name" style="display:flex;align-items:center;gap:0.5rem;"><span class="spin" style="border-top-color:var(--accent);border-color:rgba(245,158,11,0.25);"></span> Checking your plan...</div></div>
     <a class="btn-ghost" style="text-decoration:none;display:flex;align-items:center;justify-content:center;gap:0.45rem;box-sizing:border-box;" href="${PORTAL_URL}" target="_blank"><svg class="icon-svg"><use href="#i-credit-card"/></svg>Manage Billing on Stripe &rarr;</a>
     <div id="upgrade-section">
@@ -3426,7 +3437,7 @@ function renderAccount(){
       // focused; showing the text is better than failing silently.
       const mc=document.getElementById("modal-content");
       mc.innerHTML=`<h2>Diagnostics</h2>
-        <textarea class="input" style="min-height:260px;font-family:var(--mono);font-size:0.75rem;">${esc(text)}</textarea>
+        <textarea class="input" style="min-height:260px;font-family:var(--mono);font-size:var(--fs-sm);">${esc(text)}</textarea>
         <div class="modal-actions"><button class="ma-ghost" onclick="closeModal();">Close</button></div>`;
       document.getElementById("modal-back").classList.add("open");
       document.getElementById("modal").classList.add("open");
@@ -3572,32 +3583,32 @@ async function renderAdminPanel(){
       <div class="stat-box"><div class="n">${drafts.drafts.length}</div><div class="l">Campaign Drafts</div></div>
     </div>
 
-    <div class="account-email hdr-ic" style="font-size:0.85rem;margin-bottom:0.5rem;"><svg class="icon-svg"><use href="#i-briefcase"/></svg>Agency Notices${pendingNotices.length?` (${pendingNotices.length} pending)`:""}</div>
+    <div class="account-email hdr-ic" style="font-size:var(--fs-base);margin-bottom:0.5rem;"><svg class="icon-svg"><use href="#i-briefcase"/></svg>Agency Notices${pendingNotices.length?` (${pendingNotices.length} pending)`:""}</div>
     ${pendingNotices.length?pendingNotices.map(n=>`
       <div class="detail-row" style="align-items:center;">
         <div class="detail-label" style="flex:1;">${esc(n.title||"Untitled")} &mdash; ${esc(n.city)}, ${esc(n.state)}</div>
-        <button class="btn-ghost" data-notice-approve="${esc(n.id)}" style="color:var(--green);border-color:var(--green);padding:0.3rem 0.7rem;font-size:0.76rem;flex-shrink:0;">Approve</button>
-        <button class="btn-ghost" data-notice-delete="${esc(n.id)}" style="color:var(--red);border-color:var(--red);padding:0.3rem 0.7rem;font-size:0.76rem;flex-shrink:0;">Delete</button>
+        <button class="btn-ghost" data-notice-approve="${esc(n.id)}" style="color:var(--green);border-color:var(--green);padding:0.3rem 0.7rem;font-size:var(--fs-sm);flex-shrink:0;">Approve</button>
+        <button class="btn-ghost" data-notice-delete="${esc(n.id)}" style="color:var(--red);border-color:var(--red);padding:0.3rem 0.7rem;font-size:var(--fs-sm);flex-shrink:0;">Delete</button>
       </div>`).join(""):`<div class="account-status" style="margin-bottom:0.8rem;">Nothing pending.</div>`}
     ${approvedNotices.length?`<div class="account-status" style="margin:0.4rem 0 0.8rem;">${approvedNotices.length} already approved and live.</div>`:""}
 
-    <div class="account-email hdr-ic" style="font-size:0.85rem;margin-bottom:0.5rem;"><svg class="icon-svg"><use href="#i-mail"/></svg>Campaign Drafts</div>
+    <div class="account-email hdr-ic" style="font-size:var(--fs-base);margin-bottom:0.5rem;"><svg class="icon-svg"><use href="#i-mail"/></svg>Campaign Drafts</div>
     ${drafts.drafts.length?drafts.drafts.map(d=>`
       <div class="detail-row" style="align-items:center;">
         <div class="detail-label" style="flex:1;">${esc(d.subject||"Untitled")} &mdash; ${d.recipients} recipient(s)</div>
-        <button class="btn-ghost" data-draft-send="${esc(d.draft_id)}" style="color:var(--green);border-color:var(--green);padding:0.3rem 0.7rem;font-size:0.76rem;flex-shrink:0;">Send</button>
-        <button class="btn-ghost" data-draft-discard="${esc(d.draft_id)}" style="color:var(--red);border-color:var(--red);padding:0.3rem 0.7rem;font-size:0.76rem;flex-shrink:0;">Discard</button>
+        <button class="btn-ghost" data-draft-send="${esc(d.draft_id)}" style="color:var(--green);border-color:var(--green);padding:0.3rem 0.7rem;font-size:var(--fs-sm);flex-shrink:0;">Send</button>
+        <button class="btn-ghost" data-draft-discard="${esc(d.draft_id)}" style="color:var(--red);border-color:var(--red);padding:0.3rem 0.7rem;font-size:var(--fs-sm);flex-shrink:0;">Discard</button>
       </div>`).join(""):`<div class="account-status" style="margin-bottom:0.8rem;">No drafts waiting.</div>`}
 
-    <div class="account-email hdr-ic" style="font-size:0.85rem;margin-bottom:0.5rem;"><svg class="icon-svg"><use href="#i-star"/></svg>Reviews${pendingReviews.length?` (${pendingReviews.length} pending)`:""}</div>
+    <div class="account-email hdr-ic" style="font-size:var(--fs-base);margin-bottom:0.5rem;"><svg class="icon-svg"><use href="#i-star"/></svg>Reviews${pendingReviews.length?` (${pendingReviews.length} pending)`:""}</div>
     ${pendingReviews.length?pendingReviews.map(r=>`
       <div class="detail-row" style="align-items:center;">
         <div class="detail-label" style="flex:1;">${"★".repeat(r.rating)} &mdash; ${esc((r.quote||"").slice(0,80))}${(r.quote||"").length>80?"…":""}</div>
-        <button class="btn-ghost" data-review-approve="${esc(r.id)}" style="color:var(--green);border-color:var(--green);padding:0.3rem 0.7rem;font-size:0.76rem;flex-shrink:0;">Approve</button>
-        <button class="btn-ghost" data-review-reject="${esc(r.id)}" style="color:var(--red);border-color:var(--red);padding:0.3rem 0.7rem;font-size:0.76rem;flex-shrink:0;">Reject</button>
+        <button class="btn-ghost" data-review-approve="${esc(r.id)}" style="color:var(--green);border-color:var(--green);padding:0.3rem 0.7rem;font-size:var(--fs-sm);flex-shrink:0;">Approve</button>
+        <button class="btn-ghost" data-review-reject="${esc(r.id)}" style="color:var(--red);border-color:var(--red);padding:0.3rem 0.7rem;font-size:var(--fs-sm);flex-shrink:0;">Reject</button>
       </div>`).join(""):`<div class="account-status" style="margin-bottom:0.8rem;">Nothing pending.</div>`}
 
-    <div class="account-email hdr-ic" style="font-size:0.85rem;margin:0.8rem 0 0.5rem;"><svg class="icon-svg"><use href="#i-download"/></svg>Backup</div>
+    <div class="account-email hdr-ic" style="font-size:var(--fs-base);margin:0.8rem 0 0.5rem;"><svg class="icon-svg"><use href="#i-download"/></svg>Backup</div>
     <div class="account-status" style="margin-bottom:0.6rem;">Every user table, as JSON. Save it somewhere private — never a public repo.</div>
     <button class="btn-ghost" id="admin-export-btn" style="margin-bottom:1rem;">Download backup</button>
 
@@ -3686,7 +3697,7 @@ async function loadAccountStatus(){
     try{
       const r=await fetchWithTimeout(SERVER+"/validate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({key,device_id:deviceId()})},60000);
       const d=await r.json();
-      if(d.valid){html=`<div class="plan-name">Active subscription</div><div class="plan-price" style="font-size:1.4rem;">${esc(d.plan||"Pro")}</div><p style="color:var(--text2);font-size:0.82rem;margin-top:0.4rem;">Expires ${esc(d.expires||"")}</p>`;featured=true;activePaid=true;}
+      if(d.valid){html=`<div class="plan-name">Active subscription</div><div class="plan-price" style="font-size:var(--fs-2xl);">${esc(d.plan||"Pro")}</div><p style="color:var(--text2);font-size:var(--fs-base);margin-top:0.4rem;">Expires ${esc(d.expires||"")}</p>`;featured=true;activePaid=true;}
     }catch{}
   }
   if(upgradeSection)upgradeSection.style.display=activePaid?"none":"";
@@ -3698,11 +3709,11 @@ async function loadAccountStatus(){
       if(d.active){
         trialExpiresAt=d.expires_at||null;
         const countdown=timeLeftLabel(trialExpiresAt)||`${d.days_left||""} days left`;
-        html=`<div class="plan-name">Free Trial Active</div><div class="plan-price"><span id="trial-countdown">${esc(countdown)}</span></div><p style="color:var(--text2);font-size:0.82rem;">Full access. Subscribe to keep going after trial.</p>`;featured=true;
+        html=`<div class="plan-name">Free Trial Active</div><div class="plan-price"><span id="trial-countdown">${esc(countdown)}</span></div><p style="color:var(--text2);font-size:var(--fs-base);">Full access. Subscribe to keep going after trial.</p>`;featured=true;
       }
-      else html=`<div class="plan-name" style="color:var(--red);">Trial expired</div><p style="color:var(--text2);font-size:0.82rem;margin-top:0.5rem;">Subscribe below to keep scanning.</p>`;
+      else html=`<div class="plan-name" style="color:var(--red);">Trial expired</div><p style="color:var(--text2);font-size:var(--fs-base);margin-top:0.5rem;">Subscribe below to keep scanning.</p>`;
     }catch{
-      html=`<div class="plan-name" style="color:var(--text2);">Couldn't reach the server</div><p style="color:var(--text3);font-size:0.82rem;margin-top:0.5rem;">Your plan status will show once the connection's back. Try again in a bit.</p>`;
+      html=`<div class="plan-name" style="color:var(--text2);">Couldn't reach the server</div><p style="color:var(--text3);font-size:var(--fs-base);margin-top:0.5rem;">Your plan status will show once the connection's back. Try again in a bit.</p>`;
     }
   }
   card.innerHTML=html;
