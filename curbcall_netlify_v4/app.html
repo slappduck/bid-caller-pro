@@ -1627,6 +1627,26 @@ async function checkSavedSearches(){
 const MAP_TILE_URL="https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 const MAP_ATTRIB='&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors &middot; <a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener">report a map issue</a>';
 
+// The map is a location picker, not somewhere to explore, and it had none of
+// the limits that implies.
+//
+// scrollWheelZoom off is the important one: the map sat mid-page, so a wheel
+// scroll with the cursor over it zoomed the map instead of scrolling the
+// page -- you could not get past the map without the page fighting you. Zoom
+// is the +/- buttons, double-click, or pinch, all of which are deliberate.
+// Pinch stays on because on a phone the wheel does not exist and two fingers
+// are never accidental.
+//
+// The rest stops the map wandering: no infinite horizontal world repeat, no
+// zooming out to the whole planet, and a hard boundary around the area this
+// product actually covers, so a stray drag cannot leave you looking at the
+// Atlantic with no idea how to get home.
+const MAP_BOUNDS=[[15.0,-172.0],[72.0,-52.0]];   // US incl. Alaska and Hawaii
+const MAP_OPTS={attributionControl:true,tap:false,scrollWheelZoom:false,
+  minZoom:3,maxBounds:MAP_BOUNDS,maxBoundsViscosity:1.0,worldCopyJump:false};
+const TILE_OPTS={maxZoom:19,minZoom:3,noWrap:true,bounds:MAP_BOUNDS,
+  attribution:MAP_ATTRIB};
+
 // Back to a dark ring. The ring's job is to separate a coloured pin from the
 // basemap, so it inverts whenever the basemap does: light ring on dark
 // tiles, dark ring on OSM's pale streets.
@@ -1659,10 +1679,8 @@ function updateFindMap(lat,lon,label){
     // relying on that is the standard fix for "tapping the map does nothing"
     // reports. (Not independently reproduced on a physical device here --
     // please confirm this actually fixes it on your phone.)
-    findMap=L.map(mv,{attributionControl:true,tap:false}).setView([lat,lon],11);
-    const findTiles=L.tileLayer(MAP_TILE_URL,{
-      maxZoom:19,attribution:MAP_ATTRIB
-    }).addTo(findMap);
+    findMap=L.map(mv,MAP_OPTS).setView([lat,lon],11);
+    const findTiles=L.tileLayer(MAP_TILE_URL,TILE_OPTS).addTo(findMap);
     addTileRetry(findTiles);
     findMap.on("click",e=>pickFindLocation(e.latlng.lat,e.latlng.lng,null));
   } else {
@@ -1898,10 +1916,8 @@ function createLocationPicker(containerId,inputId){
     const mv=document.getElementById(containerId);
     if(!mv||!HAS_MAPS)return;
     if(!st.map){
-      st.map=L.map(mv,{attributionControl:true,tap:false}).setView([lat,lon],11);
-      const tiles=L.tileLayer(MAP_TILE_URL,{
-        maxZoom:19,attribution:MAP_ATTRIB
-      }).addTo(st.map);
+      st.map=L.map(mv,MAP_OPTS).setView([lat,lon],11);
+      const tiles=L.tileLayer(MAP_TILE_URL,TILE_OPTS).addTo(st.map);
       addTileRetry(tiles);
       st.map.on("click",e=>pick(e.latlng.lat,e.latlng.lng));
     } else {
