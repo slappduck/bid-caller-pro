@@ -715,6 +715,16 @@ def _status_near(text):
     return m.group(1).strip().capitalize() if m else ""
 
 
+# NOT WIRED INTO THE SCAN, deliberately. An RSS feed looks like the ideal
+# source -- cheap, and it would give "posted since last check" for free --
+# and this parser works. It is unused because the feeds are not there:
+# sampled across 115 live CivicPlus portals, exactly ONE exposed a bids feed
+# at /rss.aspx, and its items were already on the HTML listing. Modern
+# CivicPlus does not publish the module feed.
+#
+# Kept rather than deleted because the parser is correct and cheap to hold,
+# and a platform that does publish feeds can reuse it. Do not wire it into
+# _run_known_portals expecting more rows -- that measurement has been done.
 def parse_civicplus_rss(xml_text):
     """Rows from a CivicPlus module RSS feed.
 
