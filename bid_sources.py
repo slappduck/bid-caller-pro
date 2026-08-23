@@ -423,6 +423,18 @@ _PRO_SERVICES_RE = re.compile(
     r"surveying|inspection|planning)\s+(?:and\s+\w+\s+)?services\b"
     r"|\bprofessional\s+services\b"
     r"|\bfeasibility\s+study\b|\bmaster\s+plan\b"
+    # Studying the pavement is not repaving it. "Pavement Condition Analysis
+    # and Rehab Plan" and "Infrastructure Assessment Services" both reached a
+    # live board: they describe this trade's work in detail and award a
+    # consultant, not a crew.
+    r"|\b(?:condition|infrastructure|facility|pavement)\s+"
+    r"(?:analysis|assessment|survey|evaluation|inventory)\b"
+    r"|\b(?:analysis|assessment|survey|evaluation|inventory)\s+services\b"
+    r"|\brehab(?:ilitation)?\s+plan\b|\bneeds\s+(?:study|assessment)\b"
+    # "Pavement Management Analysis" is a consultant study; "Pavement
+    # Management Project" is work. The head noun is the whole difference.
+    r"|\b(?:pavement|sidewalk|street|road|infrastructure|asset)\s+"
+    r"management\s+(?:analysis|study|plan|assessment)\b"
     r"|\bland\s+survey(?:ing)?\b|\bright[\s-]of[\s-]way\s+appraisal\b"
     r"|\brfq?\s+for\s+(?:engineering|design|consulting)\b"
     # Construction Engineering & Inspection. The agency hires a firm to watch
@@ -454,13 +466,23 @@ _COMMODITY = (r"emulsified\s+asphalt|asphalt\s+(?:emulsion|cement|binder)|"
               r"culvert\s+pipes?|aggregate|crushed\s+(?:stone|rock)|"
               r"sand\s+and\s+gravel|road\s+salt|de[\s-]?icing|rip[\s-]?rap|"
               r"reinforcing\s+steel|rebar|guardrail\s+material|"
-              r"traffic\s+(?:paint|sign)s?|fuel|lubricants?")
+              r"traffic\s+(?:paint|sign)s?|fuel|lubricants?|"
+              r"asphaltic\s+concrete|hot\s+laid|bituminous\s+concrete")
 _SUPPLY_SHAPE_RE = re.compile(
     r"\b(?:purchase|procurement|acquisition|supply|supplying)\s+of\b"
     r"|\bannual\s+(?:supply|materials?|purchase)\b"
     r"|\bmaterials?\s+(?:bid|contract|purchase|supply)\b"
     r"|\b(?:%s)\s+for\s+(?:the\s+)?\w" % _COMMODITY
     + r"|\bbid\s+for\s+(?:the\s+)?(?:purchase|supply)\b", re.I)
+_COMMODITY_RE = re.compile(_COMMODITY, re.I)
+# Words that say a solicitation is a piece of work somewhere, rather than a
+# line item on an order form.
+_JOB_CONTEXT_RE = re.compile(
+    r"\b(?:street|road|avenue|drive|boulevard|lane|highway|route|"
+    r"project|program|phase|improvement|contract\s+no|"
+    r"subdivision|park|school|lot|intersection|trail|district)\b", re.I)
+
+
 # Verbs that mean somebody is building something, not shipping it.
 _BUILD_VERB_RE = re.compile(
     r"\b(?:construct|install|replace|repair|rehabilitat|reconstruct|resurfac|"
@@ -494,11 +516,40 @@ _ROADWAY = (r"street|st\.|road|rd\.|ave|avenue|drive|blvd|boulevard|"
 _TRANSIT_ROUTE_RE = re.compile(
     r"\b(?:bus|transit|shuttle|delivery|snow|mail|paratransit|bike)\s+route\b",
     re.I)
+# repair / maintenance / patching / replacement were missing, and that is how
+# a great deal of street work is actually titled -- "2026 Street Repair
+# Program" failed the road-work test outright while "2026 Street Improvement
+# Program" passed. They are looser words than the rest, so _NOT_ROAD_SURFACE_RE
+# below removes the things on a street that are not its surface.
+_ROAD_VERB = (r"improvement|reconstruct|rehabilitat|resurfac|widening|realign|"
+              r"repair|maintenance|patching|replacement|restoration|"
+              r"reclamation|milling")
 _ROAD_WORK_RE = re.compile(
-    rf"\b(?:{_ROADWAY})\b[^.;:]{{0,45}}?\b(?:improvement|reconstruct|"
-    rf"rehabilitat|resurfac|widening|realign)"
-    rf"|\b(?:improvement|reconstruct|rehabilitat|resurfac|widening|realign)"
+    rf"\b(?:{_ROADWAY})\b[^.;:]{{0,45}}?\b(?:{_ROAD_VERB})"
+    rf"|\b(?:{_ROAD_VERB})"
     rf"\w*\s+(?:of\s+|to\s+)?[^.;:]{{0,45}}?\b(?:{_ROADWAY})\b", re.I)
+# Things that sit on a street and are not the street. "Street Light Repair"
+# and "Traffic Signal Maintenance" are electrical contracts that the looser
+# verbs above would otherwise pull straight in.
+_NOT_ROAD_SURFACE_RE = re.compile(
+    r"\b(?:street\s*light|streetlight|"
+    r"(?:traffic|pedestrian|hybrid|hawk|beacon|flashing)\s+signals?|"
+    r"signals?\s+(?:timing|head|cabinet|upgrade|installation)|"
+    r"luminaire|guardrail|fence|landscap|"
+    r"tree|mowing|sweeping|snow\s+removal|strip(?:e|ing)|"
+    r"pavement\s+markings?|thermoplastic|"
+    r"sign(?:age|s)?\s+(?:repair|maintenance|replacement)|"
+    r"water\s+main|sanitary\s+sewer\s+main|hydrant)\b", re.I)
+# The words that mean this trade specifically. A job naming one of these is
+# ours no matter what else it mentions -- "concrete bus pad", "curb and gutter
+# with new street lights" -- so the exclusion above yields to them.
+# How far into a listing the subject is still being stated. Long enough for a
+# real title, short enough to exclude a scope's list of work items.
+_SUBJECT_WINDOW = 60
+_CORE_CONCRETE_RE = re.compile(
+    r"\b(?:concrete|sidewalk|curb|gutter|flatwork|ada\b|"
+    r"(?:handicap|pedestrian|curb)\s+ramp|driveway|apron|"
+    r"slab|footing|foundation)\b", re.I)
 
 # Bare "parking" earns its place -- a parking lot is flatwork -- but only
 # where it means the surface. The meters and the permit software are not
@@ -585,9 +636,30 @@ def looks_relevant(*texts):
     # one and would otherwise pass unexamined.
     if _PRO_SERVICES_RE.search(blob):
         return False
+    # Something on a street that is not the street. Checked before the strong
+    # term, because "pavement marking" contains "pavement" and would sail
+    # through on it -- painting stripes is not this trade.
+    #
+    # Only when it is what the job IS, not something the job mentions. A state
+    # notice describing "Bridge Replacement and Approaches (Grading, Drainage,
+    # Pavement and Traffic Stripe)" is a construction contract that happens to
+    # list striping among its items, and an unpositioned match threw it away.
+    # So the term has to appear up front, where a title states its subject.
+    subject = blob[:_SUBJECT_WINDOW]
+    if _NOT_ROAD_SURFACE_RE.search(subject) \
+            and not _CORE_CONCRETE_RE.search(subject):
+        return False
     # Buying materials is not doing the work -- unless the text also says
     # somebody is building with them.
     if _SUPPLY_SHAPE_RE.search(blob) and not _BUILD_VERB_RE.search(blob):
+        return False
+    # ...and a title that is nothing BUT a material specification is a supply
+    # order even without a giveaway phrase like "purchase of". Bellaire's
+    # "Type \"D\" Hot Mix Hot Laid Asphaltic Concrete" passed every check
+    # because "asphaltic concrete" contains a trade word. A job says where or
+    # what it is doing; a commodity line item does not.
+    if _COMMODITY_RE.search(blob) and not _BUILD_VERB_RE.search(blob) \
+            and not _JOB_CONTEXT_RE.search(blob):
         return False
     # Same reasoning: these name the buyer or the funding source, not the job,
     # and would sail past on "public works" or "cdbg" alone.
@@ -600,7 +672,7 @@ def looks_relevant(*texts):
     if not strong and any(t in blob for t in CLEARLY_UNRELATED):
         return False
     road_work = _ROAD_WORK_RE.search(blob) is not None
-    if road_work and _TRANSIT_ROUTE_RE.search(blob) and not strong:
+    if road_work and not strong and _TRANSIT_ROUTE_RE.search(blob):
         road_work = False
     return (strong or any(term in blob for term in NICHE_TERMS)
             or road_work
@@ -625,6 +697,9 @@ def _clean(text):
     return _WS_RE.sub(" ", _TAG_RE.sub(" ", str(text or ""))).strip()
 
 
+_MANGLED_ENTITY_RE = re.compile(r"and#(\d{2,5});?")
+
+
 def _unescape(text):
     """Decode HTML entities. The stdlib table, not a hand-picked six.
 
@@ -636,7 +711,16 @@ def _unescape(text):
     gap silently damaged every title, contact name and date carrying a curly
     quote, an em dash or a numeric reference.
     """
-    return html.unescape(str(text or ""))
+    out = html.unescape(str(text or ""))
+    # Some municipal CMSes publish an already-broken entity: bellairetx.gov
+    # serves the literal text "Type and#34Dand#34 Hot Mix", which is &#34;
+    # with the ampersand turned into "and" and the semicolon dropped. It is
+    # their data, not our decoding, but rendering it verbatim puts gibberish
+    # on a card. Repaired only for the numeric form, which cannot be ordinary
+    # prose.
+    return _MANGLED_ENTITY_RE.sub(
+        lambda m: chr(int(m.group(1))) if 32 <= int(m.group(1)) <= 0x10FFFF
+        else m.group(0), out)
 
 
 _MONTHS = ("January|February|March|April|May|June|July|August|September|October|"

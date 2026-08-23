@@ -903,3 +903,70 @@ class CanonicalHostedPortalTests(unittest.TestCase):
         html = self.CANON + ('<a href="https://www.bidnetdirect.com/colorado/'
                              'register">Register</a>')
         self.assertIn("cityofcanoncity", bid_sources.hosted_portal_link(html))
+
+
+class RelevancePrecisionTests(unittest.TestCase):
+    """Everything a live 270-row precision sample turned up as a false pass.
+
+    Measured by collecting every row 300 live CivicPlus portals hold, running
+    the real filter over them, and reading the results. 41 of 270 passed; 7 of
+    those 41 were not this trade. These are those seven and the honest work
+    they sit next to, so a later loosening cannot quietly bring them back.
+    """
+
+    def _drop(self, *titles):
+        for t in titles:
+            self.assertFalse(bid_sources.looks_relevant(t), "should drop: " + t)
+
+    def _keep(self, *titles):
+        for t in titles:
+            self.assertTrue(bid_sources.looks_relevant(t), "should keep: " + t)
+
+    def test_a_bare_material_specification(self):
+        # Bellaire's "Type "D" Hot Mix Hot Laid Asphaltic Concrete" -- a
+        # commodity line item that passed because it contains "concrete".
+        self._drop('Type "D" Hot Mix Hot Laid Asphaltic Concrete',
+                   "Ready Mix Concrete", "Crushed Stone Aggregate")
+
+    def test_paint_is_not_concrete(self):
+        self._drop("Installation of On-Street Pavement Markings",
+                   "Thermoplastic Pavement Marking Project", "Roadway Striping")
+
+    def test_signals_and_lighting(self):
+        self._drop("Pedestrian Hybrid Signal", "Street Light Repair and Maintenance",
+                   "Traffic Signal Maintenance Contract")
+
+    def test_studying_the_pavement_is_not_repaving_it(self):
+        self._drop("Pavement Condition Analysis and Rehab Plan",
+                   "Infrastructure Assessment Services",
+                   "Sidewalk Condition Survey", "Pavement Management Analysis")
+
+    def test_the_work_next_to_them_still_passes(self):
+        self._keep("FY 2017 Street and Sidewalk Pavement Management Project",
+                   "Cedar Drive Reconstruction", "Maple Street Sidewalk",
+                   "3rd and Main Intersection Overlay",
+                   "Bonds for Better Bellaire 2016 Group D Phase 1 Sidewalk Improvements",
+                   "Construction of Sitework Improvements in the Downtown Area")
+
+    def test_repair_and_maintenance_are_real_road_work(self):
+        # "2026 Street Repair Program" failed outright while "2026 Street
+        # Improvement Program" passed -- the verb list had no repair in it.
+        self._keep("2026 Street Repair Program", "Annual Road Maintenance Contract",
+                   "Pavement Patching - Various Streets",
+                   "Cedar Drive Pavement Replacement")
+
+    def test_an_excluded_word_in_a_scope_does_not_veto_the_job(self):
+        # A state notice listing "Traffic Stripe" among a bridge job's items
+        # is still a construction contract. The exclusion only applies where a
+        # title states its subject.
+        self._keep("DEMOF-A210(943) , TUSCALOOSA COUNTY Contract Time: 620 "
+                   "Working Days for constructing the Bridge Replacement and "
+                   "Approaches (Grading, Drainage, Pavement and Traffic Stripe)",
+                   "Curb and gutter replacement with new street lights",
+                   "Concrete bus pad and sidewalk replacement along the bus route")
+
+    def test_a_cms_mangled_entity_is_repaired(self):
+        # bellairetx.gov publishes the literal text "and#34" where &#34;
+        # belongs. Their data, but gibberish on a card.
+        self.assertEqual(bid_sources._unescape("Type and#34Dand#34 Hot Mix"),
+                         'Type "D" Hot Mix')
