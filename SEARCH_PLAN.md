@@ -540,7 +540,30 @@ need a concrete sub.
 
 **Rule: these are named individuals' business emails on a government page.
 Surface them in the context of the job they are bidding. Never export them to
-a campaign list.** Not built yet.
+a campaign list.**
+
+**Built (2026-08-23).** `bid_sources.parse_plan_holders` reads the table
+header-first rather than by position, because column order is not the same
+everywhere and guessing wrong attaches a phone number to the wrong company.
+`_attach_plan_holders` fetches one list per job, only for jobs that survived
+the radius, capped at `SCAN_PLAN_HOLDER_MAX` (12). The detail sheet renders
+them under the state-highway note, with Call and Email per contractor.
+
+The rule is enforced in two places and commented in both: `exportCSV` in
+app.html carries an explicit note that `plan_holders` must not be added to
+the header, and `_attach_plan_holders`'s docstring says the same. A future
+change that "just adds all the fields" to the export would otherwise turn
+this into the bulk-harvest tool the rule exists to prevent.
+
+Yield is time-dependent and that is worth knowing before reading too much
+into a low number: on 2026-08-23, four weeks out from the 9/18 letting, only
+1 of 9 Missouri jobs in range had any holders listed. Lists fill as the
+letting date approaches -- a call sampled the same day had 8.
+
+"vendor" is deliberately not treated as a company word. MoDOT's header is
+"Name - Vendor #", where Vendor is the state's ID for the *person*, so
+matching it returned "Rhea, Don 0010907" as the firm and never read the
+Organization column at all.
 
 ### Phase 6, second pass — wired into /scan, and a filter gap worth more than the crawl
 

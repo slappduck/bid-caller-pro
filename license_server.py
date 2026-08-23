@@ -5044,8 +5044,11 @@ def _place_state_bid(grouped, row, center, radius, city_coords=None, stats=None)
     if miles > radius:
         _count("out_of_radius")
         return
+    # "call" travels with the bid because the plan-holder list is addressed by
+    # it. Leaving it out of this list is what made every state bid arrive at
+    # the plan-holder fetcher with nothing to look up.
     bid = {k: row[k] for k in
-           ("title", "scope", "url", "deadline", "status", "source")
+           ("title", "scope", "url", "deadline", "status", "source", "call")
            if k in row}
     bid["miles"] = int(round(miles))
     bid["county"] = county
@@ -5065,6 +5068,57 @@ def _place_state_bid(grouped, row, center, radius, city_coords=None, stats=None)
     _count("state_dot_kept")
     if city_coords is not None:
         city_coords[label] = {"lat": lat, "lon": lon}
+    return bid
+
+
+PLAN_HOLDER_MAX = int(os.environ.get("SCAN_PLAN_HOLDER_MAX", "12"))
+PLAN_HOLDER_WORKERS = int(os.environ.get("SCAN_PLAN_HOLDER_WORKERS", "4"))
+
+
+def _attach_plan_holders(bids, letting_html, letting_url, stats=None):
+    """Name the contractors bidding each state job, so a sub knows who to call.
+
+    This is the answer to "why show me a highway contract I cannot win as
+    prime". The prime bidders on that job need somebody to price the ramps and
+    the sidewalk, and the letting publishes exactly who they are. Two of the
+    eight holders on one MoDOT call were themselves concrete companies, which
+    is the clearest evidence that subs already work this list.
+
+    Only runs for bids that survived the radius, and only up to
+    PLAN_HOLDER_MAX of them: it is one extra fetch per job, so it is spent on
+    work the contractor can actually reach. Failure is per-bid and silent.
+
+    NOT exported. These are named individuals' business contacts on a
+    government page, shown in the context of the job they are bidding. The
+    CSV export deliberately omits them -- see exportCSV in app.html.
+    """
+    index_url = bid_sources.plan_holder_index(letting_html, letting_url)
+    if not index_url:
+        return 0
+    targets = [b for b in bids if b.get("call")][:PLAN_HOLDER_MAX]
+    if not targets:
+        return 0
+
+    def _one(bid):
+        url = bid_sources.plan_holder_url_for_call(index_url, bid["call"])
+        if not url:
+            return 0
+        page, outcome = _fetch_page(url, timeout=PROBE_TIMEOUT)
+        if outcome != "ok" or not page:
+            return 0
+        holders = bid_sources.parse_plan_holders(page)
+        if holders:
+            bid["plan_holders"] = holders
+            bid["plan_holder_url"] = url
+        return len(holders)
+
+    with ThreadPoolExecutor(max_workers=PLAN_HOLDER_WORKERS) as ex:
+        found = sum(ex.map(_one, targets))
+    if stats is not None and found:
+        stats["plan_holders_found"] = stats.get("plan_holders_found", 0) + found
+        stats["plan_holder_jobs"] = stats.get("plan_holder_jobs", 0) + sum(
+            1 for b in targets if b.get("plan_holders"))
+    return found
 
 
 def _run_state_sources(center, radius, grouped, city_coords=None, stats=None):
@@ -5099,11 +5153,18 @@ def _run_state_sources(center, radius, grouped, city_coords=None, stats=None):
             if stats is not None:
                 stats["state_rows_read"] = \
                     stats.get("state_rows_read", 0) + len(rows)
+            landed = []
             for row in rows:
                 before = sum(len(v) for v in grouped.values())
-                _place_state_bid(grouped, row, center, radius,
-                                 city_coords, stats)
-                placed += (sum(len(v) for v in grouped.values()) > before)
+                kept = _place_state_bid(grouped, row, center, radius,
+                                        city_coords, stats)
+                if sum(len(v) for v in grouped.values()) > before:
+                    placed += 1
+                    if kept is not None:
+                        landed.append(kept)
+            # Only for jobs that made the board -- see _attach_plan_holders.
+            if landed:
+                _attach_plan_holders(landed, page, url, stats)
         except Exception as ex:      # never let a state page break a scan
             print("[scan] state source %s failed: %s" % (st, ex), flush=True)
     print("[scan] %d bids from %d state letting page(s)"

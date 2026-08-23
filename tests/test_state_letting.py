@@ -294,3 +294,108 @@ class StateRouteLanguageTests(unittest.TestCase):
     def test_route_optimisation_is_not_road_work(self):
         self.assertFalse(bid_sources.looks_relevant(
             "Route optimization consulting services"))
+
+
+class PlanHolderTests(unittest.TestCase):
+    """Who is bidding a state job as prime -- i.e. who needs a concrete sub.
+
+    This is the answer to "why show me a highway contract I cannot win". The
+    letting publishes the contractors who pulled plans, and two of the eight
+    on one live MoDOT call were themselves concrete companies, which is the
+    clearest evidence that subs already work this list.
+    """
+
+    HEADER = ["Prime", "Name - Vendor #", "Organization", "Address",
+              "Phone", "Email", "Fax"]
+
+    def _page(self, rows):
+        return table(rows, header=self.HEADER)
+
+    def test_reads_company_contact_phone_email(self):
+        got = bid_sources.parse_plan_holders(self._page([
+            ["", "Rhea, Don 0010907", "Don Schnieders Excavating Company, Inc.",
+             "1307 Fairgrounds Road Jefferson City, MO", "573-893-2251",
+             "drhea@dsecompany.com", ""]]))
+        self.assertEqual(len(got), 1)
+        self.assertEqual(got[0]["company"],
+                         "Don Schnieders Excavating Company, Inc.")
+        self.assertEqual(got[0]["contact"], "Don Rhea")
+        self.assertEqual(got[0]["email"], "drhea@dsecompany.com")
+
+    def test_vendor_number_column_is_not_the_company(self):
+        # "Name - Vendor #" holds the state's id for the PERSON. Matching
+        # "vendor" as a company word returned "Rhea, Don 0010907" as the firm
+        # and never read the Organization column at all.
+        got = bid_sources.parse_plan_holders(self._page([
+            ["", "Watson, Mark 0028254", "Watson Concrete, Inc.", "Columbia MO",
+             "573-228-6678", "mark@watsonconcreteinc.com", ""]]))
+        self.assertEqual(got[0]["company"], "Watson Concrete, Inc.")
+        self.assertNotIn("0028254", got[0]["contact"])
+
+    def test_a_row_with_no_way_to_reach_anyone_is_not_a_lead(self):
+        self.assertEqual(bid_sources.parse_plan_holders(self._page([
+            ["", "Doe, Jane", "Ghost Contracting LLC", "Nowhere", "", "", ""]])),
+            [])
+
+    def test_company_is_required(self):
+        self.assertEqual(bid_sources.parse_plan_holders(self._page([
+            ["", "Doe, Jane", "", "Nowhere", "555-1212", "j@x.com", ""]])), [])
+
+    def test_duplicate_companies_collapse(self):
+        row = ["", "A, B", "Same Co", "X", "555-000-1111", "b@same.com", ""]
+        self.assertEqual(len(bid_sources.parse_plan_holders(
+            self._page([row, row]))), 1)
+
+    def test_webmaster_addresses_are_dropped_but_the_row_survives(self):
+        got = bid_sources.parse_plan_holders(self._page([
+            ["", "A, B", "Real Co", "X", "555-000-1111", "webmaster@x.gov", ""]]))
+        self.assertEqual(got[0]["email"], "")
+        self.assertEqual(got[0]["phone"], "555-000-1111")
+
+    def test_limit_is_respected(self):
+        rows = [["", "P%d, Q" % i, "Co %d" % i, "X", "555-000-000%d" % i,
+                 "a%d@x.com" % i, ""] for i in range(9)]
+        self.assertEqual(len(bid_sources.parse_plan_holders(
+            self._page(rows), limit=4)), 4)
+
+    def test_name_without_a_comma_is_left_alone(self):
+        got = bid_sources.parse_plan_holders(self._page([
+            ["", "Estimating Dept", "Ti-Zack Concrete, LLC", "MN",
+             "507-357-6463", "estimating@tizack.com", ""]]))
+        self.assertEqual(got[0]["contact"], "Estimating Dept")
+
+    def test_index_link_is_found_on_the_letting_page(self):
+        html = '<a href="/BidLettingPlansRoom/PlanHolder/Index/6128">' \
+               'Plan Holder List (MoDOT Plans Room)</a>'
+        self.assertEqual(
+            bid_sources.plan_holder_index(
+                html, "https://x.mo.gov/BidLettingPlansRoom/Letting"),
+            "https://x.mo.gov/BidLettingPlansRoom/PlanHolder/Index/6128")
+
+    def test_call_url_is_built_from_the_index(self):
+        self.assertEqual(
+            bid_sources.plan_holder_url_for_call(
+                "https://x.mo.gov/BidLettingPlansRoom/PlanHolder/Index/6128",
+                "G02"),
+            "https://x.mo.gov/BidLettingPlansRoom/PlanHolder/Call/6128?call=G02")
+
+    def test_call_url_needs_both_parts(self):
+        self.assertEqual(bid_sources.plan_holder_url_for_call("", "G02"), "")
+        self.assertEqual(bid_sources.plan_holder_url_for_call(
+            "https://x.mo.gov/PlanHolder/Index/1", ""), "")
+        # A URL that is not the shape this function knows must decline rather
+        # than invent one -- a plausible 404 is worse than no link.
+        self.assertEqual(bid_sources.plan_holder_url_for_call(
+            "https://other.gov/bids", "G02"), "")
+
+    def test_state_rows_carry_their_call_number(self):
+        html = table([["G02", "Route 18 HENRY County. Coldmill and resurface "
+                       "on Ohio Street, 2.059 miles.", "9/18/2026"]])
+        rows = bid_sources.parse_state_letting(
+            html, "MO", "u", counties.counties_named)
+        self.assertEqual(rows[0]["call"], "G02")
+
+    def test_empty_page_is_safe(self):
+        self.assertEqual(bid_sources.parse_plan_holders(""), [])
+        self.assertEqual(bid_sources.parse_plan_holders(None), [])
+        self.assertEqual(bid_sources.plan_holder_index(None), "")

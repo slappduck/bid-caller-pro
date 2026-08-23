@@ -224,6 +224,13 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
    The label colour was --text3 (#475569), which is 2.36:1 against the sheet
    -- barely half the WCAG AA minimum, and this is a tool used on a phone in
    daylight on a job site. --text2 is 6.97:1. */
+.holders{margin:0.9rem 0 0.2rem;}
+.holders-h{font-size:var(--fs-xs);font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--text2);margin-bottom:0.5rem;}
+.holder{border:1px solid var(--line);border-radius:var(--r-r);padding:0.6rem 0.7rem;margin-bottom:0.5rem;background:var(--surface2,transparent);}
+.holder .co{font-weight:650;font-size:var(--fs-base);line-height:1.3;}
+.holder .who{font-size:var(--fs-sm);color:var(--text2);margin-top:0.1rem;}
+.holder .ways{display:flex;gap:0.4rem;margin-top:0.5rem;flex-wrap:wrap;}
+.holder .ways a{flex:1 1 auto;min-width:6.5rem;text-align:center;padding:0.45rem 0.6rem;border-radius:var(--r-sm);border:1px solid var(--line);font-size:var(--fs-sm);font-weight:600;color:var(--accent);text-decoration:none;}
 .detail-row{margin-top:1rem;}
 .sheet-head{position:sticky;top:0;z-index:2;background:var(--surface);
   padding:0.2rem 0 0.7rem;margin-bottom:0.2rem;
@@ -2760,6 +2767,11 @@ document.getElementById("export-feed-btn").onclick=()=>exportCSV(lastFeedRows,"c
 function csvEscape(v){v=String(v==null?"":v);if(/[",\n]/.test(v))return'"'+v.replace(/"/g,'""')+'"';return v;}
 function exportCSV(rows,filename){
   if(!rows||!rows.length){toast("Nothing to export yet");return;}
+  // Deliberately NOT exported: b.plan_holders. Those are named individuals'
+  // business contacts read off a government plan-holder list, and they belong
+  // on the card for the job they are bidding -- shown to someone deciding
+  // whether to call about that job, not handed over as a spreadsheet to mail
+  // in bulk. Do not add them to this header.
   const header=["City","Title","Scope","Est. Value","Deadline","Contact","Email","Phone","Source URL","Status"];
   const lines=[header.map(csvEscape).join(",")];
   rows.forEach(([city,b])=>{
@@ -2824,6 +2836,34 @@ function toggleSave(city,id){
   renderFeed();
   if(document.getElementById("screen-saved").classList.contains("active"))renderSaved();
 }
+// Who is bidding this job as prime -- i.e. who needs a concrete sub. Only
+// state lettings carry this; a city posting names the buyer, not the bidders.
+//
+// Shown here and only here, on the card for the job they are bidding. These
+// are real people's work emails off a government plan-holder list, so they
+// are not in the CSV export and must not be (see exportCSV).
+function holderBlock(b){
+  const hs=(b&&b.plan_holders)||[];
+  if(!hs.length)return"";
+  const rows=hs.slice(0,12).map(h=>{
+    const mail=h.email?safeUrl("mailto:"+h.email):"";
+    const tel=h.phone?safeUrl("tel:"+String(h.phone).replace(/[^\d+]/g,"")):"";
+    return `<div class="holder">
+      <div class="co">${esc(h.company||"")}</div>
+      ${h.contact?`<div class="who">${esc(h.contact)}</div>`:""}
+      <div class="ways">
+        ${tel?`<a href="${esc(tel)}">Call</a>`:""}
+        ${mail?`<a href="${esc(mail)}">Email</a>`:""}
+      </div></div>`;
+  }).join("");
+  return `<div class="holders">
+    <div class="holders-h">Bidding this job &mdash; ${hs.length} contractor${hs.length===1?"":"s"}</div>
+    ${rows}
+    <div class="who" style="margin-top:0.1rem;">Pulled from the state's plan holder list. These are the primes;
+    they need someone to price the concrete.</div>
+  </div>`;
+}
+
 function openDetail(city,b){
   const mc=document.getElementById("modal-content");
   const id=bidId(city,b);
@@ -2901,6 +2941,7 @@ function openDetail(city,b){
       who need your ramps and sidewalks priced.${b.also_in&&b.also_in.length
         ?` This job also covers ${esc(b.also_in.slice(0,4).map(titleCase).join(", "))}${b.also_in.length>4?" and more":""}.`
         :""}</span></div>`:""}
+    ${holderBlock(b)}
     ${row("Scope of Work",b.scope)}
     <div class="detail-grid">
       ${row("Posted",b.published)}

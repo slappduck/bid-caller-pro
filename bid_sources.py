@@ -1087,11 +1087,12 @@ def parse_state_letting(html, state, base_url="", county_finder=None):
             if key in seen:
                 continue
             seen.add(key)
-            rows.append(_state_row(ident, desc, text, places, state, base_url))
+            rows.append(_state_row(ident, desc, text, places, state, base_url,
+                                   call=(cells[0] if cells else "")))
     return rows
 
 
-def _state_row(ident, desc, text, places, state, base_url):
+def _state_row(ident, desc, text, places, state, base_url, call=""):
     county, lat, lon = places[0]
     return {
         "title": (("%s — %s" % (ident, desc)) if ident else desc)[:300],
@@ -1104,12 +1105,141 @@ def _state_row(ident, desc, text, places, state, base_url):
         "lon": lon,
         "state": state,
         "source": "state_dot",
+        # The letting's own reference for this row -- MoDOT calls it a "call
+        # number" (G02, D07). It is what addresses the plan-holder list for
+        # this job, and nothing else needs it.
+        "call": str(call or "").strip()[:16],
         "all_counties": [p[0] for p in places],
         # Every county this JOB names, with coordinates. Placement picks the
         # one nearest the scan centre -- the work really is in all of them, so
         # nearest is both true and the only useful answer to "how far is it".
         "places": list(places),
     }
+
+
+# ── Plan holders ────────────────────────────────────────────────────────────
+# A state highway job is not something a three-truck concrete crew wins as
+# prime. The way in is as a sub, and the letting page names exactly who to
+# call: the contractors who pulled plans on that job. Two of the eight holders
+# on one MoDOT call were concrete companies, so subs already work this list.
+#
+# These are named individuals' business contact details on a government page.
+# They belong on the card for the job they are bidding, and nowhere else -- in
+# particular they must never reach the CSV export or a campaign list. That is
+# a product rule, enforced at the export, not a parsing concern; it is written
+# here because this is where somebody would come looking.
+
+# "vendor" is deliberately NOT a company word. MoDOT's header is
+# "Name - Vendor #", where Vendor is the state's ID for the PERSON, so
+# matching on it handed back "McFail, Jacob 0013043" as the company and left
+# the actual Organization column unread.
+_PH_HEADERS = {
+    "company": ("organization", "company", "firm", "bidder", "contractor",
+                "business"),
+    "contact": ("name", "contact", "attention"),
+    "phone": ("phone", "telephone", "tel"),
+    "email": ("email", "e-mail"),
+    "address": ("address", "location", "city"),
+}
+# "Rhea, Don 0010907" -- the state's vendor number is bookkeeping, not a name.
+_VENDOR_NUM_RE = re.compile(r"\s*\b\d{5,}\b\s*$")
+
+
+def _ph_column_map(header_cells):
+    out = {}
+    for i, cell in enumerate(header_cells or ()):
+        low = str(cell or "").strip().lower()
+        if not low:
+            continue
+        for field, words in _PH_HEADERS.items():
+            if field in out:
+                continue
+            if any(w in low for w in words):
+                out[field] = i
+                break
+    return out
+
+
+def _flip_name(name):
+    """"Rhea, Don" -> "Don Rhea". Left alone if it is not that shape."""
+    text = _VENDOR_NUM_RE.sub("", str(name or "")).strip()
+    if text.count(",") == 1:
+        last, first = (p.strip() for p in text.split(","))
+        if last and first and " " not in first.strip():
+            return "%s %s" % (first, last)
+    return text
+
+
+def parse_plan_holders(html, limit=25):
+    """Contractors who pulled plans on a job: company, contact, phone, email.
+
+    Header-driven rather than positional -- the column order is not the same
+    on every state and guessing it wrong would attach a phone number to the
+    wrong company. A row needs a company name and at least one way to reach
+    somebody, or it is not a lead and is dropped.
+    """
+    out, seen = [], set()
+    for table in re.findall(r"(?is)<table[^>]*>(.*?)</table>", str(html or "")):
+        cols = None
+        for chunk in re.findall(r"(?is)<tr[^>]*>(.*?)</tr>", table):
+            cells = [_clean(_unescape(c)) for c in
+                     re.findall(r"(?is)<t[dh][^>]*>(.*?)</t[dh]>", chunk)]
+            if not any(cells):
+                continue
+            if cols is None:
+                found = _ph_column_map(cells)
+                if "company" in found:
+                    cols = found
+                continue
+            def at(field):
+                i = cols.get(field)
+                return cells[i].strip() if i is not None and i < len(cells) else ""
+            company = at("company")
+            email = at("email")
+            phone = at("phone")
+            if not company or not (email or phone):
+                continue
+            if email and any(j in email.lower() for j in _JUNK_EMAIL_PARTS):
+                email = ""
+            key = company.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append({"company": company,
+                        "contact": _flip_name(at("contact")),
+                        "phone": phone, "email": email,
+                        "address": at("address")})
+            if len(out) >= limit:
+                return out
+    return out
+
+
+def plan_holder_index(html, base_url=""):
+    """The letting page's link to its plan-holder index, or ""."""
+    for m in re.finditer(r'(?is)<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>',
+                         str(html or "")):
+        label = _clean(_unescape(m.group(2)))
+        href = _unescape(m.group(1))
+        if re.search(r"plan\s*holder", label + " " + href, re.I):
+            return urllib.parse.urljoin(base_url, href) if base_url else href
+    return ""
+
+
+def plan_holder_url_for_call(index_url, call_no):
+    """MoDOT shape: .../PlanHolder/Index/6128 -> .../PlanHolder/Call/6128?call=G02
+
+    Named for what it is. This is one state's URL convention, not a standard,
+    and anything else needs its own mapping rather than a wider guess here.
+    """
+    call = str(call_no or "").strip()
+    if not call or not index_url:
+        return ""
+    m = re.search(r"/PlanHolder/Index/(\d+)", str(index_url), re.I)
+    if not m:
+        return ""
+    base = str(index_url)[:m.start()]
+    return "%s/PlanHolder/Call/%s?call=%s" % (
+        base, m.group(1), urllib.parse.quote(call))
 
 
 def parse_contact(text):
