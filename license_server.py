@@ -1661,8 +1661,11 @@ DRAFT_TTL_HOURS = int(os.environ.get("CAMPAIGN_DRAFT_TTL_HOURS", "24"))
 # numbers come from a real scan of the recipient's own market, so the claim
 # is checkable by the person reading it.
 _MERGE_FIELD_RE = re.compile(r"\{\{\s*([a-z0-9_]{1,40})\s*\}\}", re.I)
-# A merge value is a line or two of plain text, never a payload.
-MERGE_VALUE_MAX = int(os.environ.get("CAMPAIGN_MERGE_VALUE_MAX", "300"))
+# A merge value is a few lines of plain text, never a payload. Roomy enough
+# for a short formatted list -- a campaign that names three solicitations
+# with dates and distances needs about 260 characters for that one field --
+# and still far too small to smuggle anything into a recipient's inbox.
+MERGE_VALUE_MAX = int(os.environ.get("CAMPAIGN_MERGE_VALUE_MAX", "600"))
 
 
 def _merge_fields(body):

@@ -31,30 +31,31 @@ import license_server as ls
 
 # Deliberately not derived from scan data or permit records: the list is
 # whatever the operator supplies, same rule the sender itself follows.
-SUBJECT = "{{bids}} concrete jobs open near {{city}} -- from {{towns}} bid pages"
+SUBJECT = "Open concrete solicitations near {{city}} - {{bids}} active"
 
 # Volume is the wrong pitch and measuring it honestly proved why: public
-# municipal concrete work runs 3-12 open jobs inside 125 miles at any moment,
-# and that is the market, not a gap in the index. Probing state DOTs, the
-# aggregators, and 160 uncrawled city and county domains added essentially
-# nothing -- so the number will not grow by trying harder.
-#
-# What IS true and worth paying for is the labour: those few jobs are spread
-# across seventy-odd separate city and county bid pages that nobody has time
-# to check every week. So the copy leads with the work avoided and the single
-# nearest job, not with a count that invites "only three?".
-BODY = """{{greeting}},
+# municipal concrete work runs a handful of open jobs inside 125 miles at any
+# moment, and that is the market, not a gap in the index. So the letter leads
+# with the coverage -- the number of agencies monitored -- and then proves it
+# with named, dated, checkable solicitations. Every figure is generated from a
+# scan run at build time, so a recipient can verify the claim in a minute.
+BODY = """Dear {{greeting}},
 
-I check every city and county bid page around {{city}} -- {{towns}} of them this morning -- and pull out the concrete work: curb, sidewalk, ADA ramps, flatwork, paving.
+CurbCall Pro monitors public bid postings for {{towns}} municipal and county agencies within {{radius}} miles of {{city}}, and identifies solicitations for concrete and site work: curb and gutter, sidewalk, ADA ramps, flatwork, paving, drainage and excavation.
 
-{{bids}} are open right now. The nearest is "{{nearest_title}}", {{nearest_miles}} miles out, closing {{nearest_due}}.
+As of this morning, {{bids}} such solicitations are open in your area. The nearest:
 
-That's the point of it. Not a pile of leads -- just the handful in your area that are actually open, with the closing date and the buyer's phone number, so you can call for the plans today instead of finding out next month that it closed.
+{{job_list}}
 
-It runs every morning. Free to try, no card: {{link}}
+Each listing carries the closing date, the issuing agency's contact details and a direct link to the original posting, so a bid can be pursued the same day it is identified.
 
--- Josh
-CurbCall Pro"""
+A no-obligation trial is available at {{link}} - no payment details required.
+
+Regards,
+
+Joshua Hukel
+CurbCall Pro
+{{link}}"""
 
 
 def scan_city(city, state, lat, lon, radius, max_towns=120):
@@ -171,14 +172,16 @@ def company_name(row):
 
 
 def greeting(row):
-    """Never a wall of scraped keywords. "Hi there" beats getting it wrong."""
+    """The salutation after "Dear". A person's full name where the row has
+    one, otherwise the company. Never a wall of scraped keywords -- "Sir or
+    Madam" is stiff but correct, and beats addressing somebody by a Google
+    Business listing title."""
     name = (row.get("contact") or "").strip()
     if name and name.lower() not in ("?", "n/a", "unknown", "-"):
-        first = name.split()[0]
-        if first.isalpha() and len(first) <= 20:
-            return f"Hi {first}"
-    company = company_name(row)
-    return f"Hi {company}" if company else "Hi there"
+        parts = [w for w in name.split() if w.replace(".", "").isalpha()]
+        if parts and len(" ".join(parts)) <= 40:
+            return " ".join(parts)
+    return company_name(row) or "Sir or Madam"
 
 
 def main():
@@ -222,6 +225,12 @@ def main():
         if len(bids) < args.min_bids:
             dropped.append((city, state, f"only {len(bids)} open", len(members)))
             continue
+        lines = []
+        for b in bids[:3]:
+            due = b.get("deadline") or "no stated date"
+            lines.append(f"  - {str(b.get('title',''))[:58]} "
+                         f"({b.get('miles')} mi, closes {due})")
+        job_list = "\n".join(lines)
         near = bids[0]
         for r in members:
             recipients.append({"email": r["email"].strip().lower(), "vars": {
@@ -234,6 +243,7 @@ def main():
                 "nearest_miles": str(near.get("miles", "")),
                 "nearest_due": near.get("deadline", "") or "no stated date",
                 "towns": str(town_count),
+                "job_list": job_list,
                 "link": args.link,
             }})
 
