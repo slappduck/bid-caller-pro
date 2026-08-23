@@ -305,6 +305,21 @@ class SendEmailTests(unittest.TestCase):
 class SupportRouteTests(unittest.TestCase):
     def setUp(self):
         self.client = ls.app.test_client()
+        # /support now keeps a per-IP daily counter in kv_backend. Without an
+        # isolated store that counter is shared with the real sandbox
+        # storage, so it survives between runs and eventually trips the rate
+        # limit -- turning every test in this class red for a reason that has
+        # nothing to do with what they assert.
+        self.store = {}
+        self._kv = [
+            patch.object(kv_backend, "get",
+                         side_effect=lambda k, d=None: self.store.get(k, d)),
+            patch.object(kv_backend, "set",
+                         side_effect=lambda k, v: self.store.__setitem__(k, v)),
+        ]
+        for p in self._kv:
+            p.start()
+        self.addCleanup(lambda: [p.stop() for p in self._kv])
 
     def test_empty_message_is_rejected_without_calling_resend(self):
         with patch.object(ls, "_send_email") as send:

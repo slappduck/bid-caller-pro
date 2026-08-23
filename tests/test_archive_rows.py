@@ -220,5 +220,70 @@ class NavigationAndBuyerNameTests(unittest.TestCase):
             "See the Bids & RFPs page for addenda."))
 
 
+class SiteWorkTests(unittest.TestCase):
+    """Work a concrete crew self-performs, or where the concrete is the job.
+
+    Auditing what the gate REJECTED across six metros found these being
+    thrown away: storm sewer work, where the inlets, manholes and curb
+    restoration are all flatwork; demolition, which is concrete removal;
+    culverts; retaining walls; and the trench restoration behind a utility
+    line. Adding them recovered 16 live jobs on the 400-portal sample.
+
+    They are NOT strong terms. These describe jobs this trade can bid, not
+    jobs that are definitionally theirs, so they must not override the
+    unrelated-trade and professional-services checks the way "sidewalk" does.
+    """
+
+    def test_site_work_qualifies(self):
+        for t in ("D23-01 Jal Draw Excavation",
+                  "Annual Drainage Contract A, B & C",
+                  "Demolition of structure(s) at 338 W 15th St",
+                  "BUXTON ROAD CULVERT REPLACEMENT",
+                  "Westshore Deep Manhole Revision",
+                  "RFP: Wayzata Retaining Wall",
+                  "Belmont Cemetery Drainage Improvements",
+                  "Residential Sewer Lateral Line Repair Project",
+                  "Commercial Street Stormsewer Improvements"):
+            self.assertTrue(bs.looks_relevant(t), t)
+
+    def test_the_things_that_still_are_not_this_trade(self):
+        for t in ("New Police Patrol SUVs", "Propane Gas 2027",
+                  "Banking Depository Services", "Insurance Broker",
+                  "Community Center AHU 1 & 2 Replacement",
+                  "PFAS Treatment at Water Treatment Plant",
+                  "Sheriff's Office Incinerator 2026", "Tree Trimming",
+                  "SNOW REMOVAL - SPRINGFIELD-BRANSON NATIONAL AIRPORT"):
+            self.assertFalse(bs.looks_relevant(t), t)
+
+    def test_site_work_does_not_override_the_services_rule(self):
+        """A strong term bypasses CLEARLY_UNRELATED; these must not."""
+        self.assertFalse(bs.looks_relevant(
+            "Engineering Services for the Storm Sewer Master Plan"))
+
+
+class TrailingLabelTests(unittest.TestCase):
+    """An archive label can sit at either end of the title.
+
+    Sites use whichever reads better, and only the leading form was matched,
+    so "Catch Basin Cleaning Award" and "CATCH BASIN CLEANING RESULTS" both
+    reached the live board as open work.
+    """
+
+    def test_a_trailing_award_is_awarded(self):
+        for t in ("Catch Basin Cleaning Award", "2026 Paving Program Bid Award",
+                  "Sidewalk Replacement Awarded"):
+            self.assertEqual(bs.status_from_title(t), "Awarded", t)
+
+    def test_a_trailing_results_is_closed(self):
+        for t in ("CATCH BASIN CLEANING RESULTS", "2026 Paving Program Results"):
+            self.assertEqual(bs.status_from_title(t), "Closed", t)
+
+    def test_a_live_bid_that_merely_contains_the_word_is_untouched(self):
+        for t in ("Award Winning Streetscape Design Standards Update",
+                  "2026 Sidewalk Replacement Program",
+                  "Buxton Road Culvert Replacement"):
+            self.assertEqual(bs.status_from_title(t), "", t)
+
+
 if __name__ == "__main__":
     unittest.main()

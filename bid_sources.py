@@ -334,6 +334,22 @@ NICHE_TERMS = (
     # Overlay Program" matched none of the terms above. "overlay" is not
     # listed on its own: a zoning overlay district is not a paving job.
     "asphalt", "mill and overlay", "milling and overlay", "microsurfacing",
+    # Site work a concrete crew self-performs, or where the concrete is the
+    # substantial part of the job. Auditing what the gate REJECTED found
+    # these being thrown away: storm sewer work (the inlets, manholes and
+    # curb restoration are all flatwork), demolition (which is concrete
+    # removal), retaining walls, culverts, and trench restoration behind a
+    # utility line.
+    #
+    # Kept out of STRONG_NICHE_TERMS deliberately -- these describe jobs
+    # this trade can bid, not jobs that are definitionally theirs, so they
+    # must not override the CLEARLY_UNRELATED and professional-services
+    # checks the way "sidewalk" does.
+    "demolition", "excavation", "earthwork", "grading", "site work",
+    "sitework", "storm sewer", "stormsewer", "stormwater", "storm water",
+    "drainage", "culvert", "retaining wall", "manhole", "catch basin",
+    "footing", "bollard", "dumpster enclosure", "full depth reclamation",
+    "sewer lateral", "trench restoration",
 )
 # Only used to explain a skip in the logs; never the sole reason to drop.
 CLEARLY_UNRELATED = (
@@ -595,15 +611,21 @@ _STATUS_RE = re.compile(
 # were displayed as open, and the majority were awards, published bid results
 # or cancellations. This is exactly the "awarded jobs shown as open" the app
 # was reported for.
+# Both a leading label ("Award - X") and a trailing one ("X Award", "X
+# Results"). Sites use whichever reads better and the trailing form was
+# invisible: "Catch Basin Cleaning Award" and "CATCH BASIN CLEANING RESULTS"
+# both reached the live board as open work.
 _TITLE_AWARDED_RE = re.compile(
     r"^\s*(?:notice\s+of\s+)?award(?:ed|s)?\b\s*[:\-–—]"      # "Award - X"
     r"|^\s*award(?:ed)?\s*[:/]"                                  # "Award: X"
     r"|\bnotice\s+of\s+award\b"
-    r"|\bhas\s+been\s+awarded\b", re.I)
+    r"|\bhas\s+been\s+awarded\b"
+    r"|\b(?:bid\s+)?award(?:ed)?\s*$", re.I)                     # "X Award"
 _TITLE_RESULTS_RE = re.compile(
     r"\bbid\s+results\b|^\s*results\s*[:\-–—]"
     r"|\bbid\s+tab(?:ulation)?s?\b"
-    r"|^\s*registry\s+of\s+proposals\b", re.I)
+    r"|^\s*registry\s+of\s+proposals\b"
+    r"|\bresults\s*$", re.I)                                      # "X Results"
 _TITLE_CANCELLED_RE = re.compile(
     r"^\s*cancell?(?:ation|ed|ation\s+of)\b|\bcancell?ed\b"
     r"|^\s*cancellation\s+of\s+(?:bids?|procurement)\b", re.I)
