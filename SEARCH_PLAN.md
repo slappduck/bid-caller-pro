@@ -610,3 +610,54 @@ blockers are the ones already listed above, not crawl depth.
 it. A `--state` run used to write only the states it touched, which silently
 deleted Florida and Missouri from the checked-in file the first time the
 other 48 were re-crawled.
+
+### Phase 6, third pass — Alabama live, and the triage of the other 47
+
+**3 states live: Florida 75, Missouri 18, Alabama 13.**
+
+Alabama needed two new capabilities, both of which should generalise:
+
+- **A prose reader.** Alabama's letting is a Notice to Contractors with no
+  table at all — numbered blocks of "1. DEMOF-A210(943), TUSCALOOSA COUNTY
+  Contract Time: 620 Working Days for constructing the Bridge Replacement and
+  Approaches...". Everything needed is there and a table-only reader saw none
+  of it. `parse_notice_to_contractors` runs only when the table and list
+  readers both come back empty.
+- **Index sources.** Alabama has no stable listing URL: the letting lives at
+  `.../NTC/2026/NTC_August_28_2026.html` and the address changes every time.
+  The URL I first hand-found 404'd within the hour. Sources now carry a
+  `kind` column; an `index` source is a page of dated letting links and the
+  current listing is resolved from it on every scan.
+  `newest_letting_link` prefers a page over a PDF (Alabama offers both and
+  the PDF sorts first by link order) and skips prior/archive/results links.
+
+The county rule needed one more refinement for prose: **the county stated
+immediately after the project number is where the work is.** A Chilton County
+job whose description mentioned "the Shelby County line" was being placed in
+Shelby, which is far larger. Only the first 90 characters after the project
+id are searched.
+
+#### Triage of all 21 states that had a page (2026-08-23)
+
+Wrong page — the crawler found something dated and repetitive that is not a
+letting: **CA** (bid-opening calendar, dates only), **CO** (a Google Sheets
+purchasing log), **DE** (asphalt price index), **HI** (traffic notices),
+**IL** (Land Acquisition Bulletin), **MD** (cost-classification key),
+**NE** (procurement manual), **NM** (sole-source consultant postings),
+**RI** (bid tabs — historical awards), **SD** (fuel price index),
+**VT** (RFPs for services), **WI** (news and instructions),
+**WV** (CEI consultant selections, not construction).
+
+Right page, nothing placeable on it: **LA** publishes project number, name,
+contract manager, dates and scope, and **no parish column anywhere**.
+**ID** and **TX** both point at facilities (buildings) tables with no county.
+**ND** is an e-plans document list — job numbers, no county.
+
+Index shape, resolvable in principle, not yielding yet: **KY** and **TN**
+both publish an index of letting dates. `newest_letting_link` resolves both
+correctly (KY to its 12/10/2026 letting, TN to October 2), but the resolved
+pages parse to zero rows — they are populated closer to the date, or the
+project list sits behind another hop. Worth re-checking rather than
+re-engineering.
+
+**AL** was in this group and is now live.

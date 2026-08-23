@@ -29,7 +29,7 @@ CSV_PATH = os.path.join(HERE, "data", "state_bid_sources.csv")
 _TAGS = re.compile(r"(?is)<(script|style|noscript)[^>]*>.*?</\1>")
 
 
-def measure(state, url):
+def measure(state, url, kind="listing"):
     """Run the REAL production parser over the page and count what survives.
 
     Uses bid_sources.parse_state_letting + counties.counties_named -- the same
@@ -46,6 +46,14 @@ def measure(state, url):
     status, html = state_fetch.fetch(url)
     if status != 200 or not html:
         return dict(rows=0, usable=0, fetch=str(status), samples=[])
+    if kind == "index":
+        import datetime
+        link = bid_sources.newest_letting_link(
+            html, url, today=datetime.date.today().timetuple()[:3])
+        if link:
+            st2, body = state_fetch.fetch(link)
+            if st2 == 200 and body:
+                url, html = link, body
     records = bid_sources.letting_rows(html)
     hits = bid_sources.parse_state_letting(
         html, state, url, counties.counties_named)
@@ -70,7 +78,8 @@ def main():
     results = {}
     with ThreadPoolExecutor(max_workers=args.workers) as ex:
         for r, m in zip(todo, ex.map(
-                lambda r: measure(r["state"], r["url"]), todo)):
+                lambda r: measure(r["state"], r["url"],
+                                  (r.get("kind") or "listing")), todo)):
             results[r["state"]] = m
             flag = "USABLE" if m["usable"] >= 2 else ("thin  " if m["usable"] else "no    ")
             print("%s %s  record_rows=%-4d usable=%-4d %s"
@@ -80,7 +89,7 @@ def main():
                 for s in m.get("samples", ()):
                     print("        * " + s, flush=True)
 
-    fields = ["state", "url", "status", "score", "note", "rows", "usable"]
+    fields = ["state", "url", "kind", "status", "score", "note", "rows", "usable"]
     for r in rows:
         m = results.get(r["state"])
         if m:

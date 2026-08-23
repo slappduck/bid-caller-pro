@@ -1038,6 +1038,143 @@ def split_bundled_jobs(desc):
     return [_BUNDLED_JOB_RE.sub("", text, count=1).strip() or text]
 
 
+# Some states do not publish a stable listing URL at all. Alabama's letting
+# lives at .../NTC/2026/NTC_August_28_2026.html -- a new address every
+# letting, and the old one 404s. Kentucky and Tennessee are the same shape: an
+# index page whose rows are dates linking to that date's letting. For those,
+# the source we store is the INDEX, and the current listing is resolved from
+# it on each scan. Storing the dated URL instead means the source silently
+# dies the moment the letting rotates.
+_MONTHS = ("january", "february", "march", "april", "may", "june", "july",
+           "august", "september", "october", "november", "december")
+_MONTH_NUM = {m: i + 1 for i, m in enumerate(_MONTHS)}
+_LETTING_LINK_RE = re.compile(
+    r"letting|notice\s*to\s*contractors|\bntc\b|bid\s*opening", re.I)
+_SKIP_LINK_RE = re.compile(
+    r"prior|previous|past|archive|histor|result|tabulat|award|"
+    r"wage|prequalif|help|form", re.I)
+
+
+def _date_in(text):
+    """(y, m, d) from "August 28, 2026", "NTC_August_28_2026" or "8/28/2026"."""
+    blob = str(text or "").replace("_", " ").replace("-", " ")
+    m = re.search(r"(%s)[a-z]*\s+(\d{1,2})\s*,?\s+(\d{4})" % "|".join(_MONTHS),
+                  blob, re.I)
+    if m:
+        return (int(m.group(3)), _MONTH_NUM[m.group(1).lower()], int(m.group(2)))
+    m = re.search(r"\b(\d{1,2})/(\d{1,2})/(\d{4})\b", blob)
+    if m:
+        return (int(m.group(3)), int(m.group(1)), int(m.group(2)))
+    return None
+
+
+def newest_letting_link(html, base_url="", today=None):
+    """The most recent dated letting link on an index page, or "".
+
+    Prefers the newest letting that is not in the future by more than a year
+    (a guard against a stray 2031 planning date), and skips anything the label
+    marks as prior/archived/results -- those pages parse perfectly well and
+    contain nothing biddable.
+    """
+    best, best_key = "", None
+    for m in re.finditer(
+            r'(?is)<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', str(html or "")):
+        href = _unescape(m.group(1))
+        label = _clean(_unescape(m.group(2)))
+        blob = label + " " + href
+        if not _LETTING_LINK_RE.search(blob) or _SKIP_LINK_RE.search(blob):
+            continue
+        when = _date_in(label) or _date_in(href)
+        if not when:
+            continue
+        if today and when[0] > today[0] + 1:
+            continue
+        # A page beats a document. Alabama's index offers both the notice as
+        # HTML and the same letting as a PDF, and the PDF sorts first by
+        # accident of link order -- we cannot read it, so it would look like a
+        # dead source.
+        is_doc = bool(re.search(r"\.(pdf|docx?|xlsx?|zip)$", href, re.I))
+        key = (when, 0 if is_doc else 1)
+        if best_key is None or key > best_key:
+            best_key = key
+            best = urllib.parse.urljoin(base_url, href) if base_url else href
+    return best
+
+
+# A third row shape, after tables and list items: the "Notice to Contractors"
+# prose page. Alabama publishes one per letting -- no table at all, just
+# numbered blocks:
+#
+#   1. DEMOF-RPF-NHF-PRF-A210(943), TUSCALOOSA COUNTY  Contract Time: 620
+#   Working Days for constructing the Bridge Replacement and Approaches
+#   (Grading, Drainage, Pavement and Traffic Stripe)...
+#
+# Everything needed is there -- project number, county, scope -- and a
+# table-only reader sees none of it.
+_NTC_ITEM_RE = re.compile(
+    r"(?<![\d.])(\d{1,3})\.\s+"                    # "1. "
+    r"([A-Z][A-Z0-9]*(?:[-/][A-Z0-9]+)*\([0-9]+\)|"  # STPSU-3525(253)
+    r"[A-Z]{2,}[A-Z0-9]*-[0-9][-0-9A-Z]*)"           # ATRP2-52-2024-263
+    r"\s*,\s*")
+
+
+# How far past the project number to look for the job's own county. Long
+# enough for "PROJNO , TUSCALOOSA COUNTY", short enough to stop before the
+# scope starts naming neighbours.
+HEAD_FOR_COUNTY = 90
+
+
+def notice_to_contractors_items(text, min_len=60):
+    """Numbered project blocks from a Notice to Contractors page.
+
+    Each block runs from its own number to the next one. The header of such a
+    page repeats the same list as a bare index ("1. X, TUSCALOOSA 4. Y,
+    SUMTER") before the detailed entries, so blocks shorter than min_len are
+    dropped -- those are the index, not the notice.
+    """
+    blob = re.sub(r"\s+", " ", str(text or ""))
+    marks = list(_NTC_ITEM_RE.finditer(blob))
+    if len(marks) < 2:
+        return []
+    out = []
+    for i, m in enumerate(marks):
+        end = marks[i + 1].start() if i + 1 < len(marks) else len(blob)
+        body = blob[m.start():end].strip()
+        if len(body) >= min_len:
+            out.append((m.group(2), body))
+    return out
+
+
+def parse_notice_to_contractors(html, state, base_url="", county_finder=None):
+    """Rows from a Notice to Contractors prose page (no table involved)."""
+    text = _clean(_unescape(re.sub(
+        r"(?is)<(script|style|noscript)[^>]*>.*?</\1>", " ", str(html or ""))))
+    rows, seen = [], set()
+    for ident, body in notice_to_contractors_items(text):
+        if not looks_relevant(body):
+            continue
+        # The county stated immediately after the project number is where the
+        # work is. The rest of the block routinely names others -- a route
+        # "from the Shelby County line", an adjoining district -- and picking
+        # by population instead put a Chilton County job in Shelby.
+        head = body[:HEAD_FOR_COUNTY]
+        places = county_finder([head], state) if county_finder else []
+        if not places and county_finder:
+            places = county_finder([body], state)
+        if not places:
+            continue
+        if ident in seen:
+            continue
+        seen.add(ident)
+        # "21. IM-HSIP-IMGR-I022(327) , WALKER COUNTY ..." -- the item number
+        # is the notice's own ordering and means nothing on a card, and the
+        # project id is already carried as the title prefix.
+        shown = re.sub(r"^\d{1,3}\.\s*", "", body).strip()
+        rows.append(_state_row(ident, shown[:1200], body, places, state,
+                               base_url, call=ident))
+    return rows
+
+
 def parse_state_letting(html, state, base_url="", county_finder=None):
     """Concrete-relevant, placeable rows from a state DOT letting page.
 
@@ -1089,6 +1226,10 @@ def parse_state_letting(html, state, base_url="", county_finder=None):
             seen.add(key)
             rows.append(_state_row(ident, desc, text, places, state, base_url,
                                    call=(cells[0] if cells else "")))
+    if not rows:
+        # No table and no list gave us anything placeable. Some states publish
+        # the letting as prose instead -- see parse_notice_to_contractors.
+        rows = parse_notice_to_contractors(html, state, base_url, county_finder)
     return rows
 
 

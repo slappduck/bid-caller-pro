@@ -4978,8 +4978,28 @@ STATE_SOURCE_TIMEOUT = float(os.environ.get("STATE_SOURCE_TIMEOUT", "20"))
 _state_sources_cache = {"at": 0.0, "rows": None}
 
 
+def _resolve_state_listing(url, kind, page):
+    """(listing_url, listing_html) for a source, following an index if needed.
+
+    A "listing" source is read directly. An "index" source is a page of dated
+    letting links, and the listing is whichever is current -- Alabama's lives
+    at .../NTC_August_28_2026.html and the address changes every letting, so
+    storing the dated URL means the source dies silently when it rotates.
+    """
+    if kind != "index":
+        return url, page
+    link = bid_sources.newest_letting_link(
+        page, url, today=datetime.date.today().timetuple()[:3])
+    if not link:
+        return url, page
+    body, outcome = _fetch_page(link, timeout=STATE_SOURCE_TIMEOUT)
+    if outcome != "ok" or not body:
+        return url, page
+    return link, body
+
+
 def _state_sources():
-    """{state: url} for states whose page is VERIFIED to yield usable rows.
+    """{state: (url, kind)} for states VERIFIED to yield usable rows.
 
     Gated on the measured `usable` column, not on whether a URL was found. The
     discovery crawl reported convincing listings in 22 states; running the real
@@ -5002,7 +5022,7 @@ def _state_sources():
                 url = (row.get("url") or "").strip()
                 st = (row.get("state") or "").strip().upper()
                 if st and url and usable >= STATE_SOURCE_MIN_USABLE:
-                    out[st] = url
+                    out[st] = (url, (row.get("kind") or "listing").strip())
     except OSError:
         out = {}
     _state_sources_cache.update({"at": now, "rows": out})
@@ -5135,12 +5155,12 @@ def _run_state_sources(center, radius, grouped, city_coords=None, stats=None):
         states = counties.states_within(center["lat"], center["lon"], radius)
     except Exception:
         states = [center.get("state", "").upper()]
-    todo = [(st, sources[st]) for st in states if st in sources]
+    todo = [(st,) + sources[st] for st in states if st in sources]
     if not todo:
         return 0
 
     placed = 0
-    for st, url in todo:
+    for st, url, kind in todo:
         try:
             page, outcome = _fetch_page(url, timeout=STATE_SOURCE_TIMEOUT)
             if outcome != "ok" or not page:
@@ -5148,6 +5168,7 @@ def _run_state_sources(center, radius, grouped, city_coords=None, stats=None):
                     k = "state_fetch_%s" % outcome
                     stats[k] = stats.get(k, 0) + 1
                 continue
+            url, page = _resolve_state_listing(url, kind, page)
             rows = bid_sources.parse_state_letting(
                 page, st, url, counties.counties_named)
             if stats is not None:

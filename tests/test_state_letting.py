@@ -399,3 +399,100 @@ class PlanHolderTests(unittest.TestCase):
         self.assertEqual(bid_sources.parse_plan_holders(""), [])
         self.assertEqual(bid_sources.parse_plan_holders(None), [])
         self.assertEqual(bid_sources.plan_holder_index(None), "")
+
+
+class NoticeToContractorsTests(unittest.TestCase):
+    """Some states publish the letting as prose, with no table at all.
+
+    Alabama's Notice to Contractors is numbered blocks:
+      1. DEMOF-RPF-NHF-PRF-A210(943), TUSCALOOSA COUNTY  Contract Time: 620
+      Working Days for constructing the Bridge Replacement and Approaches...
+    Everything needed is there and a table-only reader sees none of it.
+    """
+
+    NOTICE = (
+        "1. DEMOF-A210(943) , TUSCALOOSA COUNTY Contract Time: 620 Working "
+        "Days for constructing the Bridge Replacement and Approaches "
+        "(Grading, Drainage, Pavement and Traffic Stripe). "
+        "15. HRRR-1126(250) , CHILTON COUNTY Contract Time: 30 Working Days "
+        "for constructing sidewalk and curb ramp work on County Road 42 near "
+        "the Shelby County line. "
+        "26. STPSU-3525(253) , HOUSTON COUNTY Contract Time: 45 Working Days "
+        "for resurfacing on Route 84 including curb and gutter.")
+
+    def _rows(self):
+        return bid_sources.parse_notice_to_contractors(
+            "<p>%s</p>" % self.NOTICE, "AL", "u", counties.counties_named)
+
+    def test_each_numbered_block_is_a_job(self):
+        self.assertEqual(len(self._rows()), 3)
+
+    def test_the_county_is_the_one_next_to_the_project_number(self):
+        # The Chilton block also names Shelby, which is far larger. Picking by
+        # population put a Chilton County job in Shelby.
+        by_id = {r["call"]: r["county"] for r in self._rows()}
+        self.assertEqual(by_id["HRRR-1126(250)"], "chilton")
+
+    def test_item_number_is_not_shown(self):
+        for r in self._rows():
+            self.assertFalse(r["scope"].startswith(("1.", "15.", "26.")))
+
+    def test_project_id_becomes_the_call_number(self):
+        self.assertIn("DEMOF-A210(943)", [r["call"] for r in self._rows()])
+
+    def test_the_bare_index_at_the_top_is_not_mistaken_for_jobs(self):
+        # The page repeats the list as a short index before the real entries.
+        index = "1. DEMOF-A210(943), TUSCALOOSA 15. HRRR-1126(250), CHILTON"
+        self.assertEqual(
+            bid_sources.notice_to_contractors_items(index, min_len=60), [])
+
+    def test_prose_reader_only_runs_when_tables_gave_nothing(self):
+        html = table([["T1922", "Manatee", "Resurfacing", "9/1/2026"]],
+                     header=["Project", "County", "Work", "Letting"])
+        rows = bid_sources.parse_state_letting(
+            html, "FL", "u", counties.counties_named)
+        self.assertEqual([r["county"] for r in rows], ["manatee"])
+
+
+class LettingIndexTests(unittest.TestCase):
+    """Alabama's letting URL changes every letting, so we store the index.
+
+    .../NTC/2026/NTC_August_28_2026.html works today and 404s next month.
+    Storing that address means the source dies silently when it rotates.
+    """
+
+    INDEX = '''
+      <a href="/DW_Pages/NTC/2026/NTC_August_28_2026.html">Notice to Contractors</a>
+      <a href="/DW_Pages/NTC/2026/NTC_July_31_2026.html">Notice to Contractors</a>
+      <a href="/WEBPROPS/2026/August 28, 2026/BidAugust2826.pdf">August 28, 2026 Letting</a>
+      <a href="/DW_Pages/Prior_Lettings/Prior_Letting_2025.html">Prior Lettings 2025</a>
+    '''
+
+    def _pick(self):
+        return bid_sources.newest_letting_link(
+            self.INDEX, "https://al.gov/", today=(2026, 8, 23))
+
+    def test_picks_the_newest(self):
+        self.assertIn("August_28_2026", self._pick())
+
+    def test_prefers_a_page_over_a_pdf(self):
+        # Both are the same letting; we cannot read the PDF, so choosing it
+        # would make a working source look dead.
+        self.assertTrue(self._pick().endswith(".html"))
+
+    def test_skips_prior_lettings(self):
+        self.assertNotIn("Prior", self._pick())
+
+    def test_far_future_dates_are_ignored(self):
+        html = '<a href="/ntc/NTC_January_5_2031.html">Letting</a>' + self.INDEX
+        self.assertNotIn("2031", bid_sources.newest_letting_link(
+            html, "https://al.gov/", today=(2026, 8, 23)))
+
+    def test_no_dated_letting_link_gives_nothing(self):
+        self.assertEqual(bid_sources.newest_letting_link(
+            '<a href="/about">About us</a>', "https://al.gov/"), "")
+
+    def test_numeric_dates_are_understood(self):
+        html = '<a href="/l?letting=9/18/2026">Letting Details</a>'
+        self.assertIn("9/18/2026", bid_sources.newest_letting_link(
+            html, "https://x.gov/", today=(2026, 8, 23)))
