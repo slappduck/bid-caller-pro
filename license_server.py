@@ -4160,7 +4160,10 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
                 # with nobody to call is barely a lead, so read them. Capped and
                 # concurrent: a sequential pass over a dozen postings is exactly
                 # what blew the request budget the last time.
-                _enrich_from_detail_pages(keep[:DETAIL_PAGES_PER_PORTAL], stats, lock)
+                ordered = _enrichment_order(keep)
+                _note_enrich_budget(ordered, DETAIL_PAGES_PER_PORTAL, stats, lock)
+                _enrich_from_detail_pages(
+                    ordered[:DETAIL_PAGES_PER_PORTAL], stats, lock)
                 with lock:
                     bid_portals.record_result(pdb, city, state, url, True)
                     for row in keep:
@@ -4294,7 +4297,9 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
         for b in own_pages:
             b["url"] = bid_sources.link_for_title(page_html, url, b.get("title"))
         if own_pages:
-            _enrich_from_detail_pages(own_pages[:DETAIL_PAGES_PER_PORTAL],
+            ordered = _enrichment_order(own_pages)
+            _note_enrich_budget(ordered, DETAIL_PAGES_PER_PORTAL, stats, lock)
+            _enrich_from_detail_pages(ordered[:DETAIL_PAGES_PER_PORTAL],
                                       stats, lock)
         with lock:
             raw[0] += len(bids)
@@ -4572,6 +4577,82 @@ def _is_open_bid(bid):
     if not status:
         return True  # unstated status is not evidence of a closed bid
     return not any(word in status for word in _CLOSED_STATUS_WORDS)
+
+
+def _closed_on_arrival(row):
+    """True if the listing row already says this bid is shut.
+
+    Deliberately built out of the two functions that decide this everywhere
+    else, on a throwaway copy, so it can never drift from them: a stated
+    Closed/Awarded status, or a deadline already past. An undated row is
+    never closed on arrival — reading its posting is the only thing that can
+    date it, so it is the last row we would want to skip.
+    """
+    probe = {"status": (row or {}).get("status"),
+             "deadline": (row or {}).get("deadline")}
+    _apply_deadline_status(probe)
+    return not _is_open_bid(probe)
+
+
+def _enrichment_order(rows):
+    """Rows ordered by how much reading each posting is worth.
+
+    Enrichment is rationed twice: ten postings per portal, and fourteen across
+    the whole result. The second cap is where this matters. A scan keeps every
+    bid it finds and lets the client hide the closed ones, so the pile handed
+    to _enrich_placed_bids is mostly dead: a 125-mile scan from New Salem, MA
+    kept 93 bids of which 83 had already closed. Sorted only by whether a
+    deadline was present, roughly nine of the fourteen reads went to bids
+    nobody can bid on, and the handful of live ones arrived with no contact,
+    no scope and no engineer's estimate.
+
+    The per-portal cap turns out not to have this problem — 38 live CivicPlus
+    portals were checked and not one had enough closed relevant rows to push
+    an open bid out of its ten. The ordering is applied there anyway because
+    it costs nothing and the pathological page is only a matter of time, but
+    the measured win is at the whole-result stage.
+
+    Undated first — a missing deadline is the one thing only the posting can
+    supply, and until it is supplied the bid cannot even be recognised as
+    expired. Then open dated rows. Closed rows last: they are still kept and
+    still shown with their Closed badge, they just stop taking a slot from a
+    bid somebody could actually still bid on. Stable, so listing order is
+    preserved within each group.
+    """
+    def rank(row):
+        if not str((row or {}).get("deadline") or "").strip():
+            return 0
+        return 2 if _closed_on_arrival(row) else 1
+    return sorted(rows or [], key=rank)
+
+
+def _note_enrich_budget(rows, budget, stats, lock=None):
+    """Count postings the budget could not reach, split by whether it mattered.
+
+    Without this the reordering above is unfalsifiable. `enrich_budget_spared`
+    is the number of already-closed postings that fell outside the budget —
+    slots the old order would have spent on a dead bid. `enrich_budget_short`
+    is the number of open or undated ones that did not fit, which is the
+    honest cost of a cap of this size and the number to watch if it grows.
+    """
+    if stats is None or len(rows) <= budget:
+        return
+    missed = rows[budget:]
+    spared = sum(1 for r in missed if _closed_on_arrival(r))
+    short = len(missed) - spared
+
+    def _bump():
+        if spared:
+            stats["enrich_budget_spared"] = \
+                stats.get("enrich_budget_spared", 0) + spared
+        if short:
+            stats["enrich_budget_short"] = \
+                stats.get("enrich_budget_short", 0) + short
+    if lock is not None:
+        with lock:
+            _bump()
+    else:
+        _bump()
 
 
 def _status_breakdown(grouped):
@@ -4933,9 +5014,11 @@ def _enrich_placed_bids(grouped, stats=None):
     todo = [b for bids in (grouped or {}).values() for b in bids
             if isinstance(b, dict) and b.get("url")
             and not (b.get("email") or b.get("phone"))]
-    # Undated bids first: a missing deadline is worse than a missing phone
-    # number, because it also stops an expired listing being recognised.
-    todo.sort(key=lambda b: bool(str(b.get("deadline") or "").strip()))
+    # Undated bids first (a missing deadline is worse than a missing phone
+    # number, because it also stops an expired listing being recognised), then
+    # open ones, then bids already known to be closed -- see _enrichment_order.
+    todo = _enrichment_order(todo)
+    _note_enrich_budget(todo, ENRICH_MAX, stats)
     _enrich_from_detail_pages(todo[:ENRICH_MAX], stats=stats)
     for bid in todo[:ENRICH_MAX]:
         _apply_deadline_status(bid)
