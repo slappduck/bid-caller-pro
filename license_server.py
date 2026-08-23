@@ -5286,6 +5286,13 @@ def _enrich_placed_bids(grouped, stats=None):
 
 
 _YEAR_RE = re.compile(r"(?<!\d)(20\d{2})(?!\d)")
+# A project code is not a date. Alabama numbers jobs "ATRP2-52-2024-263" and
+# the 2024 in the middle is a sequence, not the year the work is from -- read
+# as a year it closed a live August 2026 job on sight. Letter-led hyphenated
+# codes are removed before the year scan; purely numeric ones like "2024-17"
+# are left alone, because after "Bid No." that usually IS the year it was
+# issued and closing it is right.
+_PROJECT_CODE_RE = re.compile(r"\b[A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)+\b")
 
 
 def _apply_stale_year(bid):
@@ -5302,8 +5309,9 @@ def _apply_stale_year(bid):
         return bid
     if not _is_open_bid(bid):
         return bid
-    years = [int(y) for y in _YEAR_RE.findall(
-        f"{bid.get('title') or ''} {bid.get('scope') or ''}")]
+    blob = _PROJECT_CODE_RE.sub(
+        " ", f"{bid.get('title') or ''} {bid.get('scope') or ''}")
+    years = [int(y) for y in _YEAR_RE.findall(blob)]
     if years and max(years) < datetime.datetime.now().year:
         bid["status"] = "Closed"
     return bid

@@ -610,3 +610,52 @@ class SupplyAndServicesTests(unittest.TestCase):
                   "On-call contracting services for concrete sidewalk and curb work",
                   "ADA improvements, 10 Locations at various sites"):
             self.assertTrue(bid_sources.looks_relevant(t), t)
+
+
+class ProjectCodeIsNotAYearTests(unittest.TestCase):
+    """A project code is not a date.
+
+    Alabama numbers a job "ATRP2-52-2024-263". The stale-year rule reads every
+    year in a title and closes an undated bid when they are all past, so the
+    2024 sitting in the middle of that sequence closed a live August 2026 job
+    on sight -- it showed on a Nashville board as Closed with no deadline.
+
+    Letter-led hyphenated codes are stripped before the year scan. Purely
+    numeric ones like "2024-17" are deliberately left alone: after "Bid No."
+    that usually IS the year it was issued, and closing it is right.
+    """
+    import license_server as ls_mod
+
+    def _status(self, title):
+        bid = {"title": title, "scope": "", "deadline": "", "status": "Open"}
+        self.ls_mod._apply_stale_year(bid)
+        return bid["status"]
+
+    def test_alabama_project_code_does_not_close_a_live_job(self):
+        self.assertEqual(self._status(
+            "ATRP2-52-2024-263 , MORGAN COUNTY Contract Time: 90 Working Days "
+            "for constructing the Roadway Improvements"), "Open")
+
+    def test_other_state_code_shapes(self):
+        for code in ("HRRR-0426(250)", "STPSU-3525(253)", "IM-IMGR-I065(571)",
+                     "DEMOF-RPF-NHF-PRF-A210(943)"):
+            self.assertEqual(self._status("%s BIBB COUNTY sidewalk work" % code),
+                             "Open", code)
+
+    def test_a_genuinely_stale_programme_still_closes(self):
+        self.assertEqual(
+            self._status("2025 Sidewalk Program - Scope of Work SW-1"), "Closed")
+        self.assertEqual(
+            self._status("FY2024 Street Maintenance Program"), "Closed")
+
+    def test_a_year_range_spanning_now_is_left_open(self):
+        self.assertEqual(self._status("2025-2026 Concrete Programme"), "Open")
+
+    def test_this_year_is_open(self):
+        self.assertEqual(self._status("2026 Curb and Gutter Replacement"), "Open")
+
+    def test_a_dated_bid_is_never_touched_by_this_rule(self):
+        bid = {"title": "2025 Sidewalk Program", "scope": "",
+               "deadline": "12/01/2026", "status": "Open"}
+        self.ls_mod._apply_stale_year(bid)
+        self.assertEqual(bid["status"], "Open")
