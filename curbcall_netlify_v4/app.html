@@ -582,6 +582,13 @@ const SUPABASE_ANON_KEY = "sb_publishable_sUuQHkrN_wsJqakUMfL_VA_58koZ76C";
 const SERVER = "https://bid-caller-pro.onrender.com";
 const PORTAL_URL = "https://billing.stripe.com/p/login/3cIcN4an28420Yad2fejK00";
 const SUPPORT_EMAIL = "Yumiwave1@gmail.com";
+// Residential Leads is hidden until the permit feed covers somewhere a
+// customer actually works. It is wired to three cities -- Austin TX,
+// Cambridge MA and Baton Rouge LA -- so for every contractor on the list
+// today the tab is permanently empty, and an always-empty tab costs more
+// credibility than a missing one. Everything behind it is intact: flip this
+// to true when the coverage is there.
+const LEADS_ENABLED = false;
 // Keep identical to _REFERRAL_SEP in license_server.py and REFERRAL_SEP in
 // index.html — the separator client_reference_id is split on server-side.
 const REFERRAL_SEP = "~ref~";
@@ -1267,7 +1274,7 @@ function showApp(){
   // ever. Always show a default view first so the map (and its click
   // handler) exists regardless of whether geolocation succeeds.
   updateFindMap(39.5,-98.35,"Click the map to set your location");
-  leadsPicker.show(39.5,-98.35,"Click the map to set your location");
+  if(leadsPicker)leadsPicker.show(39.5,-98.35,"Click the map to set your location");
   // Everything below needs the network. Offline, the app still opens to a
   // fully readable feed — it just doesn't waste a launch firing requests that
   // are all going to time out.
@@ -1339,6 +1346,7 @@ function observeMapSize(obj){
 // a nav-btn that doesn't exist and throw. Switching screens directly here
 // works regardless of whether a nav-btn exists for that screen.
 function switchScreen(s){
+  if(s==="leads"&&!LEADS_ENABLED)s="scan";
   document.querySelectorAll(".nav-btn").forEach(x=>x.classList.toggle("active",x.dataset.s===s));
   document.querySelectorAll(".screen").forEach(x=>x.classList.remove("active"));
   document.getElementById("screen-"+s).classList.add("active");
@@ -1346,7 +1354,7 @@ function switchScreen(s){
   if(s==="saved")renderSaved();
   if(s==="account")renderAccount();
   if(s==="upcoming")renderUpcoming();
-  if(s==="leads")renderLeads();
+  if(s==="leads"&&LEADS_ENABLED)renderLeads();
   // The map's own invalidateSize() call (in show()) only ever runs once,
   // at creation time -- for any tab that isn't the default visible one,
   // that happens while the tab is still hidden (display:none), so
@@ -1356,7 +1364,14 @@ function switchScreen(s){
   // was previously only happening by accident when a user clicked the
   // map (which incidentally re-ran show() -> invalidateSize()).
   if(s==="scan")mapSettle(findMap);
-  if(s==="leads")mapSettle(leadsPicker);
+  if(s==="leads"&&leadsPicker)mapSettle(leadsPicker);
+}
+if(!LEADS_ENABLED){
+  // Remove the tab rather than hide it, so the remaining five share the bar
+  // evenly instead of leaving a gap, and nothing can tab-focus an invisible
+  // control.
+  const lb=document.querySelector('.nav-btn[data-s="leads"]');
+  if(lb)lb.remove();
 }
 document.querySelectorAll(".nav-btn").forEach(b=>{
   b.onclick=()=>switchScreen(b.dataset.s);
@@ -1863,7 +1878,7 @@ function createLocationPicker(containerId,inputId){
 // Upcoming has no picker: it duplicated the text field on a screen that is
 // the same broad municipal search as Bids. Leads keeps one, where choosing
 // a neighbourhood visually is the point.
-const leadsPicker=createLocationPicker("leads-map-view","leads-loc-input");
+const leadsPicker=LEADS_ENABLED?createLocationPicker("leads-map-view","leads-loc-input"):null;
 
 // ── Auto ZIP + live map pin ──
 // fillInput=false (auto-run on load): only fills the box if it's empty, but

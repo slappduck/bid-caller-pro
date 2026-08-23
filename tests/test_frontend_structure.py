@@ -182,5 +182,44 @@ class FindRadiusDefaultTests(unittest.TestCase):
             self.assertEqual(len(active), 1, row_id)
 
 
+class HiddenLeadsTabTests(unittest.TestCase):
+    """Residential Leads is hidden behind a flag, not deleted.
+
+    The permit feed covers three cities -- Austin TX, Cambridge MA and Baton
+    Rouge LA -- so for every contractor currently on the outreach list the
+    tab is permanently empty, and an always-empty tab costs more credibility
+    than a missing one. Everything behind it stays wired so turning it back
+    on is one line.
+    """
+
+    def setUp(self):
+        here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(here, "curbcall_netlify_v4", "app.html"),
+                  encoding="utf-8") as fh:
+            self.app = fh.read()
+
+    def test_the_flag_exists_and_is_off(self):
+        self.assertRegex(self.app, r"const LEADS_ENABLED\s*=\s*false")
+
+    def test_the_tab_is_removed_when_the_flag_is_off(self):
+        self.assertIn("""querySelector('.nav-btn[data-s="leads"]')""", self.app)
+
+    def test_the_screen_is_unreachable_even_by_a_stale_link(self):
+        """A stored last-screen or an old deep link would otherwise land on a
+        screen with no tab to leave it by."""
+        self.assertIn('if(s==="leads"&&!LEADS_ENABLED)s="scan";', self.app)
+
+    def test_the_feature_is_still_there_to_turn_back_on(self):
+        for marker in ('id="screen-leads"', 'id="leads-btn"',
+                       "function renderLeads", 'id="leads-list"'):
+            self.assertIn(marker, self.app, marker)
+
+    def test_nothing_runs_for_the_hidden_screen(self):
+        """Building a Leaflet picker for a screen nobody can open is wasted
+        work at every cold start."""
+        self.assertIn("LEADS_ENABLED?createLocationPicker", self.app)
+        self.assertIn('if(s==="leads"&&LEADS_ENABLED)renderLeads();', self.app)
+
+
 if __name__ == "__main__":
     unittest.main()
