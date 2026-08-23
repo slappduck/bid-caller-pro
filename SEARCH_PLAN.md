@@ -374,3 +374,89 @@ Worth deciding early — the architecture above exists partly to shrink these.
 
 The single biggest cost saving and the single biggest recall gain are the same
 change: stop searching for pages we already know the address of.
+
+---
+
+## Phase 6 — State-level sources (researched 2026-08-23, not built)
+
+Everything above works on **city and county** domains. `data/gov_domains.csv`
+is 12,711 rows and every one is a City, County, or special district — there
+is not a single state agency in the corpus. That is the structural gap, and
+it is the one the paid services are selling.
+
+### What the competition actually covers
+
+BidPrime advertises ~120,000 sources gathered by "Opportunity Tracer" across
+government websites, **purchasing cooperatives**, **state portals**,
+e-procurement hubs and newspaper classifieds. ConstructConnect (~$1,000/mo,
+some markets $130–200) and Dodge (from $300/user/mo) are commercial-only and
+explicitly do **not** cover public procurement. So the category splits: the
+expensive commercial products are not competitors at all, and the public-bid
+competitor's edge is entirely breadth of source, not smarter reading.
+
+### Measured yield: state DOT beats everything else per fetch
+
+| Source | Fetches | Concrete-relevant bids |
+|---|---|---|
+| CivicPlus city portals (random live sample) | 90 | 8 |
+| MoDOT current letting, one page | 1 | 7 |
+
+`modotweb.modot.mo.gov/BidLettingPlansRoom/Letting` returns plain HTML, HTTP
+200, a `<table>` of 21 projects for the current letting — job number, route,
+**county**, and a full description — of which 7 pass `looks_relevant()`
+unmodified, including a job literally titled *"ADA improvements, 10
+Locations"*. County names geocode straight into the existing radius model.
+There is a letting roughly monthly.
+
+That is ~90× the concrete-relevant yield per fetch of a city portal. State
+DOTs let exactly this trade — sidewalk, curb, ADA ramp, pavement repair — at
+volumes no single town approaches.
+
+### What blocks it, precisely
+
+The existing discovery machinery does **not** reach these. Running
+`extract_bid_link_candidates` against 18 state DOT and state-procurement
+homepages found landing pages every time and a real listing never: every hit
+came back with zero dates on it. `modot.org/bidding` is found; the actual
+data lives at `modotweb.modot.mo.gov/...`, a **different subdomain, one hop
+further on**. The crawler stops at the first bid-shaped link, which for a
+city is the listing and for a state is a menu.
+
+So this is not a new adapter — it is one more hop plus a state-domain corpus.
+
+### Dead ends, so nobody re-checks them
+
+- **Bid Express / bidx.com** — the actual letting platform for ~44 state
+  agencies including most DOTs. Every per-state URL (`bidx.com/mo/main`,
+  `ui.bidx.com/IADOT/lettings`) returns the same 3,216-byte JS shell, and
+  the platform has required an account to browse since October 2023. Free
+  registration exists, but automated access under an account is a terms
+  question, not an engineering one. **Check the ToS before writing any code
+  against it.**
+- **Bot blocking is real at state level.** KDOT, ARDOT, Arkansas DFA and the
+  Texas ESBD all return 403 to a plain urllib request where cities almost
+  never do. State sites will need the polite-fetch treatment (browser UA,
+  per-domain delay, backoff) that the city crawl has not needed.
+- **Municode is not a procurement platform.** An earlier probe flagged 19 of
+  160 sampled pages as Municode; every one was a nav link to
+  `library.municode.com`, the ordinance code library. No adapter needed.
+- **Revize (17 of 160) is real but not worth an adapter.** Its bid pages are
+  freeform content blocks — whatever the clerk typed, plus PDF links. No
+  schema to parse; the generic path already handles them as well as anything
+  would.
+- **Bonfire / OpenGov / PlanetBids / QuestCDN / BidExpress together are 15 of
+  160 (9%)** — the smallest group of unhandled platforms and the most
+  expensive to build (JS SPAs). They are listed in STATUS.md as the known
+  gaps; they should be the last thing built, not the first.
+
+### Also unmeasured, in rough order of promise
+
+- **Purchasing cooperatives** (Sourcewell, BuyBoard, OMNIA, TIPS) — named by
+  BidPrime, untouched here, and they aggregate many agencies per source.
+- **Councils of government / regional planning commissions** — let road and
+  sidewalk work for member towns.
+- **School districts and universities** — only 5 school districts are in the
+  whole 4,428-entry directory, and they build a lot of sidewalk and parking.
+- **Newspaper legal classifieds** — BidPrime names these explicitly. Note the
+  statutory public-notice network is already ruled out above on robots.txt
+  grounds; individual papers are a separate question.
