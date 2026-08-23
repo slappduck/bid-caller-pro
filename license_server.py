@@ -1071,6 +1071,11 @@ def diag():
             "benched_until": {k: round(v - time.time(), 1)
                               for k, v in _provider_down_until.items()},
         },
+        # Delivery feedback. A campaign is only as good as the list it
+        # leaves behind, and bounces are invisible without this.
+        "email_events": kv_backend.get(_EMAIL_EVENTS_KEY, None),
+        "suppressed_count": len(_suppression()),
+        "webhook_configured": bool(RESEND_WEBHOOK_SECRET),
         "last_scan": kv_backend.get("bidcaller:last_scan", None),
         "recent_scans": _recent_scans(),
         "feed_audit": kv_backend.get(BID_AUDIT_KEY, None),
@@ -2161,6 +2166,11 @@ def _normalize_state(raw):
 _AGENCY_KEY = "bidcaller:agency_bids"
 _AGENCY_RATE_KEY = "bidcaller:agency_post_rate"
 AGENCY_MAX_PER_IP_PER_DAY = int(os.environ.get("AGENCY_MAX_PER_IP_PER_DAY", "10"))
+_SUPPORT_RATE_KEY = "bidcaller:support_rate"
+SUPPORT_MAX_PER_IP_PER_DAY = int(os.environ.get("SUPPORT_MAX_PER_IP_PER_DAY", "20"))
+SUPPORT_MAX_CHARS = int(os.environ.get("SUPPORT_MAX_CHARS", "8000"))
+# Deliberately strict: this value becomes a Reply-To header.
+_PLAIN_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]{1,64}@[A-Za-z0-9.\-]{1,190}\.[A-Za-z]{2,24}")
 
 
 def _agency_bids():
@@ -2170,6 +2180,34 @@ def _agency_bids():
 
 def _save_agency_bids(d):
     kv_backend.set(_AGENCY_KEY, d)
+
+
+def _client_ip():
+    """The caller's address, as far as it can be known behind Render's proxy."""
+    raw = (request.headers.get("X-Forwarded-For", "")
+           or request.remote_addr or "?")
+    return raw.split(",")[0].strip()
+
+
+def _ip_rate_ok(bucket_key, ip, limit):
+    """Crude per-IP daily cap, shared by the unauthenticated endpoints.
+
+    Not a real rate limiter -- it is a counter in the same storage the rest
+    of the app uses, and it resets at midnight. It exists to stop one script
+    from filling a queue or an inbox overnight, which is the actual failure
+    mode for a small public form, not to survive a determined attacker.
+    """
+    today = datetime.datetime.now().strftime("%Y%m%d")
+    got = kv_backend.get(bucket_key, None)
+    counts = got if isinstance(got, dict) else {}
+    if counts.get("day") != today:
+        counts = {"day": today, "ips": {}}
+    n = int(counts["ips"].get(ip, 0))
+    if n >= limit:
+        return False
+    counts["ips"][ip] = n + 1
+    kv_backend.set(bucket_key, counts)
+    return True
 
 
 def _agency_rate_ok(ip):
@@ -2299,15 +2337,30 @@ def support():
     delivery, referral notices and admin alerts (_send_email), so a
     systematic failure here also shows up in /health's email stats."""
     data = request.get_json(force=True, silent=True) or {}
-    email = (data.get("email") or "").strip()
-    message = (data.get("message") or "").strip()
+    # Unauthenticated by necessity -- somebody whose sign-in is broken still
+    # needs to be able to say so. That makes it a public path to our own
+    # inbox and our own Resend quota, so it is capped per IP per day and the
+    # payload is bounded. Worst case is a noisy day, not a spent quota and an
+    # unusable inbox.
+    if not _ip_rate_ok(_SUPPORT_RATE_KEY, _client_ip(), SUPPORT_MAX_PER_IP_PER_DAY):
+        return jsonify({"ok": False, "reason": "rate_limited",
+                        "detail": f"Too many messages from here today. "
+                                  f"Email {SUPPORT_EMAIL} directly."}), 429
+    email = (data.get("email") or "").strip()[:200]
+    message = (data.get("message") or "").strip()[:SUPPORT_MAX_CHARS]
     if not message:
         return jsonify({"ok": False, "reason": "no_message"})
     if not RESEND_API_KEY:
         return jsonify({"ok": False, "reason": "email_unavailable"})
+    # Only a plausible address may become Reply-To. It is caller-supplied and
+    # ends up in a mail header, so anything else is passed along in the body
+    # where it cannot be mistaken for a verified sender.
+    reply_to = email if _PLAIN_EMAIL_RE.fullmatch(email) else None
+    if email and not reply_to:
+        message = f"[unverified contact: {email}]\n\n{message}"
     ok = _send_email(SUPPORT_EMAIL,
                      f"Bid Caller Pro support request{f' from {email}' if email else ''}",
-                     message, reply_to=email or None)
+                     message, reply_to=reply_to)
     if ok:
         return jsonify({"ok": True})
     return jsonify({"ok": False, "reason": "send_failed"}), 500
