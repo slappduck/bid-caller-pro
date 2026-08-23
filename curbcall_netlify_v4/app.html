@@ -49,6 +49,7 @@
   --fs-xs:0.66rem;  --fs-sm:0.75rem;  --fs-base:0.85rem; --fs-md:0.95rem;
   --fs-lg:1rem;     --fs-xl:1.15rem;  --fs-2xl:1.35rem;  --fs-3xl:1.8rem;
   --fs-4xl:2.4rem;
+  --shell:760px; /* phone-shaped, centred on desktop */
   --ui:'Inter',sans-serif;--mono:'DM Mono',monospace;
 }
 html,body{height:100%;}
@@ -110,7 +111,14 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .avatar-placeholder{width:56px;height:56px;border-radius:50%;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:var(--fs-2xl);flex-shrink:0;}
 
 .screens{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;}
-.screen{display:none;padding:1rem 1rem 5.5rem;animation:fade 0.25s;}
+/* Nothing in this file constrained width, so on a desktop the whole app ran
+   edge to edge -- a 1900px-wide location field, radius buttons the width of
+   a monitor, and a map card so wide that the picker inside it read as a
+   letterbox slot. This is a phone-shaped app; it should stay phone-shaped
+   and centre itself on a big screen rather than stretch to fill one. */
+.screen{display:none;padding:1rem 1rem 5.5rem;animation:fade 0.25s;
+  max-width:var(--shell);margin:0 auto;}
+.topbar,nav{padding-inline:max(1rem,calc((100% - var(--shell))/2 + 1rem));}
 .screen.active{display:block;}
 @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 
@@ -292,7 +300,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .map-card-head .t{font-size:var(--fs-sm);font-weight:800;letter-spacing:0.03em;display:flex;align-items:center;gap:0.4rem;}
 .map-card-head .x{background:none;border:none;color:var(--text2);font-size:var(--fs-base);cursor:pointer;padding:0.2rem 0.4rem;}
 .map-legend{display:flex;gap:0.8rem;flex-wrap:wrap;font-size:var(--fs-sm);color:var(--text2);padding:0.6rem 0.9rem 0.75rem;}
-#find-map-view,#leads-map-view{aspect-ratio:16/9;max-height:220px;min-height:150px;background:var(--card);}
+#find-map-view,#leads-map-view{height:clamp(180px,26vh,280px);background:var(--card);}
 .map-legend span{display:inline-flex;align-items:center;gap:0.3rem;}
 /* Popups stay dark on purpose: against the light basemap they read as a panel
    floating above the map rather than part of it, and they match the app. */
