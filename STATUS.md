@@ -41,14 +41,25 @@ someone has seen it work — not when the code is written.
 
 | Item | What's needed |
 |---|---|
-| **Merge `claude/weekly-upcoming`** | Blocks all three items in the section below from running at all |
+| ~~Merge `claude/weekly-upcoming`~~ | **DONE — and do NOT merge that branch now.** Its content is all in main already (weekly Upcoming scan, `campaign_sender` in `/health`, the Wikidata tools, the admin export). Its last commit is 2026-08-18 and main has moved a week past it, so merging today would revert that week of work on `license_server.py`. Safe to delete the branch. |
 | **Re-run `supabase_sync_schema.sql`** | Adds `reviews`. Idempotent — safe to run again. Until then the review feature is inert, and reviews are the only planned source of usage data |
 | **Allowlist `query.wikidata.org`** | Egress-blocked. The only untested lever for coverage, and it helps most in AR/OK where the sales region is weakest |
 | **A campaign list** | The sender is built, approval-gated and CAN-SPAM compliant, but has no recipients and no copy. This is the last gap between "built" and "selling" |
 | **Approve reviews / notices** | Both queues are moderated by hand, by design. Nothing publishes itself |
 
-`MAILING_ADDRESS` was set in Render on 2026-08-18. Not yet *verified* — the
-`/health` flag that reports it ships with the branch below.
+`MAILING_ADDRESS` was set in Render on 2026-08-18 and is now confirmed live:
+`/health` reports `campaign_sender: true`, which is the flag that depends on
+it.
+
+### Added 2026-08-25
+
+| Item | What's needed |
+|---|---|
+| **Email Infotech about Bid Express API access** | The single highest-value thing on this list. Bid Express is the only public route to open lettings for ~44 state agencies. They have an official API and their robots.txt permits the letting paths. Draft email ready in `docs/bid_express_access.md` — it only needs sending |
+| **Put a contact route on the marketing site** | There is currently no way for a prospect to reach a human anywhere on curbcallpro.com. The two "contact" mentions on the page are feature copy about emailing bid buyers. Biggest credibility gap |
+| **Put the mailing address in the site footer** | Already configured in Render for CAN-SPAM on email; absent from the site. Clearest "real business" signal there is |
+| **Get one real review** | The review system is built, approval-gated and empty. One quote with a name, company and city outweighs every line of copy on the landing page |
+| **Delete `claude/weekly-upcoming`** | Stale and now dangerous to merge — see above |
 
 ## Built and pushed, NOT merged (`claude/weekly-upcoming`)
 
