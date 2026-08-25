@@ -970,3 +970,40 @@ class RelevancePrecisionTests(unittest.TestCase):
         # belongs. Their data, but gibberish on a card.
         self.assertEqual(bid_sources._unescape("Type and#34Dand#34 Hot Mix"),
                          'Type "D" Hot Mix')
+
+
+class CountyColumnIsNotTheDescriptionTests(unittest.TestCase):
+    """Found by running a real Tampa scan and opening every bid it returned.
+
+    Florida's row is "T7604 | Hillsborough | BDI Sidewalk". The description is
+    picked as the longest cell, and Hillsborough is longer than BDI Sidewalk,
+    so the card was titled "T7604 — Hillsborough" -- naming a place instead of
+    the work. Only visible where the county name happens to be the longer
+    string, which is why the neighbouring rows looked fine.
+    """
+
+    HEADER = ["Proposal ID", "County", "Major Work Type", "Letting"]
+
+    def _titles(self, rows):
+        return {r["county"]: r["title"] for r in bid_sources.parse_state_letting(
+            table(rows, header=self.HEADER), "FL", "u", counties.counties_named)}
+
+    def test_a_long_county_name_does_not_become_the_title(self):
+        got = self._titles([["T7604", "Hillsborough", "BDI Sidewalk", "9/30/2026"]])
+        self.assertEqual(got["hillsborough"], "T7604 — BDI Sidewalk")
+
+    def test_a_short_county_name_behaves_the_same(self):
+        got = self._titles([["T7613", "Hernando", "BDI Sidewalk", "9/30/2026"]])
+        self.assertEqual(got["hernando"], "T7613 — BDI Sidewalk")
+
+    def test_the_county_still_places_the_bid(self):
+        got = self._titles([["T1945", "Manatee", "Resurfacing", "9/30/2026"]])
+        self.assertIn("manatee", got)
+        self.assertEqual(got["manatee"], "T1945 — Resurfacing")
+
+    def test_a_table_with_no_county_column_is_unaffected(self):
+        html = table([["D05", "Route 163 BOONE County. Resurface from Route K "
+                       "to Route 63 outer road, 5.916 miles.", "9/18/2026"]])
+        rows = bid_sources.parse_state_letting(
+            html, "MO", "u", counties.counties_named)
+        self.assertIn("Resurface", rows[0]["title"])

@@ -1460,11 +1460,16 @@ def parse_state_letting(html, state, base_url="", county_finder=None):
             continue
         if not county_finder:
             continue
-        # The longest cell is the description on every state layout checked;
-        # the first short one is the call/project number.
-        full_desc = max(cells, key=len) if cells else text
+        # The longest cell is the description on every state layout checked --
+        # except that a county column must never be a candidate. Florida's
+        # row is "T7604 | Hillsborough | BDI Sidewalk", and picking by length
+        # alone titled that job "T7604 — Hillsborough": the county is longer
+        # than the work type, so the card named a place instead of the work.
+        body_cells = [c for i, c in enumerate(cells) if i != county_column] \
+            if county_column is not None else list(cells)
+        full_desc = max(body_cells or cells, key=len) if cells else text
         ident = ""
-        for c in cells:
+        for c in body_cells or cells:
             if c is not full_desc and len(c) <= 24 and _LETTING_ID_RE.search(c):
                 ident = c
                 break
