@@ -661,3 +661,46 @@ project list sits behind another hop. Worth re-checking rather than
 re-engineering.
 
 **AL** was in this group and is now live.
+
+### Phase 6, fourth pass — the state lever has a ceiling (2026-08-25)
+
+Three independent attempts to reach a fourth state all failed, and together
+they say something structural rather than "not tried hard enough".
+
+1. **A third crawl hop over all 48 unsolved states** — nothing new.
+2. **A URL-pattern probe.** The three states that work share a shape: a
+   dedicated letting subdomain (`alletting.dot.state.al.us`,
+   `modotweb.modot.mo.gov`) or a `/contracts/lettings/` path. Probed 14
+   variants of that shape against all 47 remaining states. **Zero hits.**
+3. **Ohio, worked by hand**, because it is a big market returning nothing:
+   - `letting-schedule.aspx` — a SharePoint shell requiring scripts.
+   - `SaleDates.aspx` — a calendar of sale dates. 46 rows, all bare dates,
+     earliest from 2022. No projects at all.
+   - `admin-let.pdf` — **bid results**: projects already let, with the
+     contractors and amounts. The `?ID=` parameter is ignored, every value
+     returns the same file.
+   - `PrebidQs.pdf` — does carry upcoming work ("Project No. 260352 Sale Date
+     - 8/27/2026 JEF-11") but only for projects that received questions, so
+     coverage is partial by construction.
+   - ODOT's actual open-project list is published through **Bid Express**
+     (`bidx.com/oh/lettings`), which needs an account.
+
+**The conclusion to carry forward:** Bid Express serves ~44 state agencies,
+and for most of them it is the *only* place the open-project list appears.
+Florida, Missouri and Alabama work because they publish a public page **as
+well** — that is the exception, not the rule.
+
+So "47 states of hand work" was too optimistic a framing. The real options:
+
+- **Settle the Bid Express terms question.** A free Starter account exists.
+  Whether automated access under it is permitted is a licensing decision, not
+  an engineering one, and no code should be written against it until that is
+  answered.
+- **Keep hand-checking states individually**, accepting that today's evidence
+  puts the hit rate low.
+- **Accept three states** and spend the effort on the other levers in
+  STATUS.md, which make existing bids better rather than finding more.
+
+PDF reading was proven along the way and is worth remembering even though
+Ohio did not need it: `pypdf` is available and extracts ODOT's letting
+documents cleanly, counties intact.
