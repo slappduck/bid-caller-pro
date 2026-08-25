@@ -31,6 +31,11 @@ someone has seen it work — not when the code is written.
 | Outbound campaign sender | Draft → approve, CAN-SPAM enforced in code |
 | Agency bid posting | Separate `post-a-bid.html`, moderated, feeds scans |
 | Daily open-bid alerts | GitHub Actions → `/run-saved-search-alerts`, 23 consecutive successful runs |
+| **State DOT lettings** | **FL, MO, AL wired into `/scan`.** 3 state pages out-produced ~4,400 city portals 2:1 in a five-market live test (19 bids vs 10) |
+| **County placement** | `counties.py`, 3,215 Census population-weighted centroids — a state row is placed at the county nearest the contractor |
+| **Plan holder lists** | MoDOT: the primes bidding each job, with contacts, shown on the card. Never exported — see the rule in SEARCH_PLAN.md |
+| **robots.txt respected** | Scanner asks before reading. Cost measured first: 3 of 150 portals disallow (2%) |
+| **Free sources survive an empty OpenAI balance** | Direct portal reads and state lettings no longer sit behind `OPENAI_API_KEY` |
 
 ## Waiting on Josh (blocked, not forgotten)
 
@@ -135,3 +140,50 @@ at 125mi. Wide-radius markets.
 - **Louisville 6/51 and Memphis 8/18 are not crawl failures.** Both are
   consolidated city-county governments, so there are genuinely fewer separate
   municipalities holding bid pages.
+
+
+---
+
+## Measured accuracy (2026-08-25)
+
+Numbers here came from running the real pipeline against live sites, not from
+fixtures. Re-runnable: `tools/verify_state_sources.py`, and the probes in the
+session scratchpad.
+
+| Measure | Value | How |
+|---|---|---|
+| Relevance precision | **34/34 correct** | Every row 300 live CivicPlus portals hold (270 rows), filter run, results read by hand. Was 41 passes with 7 wrong |
+| Bids verified real | **29/29** | Five live market scans; every returned bid opened — link live, title on page, deadline ahead |
+| CivicPlus parse miss | **1.8%** | 220 live portals |
+| Open bids per scan | **5–8 at 125mi** | 25 production scans; range 0–17 |
+| Cost per scan | **~$0.007** | ~29 AI calls, ~46k input tokens, gpt-4o-mini |
+
+**Recall against the real market is unmeasured and stays that way.** It needs a
+verified list of every open concrete bid in an area; that was tried and
+abandoned because such a list goes stale within weeks. What is measured is
+what a portal holds versus what we extract — not what the market holds versus
+what we find.
+
+## Open threads
+
+1. **PDF-published lettings.** Ohio's letting page is a SharePoint JS shell and
+   the real document is a PDF. `pypdf` is available and extracts cleanly with
+   counties intact — but the file pulled was bid *results*, not upcoming work.
+   Building the PDF path plus finding each state's upcoming-letting document
+   likely unlocks several states, not just Ohio. This is the next state lever,
+   not more crawling.
+2. **47 states still unwired.** See SEARCH_PLAN.md Phase 6 for the triage of
+   all of them, including 13 that are the wrong page entirely and 4 that
+   publish no location at all.
+3. **Legitimacy gaps on the marketing site**, in order: no way to contact a
+   human anywhere on it (the two "contact" mentions are feature copy about
+   emailing bid buyers); no physical address in the footer though
+   `MAILING_ADDRESS` is already set in Render for CAN-SPAM; the review system
+   is built, approval-gated and empty; no named person; no refund guarantee.
+   The coverage checker is the strongest trust asset on the site and is
+   under-used — no competitor will tell you the honest number before you pay.
+4. **Half of bids have no contact** — 197 found against 207 missing in
+   production.
+5. **61% of kept bids are already closed** — hidden from the customer, but
+   they consume the enrichment budget. Fixed for state rows; city rows need
+   more care because someone may have saved one.
