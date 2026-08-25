@@ -692,10 +692,15 @@ well** — that is the exception, not the rule.
 
 So "47 states of hand work" was too optimistic a framing. The real options:
 
-- **Settle the Bid Express terms question.** A free Starter account exists.
-  Whether automated access under it is permitted is a licensing decision, not
-  an engineering one, and no code should be written against it until that is
-  answered.
+- **Settle the Bid Express terms question.** ANSWERED, 2026-08-25: there is an
+  official API. Infotech documents it for administrators integrating the
+  service *and for developers who want to script interactions with it*, so
+  scripted access is explicitly contemplated. bidx.com's robots.txt is also
+  permissive about lettings — it disallows only `/*/apparentbids` and
+  `/*/planholders`. The recommendation is therefore to request API access
+  rather than scrape; the web UI is a JavaScript shell that cannot be read
+  without a browser anyway. Evidence, the limits of what could be checked
+  from here, and a ready-to-send email are in `docs/bid_express_access.md`.
 - **Keep hand-checking states individually**, accepting that today's evidence
   puts the hit rate low.
 - **Accept three states** and spend the effort on the other levers in
