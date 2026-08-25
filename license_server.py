@@ -476,7 +476,9 @@ def health_detail():
             "address can only send to the account's own verified email — verify a "
             "real domain or point SUPPORT_EMAIL at that verified address.")
     if not backends["openai"]:
-        problems.append("OPENAI_API_KEY unset — /scan and /upcoming return no local bids at all")
+        problems.append(
+            "OPENAI_API_KEY unset — search-discovered bids and /upcoming are "
+            "off. Direct portal reads and state lettings still work.")
     if ddg["is_sole_local_search"] and ddg["degraded"]:
         problems.append("DuckDuckGo appears blocked and no search API is configured — "
                         "local bid search is effectively down. Set BRAVE_API_KEY "
@@ -5505,7 +5507,14 @@ def _perform_scan(location, radius, force=False):
     # engines happen to surface near the center point. So for radius >= 40mi
     # we also pick a handful of towns scattered around the radius (via free
     # reverse geocoding) and run a lighter query set against each of them.
-    if OPENAI_API_KEY:
+    # Reading a town's own bid page costs nothing and needs no AI: the
+    # CivicPlus parser is plain regex. This whole block used to sit inside
+    # "if OPENAI_API_KEY", so an expired or exhausted OpenAI balance took
+    # away every local bid, including all the free ones -- a paid dependency
+    # switching off a free code path. Only the SEARCH queries are gated now,
+    # because a search result is useless without an extractor to read it.
+    SEARCH_ENABLED = bool(OPENAI_API_KEY)
+    if True:
         c, s = center["city"], center["state"]
         seen_urls = set()
         lock = threading.Lock()
@@ -5573,6 +5582,10 @@ def _perform_scan(location, radius, force=False):
             got = _run_known_portals(c, s, f"{c}, {s}", grouped, center, radius,
                                       cdb, city_coords, lock, pdb, default_city=c,
                                       town_coords=center_coords, stats=drop_stats)
+            if not SEARCH_ENABLED:
+                print(f"[scan] {got} raw bids from {c}, {s} (center, "
+                      f"portal only -- no OPENAI_API_KEY)", flush=True)
+                return got
             # A hit here (got > 0) means the city's own bid page was read
             # directly and had something real on it -- the generic queries
             # would only be re-asking a question that page already answered.
@@ -5602,6 +5615,10 @@ def _perform_scan(location, radius, force=False):
             got = _run_known_portals(ac, ast, f"{ac}, {ast}", grouped, center, radius,
                                       cdb, city_coords, lock, pdb, default_city=ac,
                                       town_coords=(alat, alon), stats=drop_stats)
+            if not SEARCH_ENABLED:
+                print(f"[scan] {got} raw bids from {ac}, {ast} (anchor, "
+                      f"portal only -- no OPENAI_API_KEY)", flush=True)
+                return got
             queries = (anchor_queries_always if got > 0
                       else anchor_queries_always + anchor_queries_generic)
             got += _run_local_queries(queries, f"{ac}, {ast}", 5,
