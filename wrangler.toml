@@ -29,3 +29,11 @@ directory = "./curbcall_netlify_v4"
 # terms, privacy), not a single-page app, so SPA-style rewriting would hide
 # real broken links behind a page that looks fine.
 not_found_handling = "none"
+
+# Serve paths exactly as written. Cloudflare's default ("auto-trailing-slash")
+# redirects /app.html to /app and serves the file from there. Every link on
+# this site is an explicit .html -- the nav, the footer, the "Launch app"
+# button -- so that indirection buys nothing and adds a redirect hop to every
+# page load, which is one more thing that can misbehave. "none" means
+# /app.html is served from /app.html and nothing is rewritten.
+html_handling = "none"
