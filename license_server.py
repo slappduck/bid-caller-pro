@@ -564,7 +564,12 @@ SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 FROM_EMAIL = os.environ.get("FROM_EMAIL", "Bid Caller Pro <onboarding@resend.dev>")
-SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL", "Yumiwave1@gmail.com")
+# Shown to customers -- "write to {SUPPORT_EMAIL}" -- so the default must be
+# an address on the product's own domain, not a personal one. The old default
+# was a private Gmail, which reads as a side project to anyone who sees it and
+# meant a missing env var quietly published it. support@curbcallpro.com is
+# live on Cloudflare Email Routing and forwards to the same inbox.
+SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL", "support@curbcallpro.com")
 
 # ── Email delivery tracking ──
 # Resend accepting the request doesn't mean the send worked. FROM_EMAIL's
