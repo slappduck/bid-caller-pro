@@ -61,45 +61,50 @@ which transport is in use.
 
 ---
 
-## 2. Counties, schools, universities — the directory is 95% cities
+## 2. The directory — counties are fine, school districts are not
 
-| entity type | in directory | exists in US |
-|---|---|---|
-| plain cities/towns | 4,223 | — |
-| counties | **52** | 3,143 |
-| school districts | **2** | ~13,000 |
-| universities | 11 | ~4,000 |
-| housing authorities | 8 | ~3,300 |
+**A correction, because the first pass of this survey got it badly wrong.**
+It reported 52 counties in the directory and called that the biggest gap in
+the product. That number came from regex-matching the word "county" against
+each directory *key* — and county portals are keyed by their **county seat**,
+not by the county. Barbour County Commission's bid page sits under
+"Clayton, AL". So the regex saw a city and counted nothing.
 
-County road departments and school districts let a great deal of concrete,
-and **no new parsing is needed** — they run the same CivicPlus and agency
-platforms we already read. `data/gov_domains.csv` already holds 2,955 county
-domains; discovery was simply never run over them.
+Measured properly, against the registry's own `type` column:
 
-Tested on 80 of them:
+| type | live directory entries | share | in registry | found |
+|---|---|---|---|---|
+| City | 3,528 | 79.7% | 8,926 | 40% |
+| **County** | **737** | **16.6%** | 2,620 | 28% |
+| Special district | 153 | 3.5% | 1,100 | 14% |
+| School district | **4** | 0.1% | **65** | 6% |
 
-* with the 24 candidate paths alone: **5%** found a bid page
-* adding the homepage-link fallback: **11%**
+Counties were never the gap. Discovery has already been run over them and
+found 737, and they reach scans normally through their county seat.
 
-Extrapolated, ~315 counties. Worth doing, not transformative. The diagnosis
-of the other 89% is the interesting part:
+### What the real gap is
 
-* **30 have no bid link on the homepage** — but many are not procurement
-  entities at all. The registry's "county" match catches sheriff's offices,
-  county clerks and courts (`pontotocsheriff-ok.gov`, `marshallcoclerkky.gov`,
-  `collierclerk.gov`). Filtering those out first would raise the real rate.
-* **22 domains are simply dead.**
-* **20 found the right page and could not read it** — and a quarter of those
-  landed on hosted platforms. `tooeleco.gov` resolves to
-  `utah.bonfirehub.com/portal/?tab=openOpportunities`.
+**School districts.** Not because discovery fails on them — because
+`data/gov_domains.csv` only contains **65 of roughly 13,000** in the country.
+The registry is built from .gov domains, and most districts are on `.k12.xx.us`
+or `.org`, so they were never in the input at all. They let exactly our kind
+of work: parking lots, walkways, play surfaces, ADA ramps.
 
-That last line is the important one, and it leads to §3.
+Filling that needs a different source for the domains (NCES publishes the
+district list), which is a real piece of work rather than a re-run.
 
-**Recommended next build:** filter the county list to actual procurement
-entities, then run `tools/discover_bid_portals.py` over it. Same for school
-districts, where coverage is 2 out of ~13,000.
+### One thing worth doing to the county run
 
----
+The county registry is polluted with offices that never let construction:
+sheriffs, clerks, courts, probate, 911 centres. 643 of 2,862 county-matched
+domains are one of those. Filtering them and re-probing raised the hit rate
+in a 120-domain sample from 11% to **20%** — so a `--recheck-missing` run
+over the filtered set should convert a few hundred of the current
+`not_found` rows without touching anything else.
+
+Note the discovery tool's own verification does **not** use `looks_relevant`,
+so the page-gate bug fixed alongside this survey has no bearing on it. There
+is no hidden win there.
 
 ## 3. Hosted platforms — agencies are consolidating onto them
 
@@ -197,13 +202,30 @@ migrated off it.
 
 ## Recommended order from here
 
-1. **Get the free SAM key** (2 min) — makes the federal source contractually
-   stable rather than dependent on an undocumented endpoint.
-2. **Filter the county registry to real procurement entities, then run
-   discovery over it.** ~2,900 domains already in hand; the sheriff/clerk
-   noise is what is holding the hit rate down.
-3. **School districts** — 2 of ~13,000 is the largest untouched pool, and
-   they let a lot of sidewalk, parking and ADA work.
-4. **Write to BidNet/Sovra** asking about data access, the way the Bid
-   Express letter does. 1,612 concrete solicitations is worth one email.
+1. **Get the free SAM key** (2 min, `api.data.gov/signup`, set `SAM_API_KEY`
+   in Render) — moves the federal source onto a documented contract instead
+   of an undocumented endpoint.
+2. **Write to BidNet/Sovra** asking about data access, the way the Bid
+   Express letter does. 1,612 open concrete solicitations is the biggest
+   single number in this document and one email is the whole cost.
+3. **Re-run county discovery over the filtered registry** — drop the
+   sheriffs, clerks and 911 centres first. Sample says 11% → 20%.
+4. **School district domains.** The largest genuinely untouched pool, and it
+   needs a new source for the domains, not a re-crawl. ~13,000 districts,
+   65 in the registry.
 5. **Socrata adapter** for the 10 domains that publish real bid data.
+
+## What was NOT worth doing, with the evidence
+
+Recorded so the same ground is not covered twice:
+
+| idea | verdict |
+|---|---|
+| CivicPlus bids RSS | no such feed — modules 1-130 all enumerated |
+| NAICS 237990 | 17 active, 0 concrete |
+| PSC Y1PZ, Z2AZ | 15 notices, 0 concrete |
+| Bonfire / BidSync / SciQuest | `Disallow: /` |
+| DemandStar, Vendor Registry | permitted but JS-only, nothing to read |
+| data.gov CKAN | API removed |
+| state central procurement | same wall as the DOTs; PA the only clean win |
+| "counties are missing" | wrong — 737 are there, keyed by county seat |

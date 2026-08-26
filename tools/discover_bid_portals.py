@@ -154,7 +154,59 @@ def _check_domain(entry, homepage_fallback=True):
             "checked_date": checked}
 
 
-def _load_registry(state_filter=None, limit=None):
+# Offices that sit inside a county but never let a construction contract.
+# The registry lists them as County-type entries, so a crawl spends its whole
+# path list on a sheriff's office or a probate court and records another
+# not_found. 643 of 2,862 county-matched domains are one of these; skipping
+# them raised the hit rate in a 120-domain sample from 11% to 20%.
+#
+# Deliberately matched against org/city/domain rather than just the org: some
+# rows carry the giveaway only in the hostname (halecoso.gov, madco911al.gov).
+# Two patterns, because org text and hostnames need opposite treatment.
+#
+# Org text has spaces, so it is word-bounded: an unanchored "treasur" skipped
+# the City of Treasure Island, and a bare "court" would take out any
+# Courtland.
+#
+# A hostname has no spaces -- cubaassessoril.gov, halecoso.gov, madco911al.gov
+# -- so boundaries would match nothing there and it is scanned for whole
+# tokens instead. That list is deliberately more conservative: only strings
+# that cannot turn up inside a place name. "court" is absent for exactly the
+# Courtland reason; the compound forms are safe.
+_OFFICE_IN_ORG_RE = re.compile(
+    r"sheriff|\bclerk\b|\bcourts?\b|courthouse|judicial|"
+    r"\battorney\b|prosecut|\bassessor\b|\brecorder\b|\btreasurer\b|"
+    r"\bcoroner\b|medical examiner|\belections?\b|\bregistrar\b|"
+    r"\bsurveyor\b|\bjail\b|detention|probation|public defender|"
+    r"\b911\b|dispatch|emergency (?:comm|service)|\besd\b|"
+    r"\blibrar(?:y|ies)\b|health depart", re.I)
+
+_OFFICE_IN_DOMAIN_RE = re.compile(
+    r"sheriff|assessor|coroner|probate|judicial|prosecut|"
+    r"circuitclerk|countyclerk|cityclerk|clerkof|"
+    r"municipalcourt|circuitcourt|districtcourt|probatecourt|countycourt|"
+    r"districtattorney|publicdefender|treasurer|recorder|"
+    r"librar|911|dispatch", re.I)
+
+
+def is_procurement_entity(row):
+    """False for an office that has nothing to put out to bid.
+
+    Used to skip, never to delete: a row that matches is simply not probed,
+    so nothing already discovered is lost if this pattern is ever wrong.
+
+    Skipping a county's sheriff does not cost that county its bid page --
+    the commission is a separate row. Of the 155 places where every row gets
+    skipped, all are counties whose only registry entry is a sheriff, clerk
+    or assessor, none of which has ever let a concrete contract.
+    """
+    org = " ".join(str(row.get(k) or "") for k in ("org", "city"))
+    if _OFFICE_IN_ORG_RE.search(org):
+        return False
+    return not _OFFICE_IN_DOMAIN_RE.search(str(row.get("domain") or ""))
+
+
+def _load_registry(state_filter=None, limit=None, skip_non_procurement=True):
     rows = []
     with open(GOV_DOMAINS_CSV, newline="", encoding="utf-8") as f:
         for row in csv.DictReader(f):
@@ -164,11 +216,14 @@ def _load_registry(state_filter=None, limit=None):
                 continue
             if state_filter and state != state_filter.upper():
                 continue
-            rows.append({
+            entry = {
                 "domain": domain, "city": (row.get("city") or "").strip(),
                 "state": state, "type": (row.get("type") or "").strip(),
                 "org": (row.get("org") or "").strip(),
-            })
+            }
+            if skip_non_procurement and not is_procurement_entity(entry):
+                continue
+            rows.append(entry)
     # Cities first (most likely to let this trade's work, and the primary
     # thing /scan looks up), then counties, then the rest -- so a --limit
     # pilot or an interrupted full run has already covered the highest-value
@@ -194,6 +249,13 @@ def _recheck_missing(args):
 
     def _targeted(row):
         if row.get("status") == "found":
+            return False
+        # A re-probe is exactly where the sheriff's-office rows hurt most:
+        # they are all sitting in this file as not_found and every run pays
+        # the full path list for them again.
+        if not is_procurement_entity(row):
+            return False
+        if args.type and (row.get("type") or "").lower() != args.type.lower():
             return False
         return not args.state or (row.get("state") or "").upper() == args.state.upper()
 
@@ -241,6 +303,9 @@ def main():
     ap.add_argument("--limit", type=int, default=None,
                      help="only process the first N entries (cities first) -- for a pilot run")
     ap.add_argument("--state", default=None, help="only this state's 2-letter code")
+    ap.add_argument("--type", default=None,
+                     help="only this registry type (City, County, "
+                          "'Special district', 'School district')")
     ap.add_argument("--workers", type=int, default=40,
                      help="concurrent domains in flight (default 40 -- spread across many "
                           "different hosts, so this is polite per-server, not aggressive)")
