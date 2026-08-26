@@ -194,6 +194,19 @@ migrated off it.
   stormwater spill gates, a drainage district). The rest were dams, levees,
   powerhouses, cemetery expansions. **Correctly excluded.**
 
+* **Statutory public notice sites.** Promising on paper: bids are legally
+  required to be advertised, so completeness should be high, and the state
+  press-association sites permit crawling (`mopublicnotices.com/robots.txt`
+  is `Allow: /` with only code directories blocked). Ten of twelve states
+  probed were reachable and server-rendered.
+
+  Rejected on inspection. They run on ASP.NET with session-bound URLs
+  (`/(S(b01ckr3udl3eowsloajjhjnl))/default.aspx`) and ViewState postbacks
+  for search, so reading them means carrying a session per site. And the
+  content is all legal advertising — foreclosures, probate, name changes,
+  meeting notices — with bid ads a small slice of unstructured prose
+  carrying no location field. High effort, low and noisy yield.
+
 * **PSC codes Y1PZ and Z2AZ.** 8 and 7 notices respectively, none of them
   concrete. Gravesite expansions, switchgear, restroom renovations, 120v
   outlets. Only **Z2PZ** earned inclusion, and it is title-filtered.
