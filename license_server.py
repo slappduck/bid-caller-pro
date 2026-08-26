@@ -5166,11 +5166,14 @@ def _place_state_bid(grouped, row, center, radius, city_coords=None, stats=None)
     if miles > radius:
         _count("out_of_radius")
         return
-    # "call" travels with the bid because the plan-holder list is addressed by
-    # it. Leaving it out of this list is what made every state bid arrive at
-    # the plan-holder fetcher with nothing to look up.
+    # This is an allowlist, so anything not named here is silently dropped --
+    # which is exactly how "call" got lost once already, leaving every state
+    # bid at the plan-holder fetcher with nothing to look up. "documents"
+    # carries the job's own Bid Book and Plans links; without it the card
+    # would send the contractor to the letting index instead.
     bid = {k: row[k] for k in
-           ("title", "scope", "url", "deadline", "status", "source", "call")
+           ("title", "scope", "url", "deadline", "status", "source", "call",
+            "documents")
            if k in row}
     bid["miles"] = int(round(miles))
     bid["county"] = county

@@ -1007,3 +1007,76 @@ class CountyColumnIsNotTheDescriptionTests(unittest.TestCase):
         rows = bid_sources.parse_state_letting(
             html, "MO", "u", counties.counties_named)
         self.assertIn("Resurface", rows[0]["title"])
+
+
+class StateDocumentTests(unittest.TestCase):
+    """A state row points at the letting page, which is an index.
+
+    In a five-market live test, 19 of 29 bids dropped the contractor on a list
+    rather than the job. The row itself carries links to that job's Bid Book,
+    Plans and JSPs, and the table header names each one — so they belong on
+    the card as named documents rather than replacing the posting URL.
+    """
+
+    def _table(self, header, row):
+        cells = "".join("<td>%s</td>" % c for c in row)
+        head = "".join("<th>%s</th>" % h for h in header)
+        return "<table><tr>%s</tr><tr>%s</tr></table>" % (head, cells)
+
+    def test_documents_are_named_by_their_column(self):
+        html = self._table(
+            ["Call for 260918", "Description", "Bid Book", "Plans"],
+            ["D05",
+             "Route 163 BOONE County. Resurface from Route K to Route 63 "
+             "outer road, 5.916 miles.",
+             '<a href="/Letting/ViewStream/1?type=plan">View</a>',
+             '<a href="/Letting/ViewStream/2?type=plan">View</a>'])
+        rows = bid_sources.parse_state_letting(
+            html, "MO", "https://x.mo.gov/BidLettingPlansRoom/Letting",
+            counties.counties_named)
+        docs = rows[0]["documents"]
+        self.assertEqual([d["name"] for d in docs], ["Bid Book", "Plans"])
+        for d in docs:
+            self.assertTrue(d["url"].startswith("https://x.mo.gov/"),
+                            "documents must be absolute: " + d["url"])
+
+    def test_a_field_suffix_is_trimmed_from_the_name(self):
+        # Florida's column is "Proposal ID"; the file is the proposal.
+        html = self._table(
+            ["Proposal ID", "County", "Major Work Type"],
+            ['<a href="/p/T1922.pdf">T1922</a>', "Manatee", "Resurfacing"])
+        rows = bid_sources.parse_state_letting(
+            html, "FL", "https://x.fl.gov/c/", counties.counties_named)
+        self.assertEqual([d["name"] for d in rows[0]["documents"]], ["Proposal"])
+
+    def test_non_document_columns_are_not_harvested(self):
+        html = self._table(
+            ["Call", "Description", "Contact"],
+            ["D05",
+             "Route 163 BOONE County. Resurface from Route K to Route 63, "
+             "5.916 miles.",
+             '<a href="mailto:a@b.gov">Jane</a>'])
+        rows = bid_sources.parse_state_letting(
+            html, "MO", "https://x.mo.gov/", counties.counties_named)
+        self.assertEqual(rows[0]["documents"], [])
+
+    def test_a_row_with_no_links_has_no_documents(self):
+        html = self._table(
+            ["Call", "Description", "Bid Book"],
+            ["D05", "Route 163 BOONE County. Resurface from Route K, "
+             "5.916 miles.", ""])
+        rows = bid_sources.parse_state_letting(
+            html, "MO", "https://x.mo.gov/", counties.counties_named)
+        self.assertEqual(rows[0]["documents"], [])
+
+    def test_an_award_table_header_is_not_read_as_a_record(self):
+        # Florida's page carries award tables alongside lettings. Their header
+        # row must be recognised as a header, not parsed as a job.
+        cells = ["PROPOSAL/CONTRACT NO. - BID TAB",
+                 "INTENT TO AWARD - CONTRACTOR'S NAME", "DATE AWARDED"]
+        self.assertTrue(bid_sources._looks_like_header(cells))
+
+    def test_a_real_record_is_not_mistaken_for_a_header(self):
+        self.assertFalse(bid_sources._looks_like_header(
+            ["D05", "Route 163 BOONE County. Resurface from Route K to Route "
+             "63 outer road, the total length being 5.916 miles.", "9/18/2026"]))

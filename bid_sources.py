@@ -1153,6 +1153,47 @@ def _row_is_a_record(text, cells):
 
 
 _COUNTY_HEADER_RE = re.compile(r"^\s*(?:county|parish|borough)\s*$", re.I)
+# Column titles that name a document rather than a field of the row.
+_DOC_HEADER_RE = re.compile(
+    r"bid\s*book|plans?|jsps?|proposal|specification|cross\s*section|"
+    r"addend|deliverable|drawing|exhibit|attachment|document", re.I)
+_HEADER_HINT_RE = re.compile(
+    r"^(?:description|project|call|county|work|letting|status|date|"
+    r"bid\s*book|plans?|proposal)\b", re.I)
+
+
+def _looks_like_header(cells):
+    """A row of column titles rather than a record. Two or more short cells
+    that name fields, and no cell long enough to be a scope."""
+    if max((len(c) for c in cells), default=0) > 44:
+        return False
+    return sum(1 for c in cells if _HEADER_HINT_RE.match(c)) >= 2
+
+
+def _row_documents(raw_cells, headers, limit=6):
+    """This row's own document links, named by the column they sit under.
+
+    A state letting row points at the letting page, which is right -- that is
+    where the job is listed -- but it is an index, so 19 of 29 bids in a live
+    five-market test dropped the contractor on a list rather than the work.
+    The row itself carries links to that job's Bid Book, Plans and JSPs, and
+    the header names each one. The detail sheet already renders a documents
+    row, so they belong there rather than replacing the posting URL.
+    """
+    out = []
+    for i, cell in enumerate(raw_cells or ()):
+        label = headers[i] if i < len(headers) else ""
+        if not label or not _DOC_HEADER_RE.search(label):
+            continue
+        # "Proposal ID" names a column, not a file. Trim the field suffix so
+        # the card reads "Proposal" rather than "Proposal ID".
+        name = re.sub(r"\s*(?:ID|No\.?|Number|#)\s*$", "", label,
+                      flags=re.I).strip() or label
+        for m in re.finditer(r'href=["\']([^"\']+)["\']', cell, re.I):
+            out.append({"name": name, "url": _unescape(m.group(1))})
+            if len(out) >= limit:
+                return out
+    return out
 
 
 def _county_column(header_cells):
@@ -1215,7 +1256,8 @@ def _heading_date_before(body, pos, floor=0):
 def letting_rows(html):
     """Record-shaped rows from a state letting page.
 
-    Returns [(joined_text, cells, county_column, letting_date)] -- both the
+    Returns [(joined_text, cells, county_column, letting_date, documents)].
+    Both the
     column index and the date travel with the row, because a page can carry
     several tables and only one has a County header, while each may belong to
     a different letting.
@@ -1232,6 +1274,7 @@ def letting_rows(html):
              for i, m in enumerate(matches)] or [(body, 0, 0)]
     current_date = ""
     for table, start, prev_end in spans:
+        headers = []
         # Florida puts one letting per section and the whole page spans
         # January to September, so a table-only reader treats a February
         # letting as current work. The date is a heading, and it does not sit
@@ -1247,18 +1290,22 @@ def letting_rows(html):
         chunks = re.findall(r"(?is)<tr[^>]*>(.*?)</tr>", table)
         col = None
         for chunk in chunks:
-            cells = [_clean(_unescape(c)) for c in
-                     re.findall(r"(?is)<t[dh][^>]*>(.*?)</t[dh]>", chunk)]
-            cells = [c for c in cells if c]
+            raw_cells = re.findall(r"(?is)<t[dh][^>]*>(.*?)</t[dh]>", chunk)
+            cells = [c for c in (_clean(_unescape(c)) for c in raw_cells) if c]
             if len(cells) < 2:
                 continue
             if col is None:
                 col = _county_column(cells)
                 if col is not None:
+                    headers = list(cells)
                     continue          # that row was the header, not a record
+            if not headers and _looks_like_header(cells):
+                headers = list(cells)
+                continue
             text = " | ".join(cells)
             if _row_is_a_record(text, cells):
-                out.append((text, cells, col, table_date))
+                out.append((text, cells, col, table_date,
+                            _row_documents(raw_cells, headers)))
     if out:
         return out
     # Only when the page has no record-shaped table at all. An earlier version
@@ -1268,7 +1315,7 @@ def letting_rows(html):
     for chunk in re.findall(r"(?is)<li[^>]*>(.{40,700}?)</li>", body):
         text = _clean(_unescape(chunk))
         if _row_is_a_record(text, [text]):
-            out.append((text, [text], None, ""))
+            out.append((text, [text], None, "", []))
     return out
 
 
@@ -1455,7 +1502,7 @@ def parse_state_letting(html, state, base_url="", county_finder=None):
     rows = []
     seen = set()
     page_date = page_letting_date(html, base_url)
-    for text, cells, county_column, table_date in letting_rows(html):
+    for text, cells, county_column, table_date, docs in letting_rows(html):
         if not looks_relevant(text):
             continue
         if not county_finder:
@@ -1493,7 +1540,7 @@ def parse_state_letting(html, state, base_url="", county_finder=None):
             rows.append(_state_row(
                 ident, desc, text, places, state, base_url,
                 call=(cells[0] if cells else ""),
-                letting_date=(table_date or page_date)))
+                letting_date=(table_date or page_date), documents=docs))
     if not rows:
         # No table and no list gave us anything placeable. Some states publish
         # the letting as prose instead -- see parse_notice_to_contractors.
@@ -1514,7 +1561,7 @@ def _compose_state_title(ident, desc):
 
 
 def _state_row(ident, desc, text, places, state, base_url, call="",
-               letting_date=""):
+               letting_date="", documents=None):
     county, lat, lon = places[0]
     return {
         # The description on a notice page opens with the same project code we
@@ -1537,6 +1584,11 @@ def _state_row(ident, desc, text, places, state, base_url, call="",
         # number" (G02, D07). It is what addresses the plan-holder list for
         # this job, and nothing else needs it.
         "call": str(call or "").strip()[:16],
+        # This job's own plans and bid book, absolute so the card can link
+        # straight to them rather than to the letting index.
+        "documents": [{"name": d["name"],
+                       "url": urllib.parse.urljoin(base_url, d["url"])}
+                      for d in (documents or [])],
         "all_counties": [p[0] for p in places],
         # Every county this JOB names, with coordinates. Placement picks the
         # one nearest the scan centre -- the work really is in all of them, so

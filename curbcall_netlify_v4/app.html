@@ -2857,6 +2857,24 @@ function prettyUrl(u){
   }catch(e){ return String(u||""); }
 }
 
+// Bid documents come in two shapes. A city posting yields bare URLs, because
+// all we can do is spot links that look like a packet. A state letting row
+// yields {name, url} -- the table's own column headings name each file, so
+// the card can say "Bid Book" and "Plans" instead of "Document 1".
+function docRow(b){
+  const ds=(b&&b.documents)||[];
+  if(!ds.length)return"";
+  const links=ds.slice(0,5).map((d,i)=>{
+    const url=safeUrl(typeof d==="string"?d:(d&&d.url));
+    if(!url)return"";
+    const name=(d&&d.name)?String(d.name):("Document "+(i+1));
+    return `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(name)}</a>`;
+  }).filter(Boolean).join(" &middot; ");
+  if(!links)return"";
+  return `<div class="detail-row"><div class="detail-label">Bid Documents</div>
+    <div class="detail-val">${links}</div></div>`;
+}
+
 function holderBlock(b){
   const hs=(b&&b.plan_holders)||[];
   if(!hs.length)return"";
@@ -2968,11 +2986,7 @@ function openDetail(city,b){
       ${row("Email",b.email,b.email?"mailto:"+b.email:null)}
       ${row("Phone",b.phone,b.phone?"tel:"+b.phone:null)}
     </div>
-    ${(b.documents&&b.documents.length)?`<div class="detail-row">
-      <div class="detail-label">Bid Documents</div>
-      <div class="detail-val">${b.documents.slice(0,5).map((d,i)=>
-        safeUrl(d)?`<a href="${esc(safeUrl(d))}" target="_blank" rel="noopener noreferrer">Document ${i+1}</a>`:"")
-        .filter(Boolean).join(" &middot; ")}</div></div>`:""}
+    ${docRow(b)}
     ${post?row("Original Posting",prettyUrl(b.url),b.url)
       :row("Original Posting","Not linked \u2014 search for it",findUrl)}
     <div class="workspace">
