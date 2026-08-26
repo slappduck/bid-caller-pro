@@ -1731,8 +1731,54 @@ function clearFindTownMarkers(){
   findTownMarkers.forEach(m=>findMap.removeLayer(m));
   findTownMarkers=[];
 }
+// Nearby-town dots come from Overpass, which is a public service and can take
+// several seconds. Three things made that feel worse than it is:
+//
+//   * the old markers were cleared only when the RESPONSE arrived, so the
+//     previous location's dots sat on screen for the whole wait;
+//   * the request was awaited after the reverse geocode rather than beside
+//     it, so the dots also paid for the geocode;
+//   * clicking around fired one query per click with no sequencing, and a
+//     slow earlier response could land last and overwrite the right dots.
+//
+// So: clear immediately, run in parallel, ignore superseded responses, and
+// remember what we already fetched.
+let findTownSeq=0;
+const findTownCache=new Map();      // "lat,lon,radius" -> elements
+const FIND_TOWN_CACHE_MAX=40;
+
+function findTownKey(lat,lon){
+  // Round to ~1km. Clicking two streets apart is the same set of towns, and
+  // without this every pixel of movement is a fresh network round trip.
+  return `${lat.toFixed(2)},${lon.toFixed(2)},${radius}`;
+}
+
+function drawFindTownMarkers(elements){
+  clearFindTownMarkers();
+  const seen=new Set();
+  for(const el of(elements||[])){
+    const name=el.tags?.name;
+    if(!name||seen.has(name.toLowerCase())||el.lat==null||el.lon==null)continue;
+    seen.add(name.toLowerCase());
+    const state=el.tags?.["addr:state"]||"";
+    const label=state?`${name}, ${state}`:name;
+    const m=L.circleMarker([el.lat,el.lon],{radius:6,color:PIN_RING,fillColor:"#3b82f6",fillOpacity:1,weight:2})
+      .addTo(findMap).bindPopup(esc(label));
+    m.on("click",()=>pickFindLocation(el.lat,el.lon,label));
+    findTownMarkers.push(m);
+    if(findTownMarkers.length>=15)break;
+  }
+}
+
 async function refreshFindTownMarkers(lat,lon){
   if(!findMap)return;
+  const mine=++findTownSeq;
+  const key=findTownKey(lat,lon);
+  const hit=findTownCache.get(key);
+  if(hit){ drawFindTownMarkers(hit); return; }
+  // Nothing cached, so there will be a wait. Take the stale dots down now
+  // rather than leaving the last location's towns sitting on the map.
+  clearFindTownMarkers();
   const radiusM=Math.round(radius*1609.34);
   const q=`[out:json][timeout:20];(node["place"~"city|town"](around:${radiusM},${lat},${lon}););out body 30;`;
   try{
@@ -1740,20 +1786,13 @@ async function refreshFindTownMarkers(lat,lon){
       method:"POST",headers:{"Content-Type":"text/plain"},body:q,
     },15000);
     const d=await r.json();
-    clearFindTownMarkers();
-    const seen=new Set();
-    for(const el of(d.elements||[])){
-      const name=el.tags?.name;
-      if(!name||seen.has(name.toLowerCase())||el.lat==null||el.lon==null)continue;
-      seen.add(name.toLowerCase());
-      const state=el.tags?.["addr:state"]||"";
-      const label=state?`${name}, ${state}`:name;
-      const m=L.circleMarker([el.lat,el.lon],{radius:6,color:PIN_RING,fillColor:"#3b82f6",fillOpacity:1,weight:2})
-        .addTo(findMap).bindPopup(esc(label));
-      m.on("click",()=>pickFindLocation(el.lat,el.lon,label));
-      findTownMarkers.push(m);
-      if(findTownMarkers.length>=15)break;
-    }
+    // A newer click has happened since this request went out; its answer is
+    // the right one and this is not.
+    if(mine!==findTownSeq)return;
+    findTownCache.set(key,d.elements||[]);
+    if(findTownCache.size>FIND_TOWN_CACHE_MAX)
+      findTownCache.delete(findTownCache.keys().next().value);
+    drawFindTownMarkers(d.elements||[]);
   }catch(e){/* best-effort — clicking blank map still works without town markers */}
 }
 // Civil divisions that are not places anyone lets a bid from. A rural point
@@ -1907,6 +1946,10 @@ async function pickFindLocation(lat,lon,label){
     return;
   }
   updateFindMap(lat,lon,"Locating...");
+  // Start the town dots NOW rather than after the geocode. They are two
+  // independent lookups and awaiting them in series meant the dots paid for
+  // the geocode as well as their own request.
+  const towns=refreshFindTownMarkers(lat,lon);
   // Coordinates only if all three providers came up empty. The server accepts
   // them, but it resolves them with the same reverse geocode that just failed,
   // so a scan from a coordinate pair usually ends up with no city and no
@@ -1914,7 +1957,7 @@ async function pickFindLocation(lat,lon,label){
   const val=(await resolvePlaceLabel(lat,lon))||`${lat.toFixed(4)}, ${lon.toFixed(4)}`;
   if(input)input.value=val;
   updateFindMap(lat,lon,val);
-  refreshFindTownMarkers(lat,lon);
+  await towns;
 }
 
 // ── Reusable "click the map to set a location" picker for tabs that don't
