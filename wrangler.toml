@@ -1,0 +1,31 @@
+# Cloudflare Workers config — serves the static site.
+#
+# The Cloudflare project was created as a Worker (deploy command
+# "npx wrangler deploy", root directory "/") rather than as a Pages project.
+# That build reported success while deploying nothing, because the repo had no
+# wrangler config, no package.json and no JavaScript at its root — there was
+# simply nothing for wrangler to find.
+#
+# This file makes that existing setup correct instead of requiring the project
+# to be recreated. It is an assets-only Worker: no script, no build step, just
+# the four static files served from the edge. That is Cloudflare's current
+# recommended way to host a static site and behaves the same as Pages for our
+# purposes.
+#
+# The backend is unaffected. license_server.py stays on Render; only the HTML,
+# service worker, icons and manifest are served from here.
+
+name = "bid-caller-pro"
+compatibility_date = "2026-08-26"
+
+[assets]
+# Everything the browser loads lives here. Note this is NOT the repo root --
+# the root holds the Python backend, the tests and the tooling, none of which
+# should ever be published to the web.
+directory = "./curbcall_netlify_v4"
+
+# A missing path returns the 404 rather than rewriting to index.html. This is
+# a plain multi-page static site (index.html, app.html, post-a-bid.html,
+# terms, privacy), not a single-page app, so SPA-style rewriting would hide
+# real broken links behind a page that looks fine.
+not_found_handling = "none"
