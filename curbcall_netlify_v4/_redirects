@@ -13,3 +13,18 @@
 # Same file format on Netlify and Cloudflare, so this is correct on whichever
 # host is serving.
 /    /index.html    200
+
+# Extensionless aliases.
+#
+# html_handling = "none" means /app is a plain 404 -- only /app.html exists.
+# That bit already: the app was reached at curbcallpro.com/app from a phone
+# and only rendered because the service worker had app.html cached. A first
+# time visitor typing the same address gets nothing.
+#
+# These are 200 rewrites, not redirects, for the same reason "/" is: the URL
+# stays as typed and no hop is added, so sw.js's precache of the explicit
+# ".html" paths is untouched.
+/app            /app.html          200
+/post-a-bid     /post-a-bid.html   200
+/privacy        /privacy.html      200
+/terms          /terms.html        200

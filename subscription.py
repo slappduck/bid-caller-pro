@@ -34,7 +34,7 @@ SERVER_URL = "https://bid-caller-pro.onrender.com"   # live license server
 STRIPE_MONTHLY_URL = "https://buy.stripe.com/aFa00idzefwuayK6DRejK05"  # $49/mo — matches web app
 STRIPE_ANNUAL_URL  = "https://buy.stripe.com/7sY5kC0Ms6ZYeP00ftejK04"  # $399/yr — matches web app
 STRIPE_PORTAL_URL  = "https://billing.stripe.com/p/login/3cIcN4an28420Yad2fejK00"
-SUPPORT_EMAIL      = "Yumiwave1@gmail.com"
+SUPPORT_EMAIL      = "support@curbcallpro.com"
 
 # How long the app keeps working if it can't reach the server
 OFFLINE_GRACE_DAYS = 5
