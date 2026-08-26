@@ -90,8 +90,28 @@ The registry is built from .gov domains, and most districts are on `.k12.xx.us`
 or `.org`, so they were never in the input at all. They let exactly our kind
 of work: parking lots, walkways, play surfaces, ADA ramps.
 
-Filling that needs a different source for the domains (NCES publishes the
-district list), which is a real piece of work rather than a re-run.
+Filling that needs a different source for the domains, and the shape of that
+job is now known precisely:
+
+* **The district list is free and complete.** The Urban Institute mirrors the
+  NCES Common Core directory at
+  `educationdata.urban.org/api/v1/school-districts/ccd/directory/2022/` —
+  **19,714 districts**, no key, with `latitude`/`longitude`, city, state, zip,
+  county, `enrollment` and `number_of_schools`. The coordinates matter: a
+  district found this way could be placed on the map exactly, the way county
+  lettings already are, with no geocoding step.
+* **It has no website field.** 69 fields, none of them a URL. That is the
+  whole of the missing work: name + city + state → domain. Guessing is much
+  harder for districts than for cities, because they sit on `.k12.xx.us`,
+  `.org` and vanity domains rather than a predictable pattern.
+* **Scope it by size.** Most of those 19,714 are tiny. Filtering on
+  `enrollment` (say >5,000) leaves on the order of 1,500 districts that
+  actually let parking-lot and walkway contracts, which is a tractable number
+  of domains to resolve.
+
+Also worth noting for whoever picks this up: `query.wikidata.org` responds
+fine from the server (checked, HTTP 200), so the note about needing to
+allowlist it is stale.
 
 ### One thing worth doing to the county run
 
