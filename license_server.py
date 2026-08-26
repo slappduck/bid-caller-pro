@@ -4352,14 +4352,23 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
             bid_portals.record_result(pdb, city, state, url, ok)
         if not ok:
             return
-        # The same gate the search path applies before every extraction, which
-        # this path was missing. A bid page with no niche term anywhere on it
-        # has no concrete work on it, and 21 of 33 sampled agency portals are
-        # in that state at any moment -- each one an AI call, and seconds of
-        # the scan's town budget, spent to find nothing. The portal is still
-        # recorded above as a working source; there is simply nothing for us
-        # on it today.
-        if not bid_sources.looks_relevant(text):
+        # Skip the extraction call on a portal with nothing of ours anywhere
+        # on it. 21 of 33 sampled agency portals are in that state at any
+        # moment -- each one an AI call, and seconds of the scan's town
+        # budget, spent to find nothing. The portal is still recorded above as
+        # a working source; there is simply nothing for us on it today.
+        #
+        # page_may_hold_work, NOT looks_relevant. This used looks_relevant,
+        # which is the per-posting test and vetoes on words like "professional
+        # services" before it ever looks for a trade term. On a whole page
+        # that made one unrelated RFP enough to discard every real bid beside
+        # it: 44 of 166 town portals were skipped this way while their text
+        # said concrete, sidewalk, curb or paving. It also contradicted the
+        # contract _run_local_queries documents for this function -- that a
+        # known portal is trusted and a gap here is our problem, not evidence
+        # the page is irrelevant. Which postings are actually ours is still
+        # decided per posting, below and in the CivicPlus branch above.
+        if not bid_sources.page_may_hold_work(text):
             if stats is not None:
                 with lock:
                     stats["portal_no_niche_content"] = \

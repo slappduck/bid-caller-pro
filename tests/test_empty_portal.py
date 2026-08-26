@@ -59,13 +59,17 @@ if __name__ == "__main__":
 
 
 class KnownPortalRelevanceGateTests(unittest.TestCase):
-    """The search path has always run looks_relevant before spending an AI
-    call. The known-portal path did not, so every one of the ~1,375 `agency`
-    portals got an extraction whether or not its page mentioned concrete at
-    all -- 21 of 33 sampled did not.
+    """The known-portal path must not spend an AI call on a page with
+    nothing of ours on it -- every one of the ~1,375 `agency` portals used to
+    get an extraction whether or not its page mentioned concrete at all, and
+    21 of 33 sampled did not.
 
     Structural, because the two paths drifting apart is exactly how this
     happened: the gate exists, it was simply never applied here.
+
+    The gate is page_may_hold_work, not looks_relevant. See
+    PageGateIsNotThePostingGateTests below for why that distinction is the
+    whole point.
     """
 
     def setUp(self):
@@ -76,7 +80,7 @@ class KnownPortalRelevanceGateTests(unittest.TestCase):
         self.body = src[start:src.index("\ndef ", start + 10)]
 
     def test_the_gate_runs_before_the_extraction(self):
-        gate = self.body.index("looks_relevant(text)")
+        gate = self.body.index("page_may_hold_work(text)")
         call = self.body.index("_ai_extract(ai_label, text)")
         self.assertLess(gate, call,
                         "the relevance gate must come before the AI call, or "
@@ -89,5 +93,65 @@ class KnownPortalRelevanceGateTests(unittest.TestCase):
         """A page with nothing for us today is not a broken source, and must
         not be aged out of the directory for it."""
         record = self.body.index("record_result(pdb, city, state, url, ok)")
-        gate = self.body.index("looks_relevant(text)")
+        gate = self.body.index("page_may_hold_work(text)")
         self.assertLess(record, gate)
+
+
+class PageGateIsNotThePostingGateTests(unittest.TestCase):
+    """A whole portal page must not be judged by the per-posting rules.
+
+    looks_relevant decides whether one title is our work, so it is built out
+    of exclusions that fire before any trade term is consulted: "professional
+    services", "master plan", "condition assessment". Correct for a title.
+    Applied to a page listing many solicitations it means one unrelated RFP
+    discards every real bid beside it.
+
+    Measured over 166 towns in eight metros: 44 portals were skipped as
+    holding no niche content while their text plainly held ours. Switching
+    the page gate recovered 24 of them and lost none. These are the live
+    pages that were being thrown away, reduced to the words that did it.
+    """
+
+    def test_a_page_offering_concrete_work_survives_an_unrelated_rfp(self):
+        # grainvalleymo.gov/bid_notices/ -- rejected on "professional
+        # services" while the same page said all of the below.
+        page = ("Bid Notices for Grain Valley, Missouri. Request for "
+                "professional services. 2026 Concrete Street Repair "
+                "Program. Asphalt overlay and pavement resurfacing.")
+        self.assertFalse(bs.looks_relevant(page),
+                         "guard: this is the per-posting verdict being fixed")
+        self.assertTrue(bs.page_may_hold_work(page))
+
+    def test_master_plan_does_not_veto_a_sidewalk_page(self):
+        # parkvillemo.gov -- rejected on "master plan"; page said sidewalk.
+        page = ("Bids and Proposals. Parks Master Plan RFP. "
+                "Sidewalk Replacement Project Phase 2.")
+        self.assertTrue(bs.page_may_hold_work(page))
+
+    def test_condition_assessment_does_not_veto_a_curb_page(self):
+        # lawrenceks.gov/purchasing -- rejected on "condition assessment".
+        page = ("Purchasing Division. Water tower condition assessment. "
+                "Curb and gutter replacement, pavement rehabilitation.")
+        self.assertTrue(bs.page_may_hold_work(page))
+
+    def test_a_page_with_nothing_of_ours_is_still_skipped(self):
+        """The cost purpose of the gate has to survive the fix."""
+        page = ("Purchasing Division. Janitorial services contract. "
+                "Employee benefits consulting. Ballistic helmets. "
+                "Audit and actuarial services.")
+        self.assertFalse(bs.page_may_hold_work(page))
+
+    def test_an_empty_page_is_skipped(self):
+        self.assertFalse(bs.page_may_hold_work(""))
+        self.assertFalse(bs.page_may_hold_work(None))
+        self.assertFalse(bs.page_may_hold_work("   "))
+
+    def test_the_posting_gate_is_left_alone(self):
+        """Loosening the page gate must not loosen the per-posting one --
+        that is what keeps professional-services RFPs out of the results."""
+        self.assertFalse(bs.looks_relevant(
+            "RFP for Professional Engineering Services"))
+        self.assertFalse(bs.looks_relevant(
+            "Snow Removal - Springfield-Branson National Airport"))
+        self.assertTrue(bs.looks_relevant(
+            "2026 Concrete Sidewalk Replacement Program"))

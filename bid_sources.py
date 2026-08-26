@@ -616,6 +616,48 @@ def _has_strong_term(blob):
         any(t in blob for t in STRONG_NICHE_TERMS)
 
 
+def page_may_hold_work(text):
+    """True if a whole portal page mentions our trade anywhere on it.
+
+    This is the page-level question, and it is NOT the same as the per-posting
+    one. looks_relevant decides whether a single title is our work, so it is
+    built out of exclusions: "professional services", "master plan",
+    "condition assessment" and the rest each veto outright, before the strong
+    term is even consulted. That is right for a title -- an RFP for planning
+    services is not concrete work no matter what else it says.
+
+    Applied to a whole page it is badly wrong, because a portal lists many
+    solicitations and one unrelated RFP anywhere on it triggers a veto that
+    throws away every real bid alongside it. Measured over 166 towns in eight
+    metros: 44 portals were skipped as having "no niche content" while their
+    text plainly held ours. Grain Valley, MO was rejected on the words
+    "professional services" while the same page said concrete, paving,
+    pavement, ramp, trail and roadway; Lawrence, KS on "condition assessment"
+    while saying curb and pavement; Topeka on "planning services" while
+    saying sidewalk.
+
+    So this asks presence, not fitness: is there anything here worth reading?
+    Deciding which of the postings are actually ours stays where it belongs,
+    on each extracted title, which is checked separately and unchanged.
+
+    The cost purpose of the gate survives -- a portal with nothing of ours
+    anywhere on it still costs no extraction call.
+    """
+    blob = str(text or "").lower()
+    if not blob.strip():
+        return False
+    if _has_strong_term(blob) or any(t in blob for t in NICHE_TERMS):
+        return True
+    if _PARKING_RE.search(blob):
+        return True
+    # Same transit-route caveat looks_relevant applies: "route 9 bus shelter"
+    # is not roadwork. This is a reading of what road_work means, not an
+    # exclusion of an otherwise-qualifying page, so it belongs here.
+    if _ROAD_WORK_RE.search(blob):
+        return _TRANSIT_ROUTE_RE.search(blob) is None
+    return False
+
+
 def looks_relevant(*texts):
     """True if a listing is worth spending an extraction call on."""
     parts = [str(t or "") for t in texts]
