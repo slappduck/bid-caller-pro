@@ -122,3 +122,97 @@ class StructureTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class KeyedTransportTests(unittest.TestCase):
+    """The keyed path is what runs once SAM_API_KEY is set, and it cannot be
+    exercised against the live service without a key -- so it is exercised
+    here against the documented payload shape instead. Without this the
+    transport Josh will actually use is the one nothing has ever run."""
+
+    # One row in api.data.gov's `opportunitiesData` shape, trimmed to the
+    # fields _normalize_opp reads.
+    OPP = {
+        "noticeId": "1c77a3137ef64a73a44cb5fb084bc9de",
+        "title": "Gateway Arch NP - Sidewalk Leveling",
+        "solicitationNumber": "140P6226Q0005",
+        "responseDeadLine": "2099-09-09T17:00:00-05:00",
+        "active": "Yes",
+        "naicsCode": "238110",
+        "fullParentPathName": "INTERIOR.NATIONAL PARK SERVICE",
+        "pointOfContact": [{"fullName": "Frank, Matthew",
+                            "email": "Matthew_Frank@ios.doi.gov",
+                            "phone": "5017629927"}],
+        "placeOfPerformance": {"city": {"name": "Saint Louis"},
+                               "state": {"code": "MO"}, "zip": "63102"},
+        "uiLink": "https://sam.gov/opp/1c77a3137ef64a73a44cb5fb084bc9de/view",
+    }
+
+    def setUp(self):
+        self.calls = []
+        self._real_fetch = ls._sam_fetch
+        self._real_key = ls.SAM_API_KEY
+
+        def fake_fetch(state):
+            self.calls.append(state)
+            return [self.OPP, {"noticeId": "b" * 32, "title": "Janitorial "
+                               "Services", "active": "Yes",
+                               "naicsCode": "561720"}]
+        ls._sam_fetch = fake_fetch
+        ls.SAM_API_KEY = "test-key"
+
+    def tearDown(self):
+        ls._sam_fetch = self._real_fetch
+        ls.SAM_API_KEY = self._real_key
+
+    def test_it_asks_every_state_in_the_radius(self):
+        ls._federal_keyed(["MO", "KS", "IA"], {})
+        self.assertEqual(self.calls, ["MO", "KS", "IA"])
+
+    def test_it_keeps_our_trade_and_drops_the_rest(self):
+        bids = ls._federal_keyed(["MO"], {})
+        self.assertEqual(len(bids), 1)
+        self.assertEqual(bids[0]["title"], "Gateway Arch NP - Sidewalk Leveling")
+
+    def test_the_bid_carries_location_and_contact(self):
+        bid = ls._federal_keyed(["MO"], {})[0]
+        self.assertEqual(bid["city"], "Saint Louis")
+        self.assertEqual(bid["state"], "MO")
+        self.assertEqual(bid["phone"], "5017629927")
+        self.assertEqual(bid["email"], "Matthew_Frank@ios.doi.gov")
+
+    def test_a_dead_state_does_not_sink_the_others(self):
+        def half_broken(state):
+            if state == "KS":
+                raise RuntimeError("SAM is down")
+            return [self.OPP]
+        ls._sam_fetch = half_broken
+        stats = {}
+        bids = ls._federal_keyed(["MO", "KS", "IA"], stats)
+        self.assertEqual(len(bids), 2)
+        self.assertEqual(stats.get("federal_search_error"), 1)
+
+    def test_the_runner_places_a_keyed_bid_end_to_end(self):
+        center = {"city": "Saint Louis", "state": "MO",
+                  "lat": 38.6270, "lon": -90.1994}
+        grouped, coords, stats = {}, {}, {}
+        placed = ls._run_federal_sources(center, 50, grouped, {}, coords, stats)
+        self.assertEqual(placed, 1)
+        bids = [b for v in grouped.values() for b in v]
+        self.assertEqual(len(bids), 1)
+        self.assertTrue(bids[0].get("phone"))
+        self.assertTrue(bids[0]["url"].startswith("https://sam.gov/opp/"))
+
+    def test_a_closed_notice_is_dropped_even_when_marked_active(self):
+        """"Active" at SAM means the notice is live, not that its response
+        date is ahead."""
+        past = dict(self.OPP, responseDeadLine="2020-01-01T17:00:00-05:00")
+        ls._sam_fetch = lambda state: [past]
+        # Springfield at 25 miles stays inside Missouri, so the stub is asked
+        # exactly once and the count is unambiguous.
+        center = {"city": "Springfield", "state": "MO",
+                  "lat": 37.2090, "lon": -93.2923}
+        stats = {}
+        placed = ls._run_federal_sources(center, 25, {}, {}, {}, stats)
+        self.assertEqual(placed, 0)
+        self.assertEqual(stats.get("federal_already_closed"), 1)
