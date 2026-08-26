@@ -3548,7 +3548,7 @@ DETAIL_WORKERS = int(os.environ.get("SCAN_DETAIL_WORKERS", "6"))
 # majority of the traffic this service generates, and it goes to public
 # agencies, so it says plainly what it is.
 CRAWLER_UA = ("CurbCallBot/1.0 (+https://curbcallpro.com; "
-              "concrete bid aggregator for concrete contractors)")
+              "concrete bid aggregator; contact support@curbcallpro.com)")
 
 
 def _page_headers():
