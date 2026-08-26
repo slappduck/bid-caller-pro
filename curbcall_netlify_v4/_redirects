@@ -1,0 +1,15 @@
+# Serve the landing page at the site root.
+#
+# Cloudflare's asset config here uses html_handling = "none", so paths are
+# served exactly as written -- /app.html comes from /app.html with no redirect
+# hop. That is deliberate: sw.js precaches explicit ".html" paths, and
+# precaching a URL that 307s to somewhere else is fragile.
+#
+# The cost of literal paths is that "/" no longer maps to index.html on its
+# own, which returned a bare 404 on the workers.dev deploy. This restores it
+# as a 200 rewrite rather than a redirect, so the address bar stays on "/"
+# and nothing gains an extra round trip.
+#
+# Same file format on Netlify and Cloudflare, so this is correct on whichever
+# host is serving.
+/    /index.html    200
