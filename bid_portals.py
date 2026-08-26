@@ -364,36 +364,48 @@ def _key(city, state):
     return f"{(city or '').strip().lower()}|{(state or '').strip().upper()}"
 
 
+def _merge_seeds(directory, entries_by_place, source, today):
+    """Add any portal URL a place does not already have.
+
+    This used to skip the whole place if it had any entry at all --
+    `if k not in directory`. The intent was precedence, so a hand-verified
+    page would not be displaced by a crawled one, but the effect was
+    exclusion: a town's SECOND portal was thrown away no matter what it was.
+
+    What that cost is specific and large. County government is keyed by its
+    county seat, so the county's bid page and the city's share one key --
+    and the city almost always got there first. Mobile County Commission sat
+    behind City of Mobile, Morgan County Commission behind City of Decatur,
+    Fairbanks North Star Borough behind City of Fairbanks. 430 verified bid
+    pages were in the CSV and unreachable by any scan.
+
+    Precedence is preserved by ORDER instead of by exclusion: existing
+    entries keep their position, new ones are appended, and callers already
+    read only the first few. So a hand-verified page is still read first, and
+    the county's page is read too.
+    """
+    for (city, state), entries in entries_by_place.items():
+        k = _key(city, state)
+        bucket = directory.setdefault(k, [])
+        have = {e.get("url") for e in bucket}
+        for e in entries:
+            if e.get("url") in have:
+                continue
+            have.add(e.get("url"))
+            bucket.append({**e, "source": source, "added": today,
+                           "last_ok": None, "last_checked": None,
+                           "fail_count": 0})
+
+
 def _seed(directory):
     today = datetime.date.today().isoformat()
-    for (city, state), entries in SEED_PORTALS.items():
-        k = _key(city, state)
-        if k not in directory:
-            directory[k] = [
-                {**e, "source": "seed", "added": today, "last_ok": None,
-                 "last_checked": None, "fail_count": 0}
-                for e in entries
-            ]
-    # Hand-verified SEED_PORTALS entries above always win for the same city --
-    # this only fills in cities the hardcoded list never covered.
-    for (city, state), entries in _national_seeds().items():
-        k = _key(city, state)
-        if k not in directory:
-            directory[k] = [
-                {**e, "source": "national_crawl", "added": today, "last_ok": None,
-                 "last_checked": None, "fail_count": 0}
-                for e in entries
-            ]
-    # Last, so a .gov page already known for a town keeps precedence: these are
-    # the towns neither list could ever have reached.
-    for (city, state), entries in _wikidata_seeds().items():
-        k = _key(city, state)
-        if k not in directory:
-            directory[k] = [
-                {**e, "source": "wikidata", "added": today, "last_ok": None,
-                 "last_checked": None, "fail_count": 0}
-                for e in entries
-            ]
+    # Order is precedence: hand-verified first, then the national crawl, then
+    # wikidata for towns neither could reach. get_portals returns them in this
+    # order and the scan reads only the first few, so the best page for a town
+    # is still the one read first.
+    _merge_seeds(directory, SEED_PORTALS, "seed", today)
+    _merge_seeds(directory, _national_seeds(), "national_crawl", today)
+    _merge_seeds(directory, _wikidata_seeds(), "wikidata", today)
 
 
 def is_aggregator_url(url):
