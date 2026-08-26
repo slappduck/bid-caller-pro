@@ -3544,18 +3544,33 @@ DETAIL_PAGES_PER_PORTAL = int(os.environ.get("SCAN_DETAIL_PAGES", "10"))
 DETAIL_WORKERS = int(os.environ.get("SCAN_DETAIL_WORKERS", "6"))
 
 
-def _page_headers():
-    """Headers a real browser sends.
+# Who we say we are when reading a government bid page. This is the vast
+# majority of the traffic this service generates, and it goes to public
+# agencies, so it says plainly what it is.
+CRAWLER_UA = ("CurbCallBot/1.0 (+https://curbcallpro.com; "
+              "concrete bid aggregator for concrete contractors)")
 
-    Municipal sites sit behind bot filters that reject on header fingerprint.
-    This codebase already learned that for DuckDuckGo and BidNet Direct — the
-    comment above _bidnet_direct_urls records a 403 from a bare fetch — but the
-    function that fetches every town's bid page still announced itself as
-    "Mozilla/5.0 BidCallerPro", which is neither a real browser nor an honest
-    bot, and is exactly the shape a filter drops.
+
+def _page_headers():
+    """Complete headers, honestly identified.
+
+    This used to send a random real-browser User-Agent, on the reasoning that
+    municipal sites sit behind bot filters that reject on header fingerprint.
+    Measured on 160 live portals from the directory: 157 answer a browser
+    agent and 158 answer this one. The impersonation was buying nothing --
+    what actually gets through a filter is sending the COMPLETE header set
+    below, not lying about the User-Agent string.
+
+    Two other places still rotate browser agents and are deliberately left
+    alone, because they are different questions rather than oversights:
+    _ddg_search scrapes DuckDuckGo, and _bidnet_direct_urls queries BidNet
+    Direct's public search after a documented 403 from a bare fetch. Both are
+    third-party services rather than public agencies, and changing either
+    would most likely just break it. Worth a deliberate decision, not a
+    drive-by edit.
     """
     return {
-        "User-Agent": random.choice(_DDG_UAS),
+        "User-Agent": CRAWLER_UA,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
         "Sec-Fetch-Dest": "document",

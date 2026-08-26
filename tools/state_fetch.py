@@ -23,8 +23,13 @@ import urllib.parse
 import urllib.request
 import urllib.robotparser
 
+# The contact URL must resolve to something a real person can act on. An
+# earlier version advertised support@curbcallpro.com, which had no MX record
+# at all -- so a state IT admin who noticed our traffic and tried to reach us
+# got a bounce, which reads worse than giving no address. Point at the site
+# until the mailbox actually exists, then put it back.
 UA = ("CurbCallBot/1.0 (+https://curbcallpro.com; "
-      "concrete bid aggregator; contact support@curbcallpro.com)")
+      "concrete bid aggregator for concrete contractors)")
 
 # A real browser sends all of these. Sending only User-Agent is what several
 # state edge configurations actually object to.
