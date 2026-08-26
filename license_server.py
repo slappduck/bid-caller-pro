@@ -16,7 +16,9 @@ ENV VARS (set in Render → your service → Environment):
   LICENSE_SECRET           license signing secret
   ADMIN_TOKEN              admin token for /issue and /revoke
   OPENAI_API_KEY           REQUIRED for local extraction
-  SAM_API_KEY              REQUIRED for federal bids (free key: sam.gov)
+  SAM_API_KEY              optional; federal bids work without it via
+                           sam.gov's public search. With a key they use the
+                           documented API instead (free: api.data.gov/signup)
   UPSTASH_REDIS_REST_URL   persistent storage (free: upstash.com) -- needed so
   UPSTASH_REDIS_REST_TOKEN   trials/keys survive restarts
   SUPABASE_URL             your Supabase project URL (https://xxx.supabase.co)
@@ -88,6 +90,7 @@ from werkzeug.exceptions import HTTPException
 import bid_portals
 import bid_sources
 import counties
+import federal_bids
 import kv_backend
 import gov_directory
 import residential_permits
@@ -447,6 +450,11 @@ def health_detail():
         "is_sole_local_search": not (backends["brave_search"] or backends["tavily"]),
     }
     problems = []
+    # Things worth saying that are not degradations. Kept separate from
+    # problems on purpose: problems drive "status": "degraded", and a
+    # configuration that is merely less durable than it could be should not
+    # make a healthy service look sick.
+    notes = []
     # A configured-but-rejected key is worse than an absent one: everything
     # keeps returning 200 and scans just quietly come back nearly empty.
     if backends["brave_search"] and brave["quota_or_auth_failure"]:
@@ -487,7 +495,14 @@ def health_detail():
         problems.append("No search API configured — local search depends solely on "
                         "scraping DuckDuckGo. Set BRAVE_API_KEY.")
     if not backends["sam_gov"]:
-        problems.append("SAM_API_KEY unset — no federal bids in results")
+        # Not a problem any more, just a downgrade: without a key the federal
+        # reader falls back to sam.gov's public search, which serves the same
+        # data but is an undocumented endpoint and so could change shape
+        # without notice. Worth saying, not worth alarming about.
+        notes.append("SAM_API_KEY unset — federal bids are using sam.gov's "
+                     "public search rather than the documented API. Both "
+                     "work; a free key at api.data.gov/signup makes the "
+                     "federal source contractually stable.")
     if not kv_backend.is_durable():
         problems.append(
             "No durable storage configured — licences, trial records, the portal "
@@ -523,6 +538,7 @@ def health_detail():
         "email": {k: email_health[k] for k in
                   ("ok", "failed", "last_status", "failing")},
         "problems": problems,
+        "notes": notes,
     }
     if not _admin_ok(request.headers.get("X-Admin-Token")):
         return jsonify(body)
@@ -3780,24 +3796,59 @@ def _bidnet_direct_urls(keywords, state_abbr, max_results=5):
 # FEDERAL SEARCH  (SAM.gov)
 # ═══════════════════════════════════════════════════════════
 SAM_API_KEY = os.environ.get("SAM_API_KEY", "")
+# api.data.gov, not api.sam.gov. The previous default,
+# api.sam.gov/prod/opportunities/v2/search, answers 404 -- every path under
+# that host does, including the ones the docs used to name. So federal bids
+# could not have worked even with a key set, which is consistent with there
+# never having been a funnel counter for them. api.data.gov/sam/... is live:
+# it answers 429 OVER_RATE_LIMIT to the shared DEMO_KEY, which is a rate
+# limit on a real endpoint rather than a wrong address.
 SAM_SEARCH_URL = os.environ.get(
-    "SAM_SEARCH_URL", "https://api.sam.gov/prod/opportunities/v2/search")
+    "SAM_SEARCH_URL", "https://api.data.gov/sam/opportunities/v2/search")
 SCAN_WINDOW_DAYS = int(os.environ.get("SCAN_WINDOW_DAYS", "60"))
 
-# Deliberately narrow to the product's actual niche. An earlier version OR'd
-# this keyword check with "NAICS starts with 236/237/238" -- but that top-level
-# bucket covers every construction trade there is (electricians, HVAC, roofers,
-# painters...), so on a state with a lot of federal opportunity volume it let
-# in a flood of bids with nothing to do with concrete. Title-keyword match
-# only, against niche terms -- lower recall, but recall on the wrong bids
-# isn't useful to a contractor scanning for sidewalk/curb/concrete work.
+# Title keywords, kept as the fallback for a notice with no NAICS code on it.
+#
+# The history matters: an earlier version OR'd this with "NAICS starts with
+# 236/237/238", which is every construction trade there is -- electricians,
+# roofers, painters -- and let in a flood. Dropping to keywords-only fixed
+# that but overcorrected, because a federal title is written for a
+# contracting file, not a search box. Three real jobs found in one probe --
+# "Whiteman AFB - FY27 Airfield Pavement", "Ft Leavenworth Asphalt Pavement
+# Rehabilitation", "NICO Interpretive Waysides and Walk Improvements" -- are
+# all our trade and none of them match a single term below as it stood.
+#
+# The answer is not a longer keyword list. It is the six-digit NAICS code,
+# which states the trade outright: see federal_bids.CONCRETE_NAICS. Keywords
+# now only decide notices that arrive without one.
 CONSTRUCTION_KEYWORDS = (
     "sidewalk", "ada ramp", "curb ramp", "curb and gutter", "curb & gutter",
-    "concrete", "flatwork", "pedestrian ramp",
+    "concrete", "flatwork", "pedestrian ramp", "pavement", "paving",
+    "resurfac", "walkway", "hardscape", "curb replacement",
 )
 
 
+def _opp_naics(opp):
+    """The NAICS code on a notice, in either transport's spelling."""
+    code = opp.get("naicsCode") or opp.get("naics") or ""
+    if isinstance(code, list) and code:
+        first = code[0]
+        code = (first.get("code") if isinstance(first, dict) else first) or ""
+        if isinstance(code, list) and code:
+            code = code[0]
+    return str(code or "").strip()
+
+
 def _is_construction(opp):
+    """True if this federal notice is our trade.
+
+    NAICS first, because it is an assertion rather than an inference: 238110
+    IS "poured concrete foundation and structure contractor". A title only
+    hints. Keywords stay for notices posted without a code.
+    """
+    naics = _opp_naics(opp)
+    if naics:
+        return naics in federal_bids.CONCRETE_NAICS
     title = (opp.get("title") or "").lower()
     return any(k in title for k in CONSTRUCTION_KEYWORDS)
 
@@ -5320,6 +5371,177 @@ def _run_state_sources(center, radius, grouped, city_coords=None, stats=None):
     return placed
 
 
+# One scan's ceiling on detail reads on the keyless transport. Its search
+# response carries no location and no contact, so a detail fetch is the only
+# way to learn either -- one request per candidate. Measured over MO/KS/AR the
+# real number was twelve, so this is headroom, not a constraint that bites.
+# The keyed transport needs none of this: its search payload is already full.
+FEDERAL_DETAIL_MAX = int(os.environ.get("SCAN_FEDERAL_MAX", "30"))
+FEDERAL_WORKERS = int(os.environ.get("SCAN_FEDERAL_WORKERS", "6"))
+FEDERAL_TIMEOUT = int(os.environ.get("SCAN_FEDERAL_TIMEOUT", "30"))
+
+
+def _federal_states(center, radius):
+    """Every state the radius touches, not just the one under the pin.
+
+    The old federal block asked SAM for center["state"] alone. That is the
+    same bug _place_bid documents for cities: a 125-mile circle is usually
+    several states wide, and the whole reason somebody picks that radius is
+    to see across the line.
+    """
+    try:
+        states = counties.states_within(center["lat"], center["lon"], radius)
+    except Exception:
+        states = [str(center.get("state") or "").upper()]
+    return [s for s in states if s]
+
+
+def _federal_keyed(states, stats):
+    """Candidates from the documented, keyed API.
+
+    Its payload is complete -- place of performance and point of contact
+    arrive with the search row -- so this needs no second request per notice.
+    """
+    out = []
+    for st in states:
+        try:
+            opps = _sam_fetch(st) or []
+        except Exception:
+            _bump(stats, "federal_search_error")
+            continue
+        for opp in opps:
+            if not _is_construction(opp):
+                continue
+            bid, city, perf_state = _normalize_opp(opp)
+            bid["city"], bid["state"] = city, perf_state
+            out.append(bid)
+    return out
+
+
+def _federal_public(states, stats):
+    """Candidates from sam.gov's own unauthenticated search.
+
+    Exists so federal bids work before anybody has registered a key. Same
+    public-domain data, one extra fetch per notice because this transport's
+    search index omits location and contact.
+    """
+    seen, candidates = set(), []
+    # NAICS queries are trusted outright; PSC queries are not, because the
+    # code is broader than the trade. See federal_bids.CONCRETE_PSC.
+    queries = ([({"naics": n}, True) for n in federal_bids.CONCRETE_NAICS] +
+               [({"psc": c}, False) for c in federal_bids.CONCRETE_PSC])
+    for st in states:
+        for params, trusted in queries:
+            try:
+                page, outcome = _fetch_page(
+                    federal_bids.search_url(state=st, **params),
+                    timeout=FEDERAL_TIMEOUT)
+            except Exception:
+                _bump(stats, "federal_search_error")
+                continue
+            if outcome != "ok" or not page:
+                _bump(stats, "federal_search_%s" % outcome)
+                continue
+            try:
+                rows = federal_bids.parse_search(page)
+            except Exception:
+                _bump(stats, "federal_search_unparsed")
+                continue
+            for row in rows:
+                if not row.get("active") or not row.get("id"):
+                    continue
+                if not trusted and not bid_sources.looks_relevant(
+                        row.get("title")):
+                    _bump(stats, "federal_psc_off_trade")
+                    continue
+                # Collapse amendments BEFORE spending a detail fetch. A
+                # solicitation reappears with every amendment and each is the
+                # same job -- Fort Leavenworth's asphalt contract showed up
+                # three times in one probe. The notice id changes; the
+                # solicitation number does not, so key on that.
+                key = (row.get("solicitation") or row["id"]).lower()
+                if key in seen:
+                    _bump(stats, "federal_amendment_collapsed")
+                    continue
+                seen.add(key)
+                candidates.append(row)
+    if len(candidates) > FEDERAL_DETAIL_MAX:
+        _bump(stats, "federal_over_budget")
+        candidates = candidates[:FEDERAL_DETAIL_MAX]
+
+    def _detail(row):
+        try:
+            raw, outcome = _fetch_page(federal_bids.detail_url(row["id"]),
+                                       timeout=FEDERAL_TIMEOUT)
+        except Exception:
+            return None
+        if outcome != "ok" or not raw:
+            return None
+        try:
+            return federal_bids.to_bid(row, federal_bids.parse_detail(raw))
+        except Exception:
+            return None
+
+    if not candidates:
+        return []
+    with ThreadPoolExecutor(max_workers=FEDERAL_WORKERS) as ex:
+        return [b for b in ex.map(_detail, candidates) if b]
+
+
+def _bump(stats, reason):
+    if stats is not None:
+        stats[reason] = stats.get(reason, 0) + 1
+
+
+def _run_federal_sources(center, radius, grouped, cdb, city_coords=None,
+                         stats=None, pdb=None):
+    """Add federal solicitations whose work falls inside the radius.
+
+    Federal work was already wired up but could never have produced a bid:
+    the default endpoint 404s, the relevance test was title-keywords that
+    real federal titles do not use, and only the centre state was asked.
+    Roughly 1,200 notices in the concrete NAICS codes are open nationwide at
+    any moment and the app saw none of them.
+
+    Worth more than its count suggests, because of what arrives with each
+    one. Of nine placeable jobs in a MO/KS/AR probe, nine had a named
+    contracting officer with a phone or an email, and all nine were
+    small-business set-asides. Contacts are the app's second-biggest quality
+    gap everywhere else; here they are simply part of the record, and no
+    extraction call is spent to get them.
+    """
+    states = _federal_states(center, radius)
+    if not states:
+        return 0
+    bids = (_federal_keyed(states, stats) if SAM_API_KEY
+            else _federal_public(states, stats))
+    placed = 0
+    for bid in bids:
+        if not bid:
+            _bump(stats, "federal_unplaceable")
+            continue
+        _apply_deadline_status(bid)
+        # Same rule the state reader applies. "Active" at SAM means the
+        # notice is live, not that its response date is still ahead: three
+        # of twelve probe hits were already past theirs.
+        if not _is_open_bid(bid):
+            _bump(stats, "federal_already_closed")
+            continue
+        before = sum(len(v) for v in grouped.values())
+        _place_bid(grouped, bid, center, radius, cdb,
+                   default_city=bid.get("city", ""),
+                   city_coords=city_coords,
+                   default_state=bid.get("state", ""),
+                   stats=stats, pdb=pdb)
+        if sum(len(v) for v in grouped.values()) > before:
+            placed += 1
+            _bump(stats, "federal_kept")
+    print("[scan] %d federal bids from %d candidate(s) in %s (%s transport)"
+          % (placed, len(bids), ",".join(states),
+             "keyed" if SAM_API_KEY else "public"), flush=True)
+    return placed
+
+
 ENRICH_MAX = int(os.environ.get("SCAN_ENRICH_MAX", "14"))
 
 SCAN_HISTORY_KEY = "bidcaller:scan_history"
@@ -5725,15 +5947,12 @@ def _perform_scan(location, radius, force=False):
     # fetch per state, at most four states in a 125-mile circle.
     _run_state_sources(center, radius, grouped, city_coords, drop_stats)
 
-    # ---- FEDERAL: SAM.gov for the state, radius-filtered ----
-    if SAM_API_KEY:
-        for opp in (_sam_fetch(center["state"]) or []):
-            if not _is_construction(opp):
-                continue
-            bid, city, perf_state = _normalize_opp(opp)
-            _place_bid(grouped, bid, center, radius, cdb, default_city=city,
-                      city_coords=city_coords, default_state=perf_state,
-                      stats=drop_stats)
+    # ---- FEDERAL: SAM.gov across every state the radius touches ----
+    # No longer gated on SAM_API_KEY: with a key it uses the documented API,
+    # without one it reads sam.gov's own public search. Same public-domain
+    # data either way, so the feature is not dark until somebody registers.
+    _run_federal_sources(center, radius, grouped, cdb, city_coords,
+                         drop_stats, pdb)
 
     # Read the posting behind every bid that still has no contact and no
     # deadline. Enrichment used to happen only inside the structured CivicPlus
