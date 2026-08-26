@@ -51,7 +51,8 @@ we want; procurement platforms field this question regularly.
 
 ---
 
-**To:** Infotech / Bid Express support
+**To:** `bidx.support@infotechinc.com` (found on bidx.com's contact page —
+Infotech's public address there is marketing@, which is the wrong desk)
 **Subject:** API access for reading open solicitations
 
 > Hello,
@@ -88,3 +89,27 @@ hand-checking individual states for a public page (today's evidence puts the
 hit rate low), or accept three states and spend the effort on the levers that
 make existing bids better — deep links on state bids, the contact gap, and the
 closed-bid share.
+
+
+## Status
+
+A Gmail draft of the email below was created on 2026-08-25, addressed to
+`bidx.support@infotechinc.com`. It has **not** been sent — that is Josh's to
+review and send.
+
+## A second route, found while looking for the support address
+
+`bidx.com/site/contact_us` is not a Bid Express support page at all. It is a
+**directory of named procurement contacts at every agency on the platform** —
+person, phone and email for Alabama DOT, Alaska DOT&PF, Nebraska, Iowa DOT,
+SCDOT, NJ DOT, WV DOH, the NY Thruway and the rest.
+
+That is worth knowing independently of the API question. If Infotech says no,
+the fallback is not scraping — it is asking the agencies themselves whether
+they publish an open-solicitation feed, and this page is the contact list for
+doing that. Several states may well have a public feed nobody has found
+because the crawler cannot guess its URL.
+
+Treat that list the way the plan-holder rule treats its contacts: these are
+named public servants with published work addresses, appropriate to email
+individually with a real question. Not a marketing list.
