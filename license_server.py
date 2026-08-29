@@ -537,6 +537,18 @@ def health_detail():
                     "quota_or_auth_failure", "failing")},
         "email": {k: email_health[k] for k in
                   ("ok", "failed", "last_status", "failing")},
+        # Endpoint and status, never credentials -- the same split "search"
+        # and "email" use above. A stale SAM_SEARCH_URL env var still
+        # pointing at the old api.sam.gov/prod address is the likeliest
+        # reason a configured key yields nothing, and it was invisible from
+        # outside: the Smiley scan could only report "failed". last_status
+        # names it -- 403 rejected key, 404 wrong endpoint, 429 rate limit.
+        "sam_gov": {
+            "endpoint": SAM_SEARCH_URL,
+            "key_configured": bool(SAM_API_KEY),
+            "window_days": SAM_WINDOW_DAYS,
+            "last_status": _sam_health["last_status"],
+        },
         "problems": problems,
         "notes": notes,
     }
@@ -568,16 +580,7 @@ def health_detail():
             "model": OPENAI_MODEL,                    # OPENAI_MODEL
         },
     })
-    # Endpoint, not credentials. A stale SAM_SEARCH_URL env var pointing at
-    # the old api.sam.gov/prod address is the likeliest reason a configured
-    # key produces nothing, and it is invisible from the outside otherwise.
-    body["sam_gov"] = {
-        "endpoint": SAM_SEARCH_URL,
-        "key_configured": bool(SAM_API_KEY),
-        "window_days": SAM_WINDOW_DAYS,
-        "last_status": _sam_health["last_status"],
-        "last_error": _sam_health["last_error"],
-    }
+    body["sam_gov"]["last_error"] = _sam_health["last_error"]
     body["brave_search"]["last_error"] = brave["last_error"]
     body["tavily"]["last_error"] = tav["last_error"]
     body["email"]["last_error"] = email_health["last_error"]

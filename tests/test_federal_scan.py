@@ -332,12 +332,27 @@ class SamHealthTests(unittest.TestCase):
             self.assertNotIn("api_key=REAL", ls._sam_scrub(junk))
 
     def test_health_reports_the_endpoint_but_not_the_key(self):
+        """The endpoint and status go in the PUBLIC half of /health -- the
+        same split search and email already use -- because the whole point is
+        being able to see a stale SAM_SEARCH_URL from outside. last_error
+        stays admin-gated, since provider error bodies can echo request
+        detail."""
         import inspect
         src = inspect.getsource(ls)
-        block = src[src.index('body["sam_gov"] = {'):]
-        block = block[:block.index("}")]
+        block = src[src.index('"sam_gov": {'):]
+        block = block[:block.index("},")]
         self.assertIn("endpoint", block)
-        self.assertIn("key_configured", block)
-        # bool(...) only -- the key itself must never be in the body.
-        self.assertNotIn('"key": SAM_API_KEY', block)
+        self.assertIn("last_status", block)
+        # bool(...) only -- the key itself must never reach the body.
         self.assertIn("bool(SAM_API_KEY)", block)
+        self.assertNotIn('"key"', block)
+        self.assertNotIn("last_error", block)
+
+    def test_the_public_block_really_is_public(self):
+        """It must sit before the admin early-return, or it is invisible to
+        exactly the person who needs it. This is the mistake that made the
+        first attempt useless."""
+        import inspect
+        src = inspect.getsource(ls)
+        self.assertLess(src.index('"sam_gov": {'),
+                        src.index("if not _admin_ok(request.headers"))
