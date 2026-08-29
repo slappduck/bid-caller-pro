@@ -356,3 +356,43 @@ class SamHealthTests(unittest.TestCase):
         src = inspect.getsource(ls)
         self.assertLess(src.index('"sam_gov": {'),
                         src.index("if not _admin_ok(request.headers"))
+
+
+class RejectedKeyIsReportedTests(unittest.TestCase):
+    """A configured-but-rejected key is worse than an absent one: /health says
+    sam_gov is True, every request returns 200, and federal bids quietly come
+    only from the fallback. This is the shape of failure that cost two rounds
+    of scans to find, so the server has to name it and name the fix."""
+
+    def setUp(self):
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(root, "license_server.py"), encoding="utf-8") as fh:
+            self.src = fh.read()
+
+    def test_a_403_is_reported_as_a_problem(self):
+        i = self.src.index('_sam_health["last_status"] == 403')
+        block = self.src[i:i + 900]
+        self.assertIn("problems.append", block)
+        self.assertIn("API_KEY_INVALID", block)
+
+    def test_the_message_names_the_actual_fix(self):
+        i = self.src.index('_sam_health["last_status"] == 403')
+        block = self.src[i:i + 900]
+        self.assertIn("api.data.gov/signup", block)
+        # The commonest cause, and the one that cost the time here.
+        self.assertIn("sam.gov's own profile page", block)
+
+    def test_it_says_this_is_not_an_outage(self):
+        """The public fallback keeps federal bids flowing, so a rejected key
+        must not read as 'federal bids are down'."""
+        i = self.src.index('_sam_health["last_status"] == 403')
+        block = self.src[i:i + 900]
+        self.assertIn("not an outage", block)
+
+    def test_a_rate_limit_is_a_note_not_a_problem(self):
+        """429 is temporary and the fallback covers it, so it must not mark
+        the whole service degraded."""
+        i = self.src.index('_sam_health["last_status"] == 429')
+        block = self.src[i:i + 400]
+        self.assertIn("notes.append", block)
+        self.assertNotIn("problems.append", block)

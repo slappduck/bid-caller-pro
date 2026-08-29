@@ -494,6 +494,23 @@ def health_detail():
     elif ddg["is_sole_local_search"]:
         problems.append("No search API configured — local search depends solely on "
                         "scraping DuckDuckGo. Set BRAVE_API_KEY.")
+    # A configured-but-rejected key is worse than no key: /health says
+    # sam_gov is True, everything returns 200, and federal bids quietly come
+    # only from the fallback. Name it, and name the fix -- 403 from
+    # api.data.gov is literally API_KEY_INVALID, and the commonest cause is
+    # using a key issued by sam.gov's own profile page, which is a different
+    # credential from an api.data.gov one.
+    if backends["sam_gov"] and _sam_health["last_status"] == 403:
+        problems.append(
+            "SAM_API_KEY is being rejected (403 API_KEY_INVALID). Federal "
+            "bids are still arriving via sam.gov's public search, so this is "
+            "not an outage, but the documented API is unavailable. Get a free "
+            "key at https://api.data.gov/signup and set SAM_API_KEY to it — "
+            "a key from sam.gov's own profile page is a different credential "
+            "and will not work here.")
+    elif backends["sam_gov"] and _sam_health["last_status"] == 429:
+        notes.append("SAM_API_KEY is rate-limited (429). Federal bids fall "
+                     "back to sam.gov's public search meanwhile.")
     if not backends["sam_gov"]:
         # Not a problem any more, just a downgrade: without a key the federal
         # reader falls back to sam.gov's public search, which serves the same
