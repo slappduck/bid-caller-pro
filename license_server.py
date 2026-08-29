@@ -568,6 +568,16 @@ def health_detail():
             "model": OPENAI_MODEL,                    # OPENAI_MODEL
         },
     })
+    # Endpoint, not credentials. A stale SAM_SEARCH_URL env var pointing at
+    # the old api.sam.gov/prod address is the likeliest reason a configured
+    # key produces nothing, and it is invisible from the outside otherwise.
+    body["sam_gov"] = {
+        "endpoint": SAM_SEARCH_URL,
+        "key_configured": bool(SAM_API_KEY),
+        "window_days": SAM_WINDOW_DAYS,
+        "last_status": _sam_health["last_status"],
+        "last_error": _sam_health["last_error"],
+    }
     body["brave_search"]["last_error"] = brave["last_error"]
     body["tavily"]["last_error"] = tav["last_error"]
     body["email"]["last_error"] = email_health["last_error"]
@@ -3864,6 +3874,18 @@ def _is_construction(opp):
 SAM_WINDOW_DAYS = int(os.environ.get("SAM_WINDOW_DAYS", "365"))
 
 
+# What SAM said last time, so a failure can be diagnosed from /health instead
+# of from a scan funnel that only says "failed". The API key is NEVER in here:
+# it travels as a query parameter, so anything derived from the URL is scrubbed
+# before it is stored.
+_sam_health = {"last_status": None, "last_error": ""}
+
+
+def _sam_scrub(text):
+    """Remove the api_key from anything about to be shown or logged."""
+    return re.sub(r"(api_key=)[^&\s]+", r"\1<redacted>", str(text or ""))
+
+
 def _sam_fetch(state):
     """Opportunities for one state, or None if the request itself failed.
 
@@ -3885,10 +3907,28 @@ def _sam_fetch(state):
         "limit": "1000",
         "offset": "0",
     }
-    data = _get_json(SAM_SEARCH_URL + "?" + urllib.parse.urlencode(params),
-                     headers={"Accept": "application/json"}, timeout=60)
-    if data is None:
-        return None                      # request failed -- caller must know
+    url = SAM_SEARCH_URL + "?" + urllib.parse.urlencode(params)
+    try:
+        req = urllib.request.Request(
+            url, headers={"Accept": "application/json",
+                          "User-Agent": CRAWLER_UA})
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        # The status is the whole diagnosis: 403 is a rejected key, 404 is a
+        # wrong endpoint (SAM_SEARCH_URL still pointing at the old
+        # api.sam.gov/prod address), 429 is a rate limit. "failed" alone sent
+        # us guessing once already.
+        _sam_health["last_status"] = e.code
+        _sam_health["last_error"] = _sam_scrub(str(e))
+        return None
+    except Exception as e:
+        _sam_health["last_status"] = None
+        _sam_health["last_error"] = _sam_scrub(
+            "%s: %s" % (type(e).__name__, e))
+        return None
+    _sam_health["last_status"] = 200
+    _sam_health["last_error"] = ""
     return data.get("opportunitiesData") or []
 
 

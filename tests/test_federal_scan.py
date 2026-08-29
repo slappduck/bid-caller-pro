@@ -305,3 +305,39 @@ class PostedWindowTests(unittest.TestCase):
         import inspect
         src = inspect.getsource(ls._run_federal_sources)
         self.assertIn("_is_open_bid", src)
+
+
+class SamHealthTests(unittest.TestCase):
+    """A failed SAM request has to say WHY.
+
+    The Smiley, TX scan reported federal_search_failed and nothing more,
+    which left "is the key rejected or is SAM_SEARCH_URL still pointing at
+    the old address" unanswerable from outside the box. The status code is
+    the whole diagnosis: 403 rejected key, 404 wrong endpoint, 429 rate
+    limit.
+    """
+
+    def test_the_api_key_is_never_stored_or_shown(self):
+        """It travels as a query parameter, so any error text derived from
+        the URL would carry it into /health, the logs and this repo."""
+        dirty = ("HTTP Error 403: Forbidden for url "
+                 "https://api.data.gov/sam/opportunities/v2/search"
+                 "?api_key=REAL_SECRET_KEY&limit=1000")
+        clean = ls._sam_scrub(dirty)
+        self.assertNotIn("REAL_SECRET_KEY", clean)
+        self.assertIn("<redacted>", clean)
+
+    def test_scrubbing_survives_an_empty_or_odd_input(self):
+        for junk in (None, "", 42, "no key here"):
+            self.assertNotIn("api_key=REAL", ls._sam_scrub(junk))
+
+    def test_health_reports_the_endpoint_but_not_the_key(self):
+        import inspect
+        src = inspect.getsource(ls)
+        block = src[src.index('body["sam_gov"] = {'):]
+        block = block[:block.index("}")]
+        self.assertIn("endpoint", block)
+        self.assertIn("key_configured", block)
+        # bool(...) only -- the key itself must never be in the body.
+        self.assertNotIn('"key": SAM_API_KEY', block)
+        self.assertIn("bool(SAM_API_KEY)", block)
