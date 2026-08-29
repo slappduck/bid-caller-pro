@@ -563,7 +563,7 @@ def health_detail():
             "max_pages_per_domain": MAX_PAGES_PER_DOMAIN,  # SCAN_MAX_PAGES_PER_DOMAIN
             "max_anchor_towns": MAX_ANCHOR_TOWNS,     # SCAN_MAX_ANCHORS
             "max_known_towns": MAX_KNOWN_TOWNS,       # SCAN_MAX_KNOWN_TOWNS
-            "federal_window_days": SCAN_WINDOW_DAYS,  # SCAN_WINDOW_DAYS
+            "federal_window_days": SAM_WINDOW_DAYS,  # SAM_WINDOW_DAYS
             "geo_miss_retry_hours": GEO_MISS_RETRY_HOURS,
             "model": OPENAI_MODEL,                    # OPENAI_MODEL
         },
@@ -3853,13 +3853,33 @@ def _is_construction(opp):
     return any(k in title for k in CONSTRUCTION_KEYWORDS)
 
 
+# How far back to ask SAM for postings. NOT SCAN_WINDOW_DAYS, which is 60:
+# that window is about how fresh a municipal listing should be, and applying
+# it here hid every solicitation posted more than two months ago no matter how
+# far in the future its response date was. Federal construction work is
+# routinely posted long before it closes -- "Little Rock AFB Base Pavements
+# IDIQ FY25" is exactly that shape -- so the posting date is the wrong thing
+# to filter on. SAM caps the range at one year, so this asks for all of it and
+# lets _is_open_bid decide what is still biddable.
+SAM_WINDOW_DAYS = int(os.environ.get("SAM_WINDOW_DAYS", "365"))
+
+
 def _sam_fetch(state):
+    """Opportunities for one state, or None if the request itself failed.
+
+    The None/[] distinction is the whole point. This used to end with
+    `(data or {}).get("opportunitiesData") or []`, which turned a rejected
+    API key, a timeout and a genuinely empty state into the same empty list
+    -- so a broken federal source looked exactly like a quiet one, and the
+    first live scan after shipping it produced no federal counters at all
+    with no way to tell which had happened.
+    """
     if not SAM_API_KEY:
         return None
     today = datetime.datetime.now()
     params = {
         "api_key": SAM_API_KEY,
-        "postedFrom": (today - datetime.timedelta(days=SCAN_WINDOW_DAYS)).strftime("%m/%d/%Y"),
+        "postedFrom": (today - datetime.timedelta(days=SAM_WINDOW_DAYS)).strftime("%m/%d/%Y"),
         "postedTo": today.strftime("%m/%d/%Y"),
         "state": state,
         "limit": "1000",
@@ -3867,7 +3887,9 @@ def _sam_fetch(state):
     }
     data = _get_json(SAM_SEARCH_URL + "?" + urllib.parse.urlencode(params),
                      headers={"Accept": "application/json"}, timeout=60)
-    return (data or {}).get("opportunitiesData") or []
+    if data is None:
+        return None                      # request failed -- caller must know
+    return data.get("opportunitiesData") or []
 
 
 def _sam_notice_url(notice_id):
@@ -5402,19 +5424,34 @@ def _federal_keyed(states, stats):
     Its payload is complete -- place of performance and point of contact
     arrive with the search row -- so this needs no second request per notice.
     """
-    out = []
+    out, failed = [], 0
     for st in states:
         try:
-            opps = _sam_fetch(st) or []
+            opps = _sam_fetch(st)
         except Exception:
-            _bump(stats, "federal_search_error")
+            opps = None
+        if opps is None:
+            failed += 1
+            _bump(stats, "federal_search_failed")
             continue
+        if not opps:
+            _bump(stats, "federal_search_empty")
+            continue
+        _bump(stats, "federal_search_ok")
         for opp in opps:
             if not _is_construction(opp):
                 continue
             bid, city, perf_state = _normalize_opp(opp)
             bid["city"], bid["state"] = city, perf_state
             out.append(bid)
+    # A rejected key must not mean no federal bids at all. The public
+    # transport reads the same public-domain data and needs no credentials,
+    # so fall back to it rather than going quiet -- which is what happened
+    # here: the keyed path returned nothing, bumped nothing, and the public
+    # one could see eight active Texas notices the whole time.
+    if failed and failed == len(states):
+        _bump(stats, "federal_fell_back_to_public")
+        return _federal_public(states, stats)
     return out
 
 

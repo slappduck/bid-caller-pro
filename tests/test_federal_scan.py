@@ -190,7 +190,8 @@ class KeyedTransportTests(unittest.TestCase):
         stats = {}
         bids = ls._federal_keyed(["MO", "KS", "IA"], stats)
         self.assertEqual(len(bids), 2)
-        self.assertEqual(stats.get("federal_search_error"), 1)
+        self.assertEqual(stats.get("federal_search_failed"), 1)
+        self.assertEqual(stats.get("federal_search_ok"), 2)
 
     def test_the_runner_places_a_keyed_bid_end_to_end(self):
         center = {"city": "Saint Louis", "state": "MO",
@@ -216,3 +217,91 @@ class KeyedTransportTests(unittest.TestCase):
         placed = ls._run_federal_sources(center, 25, {}, {}, {}, stats)
         self.assertEqual(placed, 0)
         self.assertEqual(stats.get("federal_already_closed"), 1)
+
+
+class SilentFailureTests(unittest.TestCase):
+    """A broken federal source must not look like a quiet one.
+
+    The first live scan after shipping federal bids produced no federal
+    counters at all -- not federal_kept, not an error -- and there was no way
+    to tell whether SAM had nothing near that town or the request had failed.
+    _sam_fetch ended with `(data or {}).get(...) or []`, so a rejected key, a
+    timeout and a genuinely empty state were the same empty list. Meanwhile
+    the keyless transport could see eight active Texas notices.
+    """
+
+    def setUp(self):
+        self._fetch, self._key = ls._sam_fetch, ls.SAM_API_KEY
+        ls.SAM_API_KEY = "test-key"
+
+    def tearDown(self):
+        ls._sam_fetch, ls.SAM_API_KEY = self._fetch, self._key
+
+    def test_a_failed_request_is_counted_as_a_failure(self):
+        ls._sam_fetch = lambda state: None
+        stats = {}
+        ls._federal_keyed(["MO"], stats)
+        self.assertEqual(stats.get("federal_search_failed"), 1)
+        self.assertIsNone(stats.get("federal_search_empty"))
+
+    def test_a_genuinely_empty_state_is_counted_differently(self):
+        ls._sam_fetch = lambda state: []
+        stats = {}
+        ls._federal_keyed(["MO"], stats)
+        self.assertEqual(stats.get("federal_search_empty"), 1)
+        self.assertIsNone(stats.get("federal_search_failed"))
+
+    def test_a_working_state_is_visible_too(self):
+        """Silence is the enemy: a source that worked should say so, or a
+        scan with no federal bids is still unexplained."""
+        ls._sam_fetch = lambda state: [{"title": "Janitorial", "active": "Yes",
+                                        "naicsCode": "561720"}]
+        stats = {}
+        ls._federal_keyed(["MO"], stats)
+        self.assertEqual(stats.get("federal_search_ok"), 1)
+
+    def test_a_dead_key_falls_back_to_the_public_transport(self):
+        """A rejected key must not mean no federal bids at all -- the public
+        endpoint reads the same public-domain data with no credentials."""
+        ls._sam_fetch = lambda state: None
+        calls = []
+        real_public = ls._federal_public
+        ls._federal_public = lambda states, stats: calls.append(states) or []
+        try:
+            stats = {}
+            ls._federal_keyed(["MO", "KS"], stats)
+        finally:
+            ls._federal_public = real_public
+        self.assertEqual(calls, [["MO", "KS"]])
+        self.assertEqual(stats.get("federal_fell_back_to_public"), 1)
+
+    def test_one_bad_state_does_not_trigger_the_fallback(self):
+        """The fallback is for a broken transport, not a flaky request. If
+        any state answered, the keyed path is working."""
+        ls._sam_fetch = lambda state: None if state == "KS" else []
+        calls = []
+        real_public = ls._federal_public
+        ls._federal_public = lambda states, stats: calls.append(states) or []
+        try:
+            stats = {}
+            ls._federal_keyed(["MO", "KS"], stats)
+        finally:
+            ls._federal_public = real_public
+        self.assertEqual(calls, [])
+        self.assertEqual(stats.get("federal_search_failed"), 1)
+
+
+class PostedWindowTests(unittest.TestCase):
+    def test_the_sam_window_is_not_the_municipal_one(self):
+        """SCAN_WINDOW_DAYS is 60 and is about how fresh a municipal listing
+        should be. Applied to SAM it hid every solicitation posted more than
+        two months ago however far ahead its response date was -- which is
+        the normal shape of federal construction work."""
+        self.assertGreaterEqual(ls.SAM_WINDOW_DAYS, 365)
+        self.assertNotEqual(ls.SAM_WINDOW_DAYS, ls.SCAN_WINDOW_DAYS)
+
+    def test_the_posting_date_is_not_what_decides_openness(self):
+        """_is_open_bid does, on the response date."""
+        import inspect
+        src = inspect.getsource(ls._run_federal_sources)
+        self.assertIn("_is_open_bid", src)
