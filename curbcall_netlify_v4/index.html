@@ -34,6 +34,13 @@ nav{position:sticky;top:0;z-index:40;background:rgba(11,13,20,0.82);backdrop-fil
 .logo b{color:var(--amber);font-weight:400;}
 .nav-links{display:flex;align-items:center;gap:1.6rem;}
 .nav-links a{color:var(--text2);font-size:0.9rem;font-weight:600;}
+/* The Launch App button is an <a> inside .nav-links, so the rule above
+   was repainting its label --text2 over amber: a contrast ratio of
+   1.16:1 on the page's primary conversion button, against 8.64:1 for
+   the identical hero CTA. A button carries its own colour wherever it
+   is put, so state that at a specificity the container cannot beat. */
+.nav-links a.btn-amber{color:#10131c;}
+.nav-links a.btn-line{color:var(--text);}
 .nav-links a:hover{color:var(--text);}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:0.5rem;font-weight:800;border-radius:10px;cursor:pointer;border:none;font-family:var(--ui);transition:transform .12s,background .15s;}
 .btn:active{transform:translateY(1px);}
