@@ -3892,6 +3892,14 @@ def _is_construction(opp):
 # to filter on. SAM caps the range at one year, so this asks for all of it and
 # lets _is_open_bid decide what is still biddable.
 SAM_WINDOW_DAYS = int(os.environ.get("SAM_WINDOW_DAYS", "365"))
+# Per request, not per scan. With a NAICS filter applied server-side a state
+# returns a handful of rows, so this is headroom rather than a page size to
+# work through. It replaces limit=1000, which downloaded a year of every
+# federal solicitation in the state and filtered locally.
+SAM_PAGE_LIMIT = int(os.environ.get("SAM_PAGE_LIMIT", "100"))
+# 60 seconds times five trade codes times four states is not a timeout, it is
+# an outage. A scan has a time budget and SAM is one source inside it.
+SAM_TIMEOUT = int(os.environ.get("SAM_TIMEOUT", "15"))
 
 
 # What SAM said last time, so a failure can be diagnosed from /health instead
@@ -3906,15 +3914,21 @@ def _sam_scrub(text):
     return re.sub(r"(api_key=)[^&\s]+", r"\1<redacted>", str(text or ""))
 
 
-def _sam_fetch(state):
-    """Opportunities for one state, or None if the request itself failed.
+def _sam_fetch(state, ncode=None, ccode=None):
+    """One page of opportunities for a state, narrowed server-side.
 
-    The None/[] distinction is the whole point. This used to end with
-    `(data or {}).get("opportunitiesData") or []`, which turned a rejected
-    API key, a timeout and a genuinely empty state into the same empty list
-    -- so a broken federal source looked exactly like a quiet one, and the
-    first live scan after shipping it produced no federal counters at all
-    with no way to tell which had happened.
+    Returns None if the request itself failed, [] if it genuinely matched
+    nothing. That distinction is the point: this used to end with
+    `(data or {}).get(...) or []`, so a rejected key, a timeout and an empty
+    state were the same empty list and a broken source looked like a quiet
+    one.
+
+    ncode/ccode matter as much. This asked for limit=1000 with no trade
+    filter over a year of postings, then filtered locally -- every federal
+    solicitation of any kind, for each of the three or four states a
+    125-mile scan touches. While the key was invalid that cost nothing
+    because it 403'd instantly; the moment a working key was set, scans
+    started timing out. SAM can filter by NAICS and PSC itself, so ask it to.
     """
     if not SAM_API_KEY:
         return None
@@ -3924,28 +3938,29 @@ def _sam_fetch(state):
         "postedFrom": (today - datetime.timedelta(days=SAM_WINDOW_DAYS)).strftime("%m/%d/%Y"),
         "postedTo": today.strftime("%m/%d/%Y"),
         "state": state,
-        "limit": "1000",
+        "limit": str(SAM_PAGE_LIMIT),
         "offset": "0",
     }
+    if ncode:
+        params["ncode"] = ncode
+    if ccode:
+        params["ccode"] = ccode
     url = SAM_SEARCH_URL + "?" + urllib.parse.urlencode(params)
     try:
         req = urllib.request.Request(
             url, headers={"Accept": "application/json",
                           "User-Agent": CRAWLER_UA})
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        with urllib.request.urlopen(req, timeout=SAM_TIMEOUT) as resp:
             data = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
-        # The status is the whole diagnosis: 403 is a rejected key, 404 is a
-        # wrong endpoint (SAM_SEARCH_URL still pointing at the old
-        # api.sam.gov/prod address), 429 is a rate limit. "failed" alone sent
-        # us guessing once already.
+        # The status is the whole diagnosis: 403 is a rejected key, 404 a
+        # wrong endpoint, 429 a rate limit. "failed" alone sent us guessing.
         _sam_health["last_status"] = e.code
         _sam_health["last_error"] = _sam_scrub(str(e))
         return None
     except Exception as e:
         _sam_health["last_status"] = None
-        _sam_health["last_error"] = _sam_scrub(
-            "%s: %s" % (type(e).__name__, e))
+        _sam_health["last_error"] = _sam_scrub("%s: %s" % (type(e).__name__, e))
         return None
     _sam_health["last_status"] = 200
     _sam_health["last_error"] = ""
@@ -5461,6 +5476,10 @@ def _run_state_sources(center, radius, grouped, city_coords=None, stats=None):
 FEDERAL_DETAIL_MAX = int(os.environ.get("SCAN_FEDERAL_MAX", "30"))
 FEDERAL_WORKERS = int(os.environ.get("SCAN_FEDERAL_WORKERS", "6"))
 FEDERAL_TIMEOUT = int(os.environ.get("SCAN_FEDERAL_TIMEOUT", "30"))
+# A whole-source ceiling. Individual request timeouts multiply -- five trade
+# codes across four states is twenty requests -- so the only thing that
+# actually bounds a scan is a wall clock on the source as a whole.
+FEDERAL_BUDGET_SEC = float(os.environ.get("SCAN_FEDERAL_BUDGET_SEC", "25"))
 
 
 def _federal_states(center, radius):
@@ -5483,33 +5502,73 @@ def _federal_keyed(states, stats):
 
     Its payload is complete -- place of performance and point of contact
     arrive with the search row -- so this needs no second request per notice.
+
+    Queries are narrowed server-side, one per trade code per state, rather
+    than pulling the state's whole year and filtering here. NAICS hits are
+    trusted outright; PSC is broader than the trade, so those go through the
+    normal relevance filter, same rule as the public transport.
     """
-    out, failed = [], 0
+    out, failed, attempted = [], 0, 0
+    seen = set()
+    queries = ([({"ncode": n}, True) for n in federal_bids.CONCRETE_NAICS] +
+               [({"ccode": c}, False) for c in federal_bids.CONCRETE_PSC])
+    # One wall clock for the whole source. Per-request timeouts multiply --
+    # six trade codes across four states is twenty-four requests -- so a
+    # request timeout alone does not bound a scan. Checked as a flag rather
+    # than a bare break, because break only leaves the inner loop and the
+    # outer one would re-enter and re-count it once per remaining state.
+    deadline = time.time() + FEDERAL_BUDGET_SEC
+    out_of_time = False
     for st in states:
-        try:
-            opps = _sam_fetch(st)
-        except Exception:
-            opps = None
-        if opps is None:
-            failed += 1
-            _bump(stats, "federal_search_failed")
-            continue
-        if not opps:
-            _bump(stats, "federal_search_empty")
-            continue
-        _bump(stats, "federal_search_ok")
-        for opp in opps:
-            if not _is_construction(opp):
+        if out_of_time:
+            break
+        for params, trusted in queries:
+            if time.time() > deadline:
+                _bump(stats, "federal_budget_exhausted")
+                out_of_time = True
+                break
+            attempted += 1
+            try:
+                opps = _sam_fetch(st, **params)
+            except Exception:
+                opps = None
+            if opps is None:
+                failed += 1
+                _bump(stats, "federal_search_failed")
                 continue
-            bid, city, perf_state = _normalize_opp(opp)
-            bid["city"], bid["state"] = city, perf_state
-            out.append(bid)
+            if not opps:
+                # Normal, and worth counting: most (state, trade code) pairs
+                # match nothing on any given day. Without this, "the source
+                # ran and found nothing" is indistinguishable from "every
+                # request failed", which is the confusion this whole area
+                # already cost two rounds of live scans to resolve.
+                _bump(stats, "federal_search_empty")
+                continue
+            _bump(stats, "federal_search_ok")
+            for opp in opps:
+                if not _is_construction(opp):
+                    continue
+                if not trusted and not bid_sources.looks_relevant(
+                        opp.get("title")):
+                    _bump(stats, "federal_psc_off_trade")
+                    continue
+                # Amendments repeat a solicitation; the notice id changes but
+                # the solicitation number does not.
+                key = (opp.get("solicitationNumber")
+                       or opp.get("noticeId") or "").lower()
+                if key and key in seen:
+                    _bump(stats, "federal_amendment_collapsed")
+                    continue
+                seen.add(key)
+                bid, city, perf_state = _normalize_opp(opp)
+                bid["city"], bid["state"] = city, perf_state
+                out.append(bid)
     # A rejected key must not mean no federal bids at all. The public
     # transport reads the same public-domain data and needs no credentials,
-    # so fall back to it rather than going quiet -- which is what happened
-    # here: the keyed path returned nothing, bumped nothing, and the public
-    # one could see eight active Texas notices the whole time.
-    if failed and failed == len(states):
+    # so fall back rather than going quiet -- which is what happened once:
+    # the keyed path returned nothing, bumped nothing, and the public one
+    # could see eight active Texas notices the whole time.
+    if attempted and failed == attempted:
         _bump(stats, "federal_fell_back_to_public")
         return _federal_public(states, stats)
     return out

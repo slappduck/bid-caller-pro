@@ -148,13 +148,18 @@ class KeyedTransportTests(unittest.TestCase):
         "uiLink": "https://sam.gov/opp/1c77a3137ef64a73a44cb5fb084bc9de/view",
     }
 
+    QUERIES_PER_STATE = (len(federal_bids.CONCRETE_NAICS)
+                         + len(federal_bids.CONCRETE_PSC))
+
     def setUp(self):
         self.calls = []
+        self.codes = []
         self._real_fetch = ls._sam_fetch
         self._real_key = ls.SAM_API_KEY
 
-        def fake_fetch(state):
+        def fake_fetch(state, ncode=None, ccode=None):
             self.calls.append(state)
+            self.codes.append(ncode or ccode)
             return [self.OPP, {"noticeId": "b" * 32, "title": "Janitorial "
                                "Services", "active": "Yes",
                                "naicsCode": "561720"}]
@@ -167,7 +172,18 @@ class KeyedTransportTests(unittest.TestCase):
 
     def test_it_asks_every_state_in_the_radius(self):
         ls._federal_keyed(["MO", "KS", "IA"], {})
-        self.assertEqual(self.calls, ["MO", "KS", "IA"])
+        self.assertEqual(sorted(set(self.calls)), ["IA", "KS", "MO"])
+
+    def test_it_narrows_by_trade_code_server_side(self):
+        """It used to ask for limit=1000 with no trade filter over a year of
+        postings and filter locally -- every federal solicitation in the
+        state, for each state a 125-mile scan touches. That was invisible
+        while the key was invalid, because it 403'd instantly; the moment a
+        working key was set, scans timed out."""
+        ls._federal_keyed(["MO"], {})
+        self.assertEqual(len(self.calls), self.QUERIES_PER_STATE)
+        self.assertTrue(all(c for c in self.codes),
+                        "every query must carry a trade code")
 
     def test_it_keeps_our_trade_and_drops_the_rest(self):
         bids = ls._federal_keyed(["MO"], {})
@@ -182,16 +198,28 @@ class KeyedTransportTests(unittest.TestCase):
         self.assertEqual(bid["email"], "Matthew_Frank@ios.doi.gov")
 
     def test_a_dead_state_does_not_sink_the_others(self):
-        def half_broken(state):
+        def half_broken(state, ncode=None, ccode=None):
             if state == "KS":
                 raise RuntimeError("SAM is down")
-            return [self.OPP]
+            # A DISTINCT solicitation per state. De-duplication is global by
+            # solicitation number -- the same notice arriving under two
+            # states is one job, not two -- so returning the same record for
+            # both would collapse to one bid and prove nothing about the
+            # second state having contributed.
+            return [dict(self.OPP,
+                         noticeId=state.lower() * 16,
+                         solicitationNumber="SOL-%s" % state)]
         ls._sam_fetch = half_broken
         stats = {}
         bids = ls._federal_keyed(["MO", "KS", "IA"], stats)
+        # The same notice comes back for every trade code the stub is asked
+        # for, and amendments of one solicitation are collapsed -- so two
+        # working states yield two bids, not two times the query count.
         self.assertEqual(len(bids), 2)
-        self.assertEqual(stats.get("federal_search_failed"), 1)
-        self.assertEqual(stats.get("federal_search_ok"), 2)
+        self.assertEqual(stats.get("federal_search_failed"),
+                         self.QUERIES_PER_STATE)
+        self.assertEqual(stats.get("federal_search_ok"),
+                         2 * self.QUERIES_PER_STATE)
 
     def test_the_runner_places_a_keyed_bid_end_to_end(self):
         center = {"city": "Saint Louis", "state": "MO",
@@ -208,7 +236,7 @@ class KeyedTransportTests(unittest.TestCase):
         """"Active" at SAM means the notice is live, not that its response
         date is ahead."""
         past = dict(self.OPP, responseDeadLine="2020-01-01T17:00:00-05:00")
-        ls._sam_fetch = lambda state: [past]
+        ls._sam_fetch = lambda state, ncode=None, ccode=None: [past]
         # Springfield at 25 miles stays inside Missouri, so the stub is asked
         # exactly once and the count is unambiguous.
         center = {"city": "Springfield", "state": "MO",
@@ -238,32 +266,36 @@ class SilentFailureTests(unittest.TestCase):
         ls._sam_fetch, ls.SAM_API_KEY = self._fetch, self._key
 
     def test_a_failed_request_is_counted_as_a_failure(self):
-        ls._sam_fetch = lambda state: None
+        ls._sam_fetch = lambda state, ncode=None, ccode=None: None
         stats = {}
+        n = (len(federal_bids.CONCRETE_NAICS) + len(federal_bids.CONCRETE_PSC))
         ls._federal_keyed(["MO"], stats)
-        self.assertEqual(stats.get("federal_search_failed"), 1)
+        self.assertEqual(stats.get("federal_search_failed"), n)
         self.assertIsNone(stats.get("federal_search_empty"))
 
     def test_a_genuinely_empty_state_is_counted_differently(self):
-        ls._sam_fetch = lambda state: []
+        ls._sam_fetch = lambda state, ncode=None, ccode=None: []
         stats = {}
+        n = (len(federal_bids.CONCRETE_NAICS) + len(federal_bids.CONCRETE_PSC))
         ls._federal_keyed(["MO"], stats)
-        self.assertEqual(stats.get("federal_search_empty"), 1)
+        self.assertEqual(stats.get("federal_search_empty"), n)
         self.assertIsNone(stats.get("federal_search_failed"))
 
     def test_a_working_state_is_visible_too(self):
         """Silence is the enemy: a source that worked should say so, or a
         scan with no federal bids is still unexplained."""
-        ls._sam_fetch = lambda state: [{"title": "Janitorial", "active": "Yes",
-                                        "naicsCode": "561720"}]
+        ls._sam_fetch = (lambda state, ncode=None, ccode=None:
+                         [{"title": "Janitorial", "active": "Yes",
+                           "naicsCode": "561720"}])
         stats = {}
+        n = (len(federal_bids.CONCRETE_NAICS) + len(federal_bids.CONCRETE_PSC))
         ls._federal_keyed(["MO"], stats)
-        self.assertEqual(stats.get("federal_search_ok"), 1)
+        self.assertEqual(stats.get("federal_search_ok"), n)
 
     def test_a_dead_key_falls_back_to_the_public_transport(self):
         """A rejected key must not mean no federal bids at all -- the public
         endpoint reads the same public-domain data with no credentials."""
-        ls._sam_fetch = lambda state: None
+        ls._sam_fetch = lambda state, ncode=None, ccode=None: None
         calls = []
         real_public = ls._federal_public
         ls._federal_public = lambda states, stats: calls.append(states) or []
@@ -278,7 +310,8 @@ class SilentFailureTests(unittest.TestCase):
     def test_one_bad_state_does_not_trigger_the_fallback(self):
         """The fallback is for a broken transport, not a flaky request. If
         any state answered, the keyed path is working."""
-        ls._sam_fetch = lambda state: None if state == "KS" else []
+        ls._sam_fetch = (lambda state, ncode=None, ccode=None:
+                         None if state == "KS" else [])
         calls = []
         real_public = ls._federal_public
         ls._federal_public = lambda states, stats: calls.append(states) or []
@@ -288,7 +321,9 @@ class SilentFailureTests(unittest.TestCase):
         finally:
             ls._federal_public = real_public
         self.assertEqual(calls, [])
-        self.assertEqual(stats.get("federal_search_failed"), 1)
+        self.assertEqual(stats.get("federal_search_failed"),
+                         len(federal_bids.CONCRETE_NAICS)
+                         + len(federal_bids.CONCRETE_PSC))
 
 
 class PostedWindowTests(unittest.TestCase):
@@ -396,3 +431,61 @@ class RejectedKeyIsReportedTests(unittest.TestCase):
         block = self.src[i:i + 400]
         self.assertIn("notes.append", block)
         self.assertNotIn("problems.append", block)
+
+
+class TimeBudgetTests(unittest.TestCase):
+    """A scan must not be able to spend unbounded time on one source.
+
+    This is what took the app down. _sam_fetch asked for limit=1000 with no
+    trade filter over a year of postings, once per state, at a 60-second
+    timeout -- up to four minutes of a scan's budget, downloading every
+    federal solicitation in each state. While the key was invalid it cost
+    nothing, because it 403'd instantly. The moment a working key was set,
+    scans started returning connection errors.
+    """
+
+    def setUp(self):
+        self._fetch, self._key = ls._sam_fetch, ls.SAM_API_KEY
+        self._budget = ls.FEDERAL_BUDGET_SEC
+        ls.SAM_API_KEY = "test-key"
+
+    def tearDown(self):
+        ls._sam_fetch, ls.SAM_API_KEY = self._fetch, self._key
+        ls.FEDERAL_BUDGET_SEC = self._budget
+
+    def test_the_source_stops_when_its_budget_is_gone(self):
+        import time as _t
+        ls.FEDERAL_BUDGET_SEC = 0.05
+        calls = []
+
+        def slow(state, ncode=None, ccode=None):
+            calls.append(state)
+            _t.sleep(0.03)
+            return []
+        ls._sam_fetch = slow
+        stats = {}
+        ls._federal_keyed(["MO", "KS", "IA", "NE"], stats)
+        per_state = (len(federal_bids.CONCRETE_NAICS)
+                     + len(federal_bids.CONCRETE_PSC))
+        self.assertLess(len(calls), 4 * per_state)
+        self.assertEqual(stats.get("federal_budget_exhausted"), 1,
+                         "counted once, not once per remaining state")
+
+    def test_the_request_timeout_is_not_a_minute(self):
+        """Six trade codes across four states is twenty-four requests, so a
+        60-second per-request timeout is not a timeout, it is an outage."""
+        self.assertLessEqual(ls.SAM_TIMEOUT, 20)
+
+    def test_the_page_limit_is_not_a_thousand(self):
+        self.assertLessEqual(ls.SAM_PAGE_LIMIT, 200)
+
+    def test_every_query_is_narrowed_by_trade_code(self):
+        """The filtering has to happen at SAM, not here. Downloading a state's
+        whole year and filtering locally is the bug."""
+        import inspect
+        src = inspect.getsource(ls._federal_keyed)
+        self.assertIn("ncode", src)
+        self.assertIn("ccode", src)
+        sig = inspect.signature(ls._sam_fetch)
+        self.assertIn("ncode", sig.parameters)
+        self.assertIn("ccode", sig.parameters)
