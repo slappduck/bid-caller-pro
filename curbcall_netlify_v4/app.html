@@ -131,6 +131,23 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .scan-status{color:var(--text2);font-size:var(--fs-base);text-align:center;margin-top:1.2rem;min-height:20px;}
 .progress{height:4px;background:var(--border);border-radius:var(--r-hair);overflow:hidden;margin-top:0.7rem;}
 .progress-bar{height:100%;width:0;background:var(--accent);transition:width 0.4s ease;}
+/* Past the estimate the bar stops pretending to know how far along it is and
+   says so by moving instead. A stalled bar at 90% reads as "hung"; a moving
+   one reads as "still working", which is the truth. */
+.progress-bar.indeterminate{width:100% !important;transition:none;
+  background:linear-gradient(90deg,var(--border) 0%,var(--accent) 35%,var(--accent) 65%,var(--border) 100%);
+  background-size:220% 100%;animation:sweep 1.35s linear infinite;}
+@keyframes sweep{from{background-position:120% 0;}to{background-position:-120% 0;}}
+@media (prefers-reduced-motion:reduce){
+  .progress-bar.indeterminate{animation-duration:3s;}
+}
+/* The line under the bar: elapsed time on the left, cancel on the right. */
+.scan-meta{display:flex;align-items:baseline;justify-content:space-between;
+  gap:0.75rem;margin-top:0.5rem;font-size:var(--fs-sm);color:var(--text2);}
+.scan-meta .elapsed{font-variant-numeric:tabular-nums;}
+.scan-cancel{background:none;border:none;color:var(--text2);font:inherit;
+  text-decoration:underline;cursor:pointer;padding:0.15rem 0;margin:0;width:auto;}
+.scan-cancel:hover{color:var(--text);}
 
 .feed-label{color:var(--green);font-size:var(--fs-xs);font-weight:700;letter-spacing:0.06em;margin:1.2rem 0 0.6rem;display:flex;align-items:center;gap:0.4rem;}
 .feed-label::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--border),transparent);}
@@ -2323,6 +2340,139 @@ function mergeOpenBids(incoming,scannedCities){
 // and stay: tapping a map to choose where to search has no list equivalent.
 // Leaflet is still loaded for them.
 
+// ── Scan progress ────────────────────────────────────────────────────────
+//
+// The old bar was a lie with a timer attached: +3% every 1.5s, hard-stopped
+// at 90%, over a request that can legitimately run two minutes. It told you
+// nothing, and a bar frozen at 90% reads as a hung app.
+//
+// This one only claims things it actually knows.
+//
+//   * Elapsed seconds are real, and tick.
+//   * The bar is elapsed against THIS DEVICE'S OWN median scan time, so the
+//     estimate is calibrated to the user's radius, location and connection
+//     rather than to a number somebody guessed once. With no history it uses
+//     a conservative default and says less.
+//   * When elapsed passes the estimate it stops guessing: the bar switches to
+//     a moving sweep and the copy says it is taking longer than usual. That
+//     is the honest state, and it looks alive instead of stuck.
+//   * It can be cancelled. Previously a scan held the button hostage for up
+//     to 150 seconds with no way out.
+//
+// Deliberately NOT invented: per-stage narration ("reading portals...",
+// "checking state lettings..."). The server does not report where it is, so
+// any such text would be theatre keyed to a timer -- which is precisely the
+// thing being removed here. Real per-step progress needs the backend to
+// publish it, and a single sync gunicorn worker cannot serve a poll while a
+// scan is blocking it, so that is a backend change, not a frontend one.
+// Kept per kind, because the three runs are not the same shape of work: a
+// bid scan reads dozens of portals, a permit lookup hits one city's open-data
+// API. Sharing one history would make both estimates wrong.
+const RUN_TIMES_KEY="run_durations";
+const RUN_TIME_DEFAULT={scan:45000,upcoming:40000,leads:12000};
+const RUN_TIMES_KEEP=10;
+
+function recordRunDuration(kind,ms){
+  if(!(ms>1000)||ms>600000)return;       // ignore instant cache hits and junk
+  const all=store.get(RUN_TIMES_KEY,{})||{};
+  const a=(all[kind]||[]).filter(n=>typeof n==="number");
+  a.push(ms);
+  all[kind]=a.slice(-RUN_TIMES_KEEP);
+  store.set(RUN_TIMES_KEY,all);
+}
+
+function expectedRunMs(kind){
+  const all=store.get(RUN_TIMES_KEY,{})||{};
+  const a=(all[kind]||[]).filter(n=>typeof n==="number"&&n>0);
+  if(!a.length)return RUN_TIME_DEFAULT[kind]||45000;
+  // Median, not mean: one 150-second timeout should not drag the estimate for
+  // every run after it.
+  const s=[...a].sort((x,y)=>x-y);
+  const m=s.length%2?s[(s.length-1)/2]:(s[s.length/2-1]+s[s.length/2])/2;
+  return Math.max(6000,m);
+}
+
+function fmtElapsed(ms){
+  const t=Math.floor(ms/1000);
+  return t<60?`${t}s`:`${Math.floor(t/60)}:${String(t%60).padStart(2,"0")}`;
+}
+
+// Owns the bar, the elapsed line and the cancel affordance for one run.
+function startScanProgress(wrapId,barId,opts){
+  const o=opts||{};
+  const pw=document.getElementById(wrapId);
+  const pb=document.getElementById(barId);
+  if(!pw||!pb)return{finish(){},fail(){}};
+  const started=Date.now();
+  const expected=o.expected||expectedRunMs("scan");
+  pw.style.display="block";
+  pb.classList.remove("indeterminate");
+  pb.style.width="4%";
+
+  // The meta line lives next to the bar and is created on demand, so no
+  // markup changes are needed for the three places this is used.
+  let meta=pw.nextElementSibling;
+  if(!meta||!meta.classList.contains("scan-meta")){
+    meta=document.createElement("div");
+    meta.className="scan-meta";
+    meta.innerHTML='<span class="elapsed"></span>';
+    if(o.onCancel){
+      const b=document.createElement("button");
+      b.type="button";b.className="scan-cancel";b.textContent="Cancel";
+      meta.appendChild(b);
+    }
+    pw.parentNode.insertBefore(meta,pw.nextSibling);
+  }
+  const elapsedEl=meta.querySelector(".elapsed");
+  const cancelBtn=meta.querySelector(".scan-cancel");
+  if(cancelBtn&&o.onCancel){
+    cancelBtn.style.display="";
+    cancelBtn.onclick=()=>{cancelBtn.disabled=true;cancelBtn.textContent="Cancelling...";o.onCancel();};
+  }else if(cancelBtn){cancelBtn.style.display="none";}
+
+  let over=false;
+  const tick=setInterval(()=>{
+    const el=Date.now()-started;
+    const frac=el/expected;
+    if(frac<1){
+      // Ease off near the end so it never sits on 99% looking broken.
+      pb.style.width=(4+Math.min(0.88,frac*0.88)*100).toFixed(1)+"%";
+      elapsedEl.textContent=fmtElapsed(el);
+    }else{
+      if(!over){
+        over=true;
+        pb.classList.add("indeterminate");
+        if(o.onOverrun)o.onOverrun();
+      }
+      elapsedEl.textContent=fmtElapsed(el)+" — longer than usual";
+    }
+  },200);
+
+  function stop(){
+    clearInterval(tick);
+    if(cancelBtn){cancelBtn.disabled=false;cancelBtn.textContent="Cancel";}
+  }
+  return{
+    elapsed(){return Date.now()-started;},
+    finish(){
+      stop();
+      pb.classList.remove("indeterminate");
+      pb.style.width="100%";
+      if(elapsedEl)elapsedEl.textContent=fmtElapsed(Date.now()-started);
+      setTimeout(()=>{
+        pw.style.display="none";pb.style.width="0";
+        if(meta&&meta.parentNode)meta.parentNode.removeChild(meta);
+      },800);
+    },
+    fail(){
+      stop();
+      pb.classList.remove("indeterminate");
+      pw.style.display="none";pb.style.width="0";
+      if(meta&&meta.parentNode)meta.parentNode.removeChild(meta);
+    },
+  };
+}
+
 async function runScan(force){
   if(scanBtn.disabled)return; // guard against double-tap / double-submit
   if(!requireOnline("Scanning for bids"))return;
@@ -2332,22 +2482,31 @@ async function runScan(force){
   scanBtn.disabled=true;
   scanBtn.innerHTML='<span class="spin"></span> Scanning...';
   const status=document.getElementById("scan-status");
-  const pw=document.getElementById("progress-wrap");
-  const pb=document.getElementById("progress-bar");
-  pw.style.display="block";pb.style.width="15%";
-  status.textContent="Searching for bids in your area...";
-  let p=15;
-  const tick=setInterval(()=>{p=Math.min(90,p+3);pb.style.width=p+"%";},1500);
+  status.textContent=`Scanning ${location} \u00b7 ${radius} mi...`;
+  // One controller for both the cancel button and the safety timeout, so a
+  // cancelled scan and a timed-out one land in the same place.
+  const ctrl=new AbortController();
+  let cancelled=false;
+  const prog=startScanProgress("progress-wrap","progress-bar",{
+    onCancel(){cancelled=true;ctrl.abort();},
+    onOverrun(){
+      status.textContent="Still scanning \u2014 wide radiuses take longer, "
+        +"and the server may have been asleep.";
+    },
+  });
+  // Generous timeout \u2014 real scans take a while and the backend can be
+  // asleep (Render free tier), but this still guarantees the UI never hangs
+  // forever if the server is truly unreachable.
+  const killer=setTimeout(()=>ctrl.abort(),150000);
   try{
     const token=await getSupabaseToken();
-    // Generous timeout \u2014 real scans take a while and the backend can be
-    // asleep (Render free tier), but this still guarantees the UI never
-    // hangs forever if the server is truly unreachable.
-    const r=await fetchWithTimeout(SERVER+"/scan",{
+    const r=await fetch(SERVER+"/scan",{
       method:"POST",headers:{"Content-Type":"application/json"},
+      signal:ctrl.signal,
       body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,location,radius,force:!!force})
-    },150000);
-    clearInterval(tick);pb.style.width="100%";
+    });
+    clearTimeout(killer);
+    prog.finish();
     if(r.status===403){status.textContent="Your trial or subscription isn't active.";toast("Check Account tab");goTo("account");return;}
     const d=await r.json();
     if(!d.ok){
@@ -2356,6 +2515,10 @@ async function runScan(force){
     }
     const total=d.total_bids||0;
     const added=mergeOpenBids(d.bids||{},Object.keys(d.city_coords||{}));
+    // Only a real scan calibrates the estimate. A cached result returns in
+    // milliseconds and would drag the median down to nothing, so the next
+    // real scan would show a bar that finishes instantly and then sits.
+    if(!d.cached)recordRunDuration("scan",Date.now()-startedAt);
     recordScanDiagnostics({
       kind:"scan",location:d.location||location,radius,
       ms:Date.now()-startedAt,total,added,cached:!!d.cached,debug:d.debug||null,
@@ -2366,15 +2529,21 @@ async function runScan(force){
       :"No open bids posted here right now. Try a wider radius.")+cachedNote;
     if(total>0){toast(added>0?`Added ${added} new bid(s)!`:"No new bids \u2014 already in your list.");cityFilter="All";goTo("feed");}
   }catch(e){
-    clearInterval(tick);
-    status.textContent=e.name==="AbortError"
-      ?"That took too long \u2014 the server might be waking up. Try again in a moment."
-      :"Couldn't reach the bid service. Check your internet.";
-    toast("Connection problem");
+    clearTimeout(killer);
+    prog.fail();
+    if(cancelled){
+      status.textContent="Scan cancelled.";
+    }else if(e.name==="AbortError"){
+      status.textContent="That took too long \u2014 the server might be waking "
+        +"up. Try again in a moment.";
+      toast("Connection problem");
+    }else{
+      status.textContent="Couldn't reach the bid service. Check your internet.";
+      toast("Connection problem");
+    }
   }finally{
     scanBtn.disabled=false;
     scanBtn.innerHTML="Scan for Bids";
-    setTimeout(()=>{pw.style.display="none";pb.style.width="0";},800);
   }
 }
 
@@ -2396,19 +2565,24 @@ async function runUpcoming(){
   upcomingBtn.disabled=true;
   upcomingBtn.innerHTML='<span class="spin"></span> Searching...';
   const status=document.getElementById("upcoming-status");
-  const pw=document.getElementById("up-progress-wrap");
-  const pb=document.getElementById("up-progress-bar");
-  pw.style.display="block";pb.style.width="15%";
-  status.textContent="Scanning agendas, budgets & plans...";
-  let p=15;
-  const tick=setInterval(()=>{p=Math.min(90,p+3);pb.style.width=p+"%";},1500);
+  status.textContent=`Scanning agendas, budgets & plans near ${location}...`;
+  const ctrl=new AbortController();
+  let cancelled=false;
+  const prog=startScanProgress("up-progress-wrap","up-progress-bar",{
+    expected:expectedRunMs("upcoming"),
+    onCancel(){cancelled=true;ctrl.abort();},
+    onOverrun(){status.textContent="Still searching \u2014 agendas and budget documents are slow to read.";},
+  });
+  const killer=setTimeout(()=>ctrl.abort(),150000);
   try{
     const token=await getSupabaseToken();
-    const r=await fetchWithTimeout(SERVER+"/upcoming",{
+    const r=await fetch(SERVER+"/upcoming",{
       method:"POST",headers:{"Content-Type":"application/json"},
+      signal:ctrl.signal,
       body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,location,radius:upRadius})
-    },150000);
-    clearInterval(tick);pb.style.width="100%";
+    });
+    clearTimeout(killer);
+    prog.finish();
     if(r.status===403){status.textContent="Your trial or subscription isn't active.";toast("Check Account tab");goTo("account");return;}
     const d=await r.json();
     if(!d.ok){
@@ -2423,6 +2597,7 @@ async function runUpcoming(){
       (d.items[city]||[]).forEach(b=>{const id=upcomingId(city,b);if(!ids.has(id)){have.push(b);ids.add(id);added++;}});
       upcomingData[city]=have;
     }
+    recordRunDuration("upcoming",prog.elapsed());
     store.set("upcoming_feed",upcomingData);queueFeedPush();
     status.textContent=(d.total||0)>0
       ?`Done — found ${d.total} planned project(s) near ${d.location||location}.`
@@ -2430,15 +2605,19 @@ async function runUpcoming(){
     if(added>0)toast(`Added ${added} planned project(s)!`);
     renderUpcoming();
   }catch(e){
-    clearInterval(tick);
-    status.textContent=e.name==="AbortError"
-      ?"That took too long — the server might be waking up. Try again in a moment."
-      :"Couldn't reach the bid service. Check your internet.";
-    toast("Connection problem");
+    clearTimeout(killer);
+    prog.fail();
+    if(cancelled){
+      status.textContent="Search cancelled.";
+    }else{
+      status.textContent=e.name==="AbortError"
+        ?"That took too long — the server might be waking up. Try again in a moment."
+        :"Couldn't reach the bid service. Check your internet.";
+      toast("Connection problem");
+    }
   }finally{
     upcomingBtn.disabled=false;
     upcomingBtn.innerHTML="Find Upcoming Projects";
-    setTimeout(()=>{pw.style.display="none";pb.style.width="0";},800);
   }
 }
 
@@ -2520,19 +2699,24 @@ async function runLeads(){
   leadsBtn.disabled=true;
   leadsBtn.innerHTML='<span class="spin"></span> Searching...';
   const status=document.getElementById("leads-status");
-  const pw=document.getElementById("leads-progress-wrap");
-  const pb=document.getElementById("leads-progress-bar");
-  pw.style.display="block";pb.style.width="25%";
-  status.textContent="Checking city permit records...";
-  let p=25;
-  const tick=setInterval(()=>{p=Math.min(90,p+8);pb.style.width=p+"%";},400);
+  status.textContent=`Checking city permit records near ${location}...`;
+  const ctrl=new AbortController();
+  let cancelled=false;
+  const prog=startScanProgress("leads-progress-wrap","leads-progress-bar",{
+    expected:expectedRunMs("leads"),
+    onCancel(){cancelled=true;ctrl.abort();},
+    onOverrun(){status.textContent="Still checking permit records...";},
+  });
+  const killer=setTimeout(()=>ctrl.abort(),60000);
   try{
     const token=await getSupabaseToken();
-    const r=await fetchWithTimeout(SERVER+"/residential-leads",{
+    const r=await fetch(SERVER+"/residential-leads",{
       method:"POST",headers:{"Content-Type":"application/json"},
+      signal:ctrl.signal,
       body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,location,radius:leadsRadius})
-    },60000);
-    clearInterval(tick);pb.style.width="100%";
+    });
+    clearTimeout(killer);
+    prog.finish();
     if(r.status===403){status.textContent="Your trial or subscription isn't active.";toast("Check Account tab");goTo("account");return;}
     const d=await r.json();
     if(!d.ok){
@@ -2549,6 +2733,7 @@ async function runLeads(){
     let added=0;
     (d.leads||[]).forEach(l=>{if(!ids.has(l.permit_id)){have.push(l);ids.add(l.permit_id);added++;}});
     leadsData[city]=have;
+    recordRunDuration("leads",prog.elapsed());
     store.set("leads_feed",leadsData);queueFeedPush();
     status.textContent=(d.total||0)>0
       ?`Done — found ${d.total} residential lead(s) near ${d.location||location}.`
@@ -2556,15 +2741,19 @@ async function runLeads(){
     if(added>0)toast(`Added ${added} new lead(s)!`);
     renderLeads();
   }catch(e){
-    clearInterval(tick);
-    status.textContent=e.name==="AbortError"
-      ?"That took too long — the server might be waking up. Try again in a moment."
-      :"Couldn't reach the bid service. Check your internet.";
-    toast("Connection problem");
+    clearTimeout(killer);
+    prog.fail();
+    if(cancelled){
+      status.textContent="Search cancelled.";
+    }else{
+      status.textContent=e.name==="AbortError"
+        ?"That took too long — the server might be waking up. Try again in a moment."
+        :"Couldn't reach the bid service. Check your internet.";
+      toast("Connection problem");
+    }
   }finally{
     leadsBtn.disabled=false;
     leadsBtn.innerHTML="Find Residential Leads";
-    setTimeout(()=>{pw.style.display="none";pb.style.width="0";},800);
   }
 }
 
