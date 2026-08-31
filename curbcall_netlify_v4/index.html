@@ -159,6 +159,82 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
 }
 :focus-visible{outline:2px solid var(--amber);outline-offset:2px;}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;scroll-behavior:auto!important;}}
+/* ── hero map ──────────────────────────────────────────────── */
+.mapwrap{position:relative;border:1px solid var(--line);border-radius:16px;overflow:hidden;
+  background:var(--panel);aspect-ratio:1/1;max-height:520px;}
+@media(min-width:900px){.mapwrap{aspect-ratio:4/3.4;}}
+.mapwrap svg{display:block;width:100%;height:100%;}
+.maphead{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;
+  justify-content:space-between;padding:.85rem 1rem;font-family:var(--mono);font-size:.7rem;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--text3);
+  background:linear-gradient(180deg,rgba(11,13,20,.92),rgba(11,13,20,0));z-index:2;}
+.mlive{display:inline-flex;align-items:center;gap:.45rem;color:var(--green);}
+.mlive .dot{width:7px;height:7px;border-radius:50%;background:var(--green);
+  animation:blip 1.6s ease-in-out infinite;}
+@keyframes blip{0%,100%{opacity:1}50%{opacity:.25}}
+.mapfoot{position:absolute;left:0;right:0;bottom:0;padding:.85rem 1rem 1rem;z-index:2;
+  background:linear-gradient(0deg,rgba(11,13,20,.96) 55%,rgba(11,13,20,.75) 78%,rgba(11,13,20,0));}
+.mcount{font-family:var(--display);font-size:1.9rem;line-height:1;}
+.mcount small{font-family:var(--mono);font-size:.68rem;letter-spacing:.18em;color:var(--text3);
+  text-transform:uppercase;display:block;margin-top:.2rem;}
+.mfound{margin:.7rem 0 0;display:flex;flex-direction:column;gap:.4rem;min-height:62px;}
+.mf{display:flex;align-items:center;gap:.55rem;font-size:.84rem;color:var(--text2);
+  opacity:0;transform:translateY(6px);animation:rise .45s ease forwards;}
+.mf b{color:var(--text);font-weight:600;}
+.mf i{font-style:normal;font-family:var(--mono);font-size:.68rem;color:var(--text3);margin-left:auto;}
+@keyframes rise{to{opacity:1;transform:none}}
+.pip{width:6px;height:6px;border-radius:50%;background:var(--amber);flex:none;}
+.grid-line{stroke:var(--line);stroke-width:.5;opacity:.5;}
+.road{stroke:var(--line);fill:none;stroke-linecap:round;}
+.ring{fill:none;stroke:var(--amber);stroke-width:1.5;opacity:0;}
+.ring.go{animation:sweepring 3.2s cubic-bezier(.22,.61,.36,1) infinite;}
+@keyframes sweepring{0%{r:6px;opacity:.9;stroke-width:2}
+  70%{opacity:.12;stroke-width:.6}100%{r:132px;opacity:0;stroke-width:.4}}
+.home{fill:var(--amber);} .home-halo{fill:var(--amber);opacity:.18;}
+.bid-pin{opacity:0;}
+.bid-pin.on{animation:pop .5s cubic-bezier(.2,1.4,.4,1) forwards;}
+@keyframes pop{0%{opacity:0;transform:scale(.3)}60%{transform:scale(1.15)}100%{opacity:1;transform:scale(1)}}
+
+/* ── section rhythm ────────────────────────────────────────── */
+/* Six sections in a row all read eyebrow -> big heading -> card grid on the
+   same flat ground. Changing the GROUND is the cheapest way to break that
+   without touching a word of copy. */
+.band{background:var(--panel);border-block:1px solid var(--line);}
+.band-soft{background:linear-gradient(180deg,#13162a,#0b0d14);}
+.narrow .wrap{max-width:760px;}
+
+/* ── scroll reveal ─────────────────────────────────────────── */
+.rv{opacity:0;transform:translateY(12px);transition:opacity .5s ease,transform .5s ease;}
+.rv.in{opacity:1;transform:none;}
+@media (prefers-reduced-motion:reduce){
+  .rv{opacity:1;transform:none;transition:none;}
+  .ring.go,.bid-pin.on,.mf,.mlive .dot{animation:none;}
+  .bid-pin.on,.mf{opacity:1;transform:none;}
+}
+
+/* ── get the map onto the first phone screen ──────────────────
+   The map only earns its place if it is SEEN. At 390px it began at y=771
+   against an 844px fold -- 73 visible pixels, which is the header strip and
+   none of the animation. Three things sat between the headline and it:
+
+   1. a six-line lead paragraph (192px)
+   2. three stacked full-width buttons (212px)
+   3. the trust line
+
+   So on mobile the lead is trimmed to its first sentence, the Windows
+   download leaves the hero entirely (it is already in the footer, and
+   nobody installs a desktop app from a phone), and "See how it works"
+   becomes a quiet text link rather than a second 58px slab. The full lead
+   and both buttons are untouched from 700px up, where there is room. */
+@media(max-width:699px){
+  .lead .lead-more{display:none;}
+  .hero .cta-row:nth-of-type(2){display:none;}          /* Windows download */
+  .hero .cta-row .btn-line{background:none;border:none;padding:0.6rem 0;
+    text-decoration:underline;text-underline-offset:3px;font-size:0.95rem;}
+  .hero .cta-row{align-items:center;gap:0.35rem 1.1rem;}
+  .trust{margin-top:0.85rem;}
+  .mapwrap{margin-top:1.1rem;}
+}
 </style>
 </head>
 <body>
@@ -196,7 +272,7 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
     <div>
       <span class="eyebrow">Concrete bid intelligence</span>
       <h1>Win more<br><span class="hi">flatwork.</span></h1>
-      <p class="lead">Tell CurbCall Pro your ZIP. It scans the government and municipal sites around you and uses AI to pull out live sidewalk, ADA ramp, and curb &amp; gutter bids — so you spend your time pouring concrete, not hunting for work.</p>
+      <p class="lead">Tell CurbCall Pro your ZIP and it finds the live sidewalk, ADA ramp and curb &amp; gutter bids near you.<span class="lead-more"> It reads the government and municipal sites around you and pulls the work out automatically — so you spend your time pouring concrete, not hunting for it.</span></p>
       <div class="cta-row">
         <a class="btn btn-amber btn-lg" href="app.html">Start free — open the app</a>
         <a class="btn btn-line btn-lg" href="#how">See how it works</a>
@@ -207,12 +283,27 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
       <div class="trust"><b><span class="dot"></span>Free 7-day trial</b><span>· no card required</span><span>· works on phone or desktop</span></div>
     </div>
 
-    <div class="stack" aria-hidden="true">
-      <div class="feedcard">
-        <div class="head"><span class="t">Concrete bids near you</span><span class="live"><span class="dot"></span>Live</span></div>
-        <div class="bid"><div class="bar"></div><div><div class="title">Citywide ADA Ramp Upgrades</div><div class="meta"><span class="chip"><svg class="icon-svg"><use href="#i-map-pin"/></svg> Springfield, MO</span><span class="chip"><svg class="icon-svg"><use href="#i-calendar"/></svg> Due Jul 9</span><span class="chip g">OPEN</span></div></div></div>
-        <div class="bid"><div class="bar"></div><div><div class="title">Sidewalk Replacement Program</div><div class="meta"><span class="chip"><svg class="icon-svg"><use href="#i-map-pin"/></svg> Nixa, MO</span><span class="chip g"><svg class="icon-svg"><use href="#i-dollar"/></svg> $310k</span><span class="chip g">OPEN</span></div></div></div>
-        <div class="bid"><div class="bar"></div><div><div class="title">Curb &amp; Gutter Repair — 5th St</div><div class="meta"><span class="chip"><svg class="icon-svg"><use href="#i-map-pin"/></svg> Ozark, MO</span><span class="chip"><svg class="icon-svg"><use href="#i-calendar"/></svg> Due Jul 22</span><span class="chip g">OPEN</span></div></div></div>
+    <div class="mapwrap" id="mapwrap" aria-hidden="true">
+      <div class="maphead"><span>Scanning · 125 mi</span>
+        <span class="mlive"><span class="dot"></span>Live</span></div>
+      <svg viewBox="0 0 320 320">
+        <defs><radialGradient id="mglow" cx="50%" cy="50%">
+          <stop offset="0%" stop-color="#f59e0b" stop-opacity=".16"/>
+          <stop offset="100%" stop-color="#f59e0b" stop-opacity="0"/>
+        </radialGradient></defs>
+        <rect width="320" height="320" fill="#13162a"/>
+        <g id="mgrid"></g><g id="mroads" stroke-width="1.4"></g>
+        <circle cx="160" cy="122" r="118" fill="url(#mglow)"/>
+        <circle class="ring go" cx="160" cy="122" r="6"/>
+        <circle class="ring go" cx="160" cy="122" r="6" style="animation-delay:1.6s"/>
+        <circle class="home-halo" cx="160" cy="122" r="13"/>
+        <circle class="home" cx="160" cy="122" r="5"/>
+        <g id="mbids"></g>
+      </svg>
+      <div class="mapfoot">
+        <div class="mcount"><span id="mn">0</span> bids
+          <small>found near Springfield, MO</small></div>
+        <div class="mfound" id="mfound"></div>
       </div>
     </div>
   </div>
@@ -236,7 +327,7 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
 
 <div class="hazard"></div>
 
-<section id="features">
+<section id="features" class="band">
   <div class="wrap">
     <div class="sec-head">
       <span class="eyebrow">Built for concrete crews</span>
@@ -323,7 +414,7 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
   </div>
 </section>
 
-<section id="pricing">
+<section id="pricing" class="band band-soft">
   <div class="wrap">
     <div class="sec-head">
       <span class="eyebrow">Pricing</span>
@@ -353,7 +444,7 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
   </div>
 </section>
 
-<section id="faq">
+<section id="faq" class="narrow">
   <div class="wrap" style="max-width:760px;">
     <div class="sec-head"><span class="eyebrow">FAQ</span><h2>Common questions</h2></div>
     <div class="faq">
@@ -513,6 +604,80 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
       })
       .catch(function(){/* no reviews section, page is otherwise unaffected */});
   })();
+</script>
+<script>
+// ── hero scan map ─────────────────────────────────────────────────
+(function(){
+  const NS="http://www.w3.org/2000/svg";
+  const g=document.getElementById("mgrid"), roads=document.getElementById("mroads");
+  if(!g) return;
+  for(let i=40;i<320;i+=40){
+    for(const c of [[i,0,i,320],[0,i,320,i]]){
+      const l=document.createElementNS(NS,"line");
+      l.setAttribute("x1",c[0]);l.setAttribute("y1",c[1]);
+      l.setAttribute("x2",c[2]);l.setAttribute("y2",c[3]);
+      l.setAttribute("class","grid-line");g.appendChild(l);
+    }
+  }
+  ["M0,190 C70,180 120,205 190,150 260,95 300,120 320,105",
+   "M120,320 C130,240 150,215 160,160 170,105 150,60 175,0",
+   "M0,60 C80,75 150,40 230,70 280,88 300,80 320,72"].forEach(d=>{
+    const p=document.createElementNS(NS,"path");
+    p.setAttribute("d",d);p.setAttribute("class","road");roads.appendChild(p);});
+  const BIDS=[
+    {x:104,y:78, t:"ADA Ramp Upgrades",     w:"Springfield, MO",d:"Due Jul 9"},
+    {x:226,y:112,t:"Sidewalk Replacement",  w:"Nixa, MO",       d:"$310k"},
+    {x:196,y:170,t:"Curb & Gutter — 5th",   w:"Ozark, MO",      d:"Due Jul 22"},
+    {x:88, y:152,t:"Concrete Street Repair",w:"Republic, MO",   d:"Due Aug 3"},
+    {x:250,y:58, t:"Trail Paving Phase 2",  w:"Willard, MO",    d:"Due Aug 14"}];
+  const bg=document.getElementById("mbids"), found=document.getElementById("mfound"),
+        nEl=document.getElementById("mn");
+  // Outer <g> holds the translate attribute, inner <g> takes the scale
+  // animation -- a CSS transform replaces the SVG attribute outright, which
+  // would stack every marker at the origin.
+  const markers=BIDS.map((b,i)=>{
+    const at=document.createElementNS(NS,"g");
+    at.setAttribute("transform","translate("+b.x+" "+b.y+")");
+    const w=document.createElementNS(NS,"g");w.setAttribute("class","bid-pin");
+    const halo=document.createElementNS(NS,"circle");
+    halo.setAttribute("r",9);halo.setAttribute("fill",i>2?"#3b82f6":"#22c55e");
+    halo.setAttribute("opacity",".18");
+    const dot=document.createElementNS(NS,"circle");
+    dot.setAttribute("r",4.5);dot.setAttribute("fill",i>2?"#3b82f6":"#22c55e");
+    w.append(halo,dot);at.appendChild(w);bg.appendChild(at);return w;});
+  let n=0,idx=0,timer=null;
+  function reveal(){
+    if(idx>=BIDS.length){timer=setTimeout(reset,3600);return;}
+    const b=BIDS[idx];markers[idx].classList.add("on");
+    const d=document.createElement("div");d.className="mf";
+    d.innerHTML='<span class="pip"></span><b></b><span></span><i></i>';
+    d.querySelector("b").textContent=b.t;
+    d.children[2].textContent="· "+b.w;
+    d.querySelector("i").textContent=b.d;
+    found.appendChild(d);
+    while(found.children.length>3)found.removeChild(found.firstChild);
+    nEl.textContent=++n;idx++;timer=setTimeout(reveal,760);
+  }
+  function reset(){markers.forEach(m=>m.classList.remove("on"));
+    found.innerHTML="";n=0;idx=0;nEl.textContent="0";timer=setTimeout(reveal,900);}
+  // Only run while on screen -- a hero animating behind six sections is
+  // wasted battery on a phone.
+  new IntersectionObserver(es=>{for(const e of es){
+    if(e.isIntersecting&&!timer)reveal();
+    else if(!e.isIntersecting&&timer){clearTimeout(timer);timer=null;}
+  }},{threshold:.25}).observe(document.getElementById("mapwrap"));
+})();
+
+// ── scroll reveal ────────────────────────────────────────────
+(function(){
+  const targets=document.querySelectorAll(
+    "#how .step, .fcard, #coverage .wrap > *, #pricing .ptier, .faq-item, .qa");
+  targets.forEach((el,i)=>{el.classList.add("rv");el.style.transitionDelay=(i%4*60)+"ms";});
+  const io=new IntersectionObserver(es=>{
+    for(const e of es) if(e.isIntersecting){e.target.classList.add("in");io.unobserve(e.target);}
+  },{threshold:.15,rootMargin:"0px 0px -40px 0px"});
+  targets.forEach(el=>io.observe(el));
+})();
 </script>
 </body>
 </html>
