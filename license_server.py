@@ -501,6 +501,12 @@ def health_detail():
     # api.data.gov is literally API_KEY_INVALID, and the commonest cause is
     # using a key issued by sam.gov's own profile page, which is a different
     # credential from an api.data.gov one.
+    if _keyed_breaker_open() and not _federal_breaker_open():
+        notes.append(
+            "SAM's documented API is being skipped after %d failed scans "
+            "(last: %s); federal bids are coming from sam.gov's public "
+            "search instead, which is working. Retries automatically."
+            % (_keyed_breaker["fails"], _sam_health["last_status"]))
     if _federal_breaker_open():
         notes.append(
             "Federal bids are paused: SAM has failed %d scans in a row "
@@ -578,6 +584,12 @@ def health_detail():
             # same whether SAM is down or the radius is simply quiet.
             "resting": _federal_breaker_open(),
             "consecutive_failures": _federal_breaker["fails"],
+            # Reported separately from the above, because they mean
+            # different things: a rested KEY means the documented contract
+            # is unavailable and the public endpoint is carrying the source,
+            # which is not a federal outage.
+            "keyed_resting": _keyed_breaker_open(),
+            "keyed_failures": _keyed_breaker["fails"],
         },
         "problems": problems,
         "notes": notes,
