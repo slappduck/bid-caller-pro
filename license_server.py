@@ -6268,10 +6268,17 @@ def _perform_scan(location, radius, force=False):
             print(f"[scan] {got} raw bids from {kc}, {kst} (known portal)", flush=True)
             return got
 
+        # Timed like the optional stages are. Instrumenting only the guarded
+        # ones meant optimising what could be seen: federal showed up at 30
+        # seconds and got three rounds of attention while the search-and-read
+        # phase, which is most of a scan, reported nothing at all.
+        _t_search = time.time()
         with ThreadPoolExecutor(max_workers=4) as ex:
             futures = [ex.submit(_run_center)] + [ex.submit(_run_anchor, a) for a in anchors]
             for f in as_completed(futures):
                 local_raw += f.result()
+        drop_stats["ms_search"] = int((time.time() - _t_search) * 1000)
+        _t_towns = time.time()
 
         # Separate pool from the search-driven jobs above: these are a direct
         # fetch each against a different domain, not a search-engine query,
@@ -6300,6 +6307,8 @@ def _perform_scan(location, radius, force=False):
                         drop_stats["known_towns_out_of_time"] = skipped
                         print(f"[scan] known-town budget spent, {skipped} town(s) "
                               f"not read", flush=True)
+
+        drop_stats["ms_towns"] = int((time.time() - _t_towns) * 1000)
 
         print(f"[scan] {local_raw} raw local bids extracted total "
               f"({len(anchors)} anchor town(s), {len(known_towns)} known-portal "
