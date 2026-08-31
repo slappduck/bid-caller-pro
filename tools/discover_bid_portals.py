@@ -206,9 +206,18 @@ def is_procurement_entity(row):
     return not _OFFICE_IN_DOMAIN_RE.search(str(row.get("domain") or ""))
 
 
-def _load_registry(state_filter=None, limit=None, skip_non_procurement=True):
+def _load_registry(state_filter=None, limit=None, skip_non_procurement=True,
+                   registry_path=None):
+    """Rows to probe. Defaults to the CISA .gov registry.
+
+    registry_path exists because that registry can only ever see governments
+    on a .gov domain, and whole classes of buyer are not: school districts
+    sit on .k12.xx.us, .org and vanity domains, which is why 65 of roughly
+    13,000 were in it. Any CSV with domain/city/state/type/org columns works,
+    so a new source of buyers does not need a new crawler.
+    """
     rows = []
-    with open(GOV_DOMAINS_CSV, newline="", encoding="utf-8") as f:
+    with open(registry_path or GOV_DOMAINS_CSV, newline="", encoding="utf-8") as f:
         for row in csv.DictReader(f):
             domain = (row.get("domain") or "").strip().lower()
             state = (row.get("state") or "").strip().upper()
@@ -303,6 +312,14 @@ def main():
     ap.add_argument("--limit", type=int, default=None,
                      help="only process the first N entries (cities first) -- for a pilot run")
     ap.add_argument("--state", default=None, help="only this state's 2-letter code")
+    ap.add_argument("--overwrite", action="store_true",
+                     help="rebuild the directory from scratch, discarding "
+                          "every row already in it. Without this, and without "
+                          "--resume, a run that would truncate the file is "
+                          "refused.")
+    ap.add_argument("--registry", default=None,
+                     help="probe a different CSV of candidates instead of the "
+                          ".gov registry (domain/city/state/type/org columns)")
     ap.add_argument("--type", default=None,
                      help="only this registry type (City, County, "
                           "'Special district', 'School district')")
@@ -321,7 +338,8 @@ def main():
     if args.recheck_missing:
         return _recheck_missing(args)
 
-    registry = _load_registry(state_filter=args.state, limit=args.limit)
+    registry = _load_registry(state_filter=args.state, limit=args.limit,
+                              registry_path=args.registry)
 
     already = set()
     file_exists = os.path.exists(OUT_CSV)
@@ -333,6 +351,26 @@ def main():
     print(f"[discover] {len(registry)} domains to check "
           f"({'resuming, ' + str(len(already)) + ' already done' if args.resume else 'fresh run'})",
           flush=True)
+
+    # Refuse to silently destroy the directory.
+    #
+    # Without --resume this opened OUT_CSV in "w" mode, so any run that
+    # forgot the flag truncated the whole thing. It happened: a three-domain
+    # smoke test of --registry replaced 12,711 rows with 3, and only a git
+    # checkout got them back. A tool whose default action is "delete
+    # everything we know" is a trap regardless of how it is documented, and
+    # the cost of the guard is one flag on the one run a year that wants a
+    # rebuild.
+    if (not args.resume) and file_exists and not args.overwrite:
+        existing = sum(1 for _ in open(OUT_CSV, encoding="utf-8")) - 1
+        if existing > 0:
+            print(f"[discover] refusing to overwrite {OUT_CSV} "
+                  f"({existing} rows).\n"
+                  f"           --resume    add to it, skipping domains "
+                  f"already recorded  <- probably what you want\n"
+                  f"           --overwrite rebuild it from scratch, "
+                  f"discarding those {existing} rows", file=sys.stderr)
+            return 1
 
     write_lock = threading.Lock()
     out_f = open(OUT_CSV, "a" if (args.resume and file_exists) else "w",
@@ -372,4 +410,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # Propagate main()'s status: a refusal to overwrite must fail loudly
+    # enough that a script wrapping this stops rather than continuing as if
+    # the crawl had run.
+    sys.exit(main() or 0)

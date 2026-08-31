@@ -1,0 +1,489 @@
+domain,org,city,state,type,qid,website,lat,lon,enrollment
+web.nmusd.us,Newport-Mesa Unified School District,Costa Mesa,CA,School district,Q8768798,https://web.nmusd.us/,33.679123,-117.894967,17816
+cpsd.us,Cambridge Public Schools,Cambridge,MA,School district,Q13415268,http://www.cpsd.us,42.3719,-71.090349,6746
+lasd.net,Ludington Area Schools,Ludington,MI,School district,Q14716204,https://www.lasd.net/,43.9633,-86.4387,2072
+oakland.k12.mi.us,Oakland Schools,Waterford,MI,School district,Q15274209,https://www.oakland.k12.mi.us/,42.65095,-83.331341,2304
+azusa.org,Azusa Unified School District,Azusa,CA,School district,Q16836535,https://www.azusa.org/,34.112221,-117.889883,6754
+bpusd.net,Baldwin Park Unified School District,Baldwin Park,CA,School district,Q16837287,https://www.bpusd.net/,34.081932,-117.960982,10291
+chisd.net,Cedar Hill Independent School District,Cedar Hill,TX,School district,Q16956228,https://www.chisd.net/,32.593207,-96.951022,6920
+fusd.net,Fontana Unified School District,Fontana,CA,School district,Q16993574,https://www.fusd.net/,34.078019,-117.454219,33910
+fmuthschools.com,Frankenmuth School District,Frankenmuth,MI,School district,Q16993774,https://fmuthschools.com/,43.335042,-83.732336,1374
+ipsd.org,Indian Prairie School District 204,Aurora,IL,School district,Q16996857,https://www.ipsd.org/,41.744483,-88.224168,25687
+johnston.k12.nc.us,Johnston County School District,Smithfield,NC,School district,Q16997852,https://www.johnston.k12.nc.us/,35.50202,-78.317551,37286
+tustin.k12.ca.us,Tustin Unified School District,Tustin,CA,School district,Q17063355,https://www.tustin.k12.ca.us/,33.743161,-117.825316,21830
+northport.k12.ny.us,Northport-East Northport Union Free School District,Northport,NY,School district,Q17083996,https://northport.k12.ny.us/,40.898374,-73.337148,4572
+lamarcountyschools.org,Lamar County School District,Purvis,MS,School district,Q17108730,https://www.lamarcountyschools.org/,31.136868,-89.411078,10276
+okaloosaschools.com,Okaloosa County School District,Fort Walton Beach,FL,School district,Q18155329,http://www.okaloosaschools.com/,30.405977,-86.606819,32733
+yksd.com,Yukon-Koyukuk School District,Fairbanks,AK,School district,Q24892329,https://www.yksd.com/,64.83593,-147.826946,3100
+aleutregion.org,Aleutian Region School District,Anchorage,AK,School district,Q29097074,https://www.aleutregion.org/,61.173216,-149.882214,16
+battlecreekpublicschools.org,Battle Creek Public Schools,Battle Creek,MI,School district,Q30265423,http://www.battlecreekpublicschools.org/,42.32087,-85.180721,3753
+cdaschools.org,Coeur d'Alene School District,Coeur D'Alene,ID,School district,Q30637416,https://www.cdaschools.org/,47.697979,-116.805501,10107
+district70.org,Pueblo County School District 70,Pueblo,CO,School district,Q39045815,https://www.district70.org/,38.272265,-104.520621,10501
+nixapublicschools.net,Nixa Public Schools,Nixa,MO,School district,Q48977519,https://www.nixapublicschools.net/,37.04106,-93.295521,6724
+noblesvilleschools.org,Noblesville Schools,Noblesville,IN,School district,Q55075473,https://www.noblesvilleschools.org/,40.049557,-86.029136,10578
+npsri.net,Newport Public Schools,Newport,RI,School district,Q55075489,https://www.npsri.net/,41.46846,-71.321108,1906
+madison.k12.in.us,Madison Consolidated Schools,Madison,IN,School district,Q55106620,http://www.madison.k12.in.us/,38.772289,-85.40663,2705
+hoxie.org,Hoxie Community Schools,Hoxie,KS,School district,Q55106631,https://www.hoxie.org,39.35565,-100.4399,454
+lennox.k12.sd.us,Lennox School District 41-4,Lennox,SD,School district,Q55106694,http://www.lennox.k12.sd.us,43.350336,-96.895148,1211
+ghsd.us,Galt Joint Union High School District,Galt,CA,School district,Q55612262,https://www.ghsd.us,38.256247,-121.298044,2066
+lksd.org,Lower Kuskokwim School District,Bethel,AK,School district,Q55621382,https://www.lksd.org/,60.802916,-161.77297,3970
+bcsdk12.org,Beekmantown Central School District,West Chazy,NY,School district,Q55645484,http://www.bcsdk12.org/,44.772925,-73.49076,2033
+nacs1.org,Northern Adirondack Central School District,Ellenburg Depot,NY,School district,Q55834929,https://www.nacs1.org/,44.892881,-73.841202,831
+newhaven.misd.net,New Haven Community Schools,New Haven,MI,School district,Q56274418,https://newhaven.misd.net/,42.73663,-82.807741,1442
+clintondaleschools.net,Clintondale Community Schools,Clinton Township,MI,School district,Q56274419,https://www.clintondaleschools.net/,42.555768,-82.909849,1823
+sd27j.org,School District 27J,Brighton,CO,School district,Q56278066,http://sd27j.org,39.987371,-104.770184,22713
+keenecentralschool.org,Keene Central School District,Keene Valley,NY,School district,Q56678756,https://www.keenecentralschool.org/,44.1885,-73.7896,169
+slcs.org,Saranac Lake Central School District,Saranac Lake,NY,School district,Q56744638,http://www.slcs.org,44.327715,-74.143784,1073
+conroeisd.net,Conroe Independent School District,Conroe,TX,School district,Q384581,https://www.conroeisd.net/,30.320576,-95.486046,70783
+humbleisd.net,Humble Independent School District,Humble,TX,School district,Q385491,https://www.humbleisd.net/,30.012879,-95.267822,48758
+fcps.edu,Fairfax County Public Schools,Falls Church,VA,School district,Q408109,https://www.fcps.edu/,38.868583,-77.22411,179858
+tylerisd.org,Tyler Independent School District,Tyler,TX,School district,Q586419,http://www.tylerisd.org,32.328365,-95.315183,18328
+christinak12.org,Christina School District,Newark,DE,School district,Q595965,http://www.christinak12.org/,39.630194,-75.741715,13092
+newbedfordschools.org,New Bedford Public Schools,New Bedford,MA,School district,Q597197,http://www.newbedfordschools.org/pages/NewBedfordSD,41.634772,-70.931697,12640
+springbranchisd.com,Spring Branch Independent School District,Houston,TX,School district,Q597778,http://springbranchisd.com,29.782446,-95.514571,33649
+pylusd.org,Placentia-Yorba Linda Unified School District,Placentia,CA,School district,Q961713,http://www.pylusd.org/,33.87039,-117.838051,23138
+houstonisd.org,Houston Independent School District,Houston,TX,School district,Q1029560,http://www.houstonisd.org/,29.802507,-95.454267,189934
+lausd.org,Los Angeles Unified School District,Los Angeles,CA,School district,Q1320340,https://lausd.org,34.056169,-118.257348,427795
+cppschools.com,Comstock Park Public Schools,Comstock Park,MI,School district,Q1710977,https://www.cppschools.com/,43.03645,-85.664401,1776
+grps.org,Grand Rapids Public Schools,Grand Rapids,MI,School district,Q1771480,https://grps.org/,42.949029,-85.635762,13787
+lowell.k12.ma.us,Lowell Public Schools,Lowell,MA,School district,Q2077039,http://www.lowell.k12.ma.us/pages/lpsd,42.645911,-71.31027,14228
+philasd.org,School District of Philadelphia,Philadelphia,PA,School district,Q2421725,https://www.philasd.org/,39.96101,-75.162641,118335
+detroitk12.org,Detroit Public Schools,Detroit,MI,School district,Q2497108,https://www.detroitk12.org/,42.380308,-83.247501,568
+reverek12.org,Revere Public Schools,Revere,MA,School district,Q2839547,https://www.reverek12.org/,42.412004,-71.0089,7444
+irvingisd.net,Irving Independent School District,Irving,TX,School district,Q2841538,https://www.irvingisd.net/,32.838178,-96.982468,31767
+sweetwaterschools.org,Sweetwater Union High School District,Chula Vista,CA,School district,Q2917283,http://www.sweetwaterschools.org/,32.61018,-117.077172,36109
+huntsville-isd.org,Huntsville Independent School District,Huntsville,TX,School district,Q2917679,http://www.huntsville-isd.org,30.741623,-95.540242,11313
+ausd.net,Arcadia Unified School District,Arcadia,CA,School district,Q3916632,https://www.ausd.net/,34.138381,-118.023282,8818
+ccsd.net,Clark County School District,Las Vegas,NV,School district,Q4261591,https://www.ccsd.net/,36.145349,-115.211177,314346
+abileneisd.org,Abilene Independent School District,Abilene,TX,School district,Q4667766,https://www.abileneisd.org/,32.451,-99.732233,15253
+abington.k12.pa.us,Abington School District,Abington,PA,School district,Q4667871,http://www.abington.k12.pa.us/,40.113076,-75.129159,8543
+adams12.org,Adams 12 Five Star Schools,Thornton,CO,School district,Q4680292,https://www.adams12.org/,39.926677,-104.966609,35747
+ovsd.us,Adams County Ohio Valley School District,West Union,OH,School district,Q4680316,https://www.ovsd.us/,38.811395,-83.584054,3546
+adisd.net,Agua Dulce Independent School District,Agua Dulce,TX,School district,Q4694436,https://www.adisd.net,27.784884,-97.912488,408
+dys.alabama.gov,Alabama Department of Youth Services School District,Mt Meigs,AL,School district,Q4705251,https://dys.alabama.gov/dys-school-district,32.376397,-86.084642,
+lc-ps.org,L'Anse Creuse Public Schools,Clinton Township,MI,School district,Q6455571,https://www.lc-ps.org/,42.620846,-82.864154,9414
+lajoyaisd.com,La Joya Independent School District,La Joya,TX,School district,Q6463270,https://www.lajoyaisd.com/,26.249055,-98.48145,24804
+mylpsd.com,Lafourche Parish Public Schools,Thibodaux,LA,School district,Q6471760,https://www.mylpsd.com/,29.792541,-90.81316,14208
+lancasterisd.org,Lancaster Independent School District,Lancaster,TX,School district,Q6483205,https://www.lancasterisd.org/,32.588495,-96.755452,7032
+lvusd.org,Las Virgenes Unified School District,Calabasas,CA,School district,Q6492699,https://www.lvusd.org/,34.134914,-118.703358,9732
+lisd.net,Lewisville Independent School District,Lewisville,TX,School district,Q6537450,https://www.lisd.net/,33.044284,-97.035084,49060
+lincoln.k12.mi.us,Lincoln Consolidated School District,Ypsilanti,MI,School district,Q6550567,http://www.lincoln.k12.mi.us/,42.158691,-83.61127,3566
+lincoln.k12.or.us,Lincoln County School District,Newport,OR,School district,Q6550630,https://lincoln.k12.or.us/,44.645636,-124.045312,5122
+lps.org,Lincoln Public Schools,Lincoln,NE,School district,Q6550972,https://www.lps.org/,40.812957,-96.640734,41850
+lindaleeagles.org,Lindale Independent School District,Lindale,TX,School district,Q6552111,http://www.lindaleeagles.org/,32.510139,-95.403681,4469
+lubbockisd.org,Lubbock Independent School District,Lubbock,TX,School district,Q6695124,https://www.lubbockisd.org/,33.578218,-101.854441,25247
+luciamarschools.org,Lucia Mar Unified School District,Arroyo Grande,CA,School district,Q6696653,https://www.luciamarschools.org/,35.115327,-120.576286,9591
+mackinac.eupschools.org,Mackinac Island Public Schools,Mackinac Island,MI,School district,Q6724505,https://mackinac.eupschools.org/,45.847899,-84.623987,58
+marshall.k12.mi.us,Marshall Public Schools,Marshall,MI,School district,Q6773746,http://marshall.k12.mi.us,42.270477,-84.958039,2641
+educatemc.net,Michigan City Area Schools,Michigan City,IN,School district,Q6837486,https://www.educatemc.net,41.705943,-86.868424,5193
+keysschools.com,Monroe County School District,Key West,FL,School district,Q6902174,https://www.keysschools.com/,24.563551,-81.797403,8929
+nederlandisd.org,Nederland Independent School District,Nederland,TX,School district,Q6986216,https://www.nederlandisd.org/,29.972087,-93.994116,5029
+northridge.k12.oh.us,Northridge Local School District,Johnstown,OH,School district,Q7059654,https://www.northridge.k12.oh.us/,40.189211,-82.606409,1171
+oceangateschool.net,Ocean Gate School District,Ocean Gate,NJ,School district,Q7075999,http://www.oceangateschool.net/,39.92393,-74.1435,127
+ovsd.org,Ocean View School District,Huntington Beach,CA,School district,Q7076113,https://www.ovsd.org/,33.712026,-118.020946,6809
+oconeeschools.org,Oconee County School District,Watkinsville,GA,School district,Q7076612,https://www.oconeeschools.org/,33.86439,-83.405781,8531
+oxfordasd.org,Oxford Area School District,Oxford,PA,School district,Q7115238,https://www.oxfordasd.org/,39.81743,-75.968121,3250
+pcsb.org,Pinellas County Schools,Largo,FL,School district,Q7195530,https://www.pcsb.org/,27.914041,-82.793562,93702
+prosper-isd.net,Prosper Independent School District,Prosper,TX,School district,Q7250876,https://www.prosper-isd.net/,33.238801,-96.794609,24983
+redclayschools.com,Red Clay Consolidated School District,Wilmington,DE,School district,Q7303895,http://www.redclayschools.com/,39.744302,-75.599601,14771
+rps205.com,Rockford Public School District 205,Rockford,IL,School district,Q7355251,https://www.rps205.com/,42.262298,-89.081738,27442
+sabinepass.net,Sabine Pass Independent School District,Sabine Pass,TX,School district,Q7396174,https://www.sabinepass.net,29.730351,-93.897532,370
+sausd.us,Santa Ana Unified School District,Santa Ana,CA,School district,Q7419174,https://www.sausd.us,33.743162,-117.847419,39935
+srcschools.org,Santa Rosa City Schools,Santa Rosa,CA,School district,Q7419877,https://www.srcschools.org,38.449508,-122.72386,
+alameda.k12.ca.us,Alameda Unified School District,Alameda,CA,School district,Q4705888,http://www.alameda.k12.ca.us/,37.78215,-122.270091,8830
+agsd.us,Alaska Gateway School District,Tok,AK,School district,Q4708548,https://www.agsd.us/,63.333206,-142.958861,386
+agisd.com,Alba-Golden Independent School District,Alba,TX,School district,Q4708938,https://www.agisd.com/,32.758039,-95.586251,823
+albanyisd.net,Albany Independent School District,Albany,TX,School district,Q4709329,https://www.albanyisd.net/,32.724261,-99.289099,498
+albertgallatin.k12.pa.us,Albert Gallatin Area School District,Uniontown,PA,School district,Q4710273,http://www.albertgallatin.k12.pa.us/,39.82982,-79.770561,3046
+albionk12.org,Albion Central School District,Albion,NY,School district,Q4712503,https://www.albionk12.org/,43.239154,-78.181008,1782
+albion.k12.ok.us,Albion Independent School District,Albion,OK,School district,Q4712524,https://www.albion.k12.ok.us/,34.661165,-95.095994,46
+aldenschools.org,Alden Central School District,Alden,NY,School district,Q4713542,https://www.aldenschools.org/,42.904075,-78.496879,1507
+aldineisd.org,Aldine Independent School District,Houston,TX,School district,Q4713820,https://www.aldineisd.org/,30.003612,-95.389625,60074
+aledoisd.org,Aledo Independent School District,Aledo,TX,School district,Q4714353,https://www.aledoisd.org/,32.711446,-97.617233,7857
+kleinisd.net,Klein Independent School District,Klein,TX,School district,Q6420157,https://www.kleinisd.net/,30.04787,-95.533248,53712
+pgcps.org,Prince George's County Public Schools,Upper Marlboro,MD,School district,Q7244004,https://www.pgcps.org/,38.815333,-76.759758,131133
+svusd.org,Saddleback Valley Unified School District,Mission Viejo,CA,School district,Q7397758,https://www.svusd.org/,33.62153,-117.683901,23711
+sbpsb.org,St. Bernard Parish Public Schools,Chalmette,LA,School district,Q7587300,https://www.sbpsb.org/,29.936539,-89.964649,8277
+sweenyisd.org,Sweeny Independent School District,Sweeny,TX,School district,Q7655111,http://www.sweenyisd.org/,29.048328,-95.706286,1898
+tcjackets.net,Thomas County School District,Thomasville,GA,School district,Q7788639,https://www.tcjackets.net/,30.857834,-83.952677,5727
+trschools.org,Three Rivers Community Schools,Three Rivers,MI,School district,Q7797729,http://www.trschools.org/,41.946882,-85.613395,2323
+unionnorth.org,Union-North United School Corporation,Lakeville,IN,School district,Q7885314,https://unionnorth.org/,41.477556,-86.304839,1228
+vbschools.com,Virginia Beach City Public Schools,Virginia Beach,VA,School district,Q7934131,http://www.vbschools.com/,36.751983,-76.059624,65456
+vistausd.org,Vista Unified School District,Vista,CA,School district,Q7936471,https://www.vistausd.org/,33.22621,-117.222131,18818
+wcs.k12.mi.us,Warren Consolidated Schools,Warren,MI,School district,Q7970123,http://www.wcs.k12.mi.us/,42.52384,-83.014201,12660
+normandysc.org,Normandy Schools Collaborative,Saint Louis,MO,School district,Q7981770,https://www.normandysc.org/,38.70256,-90.292641,2894
+westernline.org,Western Line School District,Avon,MS,School district,Q7988024,https://www.westernline.org/,33.235548,-91.045016,1632
+gpisd.org,Grand Prairie Independent School District,Grand Prairie,TX,School district,Q8560651,https://www.gpisd.org/,32.706679,-96.992602,27019
+sfusd.edu,San Francisco Unified School District,San Francisco,CA,School district,Q2215009,http://www.sfusd.edu/,37.779253,-122.422153,48785
+slps.org,St. Louis Public Schools,St Louis,MO,School district,Q4117147,https://www.slps.org/,38.633409,-90.194724,18321
+abcusd.us,ABC Unified School District,Cerritos,CA,School district,Q4650267,https://www.abcusd.us/,33.879715,-118.071463,18354
+airportschools.com,Airport Community Schools,Carleton,MI,School district,Q4698900,https://www.airportschools.com/,42.039126,-83.378558,2809
+ahisd.net,Alamo Heights Independent School District,San Antonio,TX,School district,Q4705958,https://www.ahisd.net/,29.492513,-98.46681,4762
+acps.k12.va.us,Alexandria City Public Schools,Alexandria,VA,School district,Q4720962,https://www.acps.k12.va.us/,38.815938,-77.051767,16040
+ausd.us,Alhambra Unified School District,Alhambra,CA,School district,Q4724457,https://www.ausd.us/,34.082856,-118.140428,14922
+aliceisd.net,Alice Independent School District,Alice,TX,School district,Q4725927,https://www.aliceisd.net/,27.757005,-98.052642,4506
+aliefisd.net,Alief Independent School District,Houston,TX,School district,Q4726388,https://www.aliefisd.net/,29.711775,-95.596805,40329
+alpineschools.org,Alpine School District,American Fork,UT,School district,Q4735517,https://alpineschools.org/,40.388401,-111.79653,87136
+amaisd.org,Amarillo Independent School District,Amarillo,TX,School district,Q4740272,https://www.amaisd.org/,35.187867,-101.917377,30342
+anaheimelementary.org,Anaheim Elementary School District,Anaheim,CA,School district,Q4750880,https://anaheimelementary.org/,33.822837,-117.898709,14618
+auhsd.us,Anaheim Union High School District,Anaheim,CA,School district,Q4750896,https://www.auhsd.us/,33.837217,-117.948938,27748
+a2schools.org,Ann Arbor Public Schools,Ann Arbor,MI,School district,Q4766227,https://www.a2schools.org/,42.25053,-83.737071,17026
+aasd.k12.wi.us,Appleton Area School District,Appleton,WI,School district,Q4781388,https://www.aasd.k12.wi.us/,44.262645,-88.40485,15270
+sd25.org,Arlington Heights School District 25,Arlington Heights,IL,School district,Q4792334,https://www.sd25.org/,42.062108,-87.981703,5316
+aisd.net,Arlington Independent School District,Arlington,TX,School district,Q4792360,https://www.aisd.net/,32.763877,-97.101276,56167
+austinisd.org,Austin Independent School District,Austin,TX,School district,Q4823141,https://www.austinisd.org/,30.218592,-97.753379,73384
+battlegroundps.org,Battle Ground School District,Battle Ground,WA,School district,Q4870049,https://www.battlegroundps.org/,45.730385,-122.560814,12393
+bmtisd.com,Beaumont Independent School District,Beaumont,TX,School district,Q4877574,https://bmtisd.com,30.088744,-94.137933,16730
+bellinghamschools.org,Bellingham School District,Bellingham,WA,School district,Q4884034,https://bellinghamschools.org/,48.75927,-122.487031,11614
+benton.k12.in.us,Benton Community School Corporation,Fowler,IN,School district,Q4890549,https://www.benton.k12.in.us/,40.614199,-87.314404,1609
+bsd100.org,Berwyn South School District 100,Berwyn,IL,School district,Q4896043,https://www.bsd100.org/,41.83038,-87.784987,3029
+bn98.org,Berwyn North School District 98,Berwyn,IL,School district,Q4896040,https://www.bn98.org/,41.858203,-87.790636,2519
+bcsdk12.net,Bibb County Public School District,Macon,GA,School district,Q4902967,https://www.bcsdk12.net,32.83634,-83.626121,21392
+birdvilleschools.net,Birdville Independent School District,Haltom City,TX,School district,Q4916161,https://www.birdvilleschools.net/,32.806592,-97.25215,22637
+boiseschools.org,Boise School District,Boise,ID,School district,Q4938460,https://www.boiseschools.org/,43.574559,-116.283299,22809
+do.bonita.k12.ca.us,Bonita Unified School District,San Dimas,CA,School district,Q4942075,https://do.bonita.k12.ca.us/,34.11791,-117.807832,9943
+boone.k12.ky.us,Boone County Schools,Florence,KY,School district,Q4943618,https://www.boone.k12.ky.us/,38.980045,-84.65406,20200
+brandywineschools.org,Brandywine School District,Wilmington,DE,School district,Q4957290,https://www.brandywineschools.org/,39.770645,-75.496312,10367
+bisd.us,Brownsville Independent School District,Brownsville,TX,School district,Q4976789,https://www.bisd.us/,25.935024,-97.489797,37898
+bryanisd.org,Bryan Independent School District,Bryan,TX,School district,Q4980176,https://www.bryanisd.org/,30.662862,-96.36752,16036
+burbankusd.org,Burbank Unified School District,Burbank,CA,School district,Q4998167,https://www.burbankusd.org/,34.16531,-118.324641,14432
+cannelton.k12.in.us,Cannelton City Schools,Cannelton,IN,School district,Q5032647,http://www.cannelton.k12.in.us,37.910295,-86.743796,219
+canyonisd.net,Canyon Independent School District,Canyon,TX,School district,Q5034215,https://www.canyonisd.net/,35.018715,-101.920588,11075
+capousd.org,Capistrano Unified School District,San Juan Capistrano,CA,School district,Q5035416,https://www.capousd.org,33.480054,-117.6699,41855
+cfbisd.edu,Carrollton-Farmers Branch Independent School District,Carrollton,TX,School district,Q5046653,https://www.cfbisd.edu/,32.956845,-96.896255,24747
+centennialsd.org,Centennial School District,Warminster,PA,School district,Q5059211,https://www.centennialsd.org/,40.201384,-75.078672,5317
+cvsd.org,Central Valley School District,Liberty Lake,WA,School district,Q5061984,https://www.cvsd.org/,47.677979,-117.090529,14688
+cherokee.k12.nc.us,Cherokee County Schools,Murphy,NC,School district,Q5092142,https://www.cherokee.k12.nc.us/,35.10192,-84.020121,3146
+cvesd.org,Chula Vista Elementary School District,Chula Vista,CA,School district,Q5116087,https://www.cvesd.org,32.631432,-117.05811,22226
+cicd99.edu,Cicero Public School District 99,Cicero,IL,School district,Q5119369,https://www.cicd99.edu/,41.847872,-87.752169,8815
+casdschools.org,Coatesville Area School District,Thorndale,PA,School district,Q5138626,https://www.casdschools.org/,39.994607,-75.763395,5400
+cobbk12.org,Cobb County School District,Marietta,GA,School district,Q5138757,https://www.cobbk12.org/,33.938441,-84.538051,106703
+cjusd.net,Colton Joint Unified School District,Colton,CA,School district,Q5149475,https://www.cjusd.net/,34.079816,-117.333439,19297
+comalisd.org,Comal Independent School District,New Braunfels,TX,School district,Q5150491,https://www.comalisd.org/,29.7049,-98.089,28511
+comfort.txed.net,Comfort Independent School District,Comfort,TX,School district,Q5151682,https://www.comfort.txed.net,29.971004,-98.91519,1104
+web.dusd.net,Downey Unified School District,Downey,CA,School district,Q5303136,https://web.dusd.net/,33.935007,-118.132808,22359
+dublinschools.net,Dublin City School District,Dublin,OH,School district,Q5310857,https://www.dublinschools.net/,40.10515,-83.128948,16525
+duncanvilleisd.org,Duncanville Independent School District,Duncanville,TX,School district,Q5314689,https://www.duncanvilleisd.org/,32.645936,-96.924682,11915
+dcps.duvalschools.org,Duval County Public Schools,Jacksonville,FL,School district,Q5317603,https://dcps.duvalschools.org/,30.317393,-81.650348,128657
+eaglepassisd.net,Eagle Pass Independent School District,Eagle Pass,TX,School district,Q5325186,https://www.eaglepassisd.net/,28.711723,-100.503288,13935
+elps.k12.mi.us,East Lansing Public Schools,East Lansing,MI,School district,Q5328807,http://elps.k12.mi.us/education/district/district.php?sectiondetailid=1,42.743707,-84.47936,3788
+eastnoble.net,East Noble School Corporation,Kendallville,IN,School district,Q5329046,https://www.eastnoble.net/,41.4414,-85.266281,3417
+ecasd.us,Eau Claire Area School District,Eau Claire,WI,School district,Q5331426,https://www.ecasd.us/,44.811814,-91.496378,10871
+ectorcountyisd.org,Ector County Independent School District,Odessa,TX,School district,Q5334310,https://www.ectorcountyisd.org,31.850676,-102.374332,33340
+emcsd.org,El Monte City School District,El Monte,CA,School district,Q5351632,https://www.emcsd.org,34.073459,-118.039194,7045
+erusd.org,El Rancho Unified School District,Pico Rivera,CA,School district,Q5351981,https://www.erusd.org/,33.994784,-118.080895,7255
+inglewoodusd.com,Inglewood Unified School District,Inglewood,CA,School district,Q5362870,https://www.inglewoodusd.com/,33.958617,-118.362078,7354
+eriesd.org,Erie City School District,Erie,PA,School district,Q5388283,https://www.eriesd.org/,42.11515,-80.079591,10100
+eusd.org,Escondido Union School District,Escondido,CA,School district,Q5397390,https://www.eusd.org,33.119214,-117.115154,14322
+district.fayar.net,Fayetteville Public Schools,Fayetteville,AR,School district,Q5439061,https://district.fayar.net/,36.05981,-94.174071,10560
+fwps.org,Federal Way Public Schools,Federal Way,WA,School district,Q5440500,https://www.fwps.org/,47.304885,-122.324633,21606
+forneyisd.net,Forney Independent School District,Forney,TX,School district,Q5470375,https://www.forneyisd.net/,32.743787,-96.476571,16211
+fortbendisd.com,Fort Bend Independent School District,Sugar Land,TX,School district,Q5470808,https://www.fortbendisd.com/,29.58887,-95.622211,79660
+fwcs.k12.in.us,Fort Wayne Community Schools,Fort Wayne,IN,School district,Q5472276,https://www.fwcs.k12.in.us/,41.074384,-85.137818,28612
+fwisd.org,Fort Worth Independent School District,Fort Worth,TX,School district,Q5472395,https://www.fwisd.org/,32.760407,-97.360455,72783
+frenship.net,Frenship Independent School District,Wolfforth,TX,School district,Q5502794,https://www.frenship.net/,33.503055,-102.011321,11165
+ggusd.us,Garden Grove Unified School District,Garden Grove,CA,School district,Q5522250,https://www.ggusd.us,33.778272,-117.952205,38164
+gusd.net,Glendale Unified School District,Glendale,CA,School district,Q5568391,https://www.gusd.net/,34.148958,-118.250587,24456
+gcisd.net,Grapevine-Colleyville Independent School District,Grapevine,TX,School district,Q5597029,https://www.gcisd.net/,32.920412,-97.115968,13772
+gwinnett.k12.ga.us,Gwinnett County Public Schools,Lawrenceville,GA,School district,Q5623670,http://www.gwinnett.k12.ga.us/,34.016948,-84.057792,181814
+hlpschools.org,Hacienda La Puente Unified School District,City Of Industry,CA,School district,Q5637129,https://www.hlpschools.org/,34.01001,-117.958633,16206
+dadeschools.net,Miami-Dade County Public Schools,Miami,FL,School district,Q5640011,http://www.dadeschools.net/,25.78893,-80.190942,334090
+jackson.k12.ms.us,Jackson Public School District,Jackson,MS,School district,Q5646260,https://www.jackson.k12.ms.us/,32.292326,-90.182688,18710
+harlandale.net,Harlandale Independent School District,San Antonio,TX,School district,Q5658439,https://www.harlandale.net/,29.349701,-98.487267,12174
+hpsmi.org,Hartford Public Schools,Hartford,MI,School district,Q5674524,https://www.hpsmi.org/,42.211587,-86.166177,1364
+hawthorne.k12.ca.us,Hawthorne School District,Hawthorne,CA,School district,Q5685653,https://www.hawthorne.k12.ca.us,33.903742,-118.352053,7093
+highislandisd.com,High Island Independent School District,High Island,TX,School district,Q5755756,https://www.highislandisd.com,29.5637,-94.3903,151
+wilmette39.org,Wilmette Public Schools District 39,Wilmette,IL,School district,Q5757923,https://www.wilmette39.org/,42.074503,-87.743015,3333
+smmusd.org,Santa Monica-Malibu Unified School District,Santa Monica,CA,School district,Q5836140,https://www.smmusd.org/,34.022301,-118.478995,8820
+hammond.k12.in.us,School City of Hammond,Hammond,IN,School district,Q5842896,https://www.hammond.k12.in.us/,41.611599,-87.524287,11505
+livoniapublicschools.org,Livonia Public Schools,Livonia,MI,School district,Q5883593,https://www.livoniapublicschools.org/,42.39478,-83.375731,13228
+hcbe.net,Houston County Schools,Perry,GA,School district,Q5916473,https://www.hcbe.net/,32.45843,-83.728765,30631
+hbuhsd.edu,Huntington Beach Union High School District,Huntington Beach,CA,School district,Q5945284,https://www.hbuhsd.edu/,33.744015,-118.027197,14522
+hebisd.edu,Hurst-Euless-Bedford Independent School District,Bedford,TX,School district,Q5948556,https://www.hebisd.edu/,32.835346,-97.134415,22947
+idaschools.org,Ida Public Schools,Ida,MI,School district,Q5987175,https://www.idaschools.org/,41.906194,-83.571497,1440
+icschools.us,Imlay City Community Schools,Imlay City,MI,School district,Q6004217,https://www.icschools.us/,43.013814,-83.085686,1770
+ithacaschools.net,Ithaca Public Schools,Ithaca,MI,School district,Q6094526,http://www.ithacaschools.net/,43.30088,-84.59741,1020
+jacksonk12.org,Jackson County School District,Scottsboro,AL,School district,Q6117052,https://www.jacksonk12.org/,34.675199,-86.061521,5200
+wsdk8.us,Westminster School District,Westminster,CA,School district,Q8768802,https://www.wsdk8.us/,33.75737,-117.994494,8149
+hcboe.us,Houston County Schools,Dothan,AL,School district,Q16800752,https://www.hcboe.us//,31.220962,-85.396924,6883
+ccps.us,Caroline County Public Schools,Bowling Green,VA,School district,Q16955959,https://www.ccps.us/,38.038222,-77.341924,4337
+d91.k12.id.us,Idaho Falls School District,Idaho Falls,ID,School district,Q28448210,https://www.d91.k12.id.us/,43.493202,-112.019154,10250
+newton-conover.org,Newton-Conover City Schools,Newton,NC,School district,Q55316605,https://www.newton-conover.org,35.66835,-81.222521,2856
+nccscougar.org,Northeastern Clinton Central School District,Champlain,NY,School district,Q55325240,https://www.nccscougar.org/,44.989284,-73.415351,1249
+bcschools.net,Bay City Public Schools,Bay City,MI,School district,Q60752302,https://www.bcschools.net/,43.606915,-83.910706,6385
+pasd.org,Pinconning Area School District,Pinconning,MI,School district,Q60752303,http://www.pasd.org/,43.852543,-83.969109,1159
+everettpublicschools.org,Everett Public Schools,Everett,MA,School district,Q60763810,https://www.everettpublicschools.org/,42.4035,-71.047011,7377
+edmonds.wednet.edu,Edmonds School District,Lynnwood,WA,School district,Q5338954,https://www.edmonds.wednet.edu/,47.813526,-122.326106,20459
+farmersville.k12.ca.us,Farmersville Unified School District,Farmersville,CA,School district,Q5435837,https://www.farmersville.k12.ca.us,36.307446,-119.202406,2451
+highlineschools.org,Highline Public Schools,Burien,WA,School district,Q5759524,https://www.highlineschools.org/,47.46228,-122.337961,18048
+irondistrict.org,Iron County School District,Cedar City,UT,School district,Q6072422,https://irondistrict.org/,37.65892,-113.087661,12739
+issaquah.wednet.edu,Issaquah School District,Issaquah,WA,School district,Q6088123,https://www.issaquah.wednet.edu/,47.55464,-122.047321,19524
+jefferson.kyschools.us,Jefferson County Public Schools,Louisville,KY,School district,Q6175438,https://www.jefferson.kyschools.us/,38.1995,-85.6851,95230
+jpschools.org,Jefferson Parish Public Schools,Harvey,LA,School district,Q6175551,http://jpschools.org/,29.908926,-90.068384,50628
+judsonisd.org,Judson Independent School District,San Antonio,TX,School district,Q6304246,https://www.judsonisd.org/,29.553083,-98.329423,25871
+kalamazoopublicschools.com,Kalamazoo Public Schools,Kalamazoo,MI,School district,Q6350407,https://www.kalamazoopublicschools.com/,42.27436,-85.600831,12298
+katyisd.org,Katy Independent School District,Katy,TX,School district,Q6378510,https://www.katyisd.org/,29.7803,-95.8327,92667
+kellerisd.net,Keller Independent School District,Keller,TX,School district,Q6385682,https://www.kellerisd.net/,32.934159,-97.247449,34078
+ksd.org,Kennewick School District,Kennewick,WA,School district,Q6390887,https://www.ksd.org/,46.206378,-119.133653,19311
+kusd.edu,Kenosha Unified School District,Kenosha,WI,School district,Q6391322,https://www.kusd.edu/,42.589206,-87.852687,19069
+alamogordoschools.org,Alamogordo Public Schools,Alamogordo,NM,School district,Q4705987,https://www.alamogordoschools.org/,32.902381,-105.950617,5575
+k12albemarle.org,Albemarle County Public Schools,Charlottesville,VA,School district,Q4709498,https://www.k12albemarle.org/,38.034707,-78.483739,13937
+albertk12.org,Albertville City Schools,Albertville,AL,School district,Q4712303,https://www.albertk12.org/,34.282186,-86.223627,5900
+aps.edu,Albuquerque Public Schools,Albuquerque,NM,School district,Q4712830,https://www.aps.edu/,35.102965,-106.572756,79805
+aacps.org,Anne Arundel County Public Schools,Annapolis,MD,School district,Q4768130,https://www.aacps.org/,38.97612,-76.559401,84452
+nhps.net,New Haven Public Schools,New Haven,CT,School district,Q539692,http://www.nhps.net/,41.299967,-72.926296,19150
+montgomeryschoolsmd.org,Montgomery County Public Schools,Rockville,MD,School district,Q599573,https://www.montgomeryschoolsmd.org/,39.095191,-77.158219,160554
+wsfcs.k12.nc.us,Winston-Salem/Forsyth County Schools,Winston Salem,NC,School district,Q615158,https://www.wsfcs.k12.nc.us/,36.17996,-80.281211,52717
+lcps.net,Las Cruces Public Schools,Las Cruces,NM,School district,Q981316,http://www.lcps.net/,32.303908,-106.77549,23631
+scusd.edu,Sacramento City Unified School District,Sacramento,CA,School district,Q1085749,https://www.scusd.edu/,38.510947,-121.438798,38821
+myips.org,Indianapolis Public Schools,Indianapolis,IN,School district,Q1661331,https://www.myips.org/,39.777329,-86.154602,22027
+bostonpublicschools.org,Boston Public Schools,Roxbury,MA,School district,Q2215021,https://www.bostonpublicschools.org/,42.330141,-71.083712,46367
+cmsk12.org,Charlotte-Mecklenburg Schools,Charlotte,NC,School district,Q2944229,https://www.cmsk12.org/,35.187118,-80.889273,144197
+cps-k12.org,Cincinnati Public Schools,Cincinnati,OH,School district,Q3065651,https://www.cps-k12.org/,39.130446,-84.502336,35585
+polkschoolsfl.com,Polk County Public Schools,Bartow,FL,School district,Q3907585,https://polkschoolsfl.com,27.87546,-81.846336,109558
+abbotsford.k12.wi.us,Abbotsford School District,Abbotsford,WI,School district,Q4664312,https://www.abbotsford.k12.wi.us/,44.949886,-90.332138,798
+aberdeen58.org,Aberdeen School District,Aberdeen,ID,School district,Q4666976,http://www.aberdeen58.org/,42.943667,-112.844022,673
+asd5.org,Aberdeen School District,Aberdeen,WA,School district,Q4666980,https://www.asd5.org/,46.9784,-123.816491,3304
+ahsd.org,Abington Heights School District,Clarks Summit,PA,School district,Q4667866,http://www.ahsd.org/,41.49395,-75.698161,3474
+addisonschools.org,Addison Community Schools,Addison,MI,School district,Q4681245,http://addisonschools.org/,41.988423,-84.343967,717
+adrianmaples.org,Adrian Public Schools,Adrian,MI,School district,Q4685293,https://www.adrianmaples.org/,41.911067,-84.048422,2771
+hillsboroughschools.org,Hillsborough County Public Schools,Tampa,FL,School district,Q8778311,https://www.hillsboroughschools.org/,27.949214,-82.452317,224538
+academicsplus.org,Academics Plus Public Charter Schools,Maumelle,AR,School district,Q15178025,http://www.academicsplus.org/,34.865497,-92.403858,1825
+tuckahoeschools.org,Tuckahoe Union Free School District,Eastchester,NY,School district,Q16940137,https://www.tuckahoeschools.org/,40.942937,-73.812456,1093
+norwichpublicschools.org,Norwich Public Schools,Norwich,CT,School district,Q16941082,https://www.norwichpublicschools.org/,41.548506,-72.095229,3348
+grotonschools.org,Groton Public Schools,Mystic,CT,School district,Q17019899,https://www.grotonschools.org/,41.386336,-72.004515,4104
+hartfordschools.org,Hartford Public Schools,Hartford,CT,School district,Q22058805,https://www.hartfordschools.org/,41.747098,-72.672813,16774
+lacoe.edu,Los Angeles County Office of Education,Downey,CA,School district,Q28599702,http://www.lacoe.edu/,33.916402,-118.129286,1533
+saultschools.org,Sault Ste. Marie Area Public Schools,Sault Sainte Marie,MI,School district,Q30258296,https://www.saultschools.org/,46.480174,-84.343907,1953
+pgs.k12.va.us,Prince George County Public Schools,Prince George,VA,School district,Q30266691,https://www.pgs.k12.va.us/,37.222456,-77.288115,6106
+perucsd.org,Peru Central School District,Peru,NY,School district,Q48743814,https://www.perucsd.org,44.582837,-73.534357,1877
+plattscsd.org,Plattsburgh City School District,Plattsburgh,NY,School district,Q55322610,http://www.plattscsd.org,44.69445,-73.458721,1735
+sbschools.net,South Burlington School District,South Burlington,VT,School district,Q56678634,https://www.sbschools.net,44.456733,-73.177403,2717
+saranac.org,Saranac Central School District,Dannemora,NY,School district,Q56744609,http://www.saranac.org/,44.71322,-73.721441,1513
+kent.k12.wa.us,Kent School District,Kent,WA,School district,Q6391894,https://www.kent.k12.wa.us/,47.37121,-122.179584,25586
+kenton.k12.ky.us,Kenton County School District,Fort Wright,KY,School district,Q6392077,https://www.kenton.k12.ky.us/,39.030458,-84.532072,14066
+killeenisd.org,Killeen Independent School District,Killeen,TX,School district,Q6407407,https://www.killeenisd.org/frontPageV3/,31.115987,-97.71063,43935
+kcsd.k12.or.us,Klamath County School District,Klamath Falls,OR,School district,Q6419633,https://www.kcsd.k12.or.us/,42.195982,-121.792118,7081
+knoxschools.org,Knox County Schools,Knoxville,TN,School district,Q6423553,https://www.knoxschools.org/,35.96659,-83.91988,60609
+lwsd.org,Lake Washington School District,Redmond,WA,School district,Q6478432,https://www.lwsd.org/,47.670953,-122.12338,30991
+lamar.k12.ga.us,Lamar County School District,Barnesville,GA,School district,Q6480853,https://www.lamar.k12.ga.us/,33.045442,-84.183599,2820
+leonschools.net,Leon County Schools,Tallahassee,FL,School district,Q6524588,https://www.leonschools.net/,30.44064,-84.334411,32212
+lrsd.org,Little Rock School District,Little Rock,AR,School district,Q6651765,https://www.lrsd.org/,34.74966,-92.279421,21456
+lrsd.k12.ar.us,Little Rock School District,Little Rock,AR,School district,Q6651765,http://www.lrsd.k12.ar.us/,34.74966,-92.279421,21456
+lcps.org,Loudoun County Public Schools,Ashburn,VA,School district,Q6686038,https://www.lcps.org/,39.033782,-77.517269,81678
+csdnb.org,New Britain Public Schools,New Britain,CT,School district,Q7005722,https://www.csdnb.org/,41.668004,-72.782107,9717
+orangeusd.org,Orange Unified School District,Orange,CA,School district,Q7099759,https://www.orangeusd.org/,33.81129,-117.826647,24764
+princetonk12.org,Princeton Public Schools,Princeton,NJ,School district,Q7244998,https://www.princetonk12.org/,40.36105,-74.663648,3817
+smcsd.org,Sausalito Marin City School District,Marin City,CA,School district,Q7427604,https://www.smcsd.org/,37.87262,-122.513791,318
+palmbeachschools.org,School District of Palm Beach County,West Palm Beach,FL,School district,Q7432244,http://www.PalmBeachSchools.org,26.64925,-80.093741,188843
+sbschools.org,South Brunswick Public Schools,North Brunswick,NJ,School district,Q7566446,https://www.sbschools.org/,40.42031,-74.512841,7950
+smcps.org,St. Mary's County Public Schools,Leonardtown,MD,School district,Q7590260,https://www.smcps.org/,38.304265,-76.640356,17493
+wheelercountyschools.org,Wheeler County School District,Alamo,GA,School district,Q7992206,http://www.wheelercountyschools.org/,32.149194,-82.782735,873
+iusd.org,Irvine Unified School District,Irvine,CA,School district,Q8560658,https://iusd.org/,33.67565,-117.792341,36542
+dcssga.org,Douglas County School District,Douglasville,GA,School district,Q5301376,https://www.dcssga.org/,33.779466,-84.704995,25802
+dpsnc.net,Durham Public Schools,Durham,NC,School district,Q5316544,https://www.dpsnc.net/,35.997229,-78.897664,31531
+epd86.org,East Peoria School District 86,East Peoria,IL,School district,Q5329135,http://epd86.org/,40.664716,-89.571502,1449
+everettsd.org,Everett Public Schools,Everett,WA,School district,Q5417059,https://www.everettsd.org/,47.965115,-122.201836,20359
+fcps.org,Frederick County Public Schools,Frederick,MD,School district,Q5497582,https://www.fcps.org/,39.410445,-77.406353,46899
+garycsc.k12.in.us,Gary Community School Corporation,Gary,IN,School district,Q5524879,https://www.garycsc.k12.in.us/,41.593932,-87.408242,4076
+lbschools.net,Long Beach Unified School District,Long Beach,CA,School district,Q5555283,https://www.lbschools.net/,33.82892,-118.213761,65554
+gcsnc.com,Guilford County Schools,Greensboro,NC,School district,Q5615918,https://www.gcsnc.com/,36.08087,-79.793191,68894
+hcps.org,Harford County Public Schools,Bel Air,MD,School district,Q5656980,https://www.hcps.org/,39.536187,-76.347192,38037
+tigerwires.com,Hollidaysburg Area School District,Hollidaysburg,PA,School district,Q5881352,https://www.tigerwires.com/,40.43101,-78.389361,3134
+hcsdnv.com,Humboldt County School District,Winnemucca,NV,School district,Q5940310,https://www.hcsdnv.com/,40.975071,-117.73043,3329
+huntsvillecityschools.org,Huntsville City Schools,Huntsville,AL,School district,Q5945856,https://www.huntsvillecityschools.org/,34.712323,-86.586335,23776
+jpsk12.org,Jackson Public Schools,Jackson,MI,School district,Q6117339,https://www.jpsk12.org/,42.2485,-84.417,4486
+jc-tn.net,Jefferson County Public Schools,Dandridge,TN,School district,Q6175440,https://www.jc-tn.net/,36.015696,-83.415743,6995
+jcswv.org,Jefferson County Public Schools,Charles Town,WV,School district,Q6175441,https://www.jcswv.org/,39.28397,-77.861631,8389
+longviewschools.com,Longview Public Schools,Longview,WA,School district,Q60790481,https://www.longviewschools.com/,46.141623,-122.955595,6311
+bangorschools.org,Bangor Township Schools,Bay City,MI,School district,Q60791471,https://www.bangorschools.org/,43.603235,-83.919646,2646
+dps61.org,Decatur Public Schools District 61,Decatur,IL,School district,Q63858644,https://www.dps61.org/,39.846702,-88.956459,7974
+ncpsk12.com,Northampton County Public Schools,Machipongo,VA,School district,Q63869932,https://www.ncpsk12.com/,37.403791,-75.910427,1359
+mancelonaschools.org,Mancelona Public Schools,Mancelona,MI,School district,Q65051283,https://www.mancelonaschools.org/,44.899968,-85.070659,863
+calhounflschools.org,Calhoun County School District,Blountstown,FL,School district,Q65059337,http://www.calhounflschools.org,30.442758,-85.042004,2129
+crookcounty.k12.or.us,Crook County School District,Prineville,OR,School district,Q66986655,http://crookcounty.k12.or.us/,44.30467,-120.830711,3272
+alpinecoe.k12.ca.us,Alpine County Unified School District,Markleeville,CA,School district,Q85741024,http://alpinecoe.k12.ca.us,38.76636,-119.808836,68
+dnusd.org,Del Norte Unified School District,Crescent City,CA,School district,Q85756253,https://www.dnusd.org,41.772026,-124.206215,3501
+dbsd.org,Denali Borough School District,Healy,AK,School district,Q85756349,https://www.dbsd.org/,63.872903,-149.015539,912
+lysd.org,Lower Yukon School District,Mountain Village,AK,School district,Q85782528,https://lysd.org/,62.092018,-163.724886,2035
+ralstonschools.org,Ralston Public Schools,Ralston,NE,School district,Q85795782,https://www.ralstonschools.org,41.201067,-96.045793,3352
+woodridge68.org,Woodridge School District 68,Woodridge,IL,School district,Q85816135,https://www.woodridge68.org/,41.741111,-88.039625,2708
+clkschools.org,"Public Schools of Calumet, Laurium & Keweenaw",Calumet,MI,School district,Q91888539,https://www.clkschools.org/,47.244776,-88.447391,1359
+erschools.com,Elk Rapids Public Schools,Elk Rapids,MI,School district,Q92319404,https://www.erschools.com/,44.892261,-85.395402,1231
+roslynschools.org,Roslyn Union Free School District,Roslyn,NY,School district,Q93877703,https://www.roslynschools.org/,40.792879,-73.640992,3301
+apsva.us,Arlington Public Schools,Arlington,VA,School district,Q4792391,https://www.apsva.us/,38.872682,-77.083473,27562
+atkinspublic.schoolinsites.com,Atkins School District,Atkins,AR,School district,Q4815896,http://atkinspublic.schoolinsites.com/,35.244891,-92.938086,989
+baltimorecityschools.org,Baltimore City Public Schools,Baltimore,MD,School district,Q4852821,https://www.baltimorecityschools.org/,39.312016,-76.613209,75995
+bethelsd.org,Bethel School District,Spanaway,WA,School district,Q4897931,https://www.bethelsd.org/,47.096826,-122.425454,21156
+bousd.us,Brea Olinda Unified School District,Brea,CA,School district,Q4959089,https://www.bousd.us/,33.917093,-117.888904,5811
+cabarrus.k12.nc.us,Cabarrus County Schools,Concord,NC,School district,Q5015260,https://www.cabarrus.k12.nc.us/,35.38879,-80.506461,34810
+southlakecarroll.edu,Carroll Independent School District,Southlake,TX,School district,Q5046583,http://www.southlakecarroll.edu/,32.97201,-97.135858,8471
+ccps.org,Cecil County Public Schools,Elkton,MD,School district,Q5056025,https://www.ccps.org/,39.612773,-75.827555,15047
+isd12.org,Centennial School District,Circle Pines,MN,School district,Q5059209,https://www.isd12.org/,45.154053,-93.15059,6764
+chino.k12.ca.us,Chino Valley Unified School District,Chino,CA,School district,Q5101225,https://www.chino.k12.ca.us/,34.019441,-117.691621,25645
+chugachschooldistrict.com,Chugach School District,Anchorage,AK,School district,Q5115949,https://www.chugachschooldistrict.com/,61.1364,-149.848232,637
+cloverpark.k12.wa.us,Clover Park School District,Lakewood,WA,School district,Q5135906,https://www.cloverpark.k12.wa.us/,47.159128,-122.519527,12566
+compton.k12.ca.us,Compton Unified School District,Compton,CA,School district,Q5157176,https://www.compton.k12.ca.us/,33.891567,-118.216745,17437
+concordschools.net,Concord Community Schools,Concord,MI,School district,Q5158785,https://www.concordschools.net/,42.171844,-84.638673,629
+coppellisd.com,Coppell Independent School District,Coppell,TX,School district,Q5168672,https://www.coppellisd.com/,32.965756,-96.99305,13361
+cfisd.net,Cypress-Fairbanks Independent School District,Houston,TX,School district,Q5200304,https://www.cfisd.net/,29.922756,-95.583673,118010
+dearbornschools.org,Dearborn Public Schools,Dearborn,MI,School district,Q5246973,https://www.dearbornschools.org,42.28302,-83.225891,20128
+dvisd.net,Del Valle Independent School District,Del Valle,TX,School district,Q5253016,https://www.dvisd.net/,30.176004,-97.613364,11118
+dentonisd.org,Denton Independent School District,Denton,TX,School district,Q5259616,https://www.dentonisd.org/,33.225457,-97.133187,32521
+donnaisd.net,Donna Independent School District,Donna,TX,School district,Q5296372,https://www.donnaisd.net/,26.173623,-98.053239,13165
+covington.kyschools.us,Covington Independent Public Schools,Covington,KY,School district,Q61989286,http://www.covington.kyschools.us/,39.083376,-84.509071,3665
+ricelake.k12.wi.us,Rice Lake Area School District,Rice Lake,WI,School district,Q63042715,https://www.ricelake.k12.wi.us/,45.500214,-91.744574,2186
+gorhamschools.org,Gorham School District,Gorham,ME,School district,Q65047695,http://www.gorhamschools.org/,43.676534,-70.443042,2737
+hardin.kyschools.us,Hardin County Schools,Elizabethtown,KY,School district,Q85765736,https://hardin.kyschools.us,37.756774,-85.899111,14675
+elkhornweb.org,Elkhorn Public Schools,Elkhorn,WI,School district,Q86998488,https://www.elkhornweb.org/,42.671961,-88.538939,3582
+janesville.k12.wi.us,School District of Janesville,Janesville,WI,School district,Q91890327,https://www.janesville.k12.wi.us/,42.6748,-89.0186,9537
+asd16.org,Arlington School District,Arlington,WA,School district,Q4792396,https://www.asd16.org/,48.195752,-122.122026,5506
+armorel.k12.ar.us,Armorel School District,Armorel,AR,School district,Q4793722,http://armorel.k12.ar.us/,35.91665,-89.80028,416
+bcps.org,Baltimore County Public Schools,Baltimore,MD,School district,Q4852849,https://bcps.org/,39.312016,-76.613209,75995
+bps-ok.org,Bartlesville Public Schools,Bartlesville,OK,School district,Q4865367,https://www.bps-ok.org/,36.742092,-95.981576,6182
+bsd405.org,Bellevue School District,Bellevue,WA,School district,Q4883960,https://bsd405.org/,47.61058,-122.178741,19089
+bridgeportedu.net,Bridgeport Public Schools,Bridgeport,CT,School district,Q4966607,https://www.bridgeportedu.net/,41.180478,-73.192979,19337
+bronxville.k12.ny.us,Bronxville Union Free School District,Bronxville,NY,School district,Q4974215,http://www.bronxville.k12.ny.us/,40.9376,-73.8308,1555
+bsdvt.org,Burlington School District,Burlington,VT,School district,Q4999280,http://www.bsdvt.org,44.482366,-73.194783,3500
+camas.wednet.edu,Camas School District,Camas,WA,School district,Q5024999,https://www.camas.wednet.edu/,45.595602,-122.401987,7324
+carolineschools.org,Caroline County Public Schools,Denton,MD,School district,Q5045024,https://www.carolineschools.org/,38.884975,-75.832572,5667
+catawbaschools.net,Catawba County Schools,Newton,NC,School district,Q5051594,https://www.catawbaschools.net/,35.68646,-81.218081,15678
+ckschools.org,Central Kitsap School District,Silverdale,WA,School district,Q5061320,https://www.ckschools.org/,47.646463,-122.697538,11206
+cherokee.k12.ga.us,Cherokee County School District,Canton,GA,School district,Q5092140,https://www.cherokee.k12.ga.us/,34.270342,-84.47183,41891
+cherokeek12.org,Cherokee County Schools,Centre,AL,School district,Q5092141,https://www.cherokeek12.org/,34.151676,-85.678793,3886
+moodle.oakland.k12.mi.us,Clarenceville School District,Livonia,MI,School district,Q5126844,http://moodle.oakland.k12.mi.us/clarenceville/course/view.php?id=40,42.43712,-83.33625,1773
+c-vusd.org,Covina-Valley Unified School District,Covina,CA,School district,Q5179333,https://www.c-vusd.org/,34.086572,-117.880895,11130
+dothan.k12.al.us,Dothan City Schools,Dothan,AL,School district,Q5299432,https://www.dothan.k12.al.us/,31.205412,-85.434158,8254
+benzieschools.net,Benzie Central Schools,Benzonia,MI,School district,Q96749241,https://benzieschools.net,44.618598,-86.053358,1236
+rrps.org,Rock Ridge Public Schools,Virginia,MN,School district,Q104854388,https://rrps.org/,47.480603,-92.520291,2406
+portnet.org,Port Washington Union Free School District,Port Washington,NY,School district,Q104869279,https://www.portnet.org/,40.829669,-73.681015,5294
+lowellschools.com,Lowell Area Schools,Lowell,MI,School district,Q105647007,https://www.lowellschools.com/,42.93623,-85.336701,3498
+pjschools.org,Port Jervis City School District,Port Jervis,NY,School district,Q106609224,https://www.pjschools.org/,41.376746,-74.691182,2444
+delmar.k12.de.us,Delmar School District,Delmar,DE,School district,Q107334705,https://delmar.k12.de.us/,38.458803,-75.566858,1427
+pickford.eupschools.org,Pickford Public Schools,Pickford,MI,School district,Q108257434,https://pickford.eupschools.org/,46.154645,-84.36019,463
+cedarvilletrojans.org,Les Cheneaux Community Schools,Cedarville,MI,School district,Q108257688,https://www.cedarvilletrojans.org/,45.998696,-84.357112,227
+oxfordschools.org,Oxford Community Schools,Oxford,MI,School district,Q109916238,https://www.oxfordschools.org/,42.82519,-83.264881,5649
+goshenschools.org,Goshen Community Schools,Goshen,IN,School district,Q111699656,https://www.goshenschools.org/,41.58007,-85.825533,6286
+franklincountyschools.org,Franklin County School District,Eastpoint,FL,School district,Q111915623,https://www.franklincountyschools.org/,29.743579,-84.876166,1208
+lawrence.k12.ma.us,Lawrence Public Schools,Lawrence,MA,School district,Q112227720,https://www.lawrence.k12.ma.us/,42.708013,-71.159939,12885
+hcsd3.org,Harney County School District 3,Burns,OR,School district,Q113349209,https://www.hcsd3.org/,43.584108,-119.064397,742
+queenbee16.org,Queen Bee School District 16,Glendale Heights,IL,School district,Q114008996,https://www.queenbee16.org/,41.916263,-88.083596,1685
+pickerington.k12.oh.us,Pickerington Local School District,Pickerington,OH,School district,Q116169913,https://www.pickerington.k12.oh.us/,39.885778,-82.75056,11370
+petoskeyschools.org,Public Schools of Petoskey,Petoskey,MI,School district,Q116946770,https://www.petoskeyschools.org/,45.36583,-84.956181,2526
+mackcity.k12.mi.us,Mackinaw City Public Schools,Mackinaw City,MI,School district,Q117148594,https://mackcity.k12.mi.us/,45.780826,-84.744355,143
+hudsonraiders.org,Hudson School District,Hudson,WI,School district,Q117229652,https://hudsonraiders.org/,44.968921,-92.672554,5377
+tfsd.org,Twin Falls School District,Twin Falls,ID,School district,Q122451855,https://www.tfsd.org/,42.55674,-114.471851,9352
+sau26.org,Merrimack School District,Merrimack,NH,School district,Q123560559,https://www.sau26.org/,42.86185,-71.497961,3570
+sdmaonline.com,Menomonie Area School District,Menomonie,WI,School district,Q123681048,https://www.sdmaonline.com,44.901248,-91.929776,3290
+msd.k12.wi.us,Menomonie Area School District,Menomonie,WI,School district,Q123681048,https://www.msd.k12.wi.us/,44.901248,-91.929776,3290
+redhookcentralschools.org,Red Hook Central School District,Red Hook,NY,School district,Q124060802,https://www.redhookcentralschools.org/,42.0182,-73.8705,1605
+hask12.org,Holly Area Schools,Holly,MI,School district,Q125559061,https://www.hask12.org/district/,42.789542,-83.612395,3101
+plainwellschools.org,Plainwell Community Schools,Plainwell,MI,School district,Q125559275,https://www.plainwellschools.org/,42.437766,-85.650662,2623
+otsegops.org,Otsego Public Schools,Otsego,MI,School district,Q125559415,https://www.otsegops.org/,42.456116,-85.707985,2363
+gnsd.k12.wa.us,Great Northern School District,Spokane,WA,School district,Q96379883,https://www.gnsd.k12.wa.us,47.686689,-117.518583,38
+winthropschools.org,Winthrop Public Schools,Winthrop,ME,School district,Q96415350,https://www.winthropschools.org/,44.3057,-69.968246,831
+henrycountyboe.org,Henry County School District,Abbeville,AL,School district,Q98666979,https://www.henrycountyboe.org/,31.566851,-85.252131,2530
+aps1.net,Andover Public Schools,Andover,MA,School district,Q104845404,http://aps1.net/421/School-Committee,42.654937,-71.135714,5590
+eufsdk12.org,Eastchester Union Free School District,Eastchester,NY,School district,Q104864373,https://www.eufsdk12.org/,40.962397,-73.810301,3013
+sccoe.org,Santa Clara County Office of Education,San Jose,CA,School district,Q104999100,https://www.sccoe.org/,37.383643,-121.900494,1394
+aisdk12.org,Annette Island School District,Metlakatla,AK,School district,Q106091024,https://www.aisdk12.org/,55.126236,-131.577064,311
+daretolearn.org,Dare County Schools,Nags Head,NC,School district,Q106476948,https://www.daretolearn.org/,35.976752,-75.638404,5181
+darecountyschoolsonline.com,Dare County Schools,Nags Head,NC,School district,Q106476948,http://www.darecountyschoolsonline.com,35.976752,-75.638404,5181
+dare.k12.nc.us,Dare County Schools,Nags Head,NC,School district,Q106476948,http://www.dare.k12.nc.us/,35.976752,-75.638404,5181
+winchesterschools.org,Winchester Public Schools,Winsted,CT,School district,Q107087713,https://www.winchesterschools.org/,41.921539,-73.068999,606
+oasd.org,Oconomowoc Area School District,Oconomowoc,WI,School district,Q108532342,https://www.oasd.org/,43.09781,-88.483615,5015
+jcschools.com,Johnson City Central School District,Johnson City,NY,School district,Q108822678,https://www.jcschools.com/,42.1345,-75.9686,2303
+hillsboro.k12.oh.us,Hillsboro City Schools,Hillsboro,OH,School district,Q109326494,https://www.hillsboro.k12.oh.us/,39.204117,-83.620162,2215
+choctawal.org,Choctaw County Schools,Butler,AL,School district,Q113645803,https://www.choctawal.org/,32.084838,-88.2326,1097
+dayton.k12.ky.us,Dayton Independent School District,Dayton,KY,School district,Q115210821,https://www.dayton.k12.ky.us/,39.116505,-84.469926,859
+newkentschools.org,New Kent County Public Schools,New Kent,VA,School district,Q117195673,https://www.newkentschools.org/,37.517201,-76.97817,3435
+hohschools.org,Hastings-on-Hudson Union Free School District,Hastings On Hudson,NY,School district,Q117471887,https://www.hohschools.org/,40.993346,-73.875542,1622
+ryeschools.org,Rye City School District,Rye,NY,School district,Q117472184,https://www.ryeschools.org,40.970785,-73.703089,2868
+greenburgh-graham.org,Greenburgh-Graham Union Free School District,Hastings On Hudson,NY,School district,Q117473400,https://www.greenburgh-graham.org/,40.97964,-73.881567,
+bkwschools.org,Berne-Knox-Westerlo Central School District,Berne,NY,School district,Q117479608,https://www.bkwschools.org/,42.6257,-74.1442,716
+bellevue.kyschools.us,Bellevue Independent Schools,Bellevue,KY,School district,Q117826708,https://www.bellevue.kyschools.us/,39.102374,-84.481671,639
+daytonsd.org,Dayton School District,Dayton,WA,School district,Q119393497,https://www.daytonsd.org/,46.316706,-117.975102,393
+letcher.kyschools.us,Letcher County Public Schools,Whitesburg,KY,School district,Q123056021,https://www.letcher.kyschools.us/,37.121167,-82.838102,2596
+lucernevalleyusd.org,Lucerne Valley Unified School District,Lucerne Valley,CA,School district,Q123301526,https://www.lucernevalleyusd.org/,34.41026,-116.907602,1029
+kanek12.org,Kane County School District,Kanab,UT,School district,Q124387326,https://kanek12.org,37.035897,-112.525424,1519
+ocs.manistee.org,Onekama Consolidated Schools,Onekama,MI,School district,Q125584794,https://www.ocs.manistee.org/,44.3647,-86.201811,304
+marleeschool.com,Mar Lee School District,Marshall,MI,School district,Q125587265,https://www.marleeschool.com/,42.304429,-84.883649,305
+mendonschools.org,Mendon Community School District,Mendon,MI,School district,Q125587811,https://mendonschools.org/,42.012521,-85.443132,455
+readingrangers.org,Reading Community Schools,Reading,MI,School district,Q125588066,https://www.readingrangers.org/,41.837696,-84.74545,696
+shps.org,South Haven Public Schools,South Haven,MI,School district,Q125588959,https://www.shps.org/,42.39678,-86.272071,1798
+inlandlakes.org,Inland Lakes School District,Indian River,MI,School district,Q125589100,https://www.inlandlakes.org,45.397506,-84.62395,621
+bearlake.manistee.org,Bear Lake Schools,Bear Lake,MI,School district,Q125599480,https://bearlake.manistee.org/,44.419796,-86.146423,290
+taschools.org,Tahquamenon Area Schools,Newberry,MI,School district,Q125599563,https://www.taschools.org/,46.350581,-85.510718,503
+vicksburgschools.org,Vicksburg Community Schools,Vicksburg,MI,School district,Q125599615,https://www.vicksburgschools.org/,42.117063,-85.530385,2588
+cassopolis.k12.mi.us,Cassopolis Public Schools,Cassopolis,MI,School district,Q125600693,https://www.cassopolis.k12.mi.us/,41.895952,-86.003158,866
+homeofthefalcons.org,Constantine Public Schools,Constantine,MI,School district,Q125601143,https://www.homeofthefalcons.org/,41.835594,-85.667585,1310
+portlandk12.org,Portland Public Schools,Portland,MI,School district,Q125604621,https://www.portlandk12.org/,42.881121,-84.918723,2036
+ppsvikings.org,Potterville Public Schools,Potterville,MI,School district,Q125604695,https://www.ppsvikings.org/,42.630581,-84.736374,753
+powellschool.com,Powell Township Schools,Big Bay,MI,School district,Q125604718,https://www.powellschool.com/,46.817644,-87.729157,42
+mattawanschools.org,Mattawan Consolidated School District,Mattawan,MI,School district,Q125604812,https://www.mattawanschools.org/,42.213274,-85.791002,3610
+bangorvikings.org,Bangor Public Schools,Bay City,MI,School district,Q125605661,https://www.bangorvikings.org/,43.603235,-83.919646,2646
+beaverisland.k12.mi.us,Beaver Island Community School,Beaver Island,MI,School district,Q125605887,https://www.beaverisland.k12.mi.us/,45.74534,-85.522771,51
+gkb.k12.in.us,Garrett-Keyser-Butler Com Sch Corp,Garrett,IN,School district,Q125614496,https://www.gkb.k12.in.us/,41.344837,-85.126728,1675
+ypsd.us,Yale Public Schools,Yale,MI,School district,Q125623319,https://www.ypsd.us/,43.126351,-82.803337,1758
+browncountyschools.com,Brown County School Corporation,Nashville,IN,School district,Q125623379,http://www.browncountyschools.com/,39.205506,-86.242746,1653
+hck12.net,Hawkins County School District,Rogersville,TN,School district,Q126900576,https://www.hck12.net/,36.408922,-83.007236,6304
+rcschool.net,Rogersville City Schools,Rogersville,TN,School district,Q126900580,http://www.rcschool.net/,36.402857,-83.005576,624
+euhsd.org,Escondido Union High School District,Escondido,CA,School district,Q131531857,https://www.euhsd.org,33.136306,-117.050179,6881
+nsd131.org,Nampa School District,Nampa,ID,School district,Q133847349,https://www.nsd131.org/,43.562748,-116.578616,13398
+somerville.k12.ma.us,Somerville Public Schools,Somerville,MA,School district,Q134520295,https://somerville.k12.ma.us/,42.387619,-71.087266,4884
+zps.org,Zeeland Public Schools,Zeeland,MI,School district,Q134520335,https://www.zps.org/,42.820074,-86.028465,6010
+yadkin.k12.nc.us,Yadkin County Schools,Yadkinville,NC,School district,Q134520355,https://www.yadkin.k12.nc.us/,36.13595,-80.669491,5243
+conwayschools.org,Conway Public Schools,Conway,AR,School district,Q134521120,https://www.conwayschools.org/,35.0921,-92.4572,10251
+district130.org,Cook County School District 130,Blue Island,IL,School district,Q134522608,https://www.district130.org/,41.669754,-87.68314,2993
+sbusd.org,South Bay Union School District,Imperial Beach,CA,School district,Q134522898,https://www.sbusd.org/,32.580036,-117.120141,5859
+muncie.k12.in.us,Muncie Community Schools,Muncie,IN,School district,Q134713830,https://www.muncie.k12.in.us/,40.154695,-85.405816,5080
+delcomschools.org,Delaware Community School Corporation,Muncie,IN,School district,Q134715851,https://www.delcomschools.org/,40.27918,-85.348889,2594
+husdschools.org,Hamilton Unified School District,Hamilton City,CA,School district,Q135254280,https://www.husdschools.org/,39.745508,-122.019438,711
+orientsd.org,Orient School District,Orient,WA,School district,Q137735121,https://orientsd.org/,48.86806,-118.204818,41
+tekonshaschools.org,Tekonsha Community Schools,Tekonsha,MI,School district,Q125560170,https://www.tekonshaschools.org/,42.089865,-84.989313,185
+quincyschools.org,Quincy Community Schools,Quincy,MI,School district,Q125561581,https://quincyschools.org/,41.9397,-84.876701,1149
+sturgisps.org,Sturgis Public Schools,Sturgis,MI,School district,Q125568927,https://www.sturgisps.org/,41.801638,-85.419575,2967
+fcs.k12.in.us,Fremont Community Schools,Fremont,IN,School district,Q125569251,https://www.fcs.k12.in.us/,41.7312,-84.949071,985
+jonesvilleschools.org,Jonesville Community Schools,Jonesville,MI,School district,Q125570113,https://www.jonesvilleschools.org/,41.984128,-84.658331,1273
+pennfield.net,Pennfield Schools,Battle Creek,MI,School district,Q125570356,https://www.pennfield.net/,42.370615,-85.133219,1986
+pittsfordk12.org,Pittsford Area Schools,Pittsford,MI,School district,Q125570388,https://www.pittsfordk12.org/,41.86358,-84.47184,356
+pineriver.org,Pine River Area Schools,Leroy,MI,School district,Q125570427,https://www.pineriver.org/,44.063846,-85.48879,974
+athensk12.org,Athens Area Schools,East Leroy,MI,School district,Q125573526,https://www.athensk12.org/,42.167039,-85.21699,503
+bronsonschools.org,Bronson Community School District,Bronson,MI,School district,Q125573576,https://www.bronsonschools.org/,41.868085,-85.186203,993
+hanoverhorton.org,Hanover-Horton School District,Horton,MI,School district,Q125573747,https://www.hanoverhorton.org/,42.114476,-84.519788,1023
+hillsdaleschools.org,Hillsdale Community Schools,Hillsdale,MI,School district,Q125573873,https://www.hillsdaleschools.org/,41.918371,-84.638649,1274
+howellschools.com,Howell Public Schools,Howell,MI,School district,Q125574051,https://www.howellschools.com/,42.615225,-83.95142,6871
+lelandschool.com,Leland Public School,Leland,MI,School district,Q125581139,https://www.lelandschool.com/,45.024006,-85.755819,450
+dowagiacschools.org,Dowagiac Union Schools,Dowagiac,MI,School district,Q125581144,https://www.dowagiacschools.org/,41.981186,-86.109648,1900
+lawtoncs.org,Lawton Community Schools,Lawton,MI,School district,Q125581265,https://www.lawtoncs.org/,42.168939,-85.839454,1050
+fowlervilleschools.org,Fowlerville Community Schools,Fowlerville,MI,School district,Q125581856,https://www.fowlervilleschools.org/,42.670294,-84.067776,2590
+northportps.org,Northport Public Schools,Northport,MI,School district,Q125581948,https://northportps.org/,45.128803,-85.61956,129
+saranac.k12.mi.us,Saranac Community Schools,Saranac,MI,School district,Q125581953,https://www.saranac.k12.mi.us/,42.928,-85.2055,852
+nvps.net,Northview Public Schools,Grand Rapids,MI,School district,Q125581979,https://nvps.net/,43.042449,-85.619917,3061
+litchfieldschools.com,Litchfield Community Schools,Litchfield,MI,School district,Q125582082,https://www.litchfieldschools.com/,42.046316,-84.754737,251
+saugatuckpublicschools.com,Saugatuck Public Schools,Douglas,MI,School district,Q125582607,https://saugatuckpublicschools.com/,42.641593,-86.204983,802
+sc-aggies.us,Sand Creek Community Schools,Sand Creek,MI,School district,Q125582733,https://www.sc-aggies.us/,41.818395,-84.102779,783
+suttonsbay.k12.mi.us,Suttons Bay Public Schools,Suttons Bay,MI,School district,Q125582826,https://www.suttonsbay.k12.mi.us/en-US,44.971167,-85.655376,578
+spartaschools.org,Sparta Area Schools,Sparta,MI,School district,Q125583240,https://www.spartaschools.org/,43.1503,-85.704701,2433
+atlantaschools.us,Atlanta Community Schools,Atlanta,MI,School district,Q125584155,https://www.atlantaschools.us/,44.99404,-84.148992,267
+ags-schools.org,Au Gres-Sims School District,Au Gres,MI,School district,Q125584328,https://www.ags-schools.org/,44.045696,-83.696874,416
+autrainonota.com,AuTrain-Onota Public Schools,Deerton,MI,School district,Q125584430,http://www.autrainonota.com/,46.474578,-87.042409,24
+badaxeps.org,Bad Axe Public Schools,Bad Axe,MI,School district,Q125584496,https://www.badaxeps.org/,43.80766,-83.015481,887
+watersmeetschool.org,Watersmeet Township School District,Watersmeet,MI,School district,Q125584618,https://watersmeetschool.org/,46.270318,-89.179768,150
+watervlietps.org,Watervliet Public Schools,Watervliet,MI,School district,Q125584660,https://www.watervlietps.org/,42.187638,-86.250851,1452
+baldwin.k12.mi.us,Baldwin Community Schools,Baldwin,MI,School district,Q125584667,https://www.baldwin.k12.mi.us/,43.888465,-85.855877,442
+trentonschools.com,Trenton Public Schools,Trenton,MI,School district,Q125584690,https://www.trentonschools.com/,42.14242,-83.201411,2501
+wpcschools.org,White Pigeon Community Schools,White Pigeon,MI,School district,Q125584731,https://www.wpcschools.org/,41.803054,-85.636939,733
+adamstownshipschools.org,Adams Township School District,Painesdale,MI,School district,Q125567352,https://adamstownshipschools.org,47.040635,-88.668107,466
+ioniaschools.org,Ionia Public Schools,Ionia,MI,School district,Q125581799,https://www.ioniaschools.org/,42.953334,-85.069917,2833
+mccardinals.org,Michigan Center School District,Michigan Center,MI,School district,Q125604854,https://www.mccardinals.org/,42.22366,-84.33859,1316
+westportps.org,Westport Public Schools,Westport,CT,School district,Q130300750,https://www.westportps.org/,41.145154,-73.360017,5387
+tcsdk8.org,Tulare City School District,Tulare,CA,School district,Q130300821,https://www.tcsdk8.org/,36.217114,-119.337324,9172
+isd622.org,North St. Paul-Maplewood-Oakdale School District,Maplewood,MN,School district,Q131920823,https://www.isd622.org/,45.016149,-92.995065,10368
+scsc.school,Silver Creek School Corporation,Sellersburg,IN,School district,Q134292684,https://scsc.school,38.409102,-85.756069,3144
+bhsc.school,Borden–Henryville School Corporation,Memphis,IN,School district,Q134444759,https://bhsc.school,38.487228,-85.760982,1716
+gpsk12.org,Greenfield Public Schools,Greenfield,MA,School district,Q136907277,https://gpsk12.org/,42.595688,-72.596468,1476
+hamlinchargers.com,Hamlin School District 28-3,Hayti,SD,School district,Q137883629,https://hamlinchargers.com/,44.657038,-97.291774,870
+swhittier.net,South Whittier Elementary School District,Whittier,CA,School district,Q138820064,https://www.swhittier.net/,33.929398,-118.039164,2317
+swhittier.k12.ca.us,South Whittier Elementary School District,Whittier,CA,School district,Q138820064,https://www.swhittier.k12.ca.us/,33.929398,-118.039164,2317
+jcs.k12.oh.us,Jackson City Schools,Jackson,OH,School district,Q139920792,https://www.jcs.k12.oh.us/,39.040225,-82.643965,2317
