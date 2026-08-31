@@ -95,10 +95,13 @@ class LiveDirectoryTests(unittest.TestCase):
         self.assertIn("cityofmobile.gov", urls[0])
 
     def test_no_town_exceeds_the_scan_cap(self):
-        """license_server reads get_portals(...)[:6]. If merging pushed towns
-        past that, the extra entries would cost nothing and hide others."""
+        """A town holding more portals than a scan reads means a verified bid
+        page that is never fetched. This caught exactly that when school
+        districts were added: Cincinnati and Houston went to seven against a
+        cap of six, so the cap moved rather than the pages being dropped."""
+        import license_server as ls
         worst = max(len(v) for v in self.d.values() if isinstance(v, list))
-        self.assertLessEqual(worst, 6)
+        self.assertLessEqual(worst, ls.PORTALS_PER_TOWN)
 
 
 if __name__ == "__main__":

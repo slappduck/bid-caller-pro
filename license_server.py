@@ -506,14 +506,16 @@ def health_detail():
             "SAM's documented API is being skipped after %d failed scans "
             "(last: %s); federal bids are coming from sam.gov's public "
             "search instead, which is working. Retries automatically."
-            % (_keyed_breaker["fails"], _sam_health["last_status"]))
+            % ((_breakers().get("keyed") or {}).get("fails", 0),
+                 _sam_health["last_status"]))
     if _federal_breaker_open():
         notes.append(
             "Federal bids are paused: SAM has failed %d scans in a row "
             "(last: %s). It retries automatically. Municipal and state bids "
             "are unaffected -- federal contributed 2 bids across the last "
             "ten scans, so this costs little."
-            % (_federal_breaker["fails"], _sam_health["last_status"]))
+            % ((_breakers().get("federal") or {}).get("fails", 0),
+                 _sam_health["last_status"]))
     if backends["sam_gov"] and _sam_health["last_status"] == 403:
         problems.append(
             "SAM_API_KEY is being rejected (403 API_KEY_INVALID). Federal "
@@ -583,13 +585,13 @@ def health_detail():
             # is to being. Without this a federal count of zero looks the
             # same whether SAM is down or the radius is simply quiet.
             "resting": _federal_breaker_open(),
-            "consecutive_failures": _federal_breaker["fails"],
+            "consecutive_failures": (_breakers().get("federal") or {}).get("fails", 0),
             # Reported separately from the above, because they mean
             # different things: a rested KEY means the documented contract
             # is unavailable and the public endpoint is carrying the source,
             # which is not a federal outage.
             "keyed_resting": _keyed_breaker_open(),
-            "keyed_failures": _keyed_breaker["fails"],
+            "keyed_failures": (_breakers().get("keyed") or {}).get("fails", 0),
         },
         "problems": problems,
         "notes": notes,
@@ -3613,6 +3615,7 @@ def _ddg_search(query, count=6):
 FETCH_TIMEOUT = int(os.environ.get("SCAN_FETCH_TIMEOUT", "18"))
 PROBE_TIMEOUT = int(os.environ.get("SCAN_PROBE_TIMEOUT", "6"))
 PORTAL_WORKERS = int(os.environ.get("SCAN_PORTAL_WORKERS", "6"))
+PORTALS_PER_TOWN = int(os.environ.get("SCAN_PORTALS_PER_TOWN", "8"))
 # Contact details live on each individual posting, so reading them costs one
 # fetch per bid. Bounded per portal, and given the shorter probe timeout: a
 # missing phone number degrades a lead, a blown request budget loses every one.
@@ -4350,7 +4353,12 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
     Entries age out (via bid_portals.MAX_FAIL) if they stop returning real
     content, so a site redesign doesn't silently keep failing forever."""
     with lock:
-        portals = list(bid_portals.get_portals(pdb, city, state))[:6]
+        # Eight, not six. Adding school districts pushed Cincinnati and
+        # Houston to seven portals each, and a cap below the real maximum
+        # does not save time -- it silently drops a verified bid page in the
+        # two biggest cities in the directory. Only those two towns read more
+        # than six, so the cost is two extra fetches on two scans.
+        portals = list(bid_portals.get_portals(pdb, city, state))[:PORTALS_PER_TOWN]
 
     # Nothing learned for this town yet? Its official domain is already known —
     # CISA publishes the registry of every .gov, so there is no need to search
@@ -5584,24 +5592,76 @@ _federal_breaker = {"fails": 0, "open_until": 0.0}
 _keyed_breaker = {"fails": 0, "open_until": 0.0}
 
 
+# Breaker state lives in the durable store, not in this process.
+#
+# In memory it did not work, and the way it failed was quiet: a Branson scan
+# logged two keyed failures and /health reported keyed_failures 0 across six
+# consecutive reads. Whether that is a second gunicorn worker or a restart
+# does not matter -- a breaker whose memory is per-process cannot count
+# consecutive failures across scans, which is the only thing it does.
+#
+# Falls back to the in-process dicts when no durable store is configured, so
+# a local run still behaves sanely; it just cannot outlive the process.
+_BREAKER_KEY = "bidcaller:federal_breakers"
+
+
+def _breakers():
+    if not kv_backend.is_durable():
+        return {"federal": _federal_breaker, "keyed": _keyed_breaker}
+    got = kv_backend.get(_BREAKER_KEY, None)
+    if not isinstance(got, dict):
+        got = {}
+    for name, mem in (("federal", _federal_breaker), ("keyed", _keyed_breaker)):
+        cur = got.get(name)
+        if not isinstance(cur, dict):
+            got[name] = dict(mem)
+    return got
+
+
+def _save_breakers(state):
+    if kv_backend.is_durable():
+        try:
+            kv_backend.set(_BREAKER_KEY, state)
+        except Exception:
+            pass          # a breaker that cannot persist must not break a scan
+    else:
+        _federal_breaker.update(state.get("federal") or {})
+        _keyed_breaker.update(state.get("keyed") or {})
+
+
+def _breaker_open(name):
+    try:
+        return time.time() < float((_breakers().get(name) or {}).get("open_until") or 0)
+    except Exception:
+        return False
+
+
 def _federal_breaker_open():
     """True while the whole federal source is being rested."""
-    return time.time() < _federal_breaker["open_until"]
+    return _breaker_open("federal")
 
 
 def _keyed_breaker_open():
     """True while the documented API is being skipped in favour of public."""
-    return time.time() < _keyed_breaker["open_until"]
+    return _breaker_open("keyed")
+
+
+def _note_breaker_named(name, ok):
+    st = _breakers()
+    cur = dict(st.get(name) or {"fails": 0, "open_until": 0.0})
+    if ok:
+        cur = {"fails": 0, "open_until": 0.0}
+    else:
+        cur["fails"] = int(cur.get("fails") or 0) + 1
+        if cur["fails"] >= _FEDERAL_TRIP_AFTER:
+            cur["open_until"] = time.time() + _FEDERAL_COOLDOWN_SEC
+    st[name] = cur
+    _save_breakers(st)
 
 
 def _note_breaker(state, ok):
-    if ok:
-        state["fails"] = 0
-        state["open_until"] = 0.0
-        return
-    state["fails"] += 1
-    if state["fails"] >= _FEDERAL_TRIP_AFTER:
-        state["open_until"] = time.time() + _FEDERAL_COOLDOWN_SEC
+    """Back-compat shim: route the two known dicts to their durable names."""
+    _note_breaker_named("keyed" if state is _keyed_breaker else "federal", ok)
 
 
 def _federal_note(ok):
