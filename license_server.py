@@ -5558,22 +5558,43 @@ FEDERAL_BUDGET_SEC = float(os.environ.get("SCAN_FEDERAL_BUDGET_SEC", "12"))
 _FEDERAL_TRIP_AFTER = int(os.environ.get("SCAN_FEDERAL_TRIP_AFTER", "3"))
 _FEDERAL_COOLDOWN_SEC = float(os.environ.get("SCAN_FEDERAL_COOLDOWN", "900"))
 _federal_breaker = {"fails": 0, "open_until": 0.0}
+# A SECOND breaker, on the keyed transport alone.
+#
+# The first version of this rested the whole federal source, which was wrong
+# and wasteful: it is the KEYED transport that times out from Render, while
+# the public one answers fine and is what produced the only federal bids
+# these scans have ever returned. Resting both meant a broken credential
+# switched off a working source.
+#
+# So the keyed transport gets its own breaker. Once it has failed enough
+# times the scan goes STRAIGHT to public -- not as a fallback after burning
+# the budget on timeouts, but as the first and only call.
+_keyed_breaker = {"fails": 0, "open_until": 0.0}
 
 
 def _federal_breaker_open():
-    """True while the source is being rested."""
+    """True while the whole federal source is being rested."""
     return time.time() < _federal_breaker["open_until"]
+
+
+def _keyed_breaker_open():
+    """True while the documented API is being skipped in favour of public."""
+    return time.time() < _keyed_breaker["open_until"]
+
+
+def _note_breaker(state, ok):
+    if ok:
+        state["fails"] = 0
+        state["open_until"] = 0.0
+        return
+    state["fails"] += 1
+    if state["fails"] >= _FEDERAL_TRIP_AFTER:
+        state["open_until"] = time.time() + _FEDERAL_COOLDOWN_SEC
 
 
 def _federal_note(ok):
     """Record whether the federal source answered at all this scan."""
-    if ok:
-        _federal_breaker["fails"] = 0
-        _federal_breaker["open_until"] = 0.0
-        return
-    _federal_breaker["fails"] += 1
-    if _federal_breaker["fails"] >= _FEDERAL_TRIP_AFTER:
-        _federal_breaker["open_until"] = time.time() + _FEDERAL_COOLDOWN_SEC
+    _note_breaker(_federal_breaker, ok)
 
 
 def _federal_states(center, radius):
@@ -5663,6 +5684,10 @@ def _federal_keyed(states, stats, deadline=None):
     # so fall back rather than going quiet -- which is what happened once:
     # the keyed path returned nothing, bumped nothing, and the public one
     # could see eight active Texas notices the whole time.
+    # Judge the KEYED transport on its own record, separately from whether
+    # federal as a whole produced anything.
+    if attempted:
+        _note_breaker(_keyed_breaker, failed < attempted)
     if attempted and failed == attempted:
         # Inherit the remaining budget rather than starting a fresh one. The
         # keyed path failing is not a reason to spend the federal allowance
@@ -5793,7 +5818,12 @@ def _run_federal_sources(center, radius, grouped, cdb, city_coords=None,
     # the fallback if the keyed one gives out, so a failing key cannot spend
     # the federal allowance twice.
     deadline = time.time() + FEDERAL_BUDGET_SEC
-    bids = (_federal_keyed(states, stats, deadline) if SAM_API_KEY
+    use_keyed = bool(SAM_API_KEY) and not _keyed_breaker_open()
+    if SAM_API_KEY and not use_keyed:
+        # The documented API is resting; the public one reads the same
+        # public-domain data and is currently the only one that answers.
+        _bump(stats, "federal_keyed_resting")
+    bids = (_federal_keyed(states, stats, deadline) if use_keyed
             else _federal_public(states, stats, deadline))
     # "Answered" means the transport worked, not that it found anything --
     # a genuinely quiet radius must not trip the breaker.
@@ -5824,7 +5854,7 @@ def _run_federal_sources(center, radius, grouped, cdb, city_coords=None,
             _bump(stats, "federal_kept")
     print("[scan] %d federal bids from %d candidate(s) in %s (%s transport)"
           % (placed, len(bids), ",".join(states),
-             "keyed" if SAM_API_KEY else "public"), flush=True)
+             "keyed" if use_keyed else "public"), flush=True)
     return placed
 
 

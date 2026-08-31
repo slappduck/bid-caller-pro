@@ -627,3 +627,76 @@ class CircuitBreakerTests(unittest.TestCase):
         a long timeout buys a longer wait for the same failure."""
         self.assertLessEqual(ls.SAM_TIMEOUT, 8)
         self.assertLessEqual(ls.FEDERAL_BUDGET_SEC, 15)
+
+
+class KeyedTransportBreakerTests(unittest.TestCase):
+    """A broken credential must not switch off a working source.
+
+    The first breaker rested the whole federal source, which was wrong: it is
+    the KEYED transport that times out from Render, while the public one
+    answers fine and produced the only federal bids these scans have ever
+    returned. Resting both threw away the working half.
+    """
+
+    def setUp(self):
+        self._f = dict(ls._federal_breaker)
+        self._k = dict(ls._keyed_breaker)
+        self._fetch, self._pub = ls._sam_fetch, ls._federal_public
+        self._key, self._states = ls.SAM_API_KEY, ls._federal_states
+        ls._federal_breaker.update({"fails": 0, "open_until": 0.0})
+        ls._keyed_breaker.update({"fails": 0, "open_until": 0.0})
+        ls.SAM_API_KEY = "test-key"
+        ls._federal_states = lambda c, r: ["MO"]
+
+    def tearDown(self):
+        ls._federal_breaker.update(self._f)
+        ls._keyed_breaker.update(self._k)
+        ls._sam_fetch, ls._federal_public = self._fetch, self._pub
+        ls.SAM_API_KEY, ls._federal_states = self._key, self._states
+
+    def _rig(self):
+        calls = {"keyed": 0, "public": 0}
+        def keyed(state, ncode=None, ccode=None):
+            calls["keyed"] += 1
+            return None                      # always times out
+        def public(states, stats, deadline=None):
+            calls["public"] += 1
+            ls._bump(stats, "federal_search_ok")
+            return [{"title": "Concrete Repair", "city": "Springfield",
+                     "state": "MO", "url": "https://sam.gov/opp/x/view",
+                     "deadline": "2099-01-01", "source": "SAM.gov"}]
+        ls._sam_fetch, ls._federal_public = keyed, public
+        return calls
+
+    def test_it_stops_calling_the_keyed_transport_after_repeated_failure(self):
+        calls = self._rig()
+        center = {"city": "Springfield", "state": "MO",
+                  "lat": 37.2090, "lon": -93.2923}
+        for _ in range(ls._FEDERAL_TRIP_AFTER):
+            ls._run_federal_sources(center, 25, {}, {}, {}, {}, None)
+        before = calls["keyed"]
+        stats = {}
+        ls._run_federal_sources(center, 25, {}, {}, {}, stats, None)
+        self.assertEqual(calls["keyed"], before,
+                         "keyed transport still being called while rested")
+        self.assertEqual(stats.get("federal_keyed_resting"), 1)
+
+    def test_federal_keeps_producing_bids_while_the_key_is_rested(self):
+        """The whole point. A rested credential must cost the documented
+        contract, not the source."""
+        self._rig()
+        center = {"city": "Springfield", "state": "MO",
+                  "lat": 37.2090, "lon": -93.2923}
+        for _ in range(ls._FEDERAL_TRIP_AFTER):
+            ls._run_federal_sources(center, 25, {}, {}, {}, {}, None)
+        grouped, stats = {}, {}
+        placed = ls._run_federal_sources(center, 25, grouped, {}, {}, stats, None)
+        self.assertEqual(placed, 1)
+        self.assertFalse(ls._federal_breaker_open(),
+                         "whole source rested even though public works")
+
+    def test_a_working_key_never_trips_it(self):
+        ls._sam_fetch = lambda state, ncode=None, ccode=None: []
+        for _ in range(ls._FEDERAL_TRIP_AFTER + 2):
+            ls._federal_keyed(["MO"], {}, time.time() + 10)
+        self.assertFalse(ls._keyed_breaker_open())
