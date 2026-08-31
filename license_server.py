@@ -5736,11 +5736,23 @@ ENRICH_MAX = int(os.environ.get("SCAN_ENRICH_MAX", "14"))
 # 125-mile scan from Republic, MO ran past the client's 150-second timeout --
 # it finished and banked 32 bids, but the phone had already given up.
 #
-# This is deliberately shorter than that client timeout. A scan that returns
-# 28 bids in 90 seconds beats one that returns 32 in 160 and is never seen.
-# The stages it guards are the additive ones; the core town-and-portal read
-# always runs.
-SCAN_BUDGET_SEC = float(os.environ.get("SCAN_BUDGET_SEC", "95"))
+# A RUNAWAY GUARD, not a routine trimmer. It sits just under the client's
+# 150-second timeout, so a normal scan finishes well inside it and loses
+# nothing; it only bites on the pathological run that would otherwise grow
+# without limit.
+#
+# It was 95s first, which was too aggressive and set before the app learned
+# to collect a scan that overruns. With that in place an overrunning scan is
+# no longer a failure -- the client re-requests and is served the full
+# cached result -- so cutting stages early costs bids for no benefit.
+#
+# What the ordering protects matters as much as the number. The guarded
+# stages run state -> federal -> agency -> enrich, so time runs out at the
+# END and enrichment is sacrificed first. Enrichment adds no bids: it fills
+# contacts and deadlines on bids already found. So the first thing a slow
+# scan loses is phone numbers, not listings, and the bid-producing stages
+# have to be well past the budget before they are touched at all.
+SCAN_BUDGET_SEC = float(os.environ.get("SCAN_BUDGET_SEC", "135"))
 
 
 def _stage(stats, name, deadline, fn, *args, **kw):

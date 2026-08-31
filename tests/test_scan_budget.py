@@ -48,10 +48,25 @@ class StageGuardTests(unittest.TestCase):
 
 
 class BudgetTests(unittest.TestCase):
-    def test_the_budget_is_shorter_than_the_client_timeout(self):
-        """The app gives up at 150s. A scan that returns 28 bids in 90
-        seconds beats one that returns 32 in 160 and is never seen."""
+    def test_the_budget_is_a_runaway_guard_not_a_trimmer(self):
+        """Under the client's 150s so a scan normally completes in band, but
+        generous enough that a normal one never loses a stage. 95s was the
+        first value and it was too aggressive: with the client now collecting
+        an overrunning scan from cache, cutting early costs bids for no
+        benefit."""
         self.assertLess(ls.SCAN_BUDGET_SEC, 150)
+        self.assertGreaterEqual(ls.SCAN_BUDGET_SEC, 120)
+
+    def test_enrichment_is_the_stage_sacrificed_first(self):
+        """It adds no bids -- it fills contacts and deadlines on bids already
+        found. So a slow scan should lose phone numbers before it loses
+        listings, which the stage ORDER is what guarantees."""
+        import inspect
+        src = inspect.getsource(ls._perform_scan)
+        order = [src.index('_stage(drop_stats, "%s"' % n)
+                 for n in ("state", "federal", "agency", "enrich")]
+        self.assertEqual(order, sorted(order),
+                         "bid-producing stages must run before enrichment")
 
     def test_the_additive_stages_are_the_ones_guarded(self):
         """The core town-and-portal read must always run -- skipping it would
