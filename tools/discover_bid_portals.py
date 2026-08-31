@@ -90,6 +90,25 @@ def _plain_text(html):
     return _WS_RE.sub(" ", _TAG_RE.sub(" ", html)).strip()
 
 
+# A single document is not a bid page.
+#
+# Discovery recorded twelve of these: a 2023 PDF on a township site, a Google
+# Doc, an uploaded RFP under /wp-content/uploads. Each passes the text test
+# -- an RFP naturally contains procurement words -- but a document never
+# changes, so the scan re-reads one frozen solicitation on every run forever,
+# and the town looks covered while its real bid page goes unread.
+_NOT_A_LISTING_RE = re.compile(
+    r"\.(?:pdf|docx?|xlsx?|rtf)(?:$|[?#])"
+    r"|docs\.google\.com|drive\.google\.com|dropbox\.com"
+    r"|/wp-content/uploads/|/sites/default/files/|/uploads/dm/",
+    re.I)
+
+
+def is_listing_url(url):
+    """False for a URL that can only ever be one document."""
+    return not _NOT_A_LISTING_RE.search(str(url or ""))
+
+
 def _looks_like_a_bid_page(html):
     """True if a fetched page is worth recording as this place's bid page.
 
@@ -131,6 +150,8 @@ def _check_domain(entry, homepage_fallback=True):
     checked = time.strftime("%Y-%m-%d")
 
     def _verify(url):
+        if not is_listing_url(url):
+            return None
         html = _fetch(url)
         ok, structural_platform = _looks_like_a_bid_page(html)
         if not ok:

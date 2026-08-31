@@ -76,3 +76,41 @@ class KeepsAnythingThatLetsWork(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ListingUrlTests(unittest.TestCase):
+    """A single document is not a bid page.
+
+    Discovery recorded twelve of these -- a 2023 PDF on a township site, a
+    Google Doc, an uploaded RFP under /wp-content/uploads. Each passes the
+    text test, because an RFP naturally contains procurement words. But a
+    document never changes, so the scan re-reads one frozen solicitation
+    forever while the town looks covered and its real bid page goes unread.
+    """
+
+    def test_real_listing_pages_are_kept(self):
+        from tools.discover_bid_portals import is_listing_url
+        for u in ("https://springfieldmo.gov/Bids.aspx",
+                  "https://x.gov/purchasing",
+                  "https://x.gov/bids?page=2",
+                  "https://x.gov/business/bids-and-rfps"):
+            self.assertTrue(is_listing_url(u), u)
+
+    def test_single_documents_are_rejected(self):
+        from tools.discover_bid_portals import is_listing_url
+        for u in ("https://docs.google.com/document/d/abc",
+                  "https://drive.google.com/drive/folders/x",
+                  "https://x.gov/wp-content/uploads/2025/04/RFP-foo.pdf",
+                  "https://x.gov/files/notice.PDF",
+                  "https://x.gov/sites/default/files/2026-07/proc.pdf",
+                  "https://y.govoffice2.com/uploads/dm/9417/FY2627.pdf"):
+            self.assertFalse(is_listing_url(u), u)
+
+    def test_the_shipped_directory_holds_no_single_documents(self):
+        import csv, os
+        from tools.discover_bid_portals import is_listing_url
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        path = os.path.join(root, "data", "bid_portal_directory.csv")
+        bad = [r["bid_url"] for r in csv.DictReader(open(path, encoding="utf-8"))
+               if r["status"] == "found" and not is_listing_url(r["bid_url"])]
+        self.assertEqual(bad, [], f"{len(bad)} document URLs recorded as bid pages")
