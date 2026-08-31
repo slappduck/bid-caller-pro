@@ -7,6 +7,7 @@ those so they cannot come back.
 """
 import os
 import sys
+import time
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -298,7 +299,8 @@ class SilentFailureTests(unittest.TestCase):
         ls._sam_fetch = lambda state, ncode=None, ccode=None: None
         calls = []
         real_public = ls._federal_public
-        ls._federal_public = lambda states, stats: calls.append(states) or []
+        ls._federal_public = (lambda states, stats, deadline=None:
+                              calls.append(states) or [])
         try:
             stats = {}
             ls._federal_keyed(["MO", "KS"], stats)
@@ -314,7 +316,8 @@ class SilentFailureTests(unittest.TestCase):
                          None if state == "KS" else [])
         calls = []
         real_public = ls._federal_public
-        ls._federal_public = lambda states, stats: calls.append(states) or []
+        ls._federal_public = (lambda states, stats, deadline=None:
+                              calls.append(states) or [])
         try:
             stats = {}
             ls._federal_keyed(["MO", "KS"], stats)
@@ -327,13 +330,18 @@ class SilentFailureTests(unittest.TestCase):
 
 
 class PostedWindowTests(unittest.TestCase):
-    def test_the_sam_window_is_not_the_municipal_one(self):
-        """SCAN_WINDOW_DAYS is 60 and is about how fresh a municipal listing
-        should be. Applied to SAM it hid every solicitation posted more than
-        two months ago however far ahead its response date was -- which is
-        the normal shape of federal construction work."""
-        self.assertGreaterEqual(ls.SAM_WINDOW_DAYS, 365)
-        self.assertNotEqual(ls.SAM_WINDOW_DAYS, ls.SCAN_WINDOW_DAYS)
+    def test_the_sam_window_is_bounded_at_both_ends(self):
+        """Too short and it hides open work: SCAN_WINDOW_DAYS is 60, about
+        how fresh a MUNICIPAL listing should be, and applied here it hid
+        every solicitation posted more than two months ago however far ahead
+        its response date was.
+
+        Too long and SAM gets slow enough to time out, which is what a
+        year-wide window did -- two failed keyed requests burning the full
+        SAM_TIMEOUT each, 30 seconds of a 33-second federal stage."""
+        self.assertGreater(ls.SAM_WINDOW_DAYS, ls.SCAN_WINDOW_DAYS)
+        self.assertGreaterEqual(ls.SAM_WINDOW_DAYS, 120)
+        self.assertLessEqual(ls.SAM_WINDOW_DAYS, 270)
 
     def test_the_posting_date_is_not_what_decides_openness(self):
         """_is_open_bid does, on the response date."""
@@ -489,3 +497,67 @@ class TimeBudgetTests(unittest.TestCase):
         sig = inspect.signature(ls._sam_fetch)
         self.assertIn("ncode", sig.parameters)
         self.assertIn("ccode", sig.parameters)
+
+
+class SharedBudgetTests(unittest.TestCase):
+    """The federal stage gets ONE allowance, not one per transport.
+
+    A Woodford County scan spent 33 seconds here and returned two bids --
+    94% of all measured stage time in that scan. The keyed transport timed
+    out twice at the full SAM_TIMEOUT, then the public fallback started a
+    fresh budget and ran the whole thing again.
+    """
+
+    def setUp(self):
+        self._fetch, self._key = ls._sam_fetch, ls.SAM_API_KEY
+        self._pub, self._budget = ls._federal_public, ls.FEDERAL_BUDGET_SEC
+        ls.SAM_API_KEY = "test-key"
+
+    def tearDown(self):
+        ls._sam_fetch, ls.SAM_API_KEY = self._fetch, self._key
+        ls._federal_public, ls.FEDERAL_BUDGET_SEC = self._pub, self._budget
+
+    def test_the_fallback_inherits_the_remaining_budget(self):
+        seen = {}
+        ls._sam_fetch = lambda state, ncode=None, ccode=None: None
+        def spy(states, stats, deadline=None):
+            seen["deadline"] = deadline
+            return []
+        ls._federal_public = spy
+        ls._federal_keyed(["MO"], {}, time.time() + 20)
+        self.assertIsNotNone(seen.get("deadline"),
+                             "fallback must be handed the shared clock")
+
+    def test_an_exhausted_budget_skips_the_fallback_entirely(self):
+        """Spending the allowance twice is the bug. If the keyed path used
+        it all, there is nothing left to run the public path with."""
+        ran = []
+        def slow(state, ncode=None, ccode=None):
+            time.sleep(0.05)
+            return None
+        ls._sam_fetch = slow
+        ls._federal_public = lambda states, stats, deadline=None: ran.append(1) or []
+        stats = {}
+        t0 = time.time()
+        ls._federal_keyed(["MO", "KS"], stats, time.time() + 0.6)
+        self.assertEqual(ran, [], "fallback ran on an exhausted budget")
+        self.assertEqual(stats.get("federal_budget_exhausted"), 1)
+        self.assertLess(time.time() - t0, 2.0)
+
+    def test_the_public_path_watches_the_clock_too(self):
+        import inspect
+        src = inspect.getsource(ls._federal_public)
+        self.assertIn("deadline", src)
+        self.assertIn("federal_budget_exhausted", src)
+
+
+class StatusIsUnambiguousTests(unittest.TestCase):
+    def test_a_timeout_does_not_report_as_no_request(self):
+        """None means "no request has been made". A timeout reporting None
+        was read as a key problem for a whole round of diagnosis, when the
+        key was fine and SAM was simply slow."""
+        import inspect
+        src = inspect.getsource(ls._sam_fetch)
+        generic = src[src.index("except Exception as e:"):]
+        self.assertIn('"timeout"', generic)
+        self.assertNotIn('last_status"] = None', generic)

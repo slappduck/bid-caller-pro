@@ -65,6 +65,7 @@ customer volume, not required to ship.
 
 import os
 import re
+import socket
 import csv
 import json
 import math
@@ -3891,7 +3892,18 @@ def _is_construction(opp):
 # IDIQ FY25" is exactly that shape -- so the posting date is the wrong thing
 # to filter on. SAM caps the range at one year, so this asks for all of it and
 # lets _is_open_bid decide what is still biddable.
-SAM_WINDOW_DAYS = int(os.environ.get("SAM_WINDOW_DAYS", "365"))
+# 180, not 365. The year-wide window is what made SAM slow enough to time
+# out: a Woodford County scan logged two failed keyed requests, and because
+# they were timeouts rather than rejections they burned the full SAM_TIMEOUT
+# each -- 30 seconds of a 33-second federal stage that produced two bids.
+#
+# 60 was the original and far too short: it hid every solicitation posted
+# more than two months ago however far ahead its response date was. But the
+# other direction has a cost too, and six months already covers the long
+# IDIQs that motivated widening it. An open federal solicitation posted more
+# than half a year ago is rare enough not to be worth a timeout on every
+# scan.
+SAM_WINDOW_DAYS = int(os.environ.get("SAM_WINDOW_DAYS", "180"))
 # Per request, not per scan. With a NAICS filter applied server-side a state
 # returns a handful of rows, so this is headroom rather than a page size to
 # work through. It replaces limit=1000, which downloaded a year of every
@@ -3959,7 +3971,12 @@ def _sam_fetch(state, ncode=None, ccode=None):
         _sam_health["last_error"] = _sam_scrub(str(e))
         return None
     except Exception as e:
-        _sam_health["last_status"] = None
+        # NOT None. None is reserved for "no request has been made"; a
+        # timeout that reported None was read as a key problem for a whole
+        # round of diagnosis when the key was fine and SAM was just slow.
+        _sam_health["last_status"] = (
+            "timeout" if isinstance(e, (socket.timeout, TimeoutError))
+            or "timed out" in str(e).lower() else "error")
         _sam_health["last_error"] = _sam_scrub("%s: %s" % (type(e).__name__, e))
         return None
     _sam_health["last_status"] = 200
@@ -5525,7 +5542,7 @@ def _federal_states(center, radius):
     return [s for s in states if s]
 
 
-def _federal_keyed(states, stats):
+def _federal_keyed(states, stats, deadline=None):
     """Candidates from the documented, keyed API.
 
     Its payload is complete -- place of performance and point of contact
@@ -5545,7 +5562,8 @@ def _federal_keyed(states, stats):
     # request timeout alone does not bound a scan. Checked as a flag rather
     # than a bare break, because break only leaves the inner loop and the
     # outer one would re-enter and re-count it once per remaining state.
-    deadline = time.time() + FEDERAL_BUDGET_SEC
+    if deadline is None:
+        deadline = time.time() + FEDERAL_BUDGET_SEC
     out_of_time = False
     for st in states:
         if out_of_time:
@@ -5597,12 +5615,20 @@ def _federal_keyed(states, stats):
     # the keyed path returned nothing, bumped nothing, and the public one
     # could see eight active Texas notices the whole time.
     if attempted and failed == attempted:
+        # Inherit the remaining budget rather than starting a fresh one. The
+        # keyed path failing is not a reason to spend the federal allowance
+        # twice: a Woodford County scan burned 33 seconds this way -- two
+        # 15-second timeouts, then the whole public path again -- for two
+        # bids, which was 94% of all measured stage time.
+        if time.time() >= deadline:
+            _bump(stats, "federal_budget_exhausted")
+            return out
         _bump(stats, "federal_fell_back_to_public")
-        return _federal_public(states, stats)
+        return _federal_public(states, stats, deadline)
     return out
 
 
-def _federal_public(states, stats):
+def _federal_public(states, stats, deadline=None):
     """Candidates from sam.gov's own unauthenticated search.
 
     Exists so federal bids work before anybody has registered a key. Same
@@ -5614,8 +5640,20 @@ def _federal_public(states, stats):
     # code is broader than the trade. See federal_bids.CONCRETE_PSC.
     queries = ([({"naics": n}, True) for n in federal_bids.CONCRETE_NAICS] +
                [({"psc": c}, False) for c in federal_bids.CONCRETE_PSC])
+    # This path also has to watch the clock. It is reached either directly or
+    # as the keyed path's fallback, and in the fallback case most of the
+    # federal allowance may already be gone.
+    if deadline is None:
+        deadline = time.time() + FEDERAL_BUDGET_SEC
+    out_of_time = False
     for st in states:
+        if out_of_time:
+            break
         for params, trusted in queries:
+            if time.time() >= deadline:
+                _bump(stats, "federal_budget_exhausted")
+                out_of_time = True
+                break
             try:
                 page, outcome = _fetch_page(
                     federal_bids.search_url(state=st, **params),
@@ -5697,8 +5735,12 @@ def _run_federal_sources(center, radius, grouped, cdb, city_coords=None,
     states = _federal_states(center, radius)
     if not states:
         return 0
-    bids = (_federal_keyed(states, stats) if SAM_API_KEY
-            else _federal_public(states, stats))
+    # One clock for the stage, handed to whichever transport runs -- and to
+    # the fallback if the keyed one gives out, so a failing key cannot spend
+    # the federal allowance twice.
+    deadline = time.time() + FEDERAL_BUDGET_SEC
+    bids = (_federal_keyed(states, stats, deadline) if SAM_API_KEY
+            else _federal_public(states, stats, deadline))
     placed = 0
     for bid in bids:
         if not bid:
