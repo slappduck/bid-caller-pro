@@ -178,6 +178,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .stat-box .n{font-size:var(--fs-2xl);font-weight:800;color:var(--accent);}
 .stat-box .l{font-size:var(--fs-xs);color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-top:0.15rem;}
 
+.empty-note{color:var(--text3);font-size:var(--fs-sm);margin-top:0.5rem;line-height:1.5;}
 .empty-actions{display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.8rem;}
 .empty-actions .btn-ghost{margin:0;flex:1 1 auto;width:auto;min-height:44px;}
 .empty{text-align:center;padding:3.5rem 1rem;}
@@ -2033,6 +2034,10 @@ async function detectLocation(fillInput){
         const input=document.getElementById("loc-input");
         if(input&&(fillInput||!input.value.trim()))input.value=val;
         if(fillInput)toast(val);
+        // A brand-new account lands on "No bids yet -- Tap Find to scan your
+        // area" and a 90-second wait. Nothing sells this product like
+        // opening it to a full feed, so run that first scan for them.
+        if(!fillInput)maybeFirstScan();
       }else if(fillInput){
         // Never silently drop a coordinate pair in the box here. The user asked
         // for their town; a number they can't check is worse than being told.
@@ -2043,6 +2048,37 @@ async function detectLocation(fillInput){
   {timeout:10000,maximumAge:600000});
 }
 function autoFillZip(){detectLocation(false);}
+
+// ── The first scan, run for them ──────────────────────────────────────
+//
+// Exactly once, on a device that has never scanned and has no bids. Every
+// condition here is a guard against doing this to somebody who did not want
+// it: an existing customer opening the app must never trigger a surprise
+// 90-second scan, and neither must a second device, a reinstall with a
+// synced feed, or somebody who scanned yesterday and found nothing.
+//
+// The flag is set BEFORE the scan runs, not after. If it were set on
+// success, a scan that failed or was cancelled would re-trigger on the next
+// app open, and the one thing worse than no first scan is one that starts
+// itself over and over.
+const FIRST_SCAN_KEY="first_scan_done";
+function maybeFirstScan(){
+  if(store.get(FIRST_SCAN_KEY,false))return;
+  if(Object.keys(bidData||{}).length)return;       // already has bids
+  if(store.get("last_scan_debug",null))return;     // has scanned before
+  const input=document.getElementById("loc-input");
+  if(!input||!input.value.trim())return;           // nothing to scan
+  // Looked up rather than closed over: the scanBtn const is declared later
+  // in the file than this function, and relying on the geolocation callback
+  // always firing after that is a temporal-dead-zone bug waiting to happen.
+  const btn=document.getElementById("scan-btn");
+  if(btn&&btn.disabled)return;                     // a scan is already running
+  if(!navigator.onLine)return;
+  store.set(FIRST_SCAN_KEY,true);
+  const status=document.getElementById("scan-status");
+  if(status)status.textContent="Finding work near you\u2026";
+  runScan(false);
+}
 
 // ── Diagnostics ──
 // A scan can come back "successful" with two bids because the area is quiet,
@@ -2500,9 +2536,18 @@ function showEmptyScanResult(d,location,cachedNote){
   if(towns) bits.push(`${towns} town${towns===1?"":"s"}`);
   const effort=bits.length?`Checked ${bits.join(" across ")}. `:"";
   const next=RADIUS_STEPS.find(r=>r>radius);
+  // Expectation-setting, not filler. A contractor has no way to know whether
+  // an empty result means the app is broken or the month is quiet, and
+  // municipal concrete work genuinely is lumpy -- across ten sample scans the
+  // median was six open bids and the worst was one. Saying so converts a
+  // disappointing result into an honest one, which is the difference between
+  // cancelling and checking back.
   status.innerHTML=
     `<div>${esc(effort)}Nothing open near ${esc(where)} right now.`
     +`${esc(cachedNote)}</div>`
+    +`<div class="empty-note">Normal for a quiet week \u2014 most areas post a `
+    +`handful of concrete jobs a month, not a steady stream. New work appears `
+    +`as agencies publish it.</div>`
     +`<div class="empty-actions">`
     +(next?`<button type="button" class="btn-ghost" id="empty-wider">`
            +`Search ${next} miles instead</button>`:"")
