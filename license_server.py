@@ -5239,6 +5239,10 @@ STATE_SOURCES_CSV = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                  "data", "state_bid_sources.csv")
 STATE_SOURCE_MIN_USABLE = int(os.environ.get("STATE_SOURCE_MIN_USABLE", "2"))
 STATE_SOURCE_TIMEOUT = float(os.environ.get("STATE_SOURCE_TIMEOUT", "20"))
+# One worker per state a wide radius can touch. Four is the observed
+# maximum for 125 miles; the cap exists so a pathological radius cannot
+# open a dozen sockets at once.
+STATE_WORKERS = int(os.environ.get("SCAN_STATE_WORKERS", "4"))
 _state_sources_cache = {"at": 0.0, "rows": None}
 
 
@@ -5434,16 +5438,40 @@ def _run_state_sources(center, radius, grouped, city_coords=None, stats=None):
     if not todo:
         return 0
 
-    placed = 0
-    for st, url, kind in todo:
+    # Fetch every state at once, then process them one at a time.
+    #
+    # This loop used to do both serially: up to four states, each with a
+    # 20-second timeout, one after the other. That is 80 seconds of a scan's
+    # budget spent waiting on sockets while nothing else happens, and it was
+    # the only stage still doing it -- towns, portals, detail pages and the
+    # federal source are all already concurrent.
+    #
+    # Only the FETCH is parallel. Parsing and placement stay on this thread
+    # because _place_state_bid mutates `grouped` and `city_coords`, and the
+    # win here is entirely in the waiting: making the mutation concurrent
+    # would add a class of bug for no measurable gain.
+    def _load(item):
+        st, url, kind = item
         try:
             page, outcome = _fetch_page(url, timeout=STATE_SOURCE_TIMEOUT)
             if outcome != "ok" or not page:
+                return st, url, None, outcome
+            url, page = _resolve_state_listing(url, kind, page)
+            return st, url, page, "ok"
+        except Exception as ex:
+            return st, url, None, "error:%s" % type(ex).__name__
+
+    with ThreadPoolExecutor(max_workers=min(STATE_WORKERS, len(todo))) as ex:
+        fetched = list(ex.map(_load, todo))
+
+    placed = 0
+    for st, url, page, outcome in fetched:
+        try:
+            if page is None:
                 if stats is not None:
                     k = "state_fetch_%s" % outcome
                     stats[k] = stats.get(k, 0) + 1
                 continue
-            url, page = _resolve_state_listing(url, kind, page)
             rows = bid_sources.parse_state_letting(
                 page, st, url, counties.counties_named)
             if stats is not None:
@@ -5700,6 +5728,41 @@ def _run_federal_sources(center, radius, grouped, cdb, city_coords=None,
 
 ENRICH_MAX = int(os.environ.get("SCAN_ENRICH_MAX", "14"))
 
+# One wall clock for the WHOLE scan.
+#
+# Every stage had its own budget and they simply added: 40s of known-town
+# reads, then unbudgeted search and extraction, then state pages, then 25s of
+# federal, then enrichment, then plan holders. Nothing capped the sum, so a
+# 125-mile scan from Republic, MO ran past the client's 150-second timeout --
+# it finished and banked 32 bids, but the phone had already given up.
+#
+# This is deliberately shorter than that client timeout. A scan that returns
+# 28 bids in 90 seconds beats one that returns 32 in 160 and is never seen.
+# The stages it guards are the additive ones; the core town-and-portal read
+# always runs.
+SCAN_BUDGET_SEC = float(os.environ.get("SCAN_BUDGET_SEC", "95"))
+
+
+def _stage(stats, name, deadline, fn, *args, **kw):
+    """Run one optional scan stage, timing it and skipping it if the scan is
+    out of time.
+
+    The timing is the point as much as the skipping. Where a scan spends its
+    seconds was, until now, something to be inferred from the outside -- the
+    state stage turned out to be 2s of letting page and 18s of plan-holder
+    fetches, which no amount of reading the code made obvious.
+    """
+    if deadline is not None and time.time() >= deadline:
+        if stats is not None:
+            stats["skipped_" + name] = 1
+        return None
+    t0 = time.time()
+    try:
+        return fn(*args, **kw)
+    finally:
+        if stats is not None:
+            stats["ms_" + name] = int((time.time() - t0) * 1000)
+
 SCAN_HISTORY_KEY = "bidcaller:scan_history"
 SCAN_HISTORY_MAX = int(os.environ.get("SCAN_HISTORY_MAX", "25"))
 
@@ -5910,6 +5973,10 @@ def _perform_scan(location, radius, force=False):
     # thing that matters most here and it fails silently, so the funnel is
     # reported in the response rather than left to be guessed at.
     drop_stats = {}
+    # The clock the optional stages are measured against. Set here rather
+    # than at the request boundary so a cached hit, which returns above,
+    # never starts one.
+    scan_deadline = time.time() + SCAN_BUDGET_SEC
 
     # ---- LOCAL: disguised DuckDuckGo first, Tavily fallback if it's empty ----
     # A wide radius is only useful if we actually search more than the one
@@ -6101,14 +6168,15 @@ def _perform_scan(location, radius, force=False):
     # Placed before SAM.gov and before enrichment so state rows go through the
     # same deadline, dedupe and enrichment passes as everything else. One
     # fetch per state, at most four states in a 125-mile circle.
-    _run_state_sources(center, radius, grouped, city_coords, drop_stats)
+    _stage(drop_stats, "state", scan_deadline, _run_state_sources,
+           center, radius, grouped, city_coords, drop_stats)
 
     # ---- FEDERAL: SAM.gov across every state the radius touches ----
     # No longer gated on SAM_API_KEY: with a key it uses the documented API,
     # without one it reads sam.gov's own public search. Same public-domain
     # data either way, so the feature is not dark until somebody registers.
-    _run_federal_sources(center, radius, grouped, cdb, city_coords,
-                         drop_stats, pdb)
+    _stage(drop_stats, "federal", scan_deadline, _run_federal_sources,
+           center, radius, grouped, cdb, city_coords, drop_stats, pdb)
 
     # Read the posting behind every bid that still has no contact and no
     # deadline. Enrichment used to happen only inside the structured CivicPlus
@@ -6122,9 +6190,11 @@ def _perform_scan(location, radius, force=False):
     # and it's the only way work from towns with no bid page at all reaches
     # anybody. Added before enrichment so a notice missing a deadline still
     # gets the same treatment as any other bid.
-    _add_agency_bids(grouped, center, radius, cdb, city_coords, drop_stats)
+    _stage(drop_stats, "agency", scan_deadline, _add_agency_bids,
+           grouped, center, radius, cdb, city_coords, drop_stats)
 
-    _enrich_placed_bids(grouped, drop_stats)
+    _stage(drop_stats, "enrich", scan_deadline, _enrich_placed_bids,
+           grouped, drop_stats)
     _flag_misplaced_bids(grouped, pdb, drop_stats)
 
     for city_bids in grouped.values():
