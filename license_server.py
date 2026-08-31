@@ -5821,6 +5821,34 @@ SCAN_HISTORY_KEY = "bidcaller:scan_history"
 SCAN_HISTORY_MAX = int(os.environ.get("SCAN_HISTORY_MAX", "25"))
 
 
+def _scan_effort(stats, towns):
+    """How much work the scan did, in terms a contractor understands.
+
+    A scan that finds nothing currently says "No open bids posted here right
+    now" and stops. That reads as a broken app rather than a quiet week --
+    the effort is completely invisible, and it is considerable: a 125-mile
+    scan reads dozens of agency bid pages across dozens of towns.
+
+    Counted here rather than in the browser so the app never has to know
+    what a funnel key means; these names change as the pipeline does.
+    """
+    stats = stats or {}
+    # Every counter that represents one portal having been READ, whatever
+    # the outcome was.
+    portal_keys = ("civicplus_no_open_bids", "portal_no_niche_content",
+                   "civicplus_parse_miss", "portal_page_missing",
+                   "portal_wrong_module", "portal_moved_to_hosted")
+    portals = sum(int(stats.get(k) or 0) for k in portal_keys)
+    portals += sum(int(v or 0) for k, v in stats.items()
+                   if k.startswith("portal_fetch_"))
+    portals += int(stats.get("postings_read") or 0)
+    # Everything the relevance filter actually looked at.
+    examined = (int(stats.get("filtered_not_niche") or 0)
+                + int(stats.get("kept") or 0))
+    return {"portals_read": portals, "postings_examined": examined,
+            "towns_read": int(towns or 0)}
+
+
 def _append_scan_history(record):
     """Keep a rolling log of recent scans.
 
@@ -6031,6 +6059,10 @@ def _perform_scan(location, radius, force=False):
     # than at the request boundary so a cached hit, which returns above,
     # never starts one.
     scan_deadline = time.time() + SCAN_BUDGET_SEC
+    # Initialised here, not only inside the read block below, so the record
+    # cannot NameError if that block is ever made conditional again -- it
+    # used to sit behind "if OPENAI_API_KEY".
+    towns_read = 0
 
     # ---- LOCAL: disguised DuckDuckGo first, Tavily fallback if it's empty ----
     # A wide radius is only useful if we actually search more than the one
@@ -6077,6 +6109,11 @@ def _perform_scan(location, radius, force=False):
         ]
 
         anchors = _nearby_anchor_towns(center, radius, pdb)
+        # Every place the scan actually visits: the centre, the guessed
+        # anchor towns, and each town we already hold a verified bid page
+        # for. Reported to the app so an empty result can say what was
+        # searched instead of just "nothing found".
+        towns_read = 1 + len(anchors)
 
         # _nearby_anchor_towns samples at most a handful of geographically-
         # guessed points regardless of how large the radius is -- a 125mi
@@ -6094,6 +6131,7 @@ def _perform_scan(location, radius, force=False):
             pdb, center["lat"], center["lon"], radius, exclude=known_exclude)
         known_towns.sort(key=lambda t: _miles_between(center["lat"], center["lon"], t[2], t[3]))
         known_towns = known_towns[:MAX_KNOWN_TOWNS]
+        towns_read += len(known_towns)
 
         # Each "town job" (center + every anchor + every known-portal town)
         # is fully independent work, so they run concurrently instead of one
@@ -6274,6 +6312,7 @@ def _perform_scan(location, radius, force=False):
         "kept": total,
         "raw_local": local_raw,
         "anchor_towns": len(anchors) if OPENAI_API_KEY else 0,
+        "towns_read": towns_read,
         "funnel": drop_stats,
         # Counts alone can't distinguish "found nothing" from "found real
         # work and threw it away", which is exactly the question that
@@ -6301,7 +6340,8 @@ def _perform_scan(location, radius, force=False):
     return {"location": f"{center['city']}, {center['state']}",
             "bids": grouped, "total_bids": total, "city_coords": city_coords,
             "center": result["center"],
-            "debug": {"raw_local": local_raw, "kept": total, "funnel": drop_stats}}
+            "debug": {"raw_local": local_raw, "kept": total,
+                      "funnel": drop_stats, **_scan_effort(drop_stats, towns_read)}}
 
 
 @app.route("/scan", methods=["POST"])

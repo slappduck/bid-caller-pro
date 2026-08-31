@@ -178,6 +178,8 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .stat-box .n{font-size:var(--fs-2xl);font-weight:800;color:var(--accent);}
 .stat-box .l{font-size:var(--fs-xs);color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-top:0.15rem;}
 
+.empty-actions{display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.8rem;}
+.empty-actions .btn-ghost{margin:0;flex:1 1 auto;width:auto;min-height:44px;}
 .empty{text-align:center;padding:3.5rem 1rem;}
 .empty .icon{font-size:var(--fs-4xl);opacity:0.4;}
 .empty h3{font-size:var(--fs-xl);color:var(--text2);margin:0.7rem 0 0.3rem;}
@@ -2473,6 +2475,55 @@ function startScanProgress(wrapId,barId,opts){
   };
 }
 
+const RADIUS_STEPS=[10,25,50,75,125];
+
+// What a scan that found nothing should say.
+//
+// The old answer was "No open bids posted here right now. Try a wider
+// radius." -- one grey line, on the screen the user was already on, telling
+// them to go and do something themselves. For a contractor whose first scan
+// lands in a quiet county that is the whole product experience, and it reads
+// as broken rather than as an honest empty week.
+//
+// Two changes. Say what was actually searched, because the effort is real
+// and completely invisible: a 125-mile scan reads dozens of bid pages across
+// dozens of towns. And put the next step under their thumb -- the wider
+// radius, or the alert that means they never have to think about it again --
+// rather than describing it.
+function showEmptyScanResult(d,location,cachedNote){
+  const status=document.getElementById("scan-status");
+  const dbg=d.debug||{};
+  const towns=dbg.towns_read||0, portals=dbg.portals_read||0;
+  const where=d.location||location;
+  const bits=[];
+  if(portals) bits.push(`${portals} bid page${portals===1?"":"s"}`);
+  if(towns) bits.push(`${towns} town${towns===1?"":"s"}`);
+  const effort=bits.length?`Checked ${bits.join(" across ")}. `:"";
+  const next=RADIUS_STEPS.find(r=>r>radius);
+  status.innerHTML=
+    `<div>${esc(effort)}Nothing open near ${esc(where)} right now.`
+    +`${esc(cachedNote)}</div>`
+    +`<div class="empty-actions">`
+    +(next?`<button type="button" class="btn-ghost" id="empty-wider">`
+           +`Search ${next} miles instead</button>`:"")
+    +`<button type="button" class="btn-ghost" id="empty-alert">`
+    +`Alert me when work appears here</button></div>`;
+  const wider=document.getElementById("empty-wider");
+  if(wider)wider.onclick=()=>{
+    // Move the visible selection too, or the radius silently disagrees with
+    // the buttons the user is looking at.
+    radius=next;
+    document.querySelectorAll("#radius-row .radius-btn").forEach(b=>
+      b.classList.toggle("active",Number(b.dataset.r)===next));
+    runScan(false);
+  };
+  const alert=document.getElementById("empty-alert");
+  if(alert)alert.onclick=()=>{
+    const save=document.getElementById("save-search-btn");
+    if(save)save.click(); else goTo("account");
+  };
+}
+
 async function runScan(force){
   if(scanBtn.disabled)return; // guard against double-tap / double-submit
   if(!requireOnline("Scanning for bids"))return;
@@ -2550,10 +2601,22 @@ async function runScan(force){
       ms:Date.now()-startedAt,total,added,cached:!!d.cached,debug:d.debug||null,
     });
     const cachedNote=d.cached?" (today\u2019s saved result \u2014 use Force a fresh scan to re-search)":"";
-    status.textContent=(total>0
-      ?`Done \u2014 ${added} new open bid(s) added near ${d.location||location}.`
-      :"No open bids posted here right now. Try a wider radius.")+cachedNote;
-    if(total>0){toast(added>0?`Added ${added} new bid(s)!`:"No new bids \u2014 already in your list.");cityFilter="All";goTo("feed");}
+    if(total>0){
+      status.textContent=`Done \u2014 ${added} new open bid(s) added near ${d.location||location}.`+cachedNote;
+      toast(added>0?`Added ${added} new bid(s)!`:"No new bids \u2014 already in your list.");
+      cityFilter="All";goTo("feed");
+    }else{
+      // An empty result used to be one grey sentence telling the user to go
+      // and change something themselves, on the screen they were already
+      // sitting on. That reads as a broken app rather than a quiet week --
+      // and it is the FIRST thing a new customer sees if their area is
+      // thin, which is exactly when they decide whether this is worth
+      // paying for.
+      //
+      // So: say what was actually searched, and put the next step under
+      // their thumb instead of describing it.
+      showEmptyScanResult(d,location,cachedNote);
+    }
   }catch(e){
     clearTimeout(killer);
     prog.fail();
