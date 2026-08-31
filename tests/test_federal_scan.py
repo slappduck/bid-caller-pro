@@ -561,3 +561,69 @@ class StatusIsUnambiguousTests(unittest.TestCase):
         generic = src[src.index("except Exception as e:"):]
         self.assertIn('"timeout"', generic)
         self.assertNotIn('last_status"] = None', generic)
+
+
+class CircuitBreakerTests(unittest.TestCase):
+    """A source that fails every scan should stop being asked.
+
+    Federal cost 30.4 seconds of a Casey County scan and produced no bids at
+    all -- two keyed requests timing out at the full SAM_TIMEOUT, then the
+    fallback -- and every scan paid it again. Capping the budget bounded that
+    but did not stop it. A cap on a source that never succeeds is the wrong
+    remedy.
+    """
+
+    def setUp(self):
+        self._state = dict(ls._federal_breaker)
+        ls._federal_breaker.update({"fails": 0, "open_until": 0.0})
+
+    def tearDown(self):
+        ls._federal_breaker.update(self._state)
+
+    def test_it_trips_only_after_repeated_failures(self):
+        """One bad scan is weather, not a broken source."""
+        for _ in range(ls._FEDERAL_TRIP_AFTER - 1):
+            ls._federal_note(False)
+            self.assertFalse(ls._federal_breaker_open())
+        ls._federal_note(False)
+        self.assertTrue(ls._federal_breaker_open())
+
+    def test_a_success_resets_it(self):
+        for _ in range(ls._FEDERAL_TRIP_AFTER):
+            ls._federal_note(False)
+        self.assertTrue(ls._federal_breaker_open())
+        ls._federal_note(True)
+        self.assertFalse(ls._federal_breaker_open())
+        self.assertEqual(ls._federal_breaker["fails"], 0)
+
+    def test_a_quiet_radius_is_not_a_failure(self):
+        """The transport working and finding nothing must NOT trip it --
+        most of the country has no open federal concrete work on a given
+        day, and resting the source then would be wrong."""
+        for _ in range(ls._FEDERAL_TRIP_AFTER + 2):
+            ls._federal_note(True)
+        self.assertFalse(ls._federal_breaker_open())
+
+    def test_a_rested_source_costs_no_time(self):
+        real = ls._federal_states
+        try:
+            ls._federal_states = lambda c, r: ["MO"]
+            for _ in range(ls._FEDERAL_TRIP_AFTER):
+                ls._federal_note(False)
+            stats = {}
+            t0 = time.time()
+            out = ls._run_federal_sources(
+                {"city": "X", "state": "MO", "lat": 37.2, "lon": -93.3},
+                25, {}, {}, {}, stats, None)
+        finally:
+            ls._federal_states = real
+        self.assertEqual(out, 0)
+        self.assertEqual(stats.get("federal_resting"), 1)
+        self.assertLess(time.time() - t0, 0.5)
+
+    def test_the_request_timeout_is_short(self):
+        """Two timeouts at fifteen seconds were thirty seconds of every
+        scan. SAM answers in well under a second when it answers at all, so
+        a long timeout buys a longer wait for the same failure."""
+        self.assertLessEqual(ls.SAM_TIMEOUT, 8)
+        self.assertLessEqual(ls.FEDERAL_BUDGET_SEC, 15)

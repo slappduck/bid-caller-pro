@@ -501,6 +501,13 @@ def health_detail():
     # api.data.gov is literally API_KEY_INVALID, and the commonest cause is
     # using a key issued by sam.gov's own profile page, which is a different
     # credential from an api.data.gov one.
+    if _federal_breaker_open():
+        notes.append(
+            "Federal bids are paused: SAM has failed %d scans in a row "
+            "(last: %s). It retries automatically. Municipal and state bids "
+            "are unaffected -- federal contributed 2 bids across the last "
+            "ten scans, so this costs little."
+            % (_federal_breaker["fails"], _sam_health["last_status"]))
     if backends["sam_gov"] and _sam_health["last_status"] == 403:
         problems.append(
             "SAM_API_KEY is being rejected (403 API_KEY_INVALID). Federal "
@@ -566,6 +573,11 @@ def health_detail():
             "key_configured": bool(SAM_API_KEY),
             "window_days": SAM_WINDOW_DAYS,
             "last_status": _sam_health["last_status"],
+            # Whether the source is currently being rested, and how close it
+            # is to being. Without this a federal count of zero looks the
+            # same whether SAM is down or the radius is simply quiet.
+            "resting": _federal_breaker_open(),
+            "consecutive_failures": _federal_breaker["fails"],
         },
         "problems": problems,
         "notes": notes,
@@ -3911,7 +3923,11 @@ SAM_WINDOW_DAYS = int(os.environ.get("SAM_WINDOW_DAYS", "180"))
 SAM_PAGE_LIMIT = int(os.environ.get("SAM_PAGE_LIMIT", "100"))
 # 60 seconds times five trade codes times four states is not a timeout, it is
 # an outage. A scan has a time budget and SAM is one source inside it.
-SAM_TIMEOUT = int(os.environ.get("SAM_TIMEOUT", "15"))
+# Six, not fifteen. Two timeouts at fifteen seconds were thirty seconds of
+# every scan spent failing. SAM answers in well under a second when it
+# answers at all, so a long timeout does not buy patience -- it buys a longer
+# wait for the same failure.
+SAM_TIMEOUT = int(os.environ.get("SAM_TIMEOUT", "6"))
 
 
 # What SAM said last time, so a failure can be diagnosed from /health instead
@@ -5524,7 +5540,40 @@ FEDERAL_TIMEOUT = int(os.environ.get("SCAN_FEDERAL_TIMEOUT", "30"))
 # A whole-source ceiling. Individual request timeouts multiply -- five trade
 # codes across four states is twenty requests -- so the only thing that
 # actually bounds a scan is a wall clock on the source as a whole.
-FEDERAL_BUDGET_SEC = float(os.environ.get("SCAN_FEDERAL_BUDGET_SEC", "25"))
+FEDERAL_BUDGET_SEC = float(os.environ.get("SCAN_FEDERAL_BUDGET_SEC", "12"))
+
+
+# A source that fails every scan should stop being asked.
+#
+# Federal cost 30.4 seconds of a Casey County scan and produced no bids at
+# all: two keyed requests, both timing out at the full SAM_TIMEOUT, then the
+# fallback. Capping the budget bounded that but did not stop it -- every
+# scan paid it again, and a cap on a source that never succeeds is the wrong
+# remedy. It should stop asking and check back later.
+#
+# Deliberately simple: consecutive failures, and a cooldown that only ends
+# with a probe. No half-open state machine, because the cost of being wrong
+# is one skipped federal source on one scan, and federal contributed 2 bids
+# across the last ten scans.
+_FEDERAL_TRIP_AFTER = int(os.environ.get("SCAN_FEDERAL_TRIP_AFTER", "3"))
+_FEDERAL_COOLDOWN_SEC = float(os.environ.get("SCAN_FEDERAL_COOLDOWN", "900"))
+_federal_breaker = {"fails": 0, "open_until": 0.0}
+
+
+def _federal_breaker_open():
+    """True while the source is being rested."""
+    return time.time() < _federal_breaker["open_until"]
+
+
+def _federal_note(ok):
+    """Record whether the federal source answered at all this scan."""
+    if ok:
+        _federal_breaker["fails"] = 0
+        _federal_breaker["open_until"] = 0.0
+        return
+    _federal_breaker["fails"] += 1
+    if _federal_breaker["fails"] >= _FEDERAL_TRIP_AFTER:
+        _federal_breaker["open_until"] = time.time() + _FEDERAL_COOLDOWN_SEC
 
 
 def _federal_states(center, radius):
@@ -5735,12 +5784,23 @@ def _run_federal_sources(center, radius, grouped, cdb, city_coords=None,
     states = _federal_states(center, radius)
     if not states:
         return 0
+    if _federal_breaker_open():
+        # Resting. Costs one skipped source on one scan; the alternative is
+        # paying thirty seconds a scan to fail at the same thing.
+        _bump(stats, "federal_resting")
+        return 0
     # One clock for the stage, handed to whichever transport runs -- and to
     # the fallback if the keyed one gives out, so a failing key cannot spend
     # the federal allowance twice.
     deadline = time.time() + FEDERAL_BUDGET_SEC
     bids = (_federal_keyed(states, stats, deadline) if SAM_API_KEY
             else _federal_public(states, stats, deadline))
+    # "Answered" means the transport worked, not that it found anything --
+    # a genuinely quiet radius must not trip the breaker.
+    answered = bool(bids) or bool(stats and (stats.get("federal_search_ok")
+                                             or stats.get("federal_search_empty")))
+    _federal_note(answered)
+
     placed = 0
     for bid in bids:
         if not bid:
