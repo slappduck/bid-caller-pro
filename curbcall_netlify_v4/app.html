@@ -2498,13 +2498,39 @@ async function runScan(force){
   // asleep (Render free tier), but this still guarantees the UI never hangs
   // forever if the server is truly unreachable.
   const killer=setTimeout(()=>ctrl.abort(),150000);
-  try{
+  async function post(signal,forceThis){
     const token=await getSupabaseToken();
-    const r=await fetch(SERVER+"/scan",{
-      method:"POST",headers:{"Content-Type":"application/json"},
-      signal:ctrl.signal,
-      body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,location,radius,force:!!force})
+    return fetch(SERVER+"/scan",{
+      method:"POST",headers:{"Content-Type":"application/json"},signal,
+      body:JSON.stringify({key:licenseKey(),device_id:deviceId(),
+        supabase_token:token,location,radius,force:!!forceThis})
     });
+  }
+  try{
+    let r;
+    try{
+      r=await post(ctrl.signal,force);
+    }catch(err){
+      // A timeout here does NOT mean the scan failed. The server keeps
+      // working after the client hangs up, finishes, and caches the result
+      // for the day -- a 125-mile scan from Republic, MO ran past 150s and
+      // banked 32 bids that the phone never saw, because it had already
+      // shown "that took too long".
+      //
+      // So collect it instead of reporting a failure. The retry is NOT
+      // forced, which is the whole point: an unforced scan for the same
+      // place on the same day is answered from that cache, so this returns
+      // in a moment rather than starting the work again.
+      if(cancelled||err.name!=="AbortError")throw err;
+      clearTimeout(killer);
+      status.textContent="Still running on the server \u2014 collecting your "
+        +"result...";
+      await new Promise(res=>setTimeout(res,4000));
+      const c2=new AbortController();
+      const k2=setTimeout(()=>c2.abort(),45000);
+      try{ r=await post(c2.signal,false); }
+      finally{ clearTimeout(k2); }
+    }
     clearTimeout(killer);
     prog.finish();
     if(r.status===403){status.textContent="Your trial or subscription isn't active.";toast("Check Account tab");goTo("account");return;}
@@ -2534,9 +2560,13 @@ async function runScan(force){
     if(cancelled){
       status.textContent="Scan cancelled.";
     }else if(e.name==="AbortError"){
-      status.textContent="That took too long \u2014 the server might be waking "
-        +"up. Try again in a moment.";
-      toast("Connection problem");
+      // Both the scan AND the follow-up collection timed out. The result may
+      // still land in the server's cache, so say what actually helps rather
+      // than "connection problem".
+      status.textContent="Still working. The server finishes scans even after "
+        +"the app stops waiting \u2014 tap Scan again in a minute and it will "
+        +"return today\u2019s saved result straight away.";
+      toast("Taking longer than usual");
     }else{
       status.textContent="Couldn't reach the bid service. Check your internet.";
       toast("Connection problem");
