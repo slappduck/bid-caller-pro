@@ -104,3 +104,74 @@ class StateSourceConcurrencyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PlanHolderBudgetTests(unittest.TestCase):
+    """Plan holders are a per-job extra, not a bid.
+
+    A Branson scan spent 19 of its 83 seconds in the state stage: 2 on the
+    MoDOT letting page itself and the rest on twelve plan-holder fetches at
+    four workers. A scan should not spend a fifth of itself on a detail that
+    hangs off bids it has already found.
+
+    Bounded by time rather than by raising the worker count, because the
+    faster clock would come from leaning harder on one agency's server --
+    the wrong trade to make with somebody else's infrastructure.
+    """
+
+    def setUp(self):
+        import bid_sources
+        self.bs = bid_sources
+        self._orig = (bid_sources.plan_holder_index,
+                      bid_sources.plan_holder_url_for_call,
+                      bid_sources.parse_plan_holders, ls._fetch_page,
+                      ls.PLAN_HOLDER_BUDGET_SEC)
+        bid_sources.plan_holder_index = lambda h, u: "https://x/index"
+        bid_sources.plan_holder_url_for_call = lambda i, c: "https://x/%s" % c
+        bid_sources.parse_plan_holders = lambda p: [{"name": "Acme"}]
+        self.calls = []
+
+        def slow(url, timeout=None):
+            self.calls.append(url)
+            time.sleep(0.2)
+            return ("<html></html>", "ok")
+        ls._fetch_page = slow
+
+    def tearDown(self):
+        (self.bs.plan_holder_index, self.bs.plan_holder_url_for_call,
+         self.bs.parse_plan_holders, ls._fetch_page,
+         ls.PLAN_HOLDER_BUDGET_SEC) = self._orig
+
+    def _run(self, budget):
+        ls.PLAN_HOLDER_BUDGET_SEC = budget
+        self.calls.clear()
+        bids = [{"call": "C%d" % i} for i in range(12)]
+        stats = {}
+        ls._attach_plan_holders(bids, "<html/>", "https://x/letting", stats)
+        return len(self.calls), sum(1 for b in bids if b.get("plan_holders")), stats
+
+    def test_a_generous_budget_fetches_everything(self):
+        n, got, stats = self._run(10.0)
+        self.assertEqual(n, 12)
+        self.assertEqual(got, 12)
+        self.assertIsNone(stats.get("plan_holder_budget_spent"))
+
+    def test_a_tight_budget_stops_partway_and_says_so(self):
+        n, got, stats = self._run(0.25)
+        self.assertLess(n, 12)
+        self.assertGreater(n, 0)
+        self.assertEqual(stats.get("plan_holder_budget_spent"), 1)
+
+    def test_an_exhausted_budget_costs_nothing(self):
+        n, got, stats = self._run(0.0)
+        self.assertEqual(n, 0)
+        self.assertEqual(stats.get("plan_holder_budget_spent"), 1)
+
+    def test_running_out_never_costs_a_bid(self):
+        """It degrades by dropping holder lists, not listings -- the bids are
+        placed before this runs and are untouched by it."""
+        ls.PLAN_HOLDER_BUDGET_SEC = 0.0
+        bids = [{"call": "C%d" % i, "title": "job %d" % i} for i in range(12)]
+        ls._attach_plan_holders(bids, "<html/>", "https://x/letting", {})
+        self.assertEqual(len(bids), 12)
+        self.assertTrue(all(b.get("title") for b in bids))

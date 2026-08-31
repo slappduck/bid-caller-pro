@@ -5425,6 +5425,8 @@ def _place_state_bid(grouped, row, center, radius, city_coords=None, stats=None)
 
 PLAN_HOLDER_MAX = int(os.environ.get("SCAN_PLAN_HOLDER_MAX", "12"))
 PLAN_HOLDER_WORKERS = int(os.environ.get("SCAN_PLAN_HOLDER_WORKERS", "4"))
+PLAN_HOLDER_BUDGET_SEC = float(
+    os.environ.get("SCAN_PLAN_HOLDER_BUDGET_SEC", "8"))
 
 
 def _attach_plan_holders(bids, letting_html, letting_url, stats=None):
@@ -5447,6 +5449,14 @@ def _attach_plan_holders(bids, letting_html, letting_url, stats=None):
     index_url = bid_sources.plan_holder_index(letting_html, letting_url)
     if not index_url:
         return 0
+    # Deadline first, then the count cap. A Branson scan spent 19 of its 83
+    # seconds in this stage -- the MoDOT letting page itself took 2, and the
+    # rest was twelve plan-holder fetches at four workers. Plan holders are a
+    # per-job extra, not a bid: a scan should never spend a fifth of itself on
+    # them. Raising the worker count would fix the clock by leaning harder on
+    # one agency's server, which is the wrong trade for somebody else's
+    # infrastructure, so this bounds the time instead.
+    deadline = time.time() + PLAN_HOLDER_BUDGET_SEC
     targets = [b for b in bids if b.get("call")][:PLAN_HOLDER_MAX]
     if not targets:
         return 0
@@ -5464,8 +5474,17 @@ def _attach_plan_holders(bids, letting_html, letting_url, stats=None):
             bid["plan_holder_url"] = url
         return len(holders)
 
+    def _one_in_time(bid):
+        # Checked per job rather than per batch: the pool runs several at
+        # once, so whoever starts after the budget is gone simply does not.
+        if time.time() >= deadline:
+            return 0
+        return _one(bid)
+
     with ThreadPoolExecutor(max_workers=PLAN_HOLDER_WORKERS) as ex:
-        found = sum(ex.map(_one, targets))
+        found = sum(ex.map(_one_in_time, targets))
+    if time.time() >= deadline and stats is not None:
+        stats["plan_holder_budget_spent"] = 1
     if stats is not None and found:
         stats["plan_holders_found"] = stats.get("plan_holders_found", 0) + found
         stats["plan_holder_jobs"] = stats.get("plan_holder_jobs", 0) + sum(
