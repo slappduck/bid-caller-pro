@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Pull US municipal websites out of Wikidata.
+"""Pull US local-government websites out of Wikidata.
+
+Four kinds of buyer, selected with --kind: city, county, school, special.
 
 The national crawl reads the CISA .gov registry, and that registry holds
 12,711 bare second-level domains and not one subdomain. Every one of them has
@@ -20,8 +22,8 @@ crowd-sourced and does carry stale and wrong website values. Nothing written
 by this script belongs in the directory until discover_bid_portals.py has
 probed it and found a real bid page:
 
-  python3 tools/wikidata_municipalities.py
-  python3 tools/discover_bid_portals.py --registry data/municipal_candidates.csv
+  python3 tools/wikidata_municipalities.py --kind school
+  python3 tools/discover_bid_portals.py --registry data/school_candidates.csv --resume
 
 Two passes, after measuring what actually costs anything here. The expensive
 part is not the size of the result -- it is SERVICE wikibase:label and the
@@ -63,6 +65,9 @@ KNOWN = [
     ("data/school_district_candidates.csv", "domain"),
 ]
 
+# The four kinds of local buyer, each a Wikidata root class whose subclass
+# tree is walked with P31/P279*.
+#
 # Q15284 is "municipality of the United States". Measured against the
 # alternatives before settling on it: Q1093829 ("city in the United States")
 # returns 6,866 and is entirely contained in this tree, so the union of the
@@ -71,9 +76,54 @@ KNOWN = [
 # Deliberately no SERVICE wikibase:label and no state join: those are what
 # blow the time budget. Bare QIDs and websites for the entire country arrive
 # in one response, and the rest is filled in below.
+KINDS = {
+    # kind        root class    directory type
+    "city":     ("Q15284",    "City"),
+    "county":   ("Q47168",    "County"),
+    "school":   ("Q15726209", "School district"),
+    "special":  ("Q610237",   "Special district"),
+}
+
+# Suffixes that turn a buyer's name into the place it sits in. The directory
+# keys coordinates on (city, state), and a district's own name is not a city
+# -- but it is nearly always a city's name with a role appended, which is why
+# the .gov-sourced rows already read "Chester School District" -> Chester.
+# Longest first: "Unified School District" must strip before "School
+# District" leaves "Unified" behind.
+_ROLE_SUFFIXES = (
+    "consolidated school district", "unified school district",
+    "independent school district", "community school district",
+    "central school district", "county school district",
+    "public school district", "regional school district",
+    "fire protection district", "community services district",
+    "metropolitan school district", "school district", "public schools",
+    "school corporation", "county commission", "sanitation district",
+    "water district", "utility district", "sewer district",
+    "housing authority", "park district", "library district",
+    "fire district", "county office of education", "county",
+)
+
+
+def _place_name(label, parent):
+    """The town a buyer sits in, for the coordinate join.
+
+    Falls back to the parent from P131 when stripping leaves nothing useful:
+    a name like "Region 14" carries no place at all.
+    """
+    low = (label or "").strip().lower()
+    for suffix in _ROLE_SUFFIXES:
+        if low.endswith(" " + suffix):
+            stem = label[: len(label) - len(suffix) - 1].strip()
+            # Two characters is not a town; neither is a bare ordinal.
+            if len(stem) > 2 and not stem.isdigit():
+                return stem
+            break
+    return (parent or label or "").strip()
+
+
 PLACES_QUERY = """
 SELECT ?x ?site WHERE {
-  ?x wdt:P31/wdt:P279* wd:Q15284 ;
+  ?x wdt:P31/wdt:P279* wd:%s ;
      wdt:P17 wd:Q30 ;
      wdt:P856 ?site .
 }
@@ -248,7 +298,13 @@ def _details_via_rest(qids):
         e = ents.get(q)
         if e is None:
             continue
-        out[q] = (_label(e), state_of(q))
+        parents = _claim_ids(e, "P131")
+        pe = ents.get(parents[0]) if parents else None
+        if parents and pe is None:
+            pe = _entity(parents[0])
+            if pe is not None:
+                ents[parents[0]] = pe
+        out[q] = (_label(e), state_of(q), _label(pe) if pe else "")
         if i % 500 == 0:
             print(f"[wikidata] resolved {i}/{len(qids)}", flush=True)
     return out
@@ -256,7 +312,7 @@ def _details_via_rest(qids):
 
 
 def _details_for(qids):
-    """Map qid -> (name, two-letter state), resolved in bounded batches."""
+    """Map qid -> (name, two-letter state, parent name), in bounded batches."""
     found = {}
     for i in range(0, len(qids), BATCH):
         values = " ".join("wd:" + q for q in qids[i:i + BATCH])
@@ -278,7 +334,7 @@ def _details_for(qids):
             # than a correction. A row that resolved no state must not
             # overwrite one that did.
             if prev is None or (not prev[1] and abbr):
-                found[q] = (name, abbr)
+                found[q] = (name, abbr, prev[2] if prev else "")
         if (i // BATCH) % 10 == 0:
             print(f"[wikidata] resolved {len(found)}/{len(qids)}", flush=True)
     return found
@@ -292,13 +348,19 @@ def main():
     ap.add_argument("--all", action="store_true",
                     help="write every candidate, not just domains the pipeline "
                          "has never probed")
-    ap.add_argument("--out", default=OUT_CSV, help="output CSV path")
+    ap.add_argument("--kind", default="city", choices=sorted(KINDS),
+                    help="which class of local buyer to pull (default: city)")
+    ap.add_argument("--out", default=None,
+                    help="output CSV path (default: data/<kind>_candidates.csv)")
     ap.add_argument("--rest", action="store_true",
                     help="resolve names and states through the REST API "
                          "instead of SPARQL. Slower per place, but immune to "
                          "the WDQS throttle.")
     args = ap.parse_args()
     want = {s.upper() for s in args.state} if args.state else None
+    root, dtype = KINDS[args.kind]
+    out_path = args.out or os.path.join(
+        _ROOT, "data", f"{args.kind}_candidates.csv")
 
     known = set() if args.all else _known_domains()
     if known:
@@ -306,8 +368,9 @@ def main():
               flush=True)
 
     t0 = time.time()
-    rows = _sparql(PLACES_QUERY)
-    print(f"[wikidata] {len(rows)} places in {time.time()-t0:.0f}s", flush=True)
+    rows = _sparql(PLACES_QUERY % root)
+    print(f"[wikidata] {len(rows)} {args.kind} places in {time.time()-t0:.0f}s",
+          flush=True)
 
     # Deduplicate before resolving states: a place carries several P856
     # values and neighbouring towns share a county-run site, so the domain
@@ -322,7 +385,7 @@ def main():
             "domain": dom,
             "qid": r.get("x", {}).get("value", "").rsplit("/", 1)[-1],
             "website": r.get("site", {}).get("value", ""),
-            "type": "City",
+            "type": dtype,
         })
     print(f"[wikidata] {len(cand)} unprobed domains; resolving states",
           flush=True)
@@ -341,14 +404,15 @@ def main():
             detail = _details_via_rest(qids)
     out = []
     for c in cand:
-        name, st = detail.get(c["qid"], ("", ""))
+        name, st, parent = detail.get(c["qid"], ("", "", ""))
         # The pipeline keys on state and cannot place a row without one.
         if not st or (want and st not in want):
             continue
-        out.append({**c, "org": name, "city": name, "state": st})
+        city = name if args.kind == "city" else _place_name(name, parent)
+        out.append({**c, "org": name, "city": city, "state": st})
 
-    os.makedirs(os.path.dirname(args.out), exist_ok=True)
-    with open(args.out, "w", newline="", encoding="utf-8") as f:
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    with open(out_path, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=FIELDS)
         w.writeheader()
         w.writerows(out)
@@ -356,12 +420,12 @@ def main():
     by = {}
     for r in out:
         by[r["state"]] = by.get(r["state"], 0) + 1
-    print(f"\n[wikidata] wrote {len(out)} new candidates -> {args.out}")
+    print(f"\n[wikidata] wrote {len(out)} new {args.kind} candidates -> {out_path}")
     print("[wikidata] top: " + ", ".join(
         f"{k}={v}" for k, v in sorted(by.items(), key=lambda x: -x[1])[:12]))
     print("\nCandidates only. Probe them before anything reaches the "
           "directory:\n"
-          f"  python3 tools/discover_bid_portals.py --registry {args.out} --resume")
+          f"  python3 tools/discover_bid_portals.py --registry {out_path} --resume")
     return 0
 
 
