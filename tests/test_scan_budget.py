@@ -175,3 +175,33 @@ class PlanHolderBudgetTests(unittest.TestCase):
         ls._attach_plan_holders(bids, "<html/>", "https://x/letting", {})
         self.assertEqual(len(bids), 12)
         self.assertTrue(all(b.get("title") for b in bids))
+
+
+class BidOriginTests(unittest.TestCase):
+    """Which half of the pipeline paid for each bid.
+
+    Search became the most expensive stage in a scan -- 23.7 of 39.4 seconds
+    on a Grant County run -- and nothing recorded whether it earned that.
+    "kept" alone cannot answer it, so whether to keep spending twenty seconds
+    on search queries was unanswerable from the data.
+    """
+
+    def test_place_bid_records_where_a_bid_came_from(self):
+        import inspect
+        src = inspect.getsource(ls._place_bid)
+        self.assertIn("origin", inspect.signature(ls._place_bid).parameters)
+        self.assertIn('_count("kept_from_" + origin)', src)
+
+    def test_both_halves_are_tagged(self):
+        """Tagging only one side would make the ratio meaningless."""
+        import inspect
+        src = inspect.getsource(ls)
+        self.assertIn('origin="search"', src)
+        self.assertIn('origin="portal"', src)
+
+    def test_an_untagged_call_still_works(self):
+        """Federal and agency bids do not carry an origin, and must not
+        break or be miscounted because of it."""
+        import inspect
+        sig = inspect.signature(ls._place_bid)
+        self.assertIsNone(sig.parameters["origin"].default)

@@ -4469,7 +4469,8 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
                         _place_bid(grouped, payload,
                             center, radius, cdb, default_city=default_city or city,
                             city_coords=city_coords, default_state=state,
-                            fallback_coords=town_coords, stats=stats)
+                            fallback_coords=town_coords, stats=stats,
+                            origin="portal")
                 return
             if bid_sources.civicplus_page_is_empty(page):
                 # The right page, with nothing posted. Sending it to the AI
@@ -4613,7 +4614,8 @@ def _run_known_portals(city, state, ai_label, grouped, center, radius, cdb,
                     _place_bid(grouped, b, center, radius, cdb, pdb=pdb,
                               default_city=default_city or city,
                               city_coords=city_coords, default_state=state,
-                              fallback_coords=town_coords, stats=stats)
+                              fallback_coords=town_coords, stats=stats,
+                              origin="portal")
 
     if portals:
         with ThreadPoolExecutor(max_workers=min(PORTAL_WORKERS, len(portals))) as ex:
@@ -4753,7 +4755,8 @@ def _run_local_queries(queries, ai_label, max_pages, grouped, center, radius, cd
                     _place_bid(grouped, b, center, radius, cdb, pdb=pdb,
                                default_city=default_city,
                               city_coords=city_coords, default_state=state,
-                              fallback_coords=town_coords, stats=stats)
+                              fallback_coords=town_coords, stats=stats,
+                              origin="search")
                     if bid_city and state:
                         bid_portals.learn_portal(pdb, bid_city, state, it["url"])
 
@@ -5085,7 +5088,8 @@ def _age_out_undated(bid, city, db, stats=None):
 
 
 def _place_bid(grouped, bid, center, radius, db, default_city="", city_coords=None,
-               default_state="", fallback_coords=None, stats=None, pdb=None):
+               default_state="", fallback_coords=None, stats=None, pdb=None,
+               origin=None):
     """Keep a bid ONLY if its real city geocodes within the radius.
 
     The city is resolved against the most specific state we have: the one the
@@ -5259,6 +5263,15 @@ def _place_bid(grouped, bid, center, radius, db, default_city="", city_coords=No
         return
     bucket.append(bid)
     _count("kept")
+    # Which half of the pipeline paid for this bid.
+    #
+    # Search is now the most expensive stage in a scan -- 23.7 of 39.4
+    # seconds on a Grant County run -- and nothing recorded whether it was
+    # earning that. "kept" alone cannot answer it, so "should a scan keep
+    # spending twenty seconds on search queries" was unanswerable from the
+    # data. That is the position the stage timings were added to get out of.
+    if origin:
+        _count("kept_from_" + origin)
     # "kept" counts bids that made it into the result; the reported total counts
     # only the OPEN ones. That gap used to be invisible, and a scan that placed
     # seven bids and reported zero looked like a bug in the geography rather
