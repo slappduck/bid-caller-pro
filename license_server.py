@@ -341,13 +341,24 @@ def health():
     return jsonify({"service": "Bid Caller Pro License Server", "status": "ok"})
 
 
-def _recent_scans():
+def _recent_scans(limit=None):
     """The scan history, newest first. Never raises — /health must answer even
-    when the storage backend is the thing that is broken."""
+    when the storage backend is the thing that is broken.
+
+    `limit` defaults to SCAN_HISTORY_SHOW, not to everything retained. The
+    store deliberately holds far more rows than a diagnostic page should
+    print; an explicit limit is how you read the rest.
+    """
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        limit = SCAN_HISTORY_SHOW
+    limit = max(1, min(limit, SCAN_HISTORY_MAX))
     try:
         history = kv_backend.get(SCAN_HISTORY_KEY, None) or []
-        return list(reversed(history))[:SCAN_HISTORY_MAX] \
-            if isinstance(history, list) else []
+        if not isinstance(history, list):
+            return []
+        return list(reversed(history))[:limit]
     except Exception:
         return []
 
@@ -1160,7 +1171,7 @@ def diag():
         "suppressed_count": len(_suppression()),
         "webhook_configured": bool(RESEND_WEBHOOK_SECRET),
         "last_scan": kv_backend.get("bidcaller:last_scan", None),
-        "recent_scans": _recent_scans(),
+        "recent_scans": _recent_scans(request.args.get("scans")),
         "feed_audit": kv_backend.get(BID_AUDIT_KEY, None),
         "scan_config": {
             "max_pages_per_town": MAX_PAGES,
@@ -6012,7 +6023,21 @@ def _stage(stats, name, deadline, fn, *args, **kw):
             stats["ms_" + name] = int((time.time() - t0) * 1000)
 
 SCAN_HISTORY_KEY = "bidcaller:scan_history"
-SCAN_HISTORY_MAX = int(os.environ.get("SCAN_HISTORY_MAX", "25"))
+SCAN_HISTORY_MAX = int(os.environ.get("SCAN_HISTORY_MAX", "500"))
+# How many of those rows the diagnostic endpoints print by default.
+#
+# Retention and display are two different questions and used to share one
+# number. Twenty-five rows is the right amount to read on a health page and
+# the wrong amount to keep: a handful of people trying the product roll the
+# log over within an afternoon, so the scans worth studying are exactly the
+# ones thrown away. Keep a launch week, print a screenful, and let
+# /diag?scans=N reach further back when there is a reason to.
+#
+# Size is the thing that caps this rather than taste: each row is roughly
+# half a kilobyte and the whole list is rewritten on every scan, so 500 rows
+# is about a 250KB read-modify-write per scan. That is comfortable on the
+# current store and would not be at 5,000.
+SCAN_HISTORY_SHOW = int(os.environ.get("SCAN_HISTORY_SHOW", "25"))
 
 
 def _scan_effort(stats, towns):
