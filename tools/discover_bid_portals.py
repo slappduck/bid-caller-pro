@@ -349,6 +349,12 @@ def main():
                           "different hosts, so this is polite per-server, not aggressive)")
     ap.add_argument("--resume", action="store_true",
                      help="skip domains already present in the output CSV")
+    ap.add_argument("--out", default=None,
+                     help="write results to this CSV instead of the directory. "
+                          "For a batch whose rows are not ready to merge yet -- "
+                          "candidates still missing a state, say -- so a long "
+                          "crawl can run without leaving half-formed rows in "
+                          "the file the scanner reads.")
     ap.add_argument("--recheck-missing", action="store_true",
                      help="re-probe ONLY the domains already recorded as not_found/error, "
                           "and rewrite their rows in place. For after CANDIDATE_BID_PATHS "
@@ -358,6 +364,12 @@ def main():
 
     if args.recheck_missing:
         return _recheck_missing(args)
+
+    # Rebinding the module global rather than threading a path through: every
+    # writer below already reads OUT_CSV, and --out is a whole-run choice.
+    global OUT_CSV
+    if args.out:
+        OUT_CSV = args.out
 
     registry = _load_registry(state_filter=args.state, limit=args.limit,
                               registry_path=args.registry)
