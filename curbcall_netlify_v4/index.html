@@ -679,5 +679,35 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
   targets.forEach(el=>io.observe(el));
 })();
 </script>
+<!-- ── Cloudflare Web Analytics ──────────────────────────────────────────
+     What this is for: the site is static files served from the edge, so no
+     server sees a page view and nothing writes one down. This reports the
+     visit from the browser instead, which is what makes the /go/<name>
+     outreach links in _redirects countable at all.
+
+     Cookieless by design -- it records the path, referrer, country and
+     browser, never an identity -- which is why the site needs no cookie
+     banner, and also why it can tell you /go/marshall was opened three
+     times but not by whom.
+
+     Paste the token from Cloudflare > Analytics & Logs > Web Analytics.
+     Until then the block does nothing whatsoever: an unset or malformed
+     token means the script is never injected, rather than every page load
+     firing a request that Cloudflare rejects. If you turn on Cloudflare's
+     automatic setup instead, it injects its own beacon and this can go.
+
+     Being JavaScript, ad blockers can suppress it -- expect to see most
+     clicks, not all of them. -->
+<script>
+(function () {
+  var token = "";
+  if (!/^[0-9a-f]{32}$/i.test(token)) return;
+  var s = document.createElement("script");
+  s.defer = true;
+  s.src = "https://static.cloudflareinsights.com/beacon.min.js";
+  s.setAttribute("data-cf-beacon", JSON.stringify({ token: token }));
+  document.head.appendChild(s);
+})();
+</script>
 </body>
 </html>

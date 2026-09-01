@@ -28,3 +28,22 @@
 /post-a-bid     /post-a-bid.html   200
 /privacy        /privacy.html      200
 /terms          /terms.html        200
+
+# Per-recipient outreach links.
+#
+# 200 rewrites, not redirects, and that is the whole trick: the address bar
+# keeps saying /go/marshall while the landing page is served from
+# index.html. The analytics beacon reports whatever the address bar says, so
+# each contractor shows up as its own row without a second page existing.
+#
+# A redirect would defeat this -- the browser would land on "/" and every
+# click would collapse into one indistinguishable number.
+#
+# These are cold-outreach links, so they are deliberately readable rather
+# than hashed. Anyone who finds one just sees the normal landing page.
+/go/marshall      /index.html   200
+/go/mattingly     /index.html   200
+/go/1c39          /index.html   200
+/go/concreteindy  /index.html   200
+/go/brbs          /index.html   200
+/go/acr           /index.html   200
