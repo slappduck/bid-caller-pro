@@ -178,6 +178,11 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .stat-box .n{font-size:var(--fs-2xl);font-weight:800;color:var(--accent);}
 .stat-box .l{font-size:var(--fs-xs);color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-top:0.15rem;}
 
+.scan-effort{margin-top:0.6rem;padding:0.7rem 0.85rem;background:var(--card);
+  border:1px solid var(--border);border-radius:var(--r-sm);
+  color:var(--text2);font-size:var(--fs-sm);line-height:1.55;}
+.scan-effort b{color:var(--text);font-weight:700;}
+.scan-effort .dim{color:var(--text3);}
 .empty-note{color:var(--text3);font-size:var(--fs-sm);margin-top:0.5rem;line-height:1.5;}
 .empty-actions{display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.8rem;}
 .empty-actions .btn-ghost{margin:0;flex:1 1 auto;width:auto;min-height:44px;}
@@ -466,6 +471,9 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
         <div class="map-legend"><span>Click the map — or a nearby city — to set your search location</span></div>
       </div>
       <div class="scan-status" id="scan-status"></div>
+      <!-- What the scan did. Sits under the result rather than inside it,
+           because it stays worth reading after the status line changes. -->
+      <div class="scan-effort" id="scan-effort" style="display:none;"></div>
       <div class="progress" id="progress-wrap" style="display:none;"><div class="progress-bar" id="progress-bar"></div></div>
       <button class="btn-ghost" id="force-scan-btn" style="margin-top:0.6rem;font-size:var(--fs-base);">Force a fresh scan (ignore today&#39;s cached result)</button>
       <button class="btn-ghost" id="save-search-btn" style="margin-top:1.2rem;">Save this search for auto-alerts</button>
@@ -2511,6 +2519,44 @@ function startScanProgress(wrapId,barId,opts){
   };
 }
 
+// What the scan actually did, in the customer's terms.
+//
+// The work is real and completely invisible: a scan opens dozens of agency
+// bid boards across dozens of towns and reads the individual postings off
+// them. A contractor who did that by hand would spend an evening on it, and
+// all they see is a list of bids appearing.
+//
+// Deliberately states counts and the clock, and expresses the saving as the
+// thing that is literally true -- sites they did not have to open. It does
+// NOT multiply by a made-up minutes-per-site figure and announce "saved you
+// four hours": that number would be invented, and a contractor who checks
+// two of these sites and finds it took them twenty seconds would stop
+// believing the rest of the app.
+function scanEffortLine(d,seconds){
+  const e=d&&d.debug||{};
+  const sites=e.sites_read|0, towns=e.towns_read|0,
+        posts=e.postings_read|0, examined=e.postings_examined|0;
+  if(!sites&&!towns)return "";
+  const bits=[];
+  if(sites) bits.push(`<b>${sites}</b> agency bid page${sites===1?"":"s"}`);
+  if(towns) bits.push(`<b>${towns}</b> town${towns===1?"":"s"}`);
+  let line=`Checked ${bits.join(" across ")}`;
+  if(posts) line+=`, opened <b>${posts}</b> posting${posts===1?"":"s"}`;
+  if(seconds) line+=` in <b>${seconds}s</b>`;
+  line+=".";
+  if(examined) line+=` <span class="dim">${examined} listing`
+    +`${examined===1?"":"s"} read and filtered down to the concrete `
+    +`work.</span>`;
+  return line;
+}
+function renderScanEffort(d,seconds){
+  const box=document.getElementById("scan-effort");
+  if(!box)return;
+  const html=scanEffortLine(d,seconds);
+  box.innerHTML=html;
+  box.style.display=html?"block":"none";
+}
+
 const RADIUS_STEPS=[10,25,50,75,125];
 
 // What a scan that found nothing should say.
@@ -2528,13 +2574,7 @@ const RADIUS_STEPS=[10,25,50,75,125];
 // rather than describing it.
 function showEmptyScanResult(d,location,cachedNote){
   const status=document.getElementById("scan-status");
-  const dbg=d.debug||{};
-  const towns=dbg.towns_read||0, portals=dbg.portals_read||0;
   const where=d.location||location;
-  const bits=[];
-  if(portals) bits.push(`${portals} bid page${portals===1?"":"s"}`);
-  if(towns) bits.push(`${towns} town${towns===1?"":"s"}`);
-  const effort=bits.length?`Checked ${bits.join(" across ")}. `:"";
   const next=RADIUS_STEPS.find(r=>r>radius);
   // Expectation-setting, not filler. A contractor has no way to know whether
   // an empty result means the app is broken or the month is quiet, and
@@ -2542,9 +2582,9 @@ function showEmptyScanResult(d,location,cachedNote){
   // median was six open bids and the worst was one. Saying so converts a
   // disappointing result into an honest one, which is the difference between
   // cancelling and checking back.
+  renderScanEffort(d,null);
   status.innerHTML=
-    `<div>${esc(effort)}Nothing open near ${esc(where)} right now.`
-    +`${esc(cachedNote)}</div>`
+    `<div>Nothing open near ${esc(where)} right now.${esc(cachedNote)}</div>`
     +`<div class="empty-note">Normal for a quiet week \u2014 most areas post a `
     +`handful of concrete jobs a month, not a steady stream. New work appears `
     +`as agencies publish it.</div>`
@@ -2648,6 +2688,9 @@ async function runScan(force){
     const cachedNote=d.cached?" (today\u2019s saved result \u2014 use Force a fresh scan to re-search)":"";
     if(total>0){
       status.textContent=`Done \u2014 ${added} new open bid(s) added near ${d.location||location}.`+cachedNote;
+      // The effort belongs on a SUCCESSFUL scan too, not only an empty one.
+      // "12 bids" says nothing about what it cost to find them.
+      renderScanEffort(d,Math.round((Date.now()-startedAt)/1000));
       toast(added>0?`Added ${added} new bid(s)!`:"No new bids \u2014 already in your list.");
       cityFilter="All";goTo("feed");
     }else{

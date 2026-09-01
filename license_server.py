@@ -6032,14 +6032,23 @@ def _scan_effort(stats, towns):
     portal_keys = ("civicplus_no_open_bids", "portal_no_niche_content",
                    "civicplus_parse_miss", "portal_page_missing",
                    "portal_wrong_module", "portal_moved_to_hosted")
-    portals = sum(int(stats.get(k) or 0) for k in portal_keys)
-    portals += sum(int(v or 0) for k, v in stats.items()
-                   if k.startswith("portal_fetch_"))
-    portals += int(stats.get("postings_read") or 0)
+    # Agency bid pages, counted separately from the individual solicitations
+    # opened off them. Both are pages a contractor would otherwise open by
+    # hand, but they are different things and a number shown to a customer
+    # should not quietly merge them: 25 bid boards and 7 postings is not the
+    # same claim as "32 sites".
+    sites = sum(int(stats.get(k) or 0) for k in portal_keys)
+    sites += sum(int(v or 0) for k, v in stats.items()
+                 if k.startswith("portal_fetch_"))
+    postings = int(stats.get("postings_read") or 0)
     # Everything the relevance filter actually looked at.
     examined = (int(stats.get("filtered_not_niche") or 0)
                 + int(stats.get("kept") or 0))
-    return {"portals_read": portals, "postings_examined": examined,
+    return {"sites_read": sites,
+            "postings_read": postings,
+            # Kept for the scan record, which already reports this name.
+            "portals_read": sites + postings,
+            "postings_examined": examined,
             "towns_read": int(towns or 0)}
 
 
