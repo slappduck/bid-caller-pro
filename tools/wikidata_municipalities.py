@@ -43,6 +43,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(_HERE)
@@ -170,6 +171,89 @@ def _known_domains():
 
 BATCH = 250
 
+ENTITY_URL = "https://www.wikidata.org/wiki/Special:EntityData/%s.json"
+REST_WORKERS = 16
+
+
+def _entity(qid):
+    """One entity's JSON, or None. Special:EntityData is a different service
+    from the SPARQL endpoint and is not governed by its throttle, which is
+    the entire reason this path exists."""
+    req = urllib.request.Request(ENTITY_URL % qid, headers={"User-Agent": UA})
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return list(json.load(r)["entities"].values())[0]
+        except Exception:
+            if attempt == 2:
+                return None
+            time.sleep(2 * (attempt + 1))
+    return None
+
+
+def _claim_ids(entity, prop):
+    out = []
+    for c in (entity.get("claims") or {}).get(prop, []):
+        v = c.get("mainsnak", {}).get("datavalue", {}).get("value")
+        if isinstance(v, dict) and v.get("id"):
+            out.append(v["id"])
+    return out
+
+
+def _label(entity):
+    return ((entity.get("labels") or {}).get("en") or {}).get("value", "")
+
+
+def _details_via_rest(qids):
+    """The same qid -> (name, state) map, built from the REST API.
+
+    Walks P131 upward rather than asking for the transitive closure: a place
+    sits under a county, the county under a state, so two levels covers
+    nearly everything and the parents are shared -- a few thousand counties
+    stand behind sixty-odd thousand places, so they are fetched once each.
+    """
+    print(f"[wikidata] resolving {len(qids)} via REST", flush=True)
+    ents = {}
+    with ThreadPoolExecutor(REST_WORKERS) as ex:
+        for q, e in zip(qids, ex.map(_entity, qids)):
+            if e is not None:
+                ents[q] = e
+    print(f"[wikidata] fetched {len(ents)} entities", flush=True)
+
+    cache = {}
+
+    def state_of(qid, depth=0):
+        if qid in cache:
+            return cache[qid]
+        if depth > 3:
+            return ""
+        e = ents.get(qid) or _entity(qid)
+        if e is None:
+            cache[qid] = ""
+            return ""
+        # A state identifies itself; anything else asks its parent.
+        if "Q35657" in _claim_ids(e, "P31") or qid == "Q61":
+            got = STATE_ABBR.get(_label(e), "")
+        else:
+            got = ""
+            for parent in _claim_ids(e, "P131"):
+                got = state_of(parent, depth + 1)
+                if got:
+                    break
+        cache[qid] = got
+        return got
+
+    out = {}
+    for i, q in enumerate(qids, 1):
+        e = ents.get(q)
+        if e is None:
+            continue
+        out[q] = (_label(e), state_of(q))
+        if i % 500 == 0:
+            print(f"[wikidata] resolved {i}/{len(qids)}", flush=True)
+    return out
+
+
 
 def _details_for(qids):
     """Map qid -> (name, two-letter state), resolved in bounded batches."""
@@ -209,6 +293,10 @@ def main():
                     help="write every candidate, not just domains the pipeline "
                          "has never probed")
     ap.add_argument("--out", default=OUT_CSV, help="output CSV path")
+    ap.add_argument("--rest", action="store_true",
+                    help="resolve names and states through the REST API "
+                         "instead of SPARQL. Slower per place, but immune to "
+                         "the WDQS throttle.")
     args = ap.parse_args()
     want = {s.upper() for s in args.state} if args.state else None
 
@@ -239,7 +327,18 @@ def main():
     print(f"[wikidata] {len(cand)} unprobed domains; resolving states",
           flush=True)
 
-    detail = _details_for([c["qid"] for c in cand])
+    qids = [c["qid"] for c in cand]
+    if args.rest:
+        detail = _details_via_rest(qids)
+    else:
+        detail = _details_for(qids)
+        # WDQS throttles to the point of returning nothing at all. The REST
+        # API is a separate service and is not subject to that, so a run
+        # that came back empty is worth retrying there rather than failing.
+        if not detail:
+            print("[wikidata] SPARQL returned nothing; falling back to REST",
+                  flush=True)
+            detail = _details_via_rest(qids)
     out = []
     for c in cand:
         name, st = detail.get(c["qid"], ("", ""))
