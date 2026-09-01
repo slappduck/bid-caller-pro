@@ -23,10 +23,16 @@ probed it and found a real bid page:
   python3 tools/wikidata_municipalities.py
   python3 tools/discover_bid_portals.py --registry data/municipal_candidates.csv
 
-Queried one state at a time rather than as a single national query. The
-P131* join that resolves a place to its state is the expensive half, and
-over 13,806 places it reliably exceeds the endpoint's 60s budget; per state
-it is comfortable, and a state that fails can be retried on its own.
+Two passes, after measuring what actually costs anything here. The expensive
+part is not the size of the result -- it is SERVICE wikibase:label and the
+P131* walk to a state, both of which time out at the endpoint's 60s budget
+when applied to every municipality at once (504, in per-state and national
+phrasings alike).
+
+Stripped to bare QIDs and website values, the whole country comes back in one
+query in about twelve seconds. Labels and states are then resolved from a
+bounded VALUES block, where both are cheap: 250 places per batch, roughly a
+second and a half each.
 """
 import argparse
 import csv
@@ -56,25 +62,31 @@ KNOWN = [
     ("data/school_district_candidates.csv", "domain"),
 ]
 
-# Q35657 is "U.S. state". DC is not one and has to be named; the territories
-# are left out because the scanner's coordinate set does not cover them.
-STATES_QUERY = """
-SELECT ?s ?sLabel WHERE {
-  { ?s wdt:P31 wd:Q35657 } UNION { VALUES ?s { wd:Q61 } }
-  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
-}
-"""
-
 # Q15284 is "municipality of the United States". Measured against the
 # alternatives before settling on it: Q1093829 ("city in the United States")
 # returns 6,866 and is entirely contained in this tree, so the union of the
 # two is still 13,806. One root class is enough.
+#
+# Deliberately no SERVICE wikibase:label and no state join: those are what
+# blow the time budget. Bare QIDs and websites for the entire country arrive
+# in one response, and the rest is filled in below.
 PLACES_QUERY = """
-SELECT ?x ?xLabel ?site WHERE {
+SELECT ?x ?site WHERE {
   ?x wdt:P31/wdt:P279* wd:Q15284 ;
      wdt:P17 wd:Q30 ;
-     wdt:P131* wd:%s ;
      wdt:P856 ?site .
+}
+"""
+
+# Q35657 is "U.S. state". A place can sit several P131 hops below one (a
+# town inside a township inside a county), so the walk has to be transitive
+# -- but bounded by VALUES it costs almost nothing. The label service is
+# affordable here for the same reason. Several rows come back per place when
+# more than one path reaches a state; the first is kept.
+DETAIL_QUERY = """
+SELECT ?x ?xLabel ?stLabel WHERE {
+  VALUES ?x { %s }
+  OPTIONAL { ?x wdt:P131* ?st . ?st wdt:P31 wd:Q35657 . }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 }
 """
@@ -113,7 +125,7 @@ def _sparql(query, tries=5):
             with urllib.request.urlopen(req, timeout=300) as r:
                 return json.load(r)["results"]["bindings"]
         except urllib.error.HTTPError as e:
-            if e.code not in (429, 500, 502, 503) or attempt == tries:
+            if e.code not in (429, 500, 502, 503, 504) or attempt == tries:
                 raise
             wait = int(e.headers.get("Retry-After") or delay)
             print(f"[wikidata] HTTP {e.code}; waiting {wait}s "
@@ -156,67 +168,85 @@ def _known_domains():
     return seen
 
 
+BATCH = 250
+
+
+def _details_for(qids):
+    """Map qid -> (name, two-letter state), resolved in bounded batches."""
+    found = {}
+    for i in range(0, len(qids), BATCH):
+        values = " ".join("wd:" + q for q in qids[i:i + BATCH])
+        try:
+            rows = _sparql(DETAIL_QUERY % values)
+        except Exception as e:
+            print(f"[wikidata] batch {i//BATCH} failed ({type(e).__name__})",
+                  flush=True)
+            continue
+        for r in rows:
+            q = r.get("x", {}).get("value", "").rsplit("/", 1)[-1]
+            if not q:
+                continue
+            name = r.get("xLabel", {}).get("value", "")
+            abbr = STATE_ABBR.get(r.get("stLabel", {}).get("value", ""), "")
+            prev = found.get(q)
+            # First path wins for the state: P131* reaches one by several
+            # routes and they agree, so a later row is a duplicate rather
+            # than a correction. A row that resolved no state must not
+            # overwrite one that did.
+            if prev is None or (not prev[1] and abbr):
+                found[q] = (name, abbr)
+        if (i // BATCH) % 10 == 0:
+            print(f"[wikidata] resolved {len(found)}/{len(qids)}", flush=True)
+    return found
+
+
 def main():
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--state", action="append", default=None,
-                    help="only these two-letter codes (repeatable). Default: all.")
+                    help="only keep these two-letter codes (repeatable)")
     ap.add_argument("--all", action="store_true",
                     help="write every candidate, not just domains the pipeline "
                          "has never probed")
     ap.add_argument("--out", default=OUT_CSV, help="output CSV path")
     args = ap.parse_args()
-
     want = {s.upper() for s in args.state} if args.state else None
-
-    print("[wikidata] resolving state QIDs...", flush=True)
-    states = []
-    for r in _sparql(STATES_QUERY):
-        label = r.get("sLabel", {}).get("value", "")
-        abbr = STATE_ABBR.get(label)
-        qid = r.get("s", {}).get("value", "").rsplit("/", 1)[-1]
-        if abbr and qid and (want is None or abbr in want):
-            states.append((abbr, label, qid))
-    states.sort()
-    print(f"[wikidata] {len(states)} state(s) to query", flush=True)
 
     known = set() if args.all else _known_domains()
     if known:
-        print(f"[wikidata] {len(known)} domains already probed; "
-              f"they will be skipped", flush=True)
+        print(f"[wikidata] {len(known)} domains already probed; skipping those",
+              flush=True)
 
-    out, seen, failed = [], set(), []
-    for i, (abbr, label, qid) in enumerate(states, 1):
-        t0 = time.time()
-        try:
-            rows = _sparql(PLACES_QUERY % qid)
-        except Exception as e:
-            failed.append(abbr)
-            print(f"[wikidata] {abbr} FAILED ({type(e).__name__})", flush=True)
+    t0 = time.time()
+    rows = _sparql(PLACES_QUERY)
+    print(f"[wikidata] {len(rows)} places in {time.time()-t0:.0f}s", flush=True)
+
+    # Deduplicate before resolving states: a place carries several P856
+    # values and neighbouring towns share a county-run site, so the domain
+    # set is much smaller than the row set and states cost per place.
+    cand, seen = [], set()
+    for r in rows:
+        dom = _domain(r.get("site", {}).get("value", ""))
+        if not dom or dom in seen or dom in known:
             continue
-        added = 0
-        for r in rows:
-            site = r.get("site", {}).get("value", "")
-            dom = _domain(site)
-            # Same host twice is one candidate: places carry several P856
-            # values (a homepage and a portal), and neighbouring towns
-            # sometimes share one county-run site.
-            if not dom or dom in seen or dom in known:
-                continue
-            seen.add(dom)
-            name = r.get("xLabel", {}).get("value", "")
-            out.append({
-                "domain": dom,
-                "org": name,
-                "city": name,
-                "state": abbr,
-                "type": "City",
-                "qid": r.get("x", {}).get("value", "").rsplit("/", 1)[-1],
-                "website": site,
-            })
-            added += 1
-        print(f"[wikidata] {i}/{len(states)} {abbr}: {len(rows)} places, "
-              f"{added} new ({time.time()-t0:.0f}s)", flush=True)
+        seen.add(dom)
+        cand.append({
+            "domain": dom,
+            "qid": r.get("x", {}).get("value", "").rsplit("/", 1)[-1],
+            "website": r.get("site", {}).get("value", ""),
+            "type": "City",
+        })
+    print(f"[wikidata] {len(cand)} unprobed domains; resolving states",
+          flush=True)
+
+    detail = _details_for([c["qid"] for c in cand])
+    out = []
+    for c in cand:
+        name, st = detail.get(c["qid"], ("", ""))
+        # The pipeline keys on state and cannot place a row without one.
+        if not st or (want and st not in want):
+            continue
+        out.append({**c, "org": name, "city": name, "state": st})
 
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     with open(args.out, "w", newline="", encoding="utf-8") as f:
@@ -224,13 +254,15 @@ def main():
         w.writeheader()
         w.writerows(out)
 
+    by = {}
+    for r in out:
+        by[r["state"]] = by.get(r["state"], 0) + 1
     print(f"\n[wikidata] wrote {len(out)} new candidates -> {args.out}")
-    if failed:
-        print(f"[wikidata] {len(failed)} state(s) failed and are worth a "
-              f"retry: {', '.join(failed)}")
+    print("[wikidata] top: " + ", ".join(
+        f"{k}={v}" for k, v in sorted(by.items(), key=lambda x: -x[1])[:12]))
     print("\nCandidates only. Probe them before anything reaches the "
           "directory:\n"
-          f"  python3 tools/discover_bid_portals.py --registry {args.out}")
+          f"  python3 tools/discover_bid_portals.py --registry {args.out} --resume")
     return 0
 
 
