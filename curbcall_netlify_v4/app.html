@@ -69,6 +69,14 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .auth-title{font-size:var(--fs-xl);font-weight:800;margin-bottom:0.3rem;}
 .auth-sub{color:var(--text2);font-size:var(--fs-base);margin-bottom:1.4rem;}
 .btn-primary:disabled,.btn-ghost:disabled{opacity:0.55;cursor:not-allowed;}
+.onb-steps{display:flex;gap:0.4rem;justify-content:center;margin-bottom:1.1rem;}
+.onb-dot{width:2rem;height:3px;border-radius:2px;background:var(--line);}
+.onb-dot.on{background:var(--amber);}
+.onb-radius{display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.6rem;}
+.onb-radius .r{flex:1;min-width:3.4rem;padding:0.55rem 0.3rem;border:1px solid var(--line);
+  border-radius:0.5rem;text-align:center;font-size:0.9rem;font-weight:600;
+  color:var(--text2);cursor:pointer;}
+.onb-radius .r.on{border-color:var(--amber);color:var(--amber);}
 .pw-field{position:relative;}
 .pw-field .input{padding-right:4.4rem;}
 /* Typing a password blind on a phone is the single most common reason a
@@ -622,6 +630,44 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
        immediate flip to the sign-in form, which reads as "something went
        wrong, try again" rather than "go check your inbox" -- and the form
        sitting there invites a second signup attempt with the same address. -->
+  <!-- Shown once, after a first sign-in, before the app. Signup collected a
+       name, an email and a password, and then dropped a contractor on a map
+       of the whole country with an empty search box -- on the screen that
+       decides whether they stay. Both questions are things the product needs
+       anyway: the location becomes their default scan, and the company name
+       and trade feed the AI proposal drafts, which start degraded without
+       them. Skippable, because a wall between someone and the thing they
+       just signed up for is worse than an empty field. -->
+  <div class="auth-card" id="onboard-card" style="display:none;">
+    <div class="onb-steps"><span class="onb-dot on" id="onb-dot1"></span><span class="onb-dot" id="onb-dot2"></span></div>
+
+    <div id="onb-step1">
+      <div class="auth-title">Where do you work out of?</div>
+      <div class="auth-sub">We'll watch the agencies around you.</div>
+      <div class="field-label">City and state, or ZIP</div>
+      <input class="input" id="onb-loc" placeholder="Springfield, MO or 65806"
+             autocomplete="postal-code" style="margin-bottom:0.5rem;" />
+      <div class="field-label" style="margin-top:0.7rem;">How far will you travel?</div>
+      <div class="onb-radius" id="onb-radius"></div>
+      <div class="field-hint" id="onb-cov" style="min-height:1.2rem;"></div>
+      <button class="btn-primary" id="onb-next">Continue</button>
+      <button class="btn-ghost" id="onb-skip1">Skip for now</button>
+    </div>
+
+    <div id="onb-step2" style="display:none;">
+      <div class="auth-title">Who should we put on your bids?</div>
+      <div class="auth-sub">Used on AI-drafted proposals. You can change it later.</div>
+      <div class="field-label">Company name</div>
+      <input class="input" id="onb-co" placeholder="Acme Concrete LLC"
+             autocomplete="organization" style="margin-bottom:0.6rem;" />
+      <div class="field-label">What do you do?</div>
+      <input class="input" id="onb-trade" placeholder="sidewalk, ADA ramp &amp; curb work"
+             style="margin-bottom:0.5rem;" />
+      <button class="btn-primary" id="onb-done">Start finding bids</button>
+      <button class="btn-ghost" id="onb-skip2">Skip for now</button>
+    </div>
+  </div>
+
   <div class="auth-card" id="auth-sent-card" style="display:none;">
     <div class="auth-sent-icon" aria-hidden="true">&#9993;</div>
     <div class="auth-title">Check your email</div>
@@ -727,6 +773,16 @@ const sb = HAS_SB ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : nul
 // question of when, not if. Past that point starring a bid or typing a note
 // silently did nothing and the work vanished on reload with no explanation.
 let storageWarned=false;
+// Declared here rather than beside the onboarding code below, which sits
+// ~900 lines further down. onAuthStateChange fires early and calls
+// onboardingNeeded(); a function declaration hoists but a const does not, so
+// keeping these next to their use would put them in the temporal dead zone
+// for exactly that first call.
+const ONBOARD_KEY="onboarded";
+const HOME_LOC_KEY="home_location";
+const HOME_RADIUS_KEY="home_radius";
+let onbRadius=50;
+
 const store = {
   get(k,d){try{return JSON.parse(localStorage.getItem(k))??d;}catch{return d;}},
   set(k,v){
@@ -1391,7 +1447,8 @@ if(sb)sb.auth.onAuthStateChange((event,session)=>{
     store.set("has_account",true);
     applyPendingSignupName();
     checkAdminStatus();
-    showApp();
+    if(onboardingNeeded())showOnboarding();
+    else showApp();
   } else {
     currentUser=null;
     store.set("last_user_email","");
@@ -1459,6 +1516,22 @@ function showApp(){
   // common), findMap never gets initialized and there's nothing to click,
   // ever. Always show a default view first so the map (and its click
   // handler) exists regardless of whether geolocation succeeds.
+  // Onboarding asked where they work; this is where that answer earns its
+  // keep. Without it loc-input starts empty on every single launch and a
+  // returning contractor retypes their own town to run the scan they came
+  // for. Only prefilled when empty, so a location typed this session wins.
+  const homeLoc=store.get(HOME_LOC_KEY,"");
+  const locBox=document.getElementById("loc-input");
+  if(locBox&&!locBox.value&&homeLoc)locBox.value=homeLoc;
+  const homeR=store.get(HOME_RADIUS_KEY,0);
+  if(homeR){
+    radius=homeR;
+    // Repaint the pills to match, or the highlighted one and the radius the
+    // scan actually uses disagree.
+    document.querySelectorAll("#radius-row .radius-btn").forEach(x=>{
+      x.classList.toggle("active",+x.dataset.r===homeR);
+    });
+  }
   updateFindMap(39.5,-98.35,"Click the map to set your location");
   if(leadsPicker)leadsPicker.show(39.5,-98.35,"Click the map to set your location");
   // Everything below needs the network. Offline, the app still opens to a
@@ -2180,6 +2253,102 @@ function autoFillZip(){detectLocation(false);}
 // success, a scan that failed or was cancelled would re-trigger on the next
 // app open, and the one thing worse than no first scan is one that starts
 // itself over and over.
+// ── First-run onboarding ──
+
+function onboardingNeeded(){
+  if(store.get(ONBOARD_KEY,false))return false;
+  // Someone who already has a location or bids has been here before this
+  // screen existed. Asking them where they work would be absurd.
+  if(store.get(HOME_LOC_KEY,""))return false;
+  if(store.get("last_scan_debug",null))return false;
+  return true;
+}
+
+function renderOnbRadius(){
+  const box=document.getElementById("onb-radius");
+  if(!box)return;
+  box.innerHTML=[10,25,50,75,125].map(r=>
+    `<div class="r ${r===onbRadius?"on":""}" data-r="${r}">${r} mi</div>`).join("");
+  box.querySelectorAll(".r").forEach(el=>{
+    el.onclick=()=>{onbRadius=+el.dataset.r;renderOnbRadius();onbCheckCoverage();};
+  });
+}
+
+// Answering with their real number is the whole point: it proves the product
+// knows their town before they have run anything, and it quietly catches a
+// location we cannot resolve while there is still someone here to retype it.
+let onbCovTimer=null;
+function onbCheckCoverage(){
+  const el=document.getElementById("onb-cov");
+  const loc=(document.getElementById("onb-loc")||{}).value||"";
+  if(!el)return;
+  clearTimeout(onbCovTimer);
+  if(loc.trim().length<3){el.textContent="";return;}
+  el.textContent="Checking...";
+  onbCovTimer=setTimeout(async()=>{
+    try{
+      const r=await fetchWithTimeout(SERVER+"/coverage",{
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({location:loc.trim(),radius:onbRadius})},20000);
+      const d=await r.json();
+      if(d.ok)el.textContent=`${d.agencies} agencies posting bids within ${onbRadius} miles`;
+      else el.textContent="We couldn't find that place — try a ZIP code";
+    }catch(e){el.textContent="";}
+  },600);
+}
+
+function showOnboarding(){
+  document.getElementById("app").style.display="none";
+  document.getElementById("auth-screen").style.display="";
+  document.getElementById("auth-card").style.display="none";
+  const sent=document.getElementById("auth-sent-card");
+  if(sent)sent.style.display="none";
+  document.getElementById("onboard-card").style.display="";
+  renderOnbRadius();
+  const co=document.getElementById("onb-co");
+  if(co&&!co.value)co.value=companyProfile.name||"";
+}
+
+function onbStep(n){
+  document.getElementById("onb-step1").style.display=n===1?"":"none";
+  document.getElementById("onb-step2").style.display=n===2?"":"none";
+  document.getElementById("onb-dot1").className="onb-dot"+(n>=1?" on":"");
+  document.getElementById("onb-dot2").className="onb-dot"+(n>=2?" on":"");
+}
+
+function finishOnboarding(){
+  store.set(ONBOARD_KEY,true);
+  document.getElementById("onboard-card").style.display="none";
+  document.getElementById("auth-card").style.display="";
+  showApp();
+}
+
+(function(){
+  const loc=document.getElementById("onb-loc");
+  if(loc)loc.addEventListener("input",onbCheckCoverage);
+  const next=document.getElementById("onb-next");
+  if(next)next.onclick=()=>{
+    const v=(document.getElementById("onb-loc").value||"").trim();
+    if(!v){toast("Enter a city or ZIP, or skip for now");return;}
+    store.set(HOME_LOC_KEY,v);
+    store.set(HOME_RADIUS_KEY,onbRadius);
+    onbStep(2);
+  };
+  const done=document.getElementById("onb-done");
+  if(done)done.onclick=()=>{
+    const name=(document.getElementById("onb-co").value||"").trim();
+    const trade=(document.getElementById("onb-trade").value||"").trim();
+    if(name)companyProfile.name=name;
+    if(trade)companyProfile.specialty=trade;
+    if(name||trade){store.set("company_profile",companyProfile);pushCompanyProfile();}
+    finishOnboarding();
+  };
+  const s1=document.getElementById("onb-skip1");
+  if(s1)s1.onclick=()=>onbStep(2);
+  const s2=document.getElementById("onb-skip2");
+  if(s2)s2.onclick=finishOnboarding;
+})();
+
 const FIRST_SCAN_KEY="first_scan_done";
 function maybeFirstScan(){
   if(store.get(FIRST_SCAN_KEY,false))return;
