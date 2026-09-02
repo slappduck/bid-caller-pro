@@ -24,11 +24,16 @@ compatibility_date = "2026-08-26"
 # should ever be published to the web.
 directory = "./curbcall_netlify_v4"
 
-# A missing path returns the 404 rather than rewriting to index.html. This is
-# a plain multi-page static site (index.html, app.html, post-a-bid.html,
-# terms, privacy), not a single-page app, so SPA-style rewriting would hide
-# real broken links behind a page that looks fine.
-not_found_handling = "none"
+# A missing path serves 404.html rather than rewriting to index.html. Still
+# not SPA-style rewriting -- that would hide real broken links behind a page
+# that looks fine, and this is a plain multi-page static site.
+#
+# It was "none", which returns a genuine 404 with an empty body: a white
+# screen, no branding, no way back. That was survivable while the only links
+# were ours; it is not now that /go/<name> links are going out in cold
+# emails, where a mangled or mistyped URL is routine and the reader's
+# conclusion is that the business is dead.
+not_found_handling = "404-page"
 
 # Serve paths exactly as written. Cloudflare's default ("auto-trailing-slash")
 # redirects /app.html to /app and serves the file from there. Every link on
