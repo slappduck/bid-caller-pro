@@ -242,14 +242,15 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
    2. three stacked full-width buttons (212px)
    3. the trust line
 
-   So on mobile the lead is trimmed to its first sentence, the Windows
-   download leaves the hero entirely (it is already in the footer, and
-   nobody installs a desktop app from a phone), and "See how it works"
-   becomes a quiet text link rather than a second 58px slab. The full lead
-   and both buttons are untouched from 700px up, where there is room. */
+   So on mobile the lead is trimmed to its first sentence and "See how it
+   works" becomes a quiet text link rather than a second 58px slab. The full
+   lead and both buttons are untouched from 700px up, where there is room.
+
+   There was a third rule here hiding the hero's Windows download row on
+   phones. The download itself is gone now, and the rule went with it rather
+   than staying behind to hide whatever lands in that position next. */
 @media(max-width:699px){
   .lead .lead-more{display:none;}
-  .hero .cta-row:nth-of-type(2){display:none;}          /* Windows download */
   .hero .cta-row .btn-line{background:none;border:none;padding:0.6rem 0;
     text-decoration:underline;text-underline-offset:3px;font-size:0.95rem;}
   .hero .cta-row{align-items:center;gap:0.35rem 1.1rem;}
@@ -298,9 +299,12 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
         <a class="btn btn-amber btn-lg" href="app.html">Start free — open the app</a>
         <a class="btn btn-line btn-lg" href="#how">See how it works</a>
       </div>
-      <div class="cta-row" style="margin-top:0.6rem;">
-        <a class="btn btn-line btn-lg" href="https://github.com/slappduck/bid-caller-pro/releases/download/v1.0.0/CurbCallProSetup.exe"><svg class="icon-svg"><use href="#i-download"/></svg> Download for Windows<span class="btn-more"> (desktop app)</span></a>
-      </div>
+      <!-- Windows download pulled 2026-09-02. The desktop app calls the same
+           server for bids, so its results are current, but its UI is 82
+           commits behind the web app -- no scan progress, no first-scan
+           onboarding, and no scan-effort line. Handing a new customer a
+           visibly older product is worse than offering one fewer way in.
+           Restore this row once parity is back. -->
       <div class="trust"><b><span class="dot"></span>Free 7-day trial</b><span>· no card required</span><span>· works on phone or desktop</span></div>
     </div>
 
@@ -471,7 +475,7 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
     <div class="sec-head"><span class="eyebrow">FAQ</span><h2>Common questions</h2></div>
     <div class="faq">
       <details><summary>What exactly does CurbCall Pro do?</summary><p>It scans government and municipal sites near you, reads their bid pages, and uses AI to pull out live sidewalk, ADA ramp, and curb &amp; gutter bids — the title, scope, deadline, and who to contact. Instead of checking dozens of city sites by hand, you get a clean feed of concrete jobs near you.</p></details>
-      <details><summary>Do I have to install anything?</summary><p>No — CurbCall Pro runs right in your browser on phone or desktop. Add it to your home screen and it works like an app on your phone. If you'd rather have a dedicated desktop app on Windows, <a href="https://github.com/slappduck/bid-caller-pro/releases/download/v1.0.0/CurbCallProSetup.exe" style="color:var(--amber);">download it here</a> — same account, same bids.</p></details>
+      <details><summary>Do I have to install anything?</summary><p>No — CurbCall Pro runs right in your browser on phone or desktop. Add it to your home screen and it works like an app on your phone.</p></details>
       <details><summary>Do I need to know the city websites?</summary><p>No. Just enter your ZIP or let the app detect your location, pick a radius, and it finds the sites for you.</p></details>
       <details><summary>How does the free trial work?</summary><p>You get 7 days of full access with no credit card required. Find real bids first, then decide. When the trial ends, subscribe to keep going.</p></details>
       <details><summary>How do payments work?</summary><p>Payments run securely through Stripe. Choose Monthly or Annual and complete checkout — the app unlocks automatically, and you can restore access on any device with your email. Cancel anytime.</p></details>
@@ -492,7 +496,7 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
 <footer>
   <div class="wrap foot-in">
     <div><span class="logo" style="font-size:1.1rem;">Curb<b>Call</b> Pro</span><div style="margin-top:0.3rem;">Sidewalk, ADA &amp; curb bid intelligence for concrete contractors.</div></div>
-    <div class="foot-links"><a href="#how">How it works</a><a href="#pricing">Pricing</a><a href="mailto:support@curbcallpro.com">Contact</a><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="app.html">Launch app</a><a href="https://github.com/slappduck/bid-caller-pro/releases/download/v1.0.0/CurbCallProSetup.exe">Download for Windows</a></div>
+    <div class="foot-links"><a href="#how">How it works</a><a href="#pricing">Pricing</a><a href="mailto:support@curbcallpro.com">Contact</a><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="app.html">Launch app</a></div>
   </div>
   <!-- overflow-wrap because the address is one long unbreakable token: on a
      390px screen it pushed the footer 56px past the edge and made the whole
