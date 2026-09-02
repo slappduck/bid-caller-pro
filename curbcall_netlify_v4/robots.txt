@@ -1,0 +1,26 @@
+# Cloudflare serves a default robots.txt when a site has none. That default is
+# 24 lines explaining what content signals mean and then declaring none of
+# them, and it carries no Sitemap line -- so it granted nothing, restricted
+# nothing, and pointed nowhere. This replaces it with the same reservation of
+# rights plus actual directives.
+
+# search:   building a search index and returning links and short excerpts.
+# ai-input: feeding content to a model at answer time (RAG, grounding, AI
+#           search summaries).
+# ai-train: training or fine-tuning models.
+#
+# search and ai-input are yes on purpose. Being indexed is the point, and
+# being quoted in an AI answer is how a contractor who has never heard of
+# this finds it -- Google's own AI Overview already describes the product
+# accurately, which is free distribution. Training is a different bargain and
+# gives nothing back, so it is declined.
+#
+# ANY RESTRICTIONS EXPRESSED VIA CONTENT SIGNALS ARE EXPRESS RESERVATIONS OF
+# RIGHTS UNDER ARTICLE 4 OF THE EUROPEAN UNION DIRECTIVE 2019/790 ON COPYRIGHT
+# AND RELATED RIGHTS IN THE DIGITAL SINGLE MARKET.
+Content-Signal: search=yes, ai-input=yes, ai-train=no
+
+User-agent: *
+Allow: /
+
+Sitemap: https://curbcallpro.com/sitemap.xml
