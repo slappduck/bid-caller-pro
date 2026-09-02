@@ -30,8 +30,8 @@
 <!-- Without these, iOS "Add to Home Screen" on the marketing page gives a
      generated letter tile instead of the logo -- app.html already had them,
      this page did not, and this is the page most people land on first. -->
-<link rel="icon" href="icon-192.png" />
-<link rel="apple-touch-icon" href="icon-192.png" />
+<link rel="icon" href="/icon-192.png" />
+<link rel="apple-touch-icon" href="/icon-192.png" />
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -284,7 +284,7 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
       <a href="#how">How it works</a>
       <a href="#features">Features</a>
       <a href="#pricing">Pricing</a>
-      <a class="btn btn-amber nav-cta" href="app.html">Launch App</a>
+      <a class="btn btn-amber nav-cta" href="/app.html">Launch App</a>
     </div>
   </div>
 </nav>
@@ -296,10 +296,15 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
       <h1>Win more<br><span class="hi">flatwork.</span></h1>
       <p class="lead">Tell CurbCall Pro your ZIP and it finds the live sidewalk, ADA ramp and curb &amp; gutter bids near you.<span class="lead-more"> It reads the government and municipal sites around you and pulls the work out automatically — so you spend your time pouring concrete, not hunting for it.</span></p>
       <div class="cta-row">
-        <a class="btn btn-amber btn-lg" href="app.html">Start free — open the app</a>
+        <a class="btn btn-amber btn-lg" href="/app.html">Start free — open the app</a>
         <a class="btn btn-line btn-lg" href="#how">See how it works</a>
       </div>
-      <!-- Windows download pulled 2026-09-02. The desktop app calls the same
+      <!-- Links here are root-absolute (/app.html, not app.html) and must stay
+     that way. index.html is also served at /go/<name> for the outreach
+     tracking links, and a relative href resolves against /go/ there -- so
+     "app.html" became /go/app.html, a 404, on the primary call to action
+     for every contractor who arrived from a cold email. -->
+<!-- Windows download pulled 2026-09-02. The desktop app calls the same
            server for bids, so its results are current, but its UI is 82
            commits behind the web app -- no scan progress, no first-scan
            onboarding, and no scan-effort line. Handing a new customer a
@@ -410,7 +415,7 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
         Post a sidewalk, ADA or concrete bid notice free and reach contractors already
         searching your area. No account, no cost &mdash; and it doesn't replace your
         legal notice.</p>
-      <a class="btn btn-line" href="post-a-bid.html">Post a bid notice &rarr;</a>
+      <a class="btn btn-line" href="/post-a-bid.html">Post a bid notice &rarr;</a>
     </div>
 
     <p style="color:var(--text3);font-size:0.82rem;margin-top:1.1rem;max-width:44rem;">
@@ -452,7 +457,7 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
         <span class="tag">Free trial</span>
         <div class="amt">$0<span> / 7 days</span></div>
         <ul><li>Full location-based scanning</li><li>AI bid extraction</li><li>Save &amp; track leads</li><li>No credit card required</li></ul>
-        <a class="btn btn-line" href="app.html">Start free trial</a>
+        <a class="btn btn-line" href="/app.html">Start free trial</a>
       </div>
       <div class="price feat">
         <span class="tag">Most popular</span>
@@ -488,7 +493,7 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
     <div class="band">
       <h2>Stop hunting. Start pouring.</h2>
       <p>Find the sidewalk, ADA, and curb bids in your area this week — free for 7 days, no card.</p>
-      <a class="btn btn-amber btn-lg" href="app.html">Open the app</a>
+      <a class="btn btn-amber btn-lg" href="/app.html">Open the app</a>
     </div>
   </div>
 </section>
@@ -496,7 +501,7 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
 <footer>
   <div class="wrap foot-in">
     <div><span class="logo" style="font-size:1.1rem;">Curb<b>Call</b> Pro</span><div style="margin-top:0.3rem;">Sidewalk, ADA &amp; curb bid intelligence for concrete contractors.</div></div>
-    <div class="foot-links"><a href="#how">How it works</a><a href="#pricing">Pricing</a><a href="mailto:support@curbcallpro.com">Contact</a><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="app.html">Launch app</a></div>
+    <div class="foot-links"><a href="#how">How it works</a><a href="#pricing">Pricing</a><a href="mailto:support@curbcallpro.com">Contact</a><a href="/terms.html">Terms</a><a href="/privacy.html">Privacy</a><a href="/app.html">Launch app</a></div>
   </div>
   <!-- overflow-wrap because the address is one long unbreakable token: on a
      390px screen it pushed the footer 56px past the edge and made the whole
