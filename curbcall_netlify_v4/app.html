@@ -4055,7 +4055,108 @@ function renderAccount(){
       <input class="input" id="key-input" placeholder="BCP-..." />
       <button class="btn-ghost" id="activate-btn">Activate Key</button>
     </div>
+    <div class="account-card">
+      <div class="account-email hdr-ic" style="font-size:var(--fs-base);"><svg class="icon-svg"><use href="#i-lock"/></svg>Sign-in &amp; Security</div>
+      <div class="account-status" style="margin-bottom:0.8rem;">Change how you get into this account.</div>
+
+      <div class="field-label">New password</div>
+      <input class="input" id="sec-password" type="password" autocomplete="new-password"
+             placeholder="At least 8 characters" style="margin-bottom:0.5rem;" />
+      <button class="btn-ghost" id="sec-password-btn">Change password</button>
+
+      <div class="field-label" style="margin-top:1.1rem;">Email address</div>
+      <input class="input" id="sec-email" type="email" autocomplete="email"
+             value="${esc(email)}" style="margin-bottom:0.5rem;" />
+      <button class="btn-ghost" id="sec-email-btn">Change email</button>
+      <div class="account-status" style="margin-top:0.4rem;">We'll send a confirmation link to the new address. Your old one keeps working until you click it.</div>
+    </div>
+
+    <div class="account-card" style="border-color:rgba(239,68,68,0.35);">
+      <div class="account-email hdr-ic" style="font-size:var(--fs-base);color:var(--red);"><svg class="icon-svg"><use href="#i-trash"/></svg>Delete account</div>
+      <div class="account-status" style="margin-bottom:0.8rem;">Permanently removes your account, saved bids and company info, and cancels any subscription. This cannot be undone.</div>
+      <div class="field-label">Type DELETE to confirm</div>
+      <input class="input" id="del-confirm" placeholder="DELETE" autocapitalize="characters"
+             style="margin-bottom:0.5rem;" />
+      <button class="btn-ghost" id="del-account-btn"
+              style="color:var(--red);border-color:var(--red);">Delete my account</button>
+    </div>
+
     <button class="btn-ghost" style="margin-top:0.5rem;color:var(--red);border-color:var(--red);" id="signout-btn">Sign out</button>`;
+
+  // ── Sign-in & security ──
+  const pwBtn=document.getElementById("sec-password-btn");
+  if(pwBtn)pwBtn.onclick=async()=>{
+    if(!signInAvailable())return;
+    const el=document.getElementById("sec-password");
+    const next=el.value;
+    if(!next||next.length<8){toast("Password must be at least 8 characters");return;}
+    pwBtn.disabled=true;pwBtn.textContent="Changing...";
+    try{
+      const{error}=await sb.auth.updateUser({password:next});
+      if(error){toast(error.message);}
+      else{el.value="";toast("Password changed");}
+    }catch(e){toast("Couldn't reach the server. Try again.");}
+    pwBtn.disabled=false;pwBtn.textContent="Change password";
+  };
+
+  const emBtn=document.getElementById("sec-email-btn");
+  if(emBtn)emBtn.onclick=async()=>{
+    if(!signInAvailable())return;
+    const next=document.getElementById("sec-email").value.trim();
+    if(!next||next.indexOf("@")<1){toast("Enter a valid email address");return;}
+    if(next.toLowerCase()===(email||"").toLowerCase()){toast("That's already your email");return;}
+    emBtn.disabled=true;emBtn.textContent="Sending...";
+    try{
+      const{error}=await sb.auth.updateUser({email:next});
+      // Supabase does not switch the address until the link in the new
+      // inbox is clicked, so say that rather than implying it is done.
+      if(error){toast(error.message);}
+      else{toast("Check "+next+" for a confirmation link");}
+    }catch(e){toast("Couldn't reach the server. Try again.");}
+    emBtn.disabled=false;emBtn.textContent="Change email";
+  };
+
+  // ── Delete account ──
+  const delBtn=document.getElementById("del-account-btn");
+  if(delBtn)delBtn.onclick=async()=>{
+    const typed=(document.getElementById("del-confirm").value||"").trim().toUpperCase();
+    // Typing the word is the confirmation. A dialog people dismiss by reflex
+    // is not one, and this is the single irreversible action in the app.
+    if(typed!=="DELETE"){toast("Type DELETE in the box to confirm");return;}
+    if(!confirm("This permanently deletes your account and cancels any subscription. There is no undo. Continue?"))return;
+    delBtn.disabled=true;delBtn.textContent="Deleting...";
+    try{
+      const token=await getSupabaseToken();
+      const r=await fetchWithTimeout(SERVER+"/account/delete",{
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({supabase_token:token,device_id:deviceId()})},60000);
+      const d=await r.json();
+      if(!d.ok){
+        // Spell out the one refusal a person can act on. The server will not
+        // delete an account with live billing, because it cannot cancel the
+        // subscription and will not leave a card being charged with no
+        // account left to stop it.
+        if(d.reason==="active_subscription"){
+          toast("Cancel your subscription in the billing portal first, then come back.");
+          if(d.portal)window.open(d.portal,"_blank");
+        } else if(d.reason==="not_signed_in"){
+          toast("Please sign out and back in, then try again");
+        } else if(d.reason==="not_configured"){
+          toast("Account deletion isn't available yet — email support@curbcallpro.com");
+        } else {
+          toast("Couldn't delete your account. Try again or email support.");
+        }
+        delBtn.disabled=false;delBtn.textContent="Delete my account";return;}
+      // Local data goes with it. Leaving cached bids on the device after the
+      // account is gone is the opposite of what someone just asked for.
+      try{localStorage.clear();}catch(_){}
+      await sb.auth.signOut();
+      location.reload();
+    }catch(e){
+      toast("Couldn't reach the server. Try again.");
+      delBtn.disabled=false;delBtn.textContent="Delete my account";
+    }
+  };
 
   document.getElementById("activate-btn").onclick=async()=>{
     const key=document.getElementById("key-input").value.trim().toUpperCase();

@@ -768,6 +768,94 @@ def _verify_supabase_token(token):
         return None
 
 
+def _supabase_user(token):
+    """The whole signed-in user record, not just the email.
+
+    Deleting an account needs the user's id: Supabase's admin delete is
+    addressed by id, and the id is the only field that cannot change under
+    us while someone is mid-flow.
+    """
+    if not (SUPABASE_URL and SUPABASE_ANON_KEY and token):
+        return None
+    try:
+        req = urllib.request.Request(
+            f"{SUPABASE_URL}/auth/v1/user",
+            headers={"Authorization": f"Bearer {token}", "apikey": SUPABASE_ANON_KEY})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except Exception:
+        return None
+
+
+def _supabase_delete_user(user_id):
+    """Delete an auth user. Needs the service-role key; returns True on success."""
+    if not (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY and user_id):
+        return False
+    try:
+        req = urllib.request.Request(
+            f"{SUPABASE_URL}/auth/v1/admin/users/{urllib.parse.quote(user_id)}",
+            method="DELETE",
+            headers={"Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+                     "apikey": SUPABASE_SERVICE_ROLE_KEY})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return resp.status in (200, 204)
+    except Exception:
+        return False
+
+
+@app.route("/account/delete", methods=["POST"])
+def account_delete():
+    """Delete the signed-in user's account and everything keyed to them.
+
+    Refuses while a paid subscription is live. This server holds Stripe's
+    webhook secret but no API key, so it cannot cancel a subscription -- and
+    deleting the account anyway would leave a card being charged with no
+    account left to log in and stop it. Better to send them to the billing
+    portal first and have them come back.
+
+    The trial record goes too. That does mean deleting an account frees up a
+    fresh trial on the same email, which is a real trade: the alternative is
+    keeping a record of someone who asked to be forgotten, and a seven-day
+    trial is not worth that.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    user = _supabase_user(data.get("supabase_token", ""))
+    if not user or not user.get("id"):
+        return jsonify({"ok": False, "reason": "not_signed_in"}), 401
+    email = (user.get("email") or "").strip().lower()
+    device = (data.get("device_id") or "").strip()
+
+    db = _db()
+    key = (db.get("emails", {}) or {}).get(email)
+    if key and _license_is_active(key, device):
+        return jsonify({"ok": False, "reason": "active_subscription",
+                        "portal": "https://billing.stripe.com/p/login/"
+                                  "3cIcN4an28420Yad2fejK00"}), 409
+
+    if not SUPABASE_SERVICE_ROLE_KEY:
+        return jsonify({"ok": False, "reason": "not_configured"}), 500
+    if not _supabase_delete_user(user["id"]):
+        return jsonify({"ok": False, "reason": "delete_failed"}), 502
+
+    # Only now purge local rows: if the auth delete failed the account still
+    # exists, and stripping its trial and licence out from under it would
+    # leave a working login with no entitlements.
+    trials = db.setdefault("trials", {})
+    trials.pop(f"email:{email}", None)
+    if device:
+        trials.pop(device, None)
+    db.setdefault("emails", {}).pop(email, None)
+    for table in ("referral_owner", "referral_codes"):
+        rows = db.get(table) or {}
+        for k in [k for k, v in rows.items() if v == email or k == email]:
+            rows.pop(k, None)
+    _save_db(db)
+    # Deliberately not logged. The one action whose entire purpose is to
+    # remove someone should not write their address into a log line on the
+    # way out.
+    return jsonify({"ok": True})
+
+
 def _stripe_verify(payload, sig_header):
     """Verify a Stripe webhook signature without the stripe library."""
     if not STRIPE_WEBHOOK_SECRET or not sig_header:
