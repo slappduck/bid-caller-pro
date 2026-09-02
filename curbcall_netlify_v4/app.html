@@ -68,6 +68,17 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .auth-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:1.5rem;width:100%;max-width:360px;}
 .auth-title{font-size:var(--fs-xl);font-weight:800;margin-bottom:0.3rem;}
 .auth-sub{color:var(--text2);font-size:var(--fs-base);margin-bottom:1.4rem;}
+.btn-primary:disabled,.btn-ghost:disabled{opacity:0.55;cursor:not-allowed;}
+.pw-field{position:relative;}
+.pw-field .input{padding-right:4.4rem;}
+/* Typing a password blind on a phone is the single most common reason a
+   correct password gets entered wrong, and 7 of the first 8 sessions here
+   were mobile. */
+.pw-toggle{position:absolute;right:0.5rem;top:50%;transform:translateY(-50%);
+  background:none;border:none;color:var(--text2);font-size:0.82rem;
+  font-weight:600;cursor:pointer;padding:0.35rem 0.45rem;}
+.pw-toggle:hover{color:var(--text);}
+.field-hint{color:var(--text3);font-size:0.8rem;margin-top:0.35rem;text-align:left;}
 .auth-sent-icon{font-size:2.6rem;line-height:1;margin-bottom:0.6rem;color:var(--accent);}
 .auth-sent-note{color:var(--text2);font-size:var(--fs-base);margin:0 0 0.9rem;line-height:1.5;}
 .social-btn{
@@ -643,14 +654,21 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
       <input class="input" id="auth-email" type="email" inputmode="email" placeholder="you@example.com" />
       <div id="password-wrap">
         <div class="field-label" style="margin-top:0.8rem;">Password</div>
-        <input class="input" id="auth-password" type="password" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" />
+        <div class="pw-field">
+          <input class="input" id="auth-password" type="password"
+                 placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;"
+                 autocomplete="current-password" />
+          <button type="button" class="pw-toggle" id="pw-toggle"
+                  aria-label="Show password">Show</button>
+        </div>
+        <div class="field-hint" id="pw-hint">At least 8 characters</div>
       </div>
       <label class="auth-trial-note" id="terms-check-wrap"
              style="display:flex;align-items:flex-start;gap:0.5rem;text-align:left;margin-top:0.8rem;cursor:pointer;">
         <input type="checkbox" id="terms-check" style="margin-top:0.2rem;flex-shrink:0;" />
         <span>I agree to the
-          <a href="terms.html" target="_blank" style="color:var(--text2);">Terms</a> and
-          <a href="privacy.html" target="_blank" style="color:var(--text2);">Privacy Policy</a>.</span>
+          <a href="/terms.html" target="_blank" style="color:var(--text2);">Terms</a> and
+          <a href="/privacy.html" target="_blank" style="color:var(--text2);">Privacy Policy</a>.</span>
       </label>
       <button class="btn-primary" id="email-btn">Create Account</button>
       <button class="btn-ghost" id="magic-btn">Send magic link instead</button>
@@ -1170,6 +1188,47 @@ function setAuthMode(mode){
   // into an existing one isn't re-agreeing to anything.
   document.getElementById("terms-check-wrap").style.display=isSignup?"flex":"none";
   document.getElementById("name-wrap").style.display=isSignup?"block":"none";
+  // The 8-character rule only binds when a password is being chosen. Showing
+  // it to someone signing in reads as a demand rather than a hint.
+  const hint=document.getElementById("pw-hint");
+  if(hint)hint.style.display=isSignup?"block":"none";
+  // Tells a password manager whether to offer a saved password or generate
+  // one; without it phones offer the wrong thing on one of the two screens.
+  const pw=document.getElementById("auth-password");
+  if(pw)pw.setAttribute("autocomplete",isSignup?"new-password":"current-password");
+}
+
+// Reveal toggle. Kept out of setAuthMode so flipping between sign-in and
+// sign-up does not silently re-hide a password the user chose to see.
+(function(){
+  const btn=document.getElementById("pw-toggle");
+  const pw=document.getElementById("auth-password");
+  if(!btn||!pw)return;
+  btn.onclick=()=>{
+    const shown=pw.type==="text";
+    pw.type=shown?"password":"text";
+    btn.textContent=shown?"Show":"Hide";
+    btn.setAttribute("aria-label",shown?"Show password":"Hide password");
+    pw.focus();
+  };
+})();
+
+// A submit that looks identical while it waits invites a second tap, and a
+// second signUp for the same address comes back as a rate-limit error that
+// reads like a real failure.
+function setAuthBusy(on,label){
+  const b=document.getElementById("email-btn");
+  const m=document.getElementById("magic-btn");
+  if(!b)return;
+  if(on){
+    b.dataset.idle=b.dataset.idle||b.textContent;
+    b.textContent=label||"Working...";
+  }else if(b.dataset.idle){
+    b.textContent=b.dataset.idle;
+    delete b.dataset.idle;
+  }
+  b.disabled=on;
+  if(m)m.disabled=on;
 }
 
 document.getElementById("toggle-link").onclick=()=>setAuthMode("signin");
@@ -1250,13 +1309,19 @@ document.getElementById("email-btn").onclick=async()=>{
     setMsg("Please agree to the Terms and Privacy Policy to continue","err");return;
   }
   capturePendingSignupName();
-  setMsg("...","");
+  setMsg("","");
+  setAuthBusy(true,authMode==="signup"?"Creating account...":"Signing in...");
   let res;
-  if(authMode==="signup"){
-    res=await sb.auth.signUp({email,password});
-  } else {
-    res=await sb.auth.signInWithPassword({email,password});
+  try{
+    res=authMode==="signup"
+      ? await sb.auth.signUp({email,password})
+      : await sb.auth.signInWithPassword({email,password});
+  }catch(e){
+    setAuthBusy(false);
+    setMsg("Couldn't reach the server. Check your connection and try again.","err");
+    return;
   }
+  setAuthBusy(false);
   if(res.error){setMsg(res.error.message,"err");return;}
   if(authMode==="signup"&&!res.data.session){
     showEmailSent(email);
