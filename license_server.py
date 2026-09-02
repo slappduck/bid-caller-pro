@@ -2682,19 +2682,65 @@ def _normalize_place(name):
     return s.strip()
 
 
+def _zip_name_key(name):
+    """A place name reduced to what makes two spellings the same place."""
+    return re.sub(r"[^a-z0-9]", "", str(name or "").lower())
+
+
+def _largest_cluster(pts, radius_mi=25.0):
+    """The biggest group of points within `radius_mi` of one of their number.
+
+    Greedy and O(n^2), which is free at the handful of ZIPs a city has.
+    """
+    best = []
+    for anchor in pts:
+        near = [p for p in pts
+                if _miles_between(anchor[0], anchor[1], p[0], p[1]) <= radius_mi]
+        if len(near) > len(best):
+            best = near
+    return best or list(pts)
+
+
 def _zippopotam_city(city, state):
+    """Coordinates for a named place, averaged over its ZIP codes.
+
+    Averaging every ZIP the API returns was wrong in a way that quietly
+    destroyed the answer for ambiguous names. Asked for Frankfort, IL,
+    zippopotam returns three places -- Frankfort itself at 41.5,-87.8, plus
+    Frankfort Heights and West Frankfort, both around 38.0,-88.9. The mean of
+    those three is a field near Effingham, 150 miles from any of them, and a
+    contractor in Frankfort saw 8 nearby agencies instead of 113.
+
+    Two filters, in order. Exact name first: "Frankfort Heights" is not
+    Frankfort, and dropping the near-misses solves this case outright. Then,
+    for names that really are duplicated within one state, keep the largest
+    cluster -- more ZIP codes means the bigger place, which is what someone
+    typing a bare city name almost always means.
+
+    A city with many ZIPs still averages them, which is the behaviour worth
+    keeping: Springfield MO spans 16 ZIPs across 10 miles and Peoria 36
+    across 19, and their means are correct.
+    """
     url = f"https://api.zippopotam.us/us/{state.upper()}/{urllib.parse.quote(city)}"
     data = _get_json(url)
     places = (data or {}).get("places") or []
-    pts = []
+    pts, exact = [], []
+    want = _zip_name_key(city)
     for p in places:
         try:
-            pts.append((float(p["latitude"]), float(p["longitude"])))
+            pt = (float(p["latitude"]), float(p["longitude"]))
         except (KeyError, ValueError, TypeError):
             continue
-    if not pts:
+        pts.append(pt)
+        if _zip_name_key(p.get("place name")) == want:
+            exact.append(pt)
+    chosen = exact or pts
+    if not chosen:
         return None
-    return (sum(x for x, _ in pts) / len(pts), sum(y for _, y in pts) / len(pts))
+    if len(chosen) > 1:
+        chosen = _largest_cluster(chosen)
+    return (sum(x for x, _ in chosen) / len(chosen),
+            sum(y for _, y in chosen) / len(chosen))
 
 
 # Nominatim asks for a descriptive User-Agent and no more than one request a

@@ -107,13 +107,28 @@ class PlacementTests(unittest.TestCase):
         placed, _ = self._place("https://someagency.gov/DocumentCenter/View/9/x.pdf")
         self.assertEqual(placed, 1)
 
-    def test_a_bid_that_states_its_own_city_is_believed(self):
+    def test_a_bid_that_states_a_distant_city_is_believed_then_dropped(self):
         # Not dropped by this rule -- geocoded properly and then judged on
-        # distance like anything else.
+        # distance like anything else. Fairfield CA is a continent away, so
+        # distance is what removes it, not the borrowed-town rule.
+        placed, stats = self._place(
+            "https://cms3.revize.com/revize/fairfield/Purchasing/x.pdf",
+            stated_city="Fairfield, CA")
+        self.assertEqual(placed, 0)
+        self.assertNotIn("url_names_another_town", stats)
+
+    def test_a_bid_that_states_a_nearby_city_is_believed_and_kept(self):
+        # The other half of the same rule, and the half that used to fail
+        # silently: Fairfield OH is 102 miles from New Albany, inside the 125
+        # radius, so it belongs in the results. It was dropped for a while
+        # because geocoding averaged Fairfield with North Fairfield, a
+        # different town 100 miles up the state, and put the pin 154 miles
+        # out. Asserting the keep as well as the drop is what would have
+        # caught that.
         placed, stats = self._place(
             "https://cms3.revize.com/revize/fairfield/Purchasing/x.pdf",
             stated_city="Fairfield, OH")
-        self.assertEqual(placed, 0)
+        self.assertEqual(placed, 1)
         self.assertNotIn("url_names_another_town", stats)
 
     def test_the_live_directory_loads_and_is_usable(self):
