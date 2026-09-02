@@ -68,6 +68,8 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .auth-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:1.5rem;width:100%;max-width:360px;}
 .auth-title{font-size:var(--fs-xl);font-weight:800;margin-bottom:0.3rem;}
 .auth-sub{color:var(--text2);font-size:var(--fs-base);margin-bottom:1.4rem;}
+.auth-sent-icon{font-size:2.6rem;line-height:1;margin-bottom:0.6rem;color:var(--accent);}
+.auth-sent-note{color:var(--text2);font-size:var(--fs-base);margin:0 0 0.9rem;line-height:1.5;}
 .social-btn{
   width:100%;display:flex;align-items:center;justify-content:center;gap:0.7rem;
   padding:0.85rem;border-radius:var(--r);font-weight:700;font-size:var(--fs-md);
@@ -603,6 +605,23 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 <div id="auth-screen">
   <div class="auth-logo">Curb<span>Call</span></div>
   <div class="auth-tagline">Sidewalk, ADA &amp; curb bids near you</div>
+
+  <!-- Shown in place of the form once a signup needs email confirmation.
+       Previously that state was a one-line message under the button and an
+       immediate flip to the sign-in form, which reads as "something went
+       wrong, try again" rather than "go check your inbox" -- and the form
+       sitting there invites a second signup attempt with the same address. -->
+  <div class="auth-card" id="auth-sent-card" style="display:none;">
+    <div class="auth-sent-icon" aria-hidden="true">&#9993;</div>
+    <div class="auth-title">Check your email</div>
+    <div class="auth-sub">We sent a confirmation link to<br>
+      <b id="auth-sent-email" style="color:var(--text);word-break:break-all;"></b></div>
+    <p class="auth-sent-note">Click the link to finish setting up your account,
+      then come back here and sign in. The link is good for 24 hours.</p>
+    <p class="auth-sent-note">Nothing after a minute or two? Check your spam
+      folder &mdash; and confirm the address above is spelled right.</p>
+    <button class="btn-ghost" id="auth-sent-back">Use a different email</button>
+  </div>
 
   <div class="auth-card" id="auth-card">
     <div class="auth-title" id="auth-title">Create your free account</div>
@@ -1240,8 +1259,7 @@ document.getElementById("email-btn").onclick=async()=>{
   }
   if(res.error){setMsg(res.error.message,"err");return;}
   if(authMode==="signup"&&!res.data.session){
-    setMsg("Check your email to confirm your account, then come back to sign in.","ok");
-    setAuthMode("signin");
+    showEmailSent(email);
     return;
   }
   // session is live — onAuthStateChange will fire
@@ -1258,8 +1276,36 @@ document.getElementById("magic-btn").onclick=async()=>{
   setMsg("Sending...","");
   const{error}=await sb.auth.signInWithOtp({email,options:{emailRedirectTo:window.location.href}});
   if(error){setMsg(error.message,"err");return;}
-  setMsg("Magic link sent! Check your email.","ok");
+  showEmailSent(email);
 };
+
+// Swap the form out for the "we sent it" panel. Hiding the form matters as
+// much as showing the message: leaving it up invites a second signup with
+// the same address, which Supabase answers with a rate-limit error that
+// looks like a failure.
+function showEmailSent(email){
+  const card=document.getElementById("auth-card");
+  const sent=document.getElementById("auth-sent-card");
+  const who=document.getElementById("auth-sent-email");
+  if(!card||!sent)return;
+  if(who)who.textContent=email;
+  card.style.display="none";
+  sent.style.display="";
+  setMsg("","");
+}
+
+(function(){
+  const back=document.getElementById("auth-sent-back");
+  if(!back)return;
+  back.onclick=()=>{
+    const card=document.getElementById("auth-card");
+    const sent=document.getElementById("auth-sent-card");
+    if(sent)sent.style.display="none";
+    if(card)card.style.display="";
+    const f=document.getElementById("auth-email");
+    if(f){f.value="";f.focus();}
+  };
+})();
 
 function setMsg(msg,cls){
   const el=document.getElementById("auth-msg");
@@ -4233,8 +4279,13 @@ function tickTrialCountdown(){
   if(label)el.textContent=label;
 }
 async function loadAccountStatus(){
-  const card=document.getElementById("status-card");
-  const upgradeSection=document.getElementById("upgrade-section");
+  // Deliberately not holding a reference to the card across the awaits
+  // below. renderAccount() rewrites the whole Account pane, placeholder
+  // spinner and all, and it runs again on every company-info save, cancel
+  // and chip update. An element captured before /validate and /trial can be
+  // detached by the time they answer, so the result lands in a node that is
+  // no longer on the page and the spinner spins forever -- which is exactly
+  // what "CHECKING YOUR PLAN..." stuck on screen was.
   const key=licenseKey();
   let html="";
   let featured=false;
@@ -4248,6 +4299,9 @@ async function loadAccountStatus(){
       if(d.valid){html=`<div class="plan-name">Active subscription</div><div class="plan-price" style="font-size:var(--fs-2xl);">${esc(d.plan||"Pro")}</div><p style="color:var(--text2);font-size:var(--fs-base);margin-top:0.4rem;">Expires ${esc(d.expires||"")}</p>`;featured=true;activePaid=true;}
     }catch{}
   }
+  // Re-queried for the same reason as the card below: /validate has already
+  // been awaited by this point, so a reference taken earlier may be detached.
+  const upgradeSection=document.getElementById("upgrade-section");
   if(upgradeSection)upgradeSection.style.display=activePaid?"none":"";
   if(!html){
     try{
@@ -4264,6 +4318,11 @@ async function loadAccountStatus(){
       html=`<div class="plan-name" style="color:var(--text2);">Couldn't reach the server</div><p style="color:var(--text3);font-size:var(--fs-base);margin-top:0.5rem;">Your plan status will show once the connection's back. Try again in a bit.</p>`;
     }
   }
+  // Re-query now that the awaits are done: this is the live node, whatever
+  // re-renders happened while we waited. Gone entirely means the user left
+  // the Account tab, and there is nothing to update.
+  const card=document.getElementById("status-card");
+  if(!card)return;
   card.innerHTML=html;
   card.className="plan"+(featured?" featured":"");
   if(html.indexOf("Trial expired")>-1)card.style.borderColor="var(--red)";
