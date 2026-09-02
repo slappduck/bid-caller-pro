@@ -1,12 +1,22 @@
 #!/usr/bin/env python3
-"""Write the next few outreach emails, each carrying that contractor's own
-coverage number.
+"""Brief the next few outreach emails: the verified facts, not the prose.
 
-The pitch that works is not a claim about the product, it is a fact about
-their town: "there are 94 agencies inside 50 miles of Wilmington on it right
-now." So every draft is built from a live /coverage call rather than from
-adjectives, and a prospect whose number cannot be trusted is skipped instead
-of guessed at.
+This used to emit finished emails from a template. They read as machine-
+written, and they were -- five bodies off one skeleton, the same three-item
+list of trades in each, an em dash in every other sentence. Two of the five
+went to contractors in the same city, so a template was one forwarded email
+away from being obvious.
+
+A merge field cannot fix that, because being a merge field is the problem.
+So this hands over what a person cannot look up in thirty seconds -- the
+live agency count for that contractor's town, checked and sanity-tested,
+plus their tracking link -- and the note itself gets typed. At five a day
+that is a couple of minutes each, and it is the difference between mail
+that gets read and mail that gets binned.
+
+The number is the part worth automating: it is a fact about their town, not
+an adjective about the product, and it is the one thing in the email the
+recipient can verify in half a minute.
 
 Two guards, both learned the hard way.
 
@@ -93,23 +103,19 @@ def _looks_like_the_right_town(data, city):
     return any(want == n.split(",")[0].strip().lower() for n in nearest[:3])
 
 
-def compose(row, agencies):
-    city = row["city"]
-    subject = (f"{agencies} agencies near {city} post sidewalk and ADA bids")
-    body = (
-        f"Hi {row['greeting']},\n\n"
-        f"{row['intro']}\n\n"
-        "I built CurbCall Pro — it watches the bid pages of every city, county, "
-        "school district and special district near you and pulls out the "
-        "sidewalk, ADA-ramp and curb & gutter work. There are "
-        f"{agencies} agencies inside {RADIUS} miles of {city} on it right now.\n\n"
-        "You can check your own area free before paying anything:\n"
-        f"{SITE}/go/{row['slug']}\n\n"
-        "Worth a look?\n\n"
-        "Josh\n"
-        "CurbCall Pro"
-    )
-    return subject, body
+def brief(row, agencies, nearest):
+    """The facts for one prospect. The email gets written by a person."""
+    return {
+        "slug": row["slug"],
+        "company": row["company"],
+        "to": row["email"],
+        "greeting": row["greeting"],
+        "agencies": agencies,
+        "city": f"{row['city']}, {row['state']}",
+        "link": f"{SITE}/go/{row['slug']}",
+        "angle": row["intro"],
+        "nearest": nearest,
+    }
 
 
 def main():
@@ -154,10 +160,7 @@ def main():
         if n < MIN_AGENCIES:
             held.append((row, f"only {n} agencies — too thin to lead with"))
             continue
-        subject, body = compose(row, n)
-        drafts.append({"slug": row["slug"], "company": row["company"],
-                       "to": row["email"], "subject": subject, "body": body,
-                       "agencies": n})
+        drafts.append(brief(row, n, (data.get("nearest") or [])[:4]))
 
     if args.json:
         print(json.dumps({"drafts": drafts,
@@ -167,17 +170,23 @@ def main():
 
     for d in drafts:
         print("=" * 72)
-        print(f"TO:      {d['to']}")
-        print(f"SUBJECT: {d['subject']}")
-        print("-" * 72)
-        print(d["body"])
+        print(f"{d['company']}   ({d['city']})")
+        print(f"  to        {d['to']}")
+        print(f"  open with {d['greeting']},")
+        print(f"  the fact  {d['agencies']} agencies within {RADIUS} miles")
+        print(f"  link      {d['link']}")
+        print(f"  angle     {d['angle']}")
+        if d["nearest"]:
+            print(f"  nearby    {', '.join(d['nearest'])}")
         print()
     if held:
         print("=" * 72)
         print("HELD (not drafted):")
         for r, why in held:
             print(f"  {r['slug']:14} {r['company'][:28]:30} {why}")
-    print(f"\n{len(drafts)} draft(s), {len(held)} held. Nothing was sent.")
+    print(f"\n{len(drafts)} brief(s), {len(held)} held. Write the notes yourself:\n"
+          "keep them short, vary them, and do not reuse a sentence between two\n"
+          "contractors in the same city.")
     return 0
 
 
