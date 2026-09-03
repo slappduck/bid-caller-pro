@@ -2991,6 +2991,22 @@ function startScanProgress(wrapId,barId,opts){
 // four hours": that number would be invented, and a contractor who checks
 // two of these sites and finds it took them twenty seconds would stop
 // believing the rest of the app.
+// What to say when a request did not come back at all.
+//
+// Every one of these used to read "Check your internet", which is a guess,
+// and usually the wrong one: the page itself had already loaded, so the
+// connection was fine. The common causes are the backend redeploying or
+// briefly restarting, and telling a contractor on a job site that their
+// signal is bad -- when it is not -- sends them to reboot a router instead of
+// tapping the button again ten seconds later. The browser already knows which
+// case it is, so ask it.
+function offlineOrServer(){
+  return navigator.onLine
+    ? "Couldn\u2019t reach the bid service \u2014 it may be restarting. "
+      + "Try again in a moment."
+    : "You\u2019re offline. Reconnect and try again.";
+}
+
 function scanEffortLine(d,seconds){
   const e=d&&d.debug||{};
   const sites=e.sites_read|0, towns=e.towns_read|0,
@@ -3183,7 +3199,7 @@ async function runScan(force){
         +"return today\u2019s saved result straight away.";
       toast("Taking longer than usual");
     }else{
-      status.textContent="Couldn't reach the bid service. Check your internet.";
+      status.textContent=offlineOrServer();
       toast("Connection problem");
     }
   }finally{
@@ -3257,7 +3273,7 @@ async function runUpcoming(){
     }else{
       status.textContent=e.name==="AbortError"
         ?"That took too long — the server might be waking up. Try again in a moment."
-        :"Couldn't reach the bid service. Check your internet.";
+        :offlineOrServer();
       toast("Connection problem");
     }
   }finally{
@@ -3393,7 +3409,7 @@ async function runLeads(){
     }else{
       status.textContent=e.name==="AbortError"
         ?"That took too long — the server might be waking up. Try again in a moment."
-        :"Couldn't reach the bid service. Check your internet.";
+        :offlineOrServer();
       toast("Connection problem");
     }
   }finally{
@@ -4579,7 +4595,7 @@ function renderAccount(){
       const d=await r.json();
       if(d.ok){statusEl.style.color="var(--green)";statusEl.textContent="Message sent — we'll get back to you soon.";msgBox.value="";}
       else{statusEl.style.color="var(--red)";statusEl.textContent=d.reason==="email_unavailable"?"Support messages aren't configured yet — email us directly instead.":"Couldn't send your message. Try again.";}
-    }catch(e){statusEl.style.color="var(--red)";statusEl.textContent="Couldn't reach the server. Check your internet and try again.";}
+    }catch(e){statusEl.style.color="var(--red)";statusEl.textContent=offlineOrServer();}
   };
   document.getElementById("sync-now-link").onclick=(e)=>{
     e.preventDefault();

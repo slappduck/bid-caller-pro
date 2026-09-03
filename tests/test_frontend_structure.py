@@ -456,3 +456,33 @@ class DestructiveActionIsNotFirstTests(unittest.TestCase):
     def test_clear_all_bids_still_confirms(self):
         i = self.src.index('getElementById("clear-feed").onclick')
         self.assertIn("confirm(", self.src[i:i + 300])
+
+
+class ConnectionErrorsAreHonestTests(unittest.TestCase):
+    """"Check your internet" was a guess, and usually the wrong one.
+
+    Every one of these fires after the page itself has loaded, so the
+    connection is demonstrably working. The real causes are the backend
+    redeploying or restarting. Telling a contractor on a job site that their
+    signal is bad sends them to reboot a router instead of tapping the button
+    again ten seconds later.
+    """
+
+    def setUp(self):
+        here = os.path.dirname(os.path.abspath(__file__))
+        with open(os.path.join(here, os.pardir, "curbcall_netlify_v4",
+                               "app.html"), encoding="utf-8") as f:
+            self.src = f.read()
+
+    def test_no_message_blames_the_users_connection_outright(self):
+        code = re.sub(r"//.*$", "", self.src, flags=re.M)
+        self.assertNotIn("Check your internet", code)
+
+    def test_there_is_one_helper_and_it_asks_the_browser(self):
+        i = self.src.index("function offlineOrServer()")
+        fn = self.src[i:i + 500]
+        self.assertIn("navigator.onLine", fn)
+        self.assertIn("restarting", fn)
+
+    def test_every_failed_request_uses_it(self):
+        self.assertGreaterEqual(self.src.count("offlineOrServer()"), 4)
