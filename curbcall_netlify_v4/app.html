@@ -547,7 +547,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
       </div>
       <div class="filter-row" id="filter-row" style="display:none;">
         <input id="feed-search" placeholder="Search title or scope..." />
-        <select id="feed-sort">
+        <select id="feed-sort" aria-label="Sort bids">
           <option value="match">Best Match</option>
           <option value="near">Nearest</option>
           <option value="new">Newest</option>
@@ -581,7 +581,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
       </div>
       <div class="filter-row" id="up-filter-row" style="display:none;margin-top:1rem;">
         <input id="up-search" placeholder="Search title or scope..." />
-        <select id="up-sort">
+        <select id="up-sort" aria-label="Sort upcoming projects">
           <option value="match">Best Match</option>
           <option value="city">City</option>
           <option value="title">Title</option>
@@ -618,7 +618,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
       <div id="leads-tiles"></div>
       <div class="filter-row" id="leads-filter-row" style="display:none;">
         <input id="leads-search" placeholder="Search address or description..." />
-        <select id="leads-sort">
+        <select id="leads-sort" aria-label="Sort leads">
           <option value="match">Best Match</option>
           <option value="new">Newest</option>
         </select>
@@ -743,7 +743,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
         </div>
       </div>
       <div class="field-label">Email</div>
-      <input class="input" id="auth-email" type="email" inputmode="email" placeholder="you@example.com" />
+      <input class="input" id="auth-email" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com" />
       <div id="password-wrap">
         <div class="field-label" style="margin-top:0.8rem;">Password</div>
         <div class="pw-field">

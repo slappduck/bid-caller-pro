@@ -534,3 +534,28 @@ class BillingIsWhereYouAreSentTests(unittest.TestCase):
         link = self.body[max(0, i - 400):i + 60]
         self.assertIn("btn-quiet", link)
         self.assertIn("Already subscribed?", self.body)
+
+
+class FormsAreLabelledTests(unittest.TestCase):
+    """Found by walking the rendered page, not by reading the markup.
+
+    The email field carried no autocomplete, so a phone would not offer the
+    address the customer had already saved -- friction on every single
+    sign-in. The three sort dropdowns announced themselves as nothing at all
+    to a screen reader.
+    """
+
+    def setUp(self):
+        here = os.path.dirname(os.path.abspath(__file__))
+        with open(os.path.join(here, os.pardir, "curbcall_netlify_v4",
+                               "app.html"), encoding="utf-8") as f:
+            self.src = f.read()
+
+    def test_the_email_field_can_be_autofilled(self):
+        i = self.src.index('id="auth-email"')
+        self.assertIn('autocomplete="email"', self.src[i - 120:i + 200])
+
+    def test_every_select_has_an_accessible_name(self):
+        for tag in re.findall(r"<select[^>]*>", self.src):
+            self.assertTrue("aria-label=" in tag or "aria-labelledby=" in tag,
+                            f"unlabelled select: {tag}")
