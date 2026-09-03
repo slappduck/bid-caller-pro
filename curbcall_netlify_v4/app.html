@@ -3002,6 +3002,14 @@ function startScanProgress(wrapId,barId,opts){
 // case it is, so ask it.
 // "3 bid(s)" is how a form letter counts. The app knows the number, so it
 // can say the word: plural(1,"bid") -> "1 bid", plural(3,"bid") -> "3 bids".
+// A file the customer will find in Downloads next week. Date.now() gives
+// them "curbcall_bids_1788409740206.csv", which sorts oddly and tells them
+// nothing; a plain date says which day the list is from.
+function stampedName(base,ext){
+  const d=new Date(), p=n=>String(n).padStart(2,"0");
+  return `${base}-${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}.${ext}`;
+}
+
 function plural(n,word,plural_){
   return n+" "+(Math.abs(n)===1?word:(plural_||word+"s"));
 }
@@ -3523,7 +3531,7 @@ function exportLeadsCSV(rows){
   const blob=new Blob([lines.join("\n")],{type:"text/csv"});
   const url=URL.createObjectURL(blob);
   const a=document.createElement("a");
-  a.href=url;a.download="curbcall_leads_"+Date.now()+".csv";document.body.appendChild(a);a.click();a.remove();
+  a.href=url;a.download=stampedName("curbcall-leads","csv");document.body.appendChild(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 document.getElementById("export-leads-btn").onclick=()=>exportLeadsCSV(lastLeadsRows);
@@ -3663,7 +3671,7 @@ function renderFeed(){
 }
 document.getElementById("feed-search").oninput=()=>renderFeed();
 document.getElementById("feed-sort").onchange=()=>renderFeed();
-document.getElementById("export-feed-btn").onclick=()=>exportCSV(lastFeedRows,"curbcall_bids");
+document.getElementById("export-feed-btn").onclick=()=>exportCSV(lastFeedRows,"curbcall-bids");
 
 function csvEscape(v){v=String(v==null?"":v);if(/[",\n]/.test(v))return'"'+v.replace(/"/g,'""')+'"';return v;}
 function exportCSV(rows,filename){
@@ -3682,7 +3690,7 @@ function exportCSV(rows,filename){
   const blob=new Blob([lines.join("\n")],{type:"text/csv"});
   const url=URL.createObjectURL(blob);
   const a=document.createElement("a");
-  a.href=url;a.download=filename+"_"+Date.now()+".csv";document.body.appendChild(a);a.click();a.remove();
+  a.href=url;a.download=stampedName(filename,"csv");document.body.appendChild(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
   toast("Exported "+plural(rows.length,"bid"));
 }

@@ -74,3 +74,42 @@ class NoFormLetterCountsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ExportFilenameTests(unittest.TestCase):
+    """A file the customer finds in Downloads next week.
+
+    Date.now() produced curbcall_bids_1788409740206.csv, which sorts oddly
+    next to its siblings and says nothing about which day the list is from.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        if not shutil.which("node"):
+            raise unittest.SkipTest("node not available")
+        with open(APP, encoding="utf-8") as f:
+            cls.src = f.read()
+
+    def test_the_name_carries_a_readable_date(self):
+        i = self.src.index("function stampedName(base,ext){")
+        # Brace-match rather than "find the next }". The body contains a
+        # template literal, so the first closing brace belongs to
+        # ${d.getFullYear()} and slicing there yields an unterminated string.
+        depth, j = 0, self.src.index("{", i)
+        for j in range(j, len(self.src)):
+            if self.src[j] == "{":
+                depth += 1
+            elif self.src[j] == "}":
+                depth -= 1
+                if depth == 0:
+                    break
+        fn = self.src[i:j + 1]
+        js = fn + '\nconsole.log(stampedName("curbcall-bids","csv"));'
+        out = subprocess.run([shutil.which("node"), "-e", js],
+                             capture_output=True, text=True, timeout=60)
+        self.assertEqual(out.returncode, 0, out.stderr[-500:])
+        name = out.stdout.strip()
+        self.assertRegex(name, r"^curbcall-bids-\d{4}-\d{2}-\d{2}\.csv$")
+
+    def test_no_export_is_named_with_a_raw_timestamp(self):
+        self.assertNotIn('+Date.now()+".csv"', self.src)
