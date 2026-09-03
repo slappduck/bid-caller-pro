@@ -4351,6 +4351,38 @@ function renderAccount(){
         <input type="file" id="avatar-input" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none;" />
       </div>
     </div>
+        <!-- Billing sits directly under the profile, not at the bottom.
+         A customer whose trial has run out is sent here by the scan screen
+         with "Check Account tab", and this card was fifteenth on the page --
+         below Stats, Alerts, Company Info, Support, Referrals, Reviews and
+         Admin. They had to scroll past all of it to reach the one thing they
+         were sent for. It is also simply what people open Account to look
+         at. -->
+<div class="account-email hdr-ic" style="font-size:var(--fs-base);margin:0.4rem 0 0.5rem;"><svg class="icon-svg"><use href="#i-credit-card"/></svg>Billing</div>
+    <div class="plan" id="status-card"><div class="plan-name" style="display:flex;align-items:center;gap:0.5rem;"><span class="spin" style="border-top-color:var(--accent);border-color:rgba(245,158,11,0.25);"></span> Checking your plan...</div></div>
+    <!-- Deliberately worded as a question and styled quietly. It sat above the
+         pricing looking like the primary action, and for someone who has
+         never subscribed the Stripe portal is a dead end. Not hidden
+         outright: a customer who has just paid but not yet activated their
+         key still needs it, and so does anyone chasing an invoice. -->
+    <a class="btn-ghost btn-quiet" style="text-decoration:none;display:flex;align-items:center;justify-content:center;gap:0.45rem;box-sizing:border-box;font-size:var(--fs-sm);" href="${PORTAL_URL}" target="_blank"><svg class="icon-svg"><use href="#i-credit-card"/></svg>Already subscribed? Manage billing &rarr;</a>
+    <div id="upgrade-section">
+      <div class="plan featured">
+        <div class="plan-name">Pro Monthly</div>
+        <div class="plan-price">$49<span> / month</span></div>
+        <ul><li>Unlimited nationwide bid scans</li><li>AI bid extraction</li><li>Federal + local bids</li><li>Save &amp; track leads</li><li>Cancel anytime</li></ul>
+        <a class="btn-primary" style="text-decoration:none;" href="${mLink}" target="_blank">Subscribe Monthly</a>
+      </div>
+      <div class="plan">
+        <div class="plan-name">Pro Annual &mdash; best value, save $189</div>
+        <div class="plan-price">$399<span> / year</span></div>
+        <ul><li>Everything in Monthly</li><li>About 4 months free</li><li>Priority support</li></ul>
+        <a class="btn-ghost" style="text-decoration:none;display:block;text-align:center;" href="${aLink}" target="_blank">Subscribe Annual</a>
+      </div>
+      <div class="field-label" style="margin-top:1.2rem;">Have a license key?</div>
+      <input class="input" id="key-input" placeholder="BCP-..." />
+      <button class="btn-ghost" id="activate-btn">Activate Key</button>
+    </div>
     <div class="account-card">
       <div class="account-email hdr-ic" style="font-size:var(--fs-base);margin-bottom:0.6rem;"><svg class="icon-svg"><use href="#i-bar-chart"/></svg>Your Stats</div>
       <div class="stats-grid">
@@ -4421,26 +4453,6 @@ function renderAccount(){
       <div class="account-status">Reviews, agency notices, campaign drafts, backups &rarr;</div>
     </div>
     `:""}
-    <div class="account-email hdr-ic" style="font-size:var(--fs-base);margin:0.4rem 0 0.5rem;"><svg class="icon-svg"><use href="#i-credit-card"/></svg>Billing</div>
-    <div class="plan" id="status-card"><div class="plan-name" style="display:flex;align-items:center;gap:0.5rem;"><span class="spin" style="border-top-color:var(--accent);border-color:rgba(245,158,11,0.25);"></span> Checking your plan...</div></div>
-    <a class="btn-ghost" style="text-decoration:none;display:flex;align-items:center;justify-content:center;gap:0.45rem;box-sizing:border-box;" href="${PORTAL_URL}" target="_blank"><svg class="icon-svg"><use href="#i-credit-card"/></svg>Manage Billing on Stripe &rarr;</a>
-    <div id="upgrade-section">
-      <div class="plan featured">
-        <div class="plan-name">Pro Monthly</div>
-        <div class="plan-price">$49<span> / month</span></div>
-        <ul><li>Unlimited nationwide bid scans</li><li>AI bid extraction</li><li>Federal + local bids</li><li>Save &amp; track leads</li><li>Cancel anytime</li></ul>
-        <a class="btn-primary" style="text-decoration:none;" href="${mLink}" target="_blank">Subscribe Monthly</a>
-      </div>
-      <div class="plan">
-        <div class="plan-name">Pro Annual &mdash; best value, save $189</div>
-        <div class="plan-price">$399<span> / year</span></div>
-        <ul><li>Everything in Monthly</li><li>About 4 months free</li><li>Priority support</li></ul>
-        <a class="btn-ghost" style="text-decoration:none;display:block;text-align:center;" href="${aLink}" target="_blank">Subscribe Annual</a>
-      </div>
-      <div class="field-label" style="margin-top:1.2rem;">Have a license key?</div>
-      <input class="input" id="key-input" placeholder="BCP-..." />
-      <button class="btn-ghost" id="activate-btn">Activate Key</button>
-    </div>
     <div class="account-card">
       <div class="account-email hdr-ic" style="font-size:var(--fs-base);"><svg class="icon-svg"><use href="#i-lock"/></svg>Sign-in &amp; Security</div>
       <div class="account-status" style="margin-bottom:0.8rem;">Change how you get into this account.</div>

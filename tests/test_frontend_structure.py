@@ -486,3 +486,51 @@ class ConnectionErrorsAreHonestTests(unittest.TestCase):
 
     def test_every_failed_request_uses_it(self):
         self.assertGreaterEqual(self.src.count("offlineOrServer()"), 4)
+
+
+class BillingIsWhereYouAreSentTests(unittest.TestCase):
+    """A scan refused for an inactive plan sends the customer to Account.
+
+    The Billing card was fifteenth on that screen -- below Stats, Bid Alerts,
+    Company Info, Support, Referrals, Reviews and Admin. So the app said
+    "Check Account tab" and then buried the one thing it sent them for, at
+    the exact moment they decide whether to pay.
+    """
+
+    def setUp(self):
+        here = os.path.dirname(os.path.abspath(__file__))
+        with open(os.path.join(here, os.pardir, "curbcall_netlify_v4",
+                               "app.html"), encoding="utf-8") as f:
+            src = f.read()
+        i = src.index("function renderAccount(){")
+        body = src[i:i + 14000]
+        # Comments out. These notes explain the ordering by naming the very
+        # cards being ordered ("below Stats, Alerts, Company Info, ..."), so
+        # a raw index finds the sentence rather than the card.
+        body = re.sub(r"<!--.*?-->", "", body, flags=re.S)
+        self.body = re.sub(r"//.*$", "", body, flags=re.M)
+
+    def _at(self, needle):
+        return self.body.index(needle)
+
+    def test_billing_comes_before_everything_else_on_the_screen(self):
+        billing = self._at('id="status-card"')
+        for later in ("Your Stats", "Bid Alerts", "Company Info",
+                      "Support", "Refer a Contractor"):
+            self.assertLess(billing, self._at(later),
+                            f"Billing should come before {later!r}")
+
+    def test_the_upgrade_offer_sits_with_it(self):
+        self.assertLess(self._at('id="upgrade-section"'), self._at("Your Stats"))
+
+    def test_destructive_account_actions_stay_at_the_bottom(self):
+        """Delete account must not migrate up with this."""
+        self.assertGreater(self._at("Delete account"), self._at("Your Stats"))
+
+    def test_the_stripe_portal_link_does_not_pose_as_the_main_action(self):
+        """For someone who never subscribed it is a dead end, and it sat
+        above the pricing styled like a button."""
+        i = self.body.index("Manage billing")
+        link = self.body[max(0, i - 400):i + 60]
+        self.assertIn("btn-quiet", link)
+        self.assertIn("Already subscribed?", self.body)
