@@ -275,3 +275,32 @@ class AuthScreenIsReachableTests(unittest.TestCase):
 
     def test_the_shell_still_has_exactly_one_scroll_container(self):
         self.assertIn("flex:1;overflow-y:auto", self._rule(".screens"))
+
+
+class PasswordRulesAgreeTests(unittest.TestCase):
+    """One minimum, everywhere a password can be set.
+
+    Signup enforces 8 and says so; changing it from the Account screen
+    enforces 8. The reset-link flow enforced 6, which made a password reset
+    the one way into the app to set a password weaker than the app otherwise
+    allows -- and it said nothing about a minimum at all until it rejected
+    you.
+    """
+
+    def setUp(self):
+        here = os.path.dirname(os.path.abspath(__file__))
+        with open(os.path.join(here, os.pardir, "curbcall_netlify_v4",
+                               "app.html"), encoding="utf-8") as f:
+            self.src = re.sub(r"//.*$", "", f.read(), flags=re.M)
+
+    def test_every_password_check_uses_the_same_minimum(self):
+        found = set(re.findall(r"password[^;]{0,12}\.length<(\d+)", self.src))
+        found |= set(re.findall(r"next[^;]{0,12}\.length<(\d+)", self.src))
+        self.assertTrue(found, "no password length checks found")
+        self.assertEqual(found, {"8"},
+                         f"password minimums disagree: {sorted(found)}")
+
+    def test_the_reset_screen_states_the_minimum_before_rejecting_you(self):
+        i = self.src.index("function showPasswordReset()")
+        card = self.src[i:i + 1400]
+        self.assertIn("At least 8 characters", card)

@@ -1412,11 +1412,15 @@ function showPasswordReset(){
     <div class="auth-sub">Enter a new password for your account.</div>
     <div class="field-label">New Password</div>
     <input class="input" id="new-password" type="password" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" />
+    <div class="field-hint">At least 8 characters</div>
     <button class="btn-primary" id="new-password-btn">Update Password</button>
     <div class="auth-msg" id="auth-msg"></div>`;
   document.getElementById("new-password-btn").onclick=async()=>{
     const password=document.getElementById("new-password").value;
-    if(!password||password.length<6){setMsg("Password must be at least 6 characters","err");return;}
+    // Eight, like signup and like changing it from the Account screen. This
+    // was six, so the reset link was the one way into the app to set a
+    // password weaker than the app otherwise allows.
+    if(!password||password.length<8){setMsg("Password must be at least 8 characters","err");return;}
     setMsg("...","");
     const{error}=await sb.auth.updateUser({password});
     if(error){setMsg(error.message,"err");return;}
