@@ -10,8 +10,17 @@ dates on it. modot.org/bidding is found easily; the actual data lives at
 modotweb.modot.mo.gov/BidLettingPlansRoom/Letting, a different subdomain one
 hop further on.
 
-So this crawls two hops instead of one, and judges the result on whether the
-page carries dated, project-shaped rows rather than merely procurement words.
+So this crawls two hops instead of one, and judges each candidate by running
+the production parser over it and counting the rows that survive -- concrete-
+relevant and placeable on a map.
+
+It used to judge them on a heuristic instead: dated, repeated, project-shaped
+rows. That is a good filter for "is this a listing of something" and no filter
+at all for "is this a listing of WORK". South Dakota's fuel price index (295
+dated rows of diesel prices) beat the real letting page on that score, and
+Nebraska's "Policies and Forms" beat its own. Twelve states were pointed at
+pages that could never yield a bid. The heuristic is still computed -- it is
+cheap and it breaks ties -- but yield is what decides.
 
 Output: data/state_bid_sources.csv, checked in and reviewable, same pattern
 as data/bid_portal_directory.csv.
@@ -31,6 +40,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import bid_sources  # noqa: E402
+import counties  # noqa: E402
 from tools import state_fetch  # noqa: E402
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -121,6 +131,29 @@ def listing_score(html):
                    "niche": niche, "chars": len(text)}
 
 
+def measured_yield(state, url, html):
+    """Placeable, concrete-relevant rows the REAL parser gets from this page.
+
+    listing_score() cannot tell a list of jobs from a list of numbers, and
+    that is not a tuning problem. South Dakota's fuel price index carries 295
+    dated rows of diesel prices and outscored the actual letting page;
+    Nebraska's "Policies and Forms" won its state the same way. Both look
+    exactly like a listing to a heuristic that counts dates and table rows.
+
+    The only thing that settles it is running the production parser and
+    counting what survives placement -- which is what verify_state_sources.py
+    already did, one URL at a time, after discovery had already picked wrong.
+    Doing it here means the choice is made on yield in the first place.
+    """
+    try:
+        return len(bid_sources.parse_state_letting(
+            html, state, url, counties.counties_named))
+    except Exception:
+        # A malformed page must not take the whole crawl down; scoring it
+        # zero simply means some other candidate wins.
+        return 0
+
+
 def candidates(html, base_url, limit=6):
     """Bid-shaped links off a page, best first, de-duplicated."""
     out, seen = [], set()
@@ -153,15 +186,36 @@ def candidates(html, base_url, limit=6):
     return out[:limit]
 
 
-def discover(state, root, hops=2):
+def _as_index(state, url, html, today=None):
+    """(listing_url, yield) when this page is a DATE INDEX over lettings.
+
+    Alabama's real listing lives at a new address every letting
+    (.../NTC_August_28_2026.html) and the old one 404s, so the durable source
+    is the index and the listing is resolved from it per scan. A page like
+    that yields nothing when parsed directly -- its rows are dates -- and the
+    old discovery scored it as a failure and moved on.
+    """
+    try:
+        link = bid_sources.newest_letting_link(html, url, today=today)
+    except Exception:
+        return "", 0
+    if not link:
+        return "", 0
+    st, body = state_fetch.fetch(link)
+    if st != 200 or not body:
+        return "", 0
+    return link, measured_yield(state, link, body)
+
+
+def discover(state, root, hops=2, today=None):
     """Best listing URL for one state, or a reason there isn't one."""
     status, html = state_fetch.fetch(root)
     if status != 200:
-        return {"state": state, "url": "", "status": str(status),
-                "score": 0, "note": "root %s" % status}
+        return {"state": state, "url": "", "status": str(status), "kind": "listing",
+                "score": 0, "usable": 0, "note": "root %s" % status}
 
-    best = {"state": state, "url": "", "status": "no_listing", "score": 0,
-            "note": ""}
+    best = {"state": state, "url": "", "status": "no_listing", "kind": "listing",
+            "score": 0, "usable": 0, "note": ""}
     frontier = [(root, html)]
     seen_urls = {root}
     for depth in range(hops):
@@ -175,16 +229,40 @@ def discover(state, root, hops=2):
                 if st != 200 or not body:
                     continue
                 score, detail = listing_score(body)
-                if score > best["score"]:
-                    best = {"state": state, "url": url, "status": "ok",
-                            "score": score,
-                            "note": "d%d %s dates=%d rows=%d niche=%d"
-                                    % (depth, label[:34], detail["dates"],
-                                       detail["rows"], detail["niche"])}
+                kind = "listing"
+                usable = measured_yield(state, url, body)
+                if not usable:
+                    # Nothing placeable here, but it may be the index ABOVE
+                    # the listing rather than a dud.
+                    _link, idx_usable = _as_index(state, url, body, today)
+                    if idx_usable:
+                        kind, usable = "index", idx_usable
+                # Yield decides. listing_score only breaks ties between pages
+                # that produce the same number of real rows, because a page
+                # yielding nothing is not a listing however much it resembles
+                # one.
+                if (usable, score) > (best["usable"], best["score"]):
+                    # A page that yields nothing is kept, because a human
+                    # reviewing the CSV wants to see what the crawl landed on
+                    # -- but it is not called "ok". That word meant "we found
+                    # the listing" while pointing at a fuel price index.
+                    # Production gates on the usable count, so a no_yield row
+                    # is never fetched at scan time either way.
+                    best = {"state": state, "url": url,
+                            "status": ("ok" if usable else "no_yield"),
+                            "kind": kind, "score": score, "usable": usable,
+                            "note": "d%d %s %sdates=%d rows=%d niche=%d"
+                                    % (depth, label[:34],
+                                       ("index " if kind == "index" else ""),
+                                       detail["dates"], detail["rows"],
+                                       detail["niche"])}
                 if depth + 1 < hops:
                     next_frontier.append((url, body))
         frontier = next_frontier
-        if best["score"] >= 5:      # already convincing; stop paying for hops
+        # Stop paying for hops once a page has produced real, placeable work.
+        # This was "score >= 5", which stopped the crawl on the strength of a
+        # heuristic -- South Dakota's fuel price index scores 6.
+        if best["usable"] >= 3:
             break
     return best
 
@@ -208,10 +286,10 @@ def main():
     with ThreadPoolExecutor(max_workers=args.workers) as ex:
         for res in ex.map(lambda kv: discover(kv[0], kv[1], args.hops), todo):
             rows.append(res)
-            flag = "OK " if res["score"] >= 4 else ("~  " if res["score"] else "-- ")
-            print("%s %s  score=%d  %s\n      %s"
-                  % (flag, res["state"], res["score"], res["note"],
-                     res["url"] or "(none)"), flush=True)
+            flag = "OK " if res["usable"] >= 2 else ("~  " if res["usable"] else "-- ")
+            print("%s %s  usable=%-3d score=%d  %s\n      %s"
+                  % (flag, res["state"], res["usable"], res["score"],
+                     res["note"], res["url"] or "(none)"), flush=True)
 
     # MERGE, never replace. A --state run used to write only the states it
     # touched, so re-crawling the 48 unresolved ones silently deleted the two
@@ -223,26 +301,32 @@ def main():
                 merged[prev["state"]] = prev
     for r in rows:
         prior = merged.get(r["state"], {})
-        # A fresh crawl knows nothing about yield. Keep the measured columns
-        # only if it landed on the same URL; a new URL makes them stale.
         same = prior.get("url") == r["url"]
+        # The crawl now measures yield itself, so "usable" is fresh either
+        # way. "rows" is the raw record count, which only verify computes, so
+        # it survives only when the URL did not move.
         merged[r["state"]] = dict(
-            r,
-            rows=(prior.get("rows", "") if same else ""),
-            usable=(prior.get("usable", "") if same else ""))
-    fields = ["state", "url", "status", "score", "note", "rows", "usable"]
+            r, rows=(prior.get("rows", "") if same else ""))
+    # "kind" was missing from this list while the CSV carried it, so every
+    # run of this tool silently blanked the column -- and kind=index is the
+    # only thing that keeps Alabama and Kentucky resolvable, since their
+    # listing URL changes with each letting. Discovery now sets it, and it
+    # has to be written out.
+    fields = ["state", "url", "kind", "status", "score", "note", "rows",
+              "usable"]
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
         w.writeheader()
         for st in sorted(merged):
             row = merged[st]
+            row.setdefault("kind", "listing")
             for k in fields:
                 row.setdefault(k, "")
             w.writerow(row)
-    good = sum(1 for r in rows if r["score"] >= 4)
+    good = sum(1 for r in rows if r["usable"] >= 2)
     blocked = sum(1 for r in rows if r["status"] == "root blocked")
-    print("\n%d/%d states with a convincing listing; %d blocked us; wrote %s"
+    print("\n%d/%d states yielding 2+ placeable rows; %d blocked us; wrote %s"
           % (good, len(rows), blocked, OUT))
 
 
