@@ -2,7 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<!-- viewport-fit=cover is what makes env(safe-area-inset-*) return a real
+     number instead of 0. The topbar and bottom nav already pad by those
+     insets, but installed to the Home Screen with a black-translucent
+     status bar the app draws edge to edge, so without this the header sits
+     under the clock and the nav under the home indicator. Invisible in
+     Safari, because browser chrome covers both zones. -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <meta name="theme-color" content="#0d0f18" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
