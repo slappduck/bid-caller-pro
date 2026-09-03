@@ -367,3 +367,92 @@ class OnboardingFollowsTheAccountTests(unittest.TestCase):
     def test_the_column_is_added_by_alter_not_create(self):
         """create table if not exists never alters an existing table."""
         self.assertIn("add column if not exists onboarded", self.sql)
+
+
+class TapTargetsTests(unittest.TestCase):
+    """A 15px-tall link is not tappable on a phone.
+
+    Measured in a real browser at 390x844: "Sync now" was 59x15, the Company
+    Info Edit button 318x27, Change Photo 27 tall, and each review star 30x30.
+    44 is Apple's guidance and this file already used it for
+    .empty-actions .btn-ghost, so these are brought in line rather than
+    inventing a number.
+    """
+
+    def setUp(self):
+        here = os.path.dirname(os.path.abspath(__file__))
+        with open(os.path.join(here, os.pardir, "curbcall_netlify_v4",
+                               "app.html"), encoding="utf-8") as f:
+            self.src = f.read()
+
+    def _near(self, needle, span=320):
+        i = self.src.index(needle)
+        return self.src[i:i + span]
+
+    def test_sync_now_is_tappable(self):
+        self.assertIn("min-height:44px", self._near('id="sync-now-link"'))
+
+    def test_company_edit_is_tappable(self):
+        self.assertIn("min-height:44px", self._near('id="co-edit-btn"'))
+
+    def test_change_photo_is_tappable(self):
+        self.assertIn("min-height:44px", self._near('for="avatar-input"'))
+
+    def test_review_stars_are_tappable(self):
+        rule = self._near(".stars button{")
+        self.assertIn("min-height:44px", rule)
+        self.assertIn("min-width:44px", rule)
+
+
+class AvatarPlaceholderTests(unittest.TestCase):
+    """It centred nothing, so an account with no photo showed a bare ring."""
+
+    def setUp(self):
+        here = os.path.dirname(os.path.abspath(__file__))
+        with open(os.path.join(here, os.pardir, "curbcall_netlify_v4",
+                               "app.html"), encoding="utf-8") as f:
+            self.src = f.read()
+
+    def test_the_placeholder_gets_an_initial(self):
+        self.assertIn("function avatarInitial()", self.src)
+        self.assertIn('<div class="avatar-placeholder">${esc(avatarInitial())}',
+                      self.src)
+
+    def test_a_broken_photo_falls_back_to_the_initial_too(self):
+        i = self.src.index("onerror=\"this.replaceWith")
+        self.assertIn("data-initial", self.src[i:i + 400])
+
+
+class ScanResultAgreesWithTheListTests(unittest.TestCase):
+    """The Find screen said "nothing open near you" while the Bids tab filled.
+
+    total_bids is counted on the server; `added` is what mergeOpenBids
+    actually put in the list. Two sources of truth for one question, and the
+    failure mode reads as a broken app.
+    """
+
+    def setUp(self):
+        here = os.path.dirname(os.path.abspath(__file__))
+        with open(os.path.join(here, os.pardir, "curbcall_netlify_v4",
+                               "app.html"), encoding="utf-8") as f:
+            self.src = re.sub(r"//.*$", "", f.read(), flags=re.M)
+
+    def test_anything_added_counts_as_a_result(self):
+        self.assertIn("if(total>0||added>0){", self.src)
+        self.assertNotIn("if(total>0){", self.src)
+
+
+class DestructiveActionIsNotFirstTests(unittest.TestCase):
+    def setUp(self):
+        here = os.path.dirname(os.path.abspath(__file__))
+        with open(os.path.join(here, os.pardir, "curbcall_netlify_v4",
+                               "app.html"), encoding="utf-8") as f:
+            self.src = f.read()
+
+    def test_export_comes_before_clear_all_bids(self):
+        self.assertLess(self.src.index('id="export-feed-btn"'),
+                        self.src.index('id="clear-feed"'))
+
+    def test_clear_all_bids_still_confirms(self):
+        i = self.src.index('getElementById("clear-feed").onclick')
+        self.assertIn("confirm(", self.src[i:i + 300])

@@ -159,7 +159,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .user-chip .chev{opacity:0.75;flex-shrink:0;font-size:var(--fs-md);line-height:1;}
 .user-chip img{width:18px;height:18px;border-radius:50%;object-fit:cover;flex-shrink:0;}
 .avatar-lg{width:56px;height:56px;border-radius:50%;object-fit:cover;flex-shrink:0;}
-.avatar-placeholder{width:56px;height:56px;border-radius:50%;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:var(--fs-2xl);flex-shrink:0;}
+.avatar-placeholder{width:56px;height:56px;border-radius:50%;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:var(--fs-2xl);flex-shrink:0;color:var(--amber);font-weight:800;line-height:1;user-select:none;}
 
 .screens{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;}
 /* Nothing in this file constrained width, so on a desktop the whole app ran
@@ -266,8 +266,8 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 /* Star rating. Real <button>s, not spans: this is the one control on the
    Account screen someone might reach by keyboard, and a div can't be
    focused or activated with a key. */
-.stars{display:flex;gap:0.25rem;margin-bottom:0.7rem;}
-.stars button{background:none;border:none;padding:0.15rem;cursor:pointer;color:var(--text3);line-height:0;}
+.stars{display:flex;gap:0;margin-bottom:0.7rem;margin-left:-0.4rem;}
+.stars button{background:none;border:none;padding:0.5rem 0.4rem;cursor:pointer;color:var(--text3);line-height:0;min-height:44px;min-width:44px;display:inline-flex;align-items:center;justify-content:center;}
 .stars button.on{color:var(--accent);}
 .stars button .icon-svg{width:1.6rem;height:1.6rem;}
 .stars button.on .icon-svg{fill:currentColor;}
@@ -379,6 +379,8 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 /* ── Feed toolbar / Map ── */
 .feed-toolbar{display:flex;gap:0.5rem;margin:0 0 0.9rem;}
 .feed-toolbar .btn-ghost{margin:0;flex:none;width:auto;}
+.btn-quiet{color:var(--text3);border-color:transparent;}
+.btn-quiet:hover{color:var(--text2);border-color:var(--border);}
 .map-card{display:none;border-radius:var(--r-lg);overflow:hidden;margin-bottom:1.1rem;border:1px solid var(--border);background:var(--surface);}
 .map-card.show{display:block;animation:fade 0.3s;}
 .map-card-head{display:flex;align-items:center;justify-content:space-between;padding:0.7rem 0.9rem;background:linear-gradient(90deg,rgba(245,158,11,0.14),transparent);border-bottom:1px solid var(--border);}
@@ -536,8 +538,12 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
       <div class="screen-title">Live Bids</div>
       <div class="screen-sub" id="feed-sub">Bids you've found. New scans add to this list.</div>
       <div class="feed-toolbar">
-        <button class="btn-ghost" id="clear-feed" style="display:none;">Clear all bids</button>
+        <!-- Export first. "Clear all bids" is the destructive one and it had
+             the leftmost, most-tapped position on the screen, ahead of the
+             action people actually want. It confirms before wiping, so this
+             is about not inviting the tap in the first place. -->
         <button class="btn-ghost" id="export-feed-btn" style="display:none;">Export</button>
+        <button class="btn-ghost btn-quiet" id="clear-feed" style="display:none;">Clear all bids</button>
       </div>
       <div class="filter-row" id="filter-row" style="display:none;">
         <input id="feed-search" placeholder="Search title or scope..." />
@@ -3139,7 +3145,12 @@ async function runScan(force){
       ms:Date.now()-startedAt,total,added,cached:!!d.cached,debug:d.debug||null,
     });
     const cachedNote=d.cached?" (today\u2019s saved result \u2014 use Force a fresh scan to re-search)":"";
-    if(total>0){
+    // Two sources of truth for one question: total_bids is counted on the
+    // server, `added` is what mergeOpenBids actually put in the list. They
+    // agree today. If they ever stop agreeing, the failure is a screen saying
+    // "nothing open near you" while the Bids tab fills up behind it, which
+    // reads as a broken app. Whatever reached the list wins.
+    if(total>0||added>0){
       status.textContent=`Done \u2014 ${added} new open bid(s) added near ${d.location||location}.`+cachedNote;
       // The effort belongs on a SUCCESSFUL scan too, not only an empty one.
       // "12 bids" says nothing about what it cost to find them.
@@ -4278,6 +4289,17 @@ async function loadReferralCard(){
     };
   }catch(e){el.textContent="Couldn't load your referral link right now.";}
 }
+// First letter of whoever this is -- their contact name if they gave one,
+// otherwise their email. The placeholder circle had centring and a font size
+// and nothing to centre, so an account with no photo showed a bare grey ring
+// that reads as an image that failed to load.
+function avatarInitial(){
+  const src=String((companyProfile&&companyProfile.contact)||"").trim()
+           ||String((currentUser&&currentUser.email)||"").trim();
+  const ch=src.charAt(0);
+  return ch?ch.toUpperCase():"\u00b7";
+}
+
 function renderAccount(){
   const body=document.getElementById("account-body");
   const email=currentUser?.email||"";
@@ -4298,12 +4320,12 @@ function renderAccount(){
   body.innerHTML=`
     <div class="account-card" style="display:flex;align-items:center;gap:0.9rem;">
       ${companyProfile.avatar_url?`<img class="avatar-lg" src="${esc(companyProfile.avatar_url)}" alt=""
-           onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'avatar-placeholder'}))">`
-        :`<div class="avatar-placeholder"></div>`}
+           onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'avatar-placeholder',textContent:this.dataset.initial||''}))" data-initial="${esc(avatarInitial())}">`
+        :`<div class="avatar-placeholder">${esc(avatarInitial())}</div>`}
       <div style="flex:1;min-width:0;">
         <div class="account-email">${esc(email)}</div>
         <div class="account-status">Signed in with ${currentUser?.app_metadata?.provider||"email"}${created?` &middot; Member since ${esc(created)}`:""}</div>
-        <label class="btn-ghost" for="avatar-input" style="display:inline-block;margin-top:0.5rem;padding:0.4rem 0.8rem;font-size:var(--fs-sm);cursor:pointer;">Change Photo</label>
+        <label class="btn-ghost" for="avatar-input" style="display:inline-flex;align-items:center;justify-content:center;margin-top:0.5rem;padding:0 0.9rem;min-height:44px;width:auto;font-size:var(--fs-sm);cursor:pointer;">Change Photo</label>
         <input type="file" id="avatar-input" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none;" />
       </div>
     </div>
@@ -4317,7 +4339,7 @@ function renderAccount(){
       </div>
       <div class="account-status" style="margin-top:0.7rem;display:flex;align-items:center;justify-content:space-between;">
         <span>${esc(syncText)}</span>
-        <a href="#" id="sync-now-link" style="color:var(--amber);">Sync now</a>
+        <a href="#" id="sync-now-link" style="color:var(--amber);display:inline-flex;align-items:center;min-height:44px;padding:0 0.25rem;">Sync now</a>
       </div>
     </div>
     ${isAdmin?renderDiagnostics():""}
@@ -4328,7 +4350,7 @@ function renderAccount(){
     <div class="account-card">
       <div style="font-size:var(--fs-base);font-weight:700;display:flex;flex-wrap:wrap;gap:0.5rem;justify-content:space-between;align-items:center;">
         <span class="hdr-ic" style="white-space:nowrap;"><svg class="icon-svg"><use href="#i-briefcase"/></svg>Company Info</span>
-        ${companyEditMode?"":`<button class="btn-ghost hdr-ic" id="co-edit-btn" style="padding:0.35rem 0.8rem;font-size:var(--fs-sm);flex-shrink:0;justify-content:center;"><svg class="icon-svg"><use href="#i-pencil"/></svg>Edit</button>`}
+        ${companyEditMode?"":`<button class="btn-ghost hdr-ic" id="co-edit-btn" style="padding:0.35rem 0.9rem;min-height:44px;font-size:var(--fs-sm);flex-shrink:0;justify-content:center;align-items:center;"><svg class="icon-svg"><use href="#i-pencil"/></svg>Edit</button>`}
       </div>
       <div class="account-status" style="margin-bottom:0.7rem;">Used to personalize AI-drafted bid proposals, and Contact Person is shown in the corner up top instead of your email. Nothing here is shared beyond that.</div>
       ${companyEditMode?`
