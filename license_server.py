@@ -813,10 +813,13 @@ def account_delete():
     account left to log in and stop it. Better to send them to the billing
     portal first and have them come back.
 
-    The trial record goes too. That does mean deleting an account frees up a
-    fresh trial on the same email, which is a real trade: the alternative is
-    keeping a record of someone who asked to be forgotten, and a seven-day
-    trial is not worth that.
+    The trial record goes too, filed under the plus-stripped identity that
+    _trial_identity() produces rather than the address as typed. That does
+    mean deleting an account frees up a fresh trial on the same email, which
+    is a real trade: the alternative is keeping a record of someone who asked
+    to be forgotten, and a seven-day trial is not worth that. The trade is the
+    same one for a tagged address -- it just was not honoured for those, which
+    is the bug this note exists to stop coming back.
     """
     data = request.get_json(force=True, silent=True) or {}
     user = _supabase_user(data.get("supabase_token", ""))
@@ -841,6 +844,14 @@ def account_delete():
     # exists, and stripping its trial and licence out from under it would
     # leave a working login with no entitlements.
     trials = db.setdefault("trials", {})
+    # Pop the key the trial was FILED under, which is the plus-stripped
+    # identity -- not the raw address. These are the same string for an
+    # ordinary email and different for a tagged one, so josh+test@gmail.com
+    # deleted its account and left its trial row behind, with the full tagged
+    # address still stored inside it. The function whose whole purpose is to
+    # forget someone was keeping their email.
+    trials.pop(f"email:{_trial_identity(email)}", None)
+    # The raw form too: rows written before this was fixed are filed that way.
     trials.pop(f"email:{email}", None)
     if device:
         trials.pop(device, None)
