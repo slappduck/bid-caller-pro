@@ -1944,9 +1944,9 @@ async function checkSavedSearches(){
     }catch(e){}
   }
   if(newTotal>0){
-    toast(`${newTotal} new bid(s) from your saved searches!`);
+    toast(`${plural(newTotal,"new bid")} from your saved searches!`);
     showFeedBadge(true);
-    fireNotification("CurbCall Pro — New Bids",`${newTotal} new bid(s) from your saved searches.`);
+    fireNotification("CurbCall Pro — New Bids",`${plural(newTotal,"new bid")} from your saved searches.`);
     if(document.getElementById("screen-feed").classList.contains("active"))renderFeed();
   }
 }
@@ -3000,6 +3000,12 @@ function startScanProgress(wrapId,barId,opts){
 // signal is bad -- when it is not -- sends them to reboot a router instead of
 // tapping the button again ten seconds later. The browser already knows which
 // case it is, so ask it.
+// "3 bid(s)" is how a form letter counts. The app knows the number, so it
+// can say the word: plural(1,"bid") -> "1 bid", plural(3,"bid") -> "3 bids".
+function plural(n,word,plural_){
+  return n+" "+(Math.abs(n)===1?word:(plural_||word+"s"));
+}
+
 function offlineOrServer(){
   return navigator.onLine
     ? "Couldn\u2019t reach the bid service \u2014 it may be restarting. "
@@ -3167,11 +3173,11 @@ async function runScan(force){
     // "nothing open near you" while the Bids tab fills up behind it, which
     // reads as a broken app. Whatever reached the list wins.
     if(total>0||added>0){
-      status.textContent=`Done \u2014 ${added} new open bid(s) added near ${d.location||location}.`+cachedNote;
+      status.textContent=`Done \u2014 ${plural(added,"new open bid")} added near ${d.location||location}.`+cachedNote;
       // The effort belongs on a SUCCESSFUL scan too, not only an empty one.
       // "12 bids" says nothing about what it cost to find them.
       renderScanEffort(d,Math.round((Date.now()-startedAt)/1000));
-      toast(added>0?`Added ${added} new bid(s)!`:"No new bids \u2014 already in your list.");
+      toast(added>0?`Added ${plural(added,"new bid")}!`:"No new bids \u2014 already in your list.");
       cityFilter="All";goTo("feed");
     }else{
       // An empty result used to be one grey sentence telling the user to go
@@ -3261,9 +3267,9 @@ async function runUpcoming(){
     recordRunDuration("upcoming",prog.elapsed());
     store.set("upcoming_feed",upcomingData);queueFeedPush();
     status.textContent=(d.total||0)>0
-      ?`Done — found ${d.total} planned project(s) near ${d.location||location}.`
+      ?`Done — found ${plural(d.total,"planned project")} near ${d.location||location}.`
       :"Nothing planned turned up yet. Try a wider radius.";
-    if(added>0)toast(`Added ${added} planned project(s)!`);
+    if(added>0)toast(`Added ${plural(added,"planned project")}!`);
     renderUpcoming();
   }catch(e){
     clearTimeout(killer);
@@ -3397,9 +3403,9 @@ async function runLeads(){
     recordRunDuration("leads",prog.elapsed());
     store.set("leads_feed",leadsData);queueFeedPush();
     status.textContent=(d.total||0)>0
-      ?`Done — found ${d.total} residential lead(s) near ${d.location||location}.`
+      ?`Done — found ${plural(d.total,"residential lead")} near ${d.location||location}.`
       :"No recent driveway/sidewalk permits in this area. Try a wider radius.";
-    if(added>0)toast(`Added ${added} new lead(s)!`);
+    if(added>0)toast(`Added ${plural(added,"new lead")}!`);
     renderLeads();
   }catch(e){
     clearTimeout(killer);
@@ -3604,7 +3610,7 @@ function renderFeed(){
   const cities=Object.keys(bidData).filter(c=>(bidData[c]||[]).some(isOpen));
   const total=cities.reduce((n,c)=>n+bidData[c].filter(isOpen).length,0);
   document.getElementById("feed-sub").textContent=total
-    ?`${total} open bid(s) across ${cities.length} town(s). New scans add more.`
+    ?`${plural(total,"open bid")} across ${plural(cities.length,"town")}. New scans add more.`
     :"Bids you've found. New scans add to this list.";
   clearBtn.style.display=total?"block":"none";
   filterRow.style.display=total?"flex":"none";
@@ -3678,7 +3684,7 @@ function exportCSV(rows,filename){
   const a=document.createElement("a");
   a.href=url;a.download=filename+"_"+Date.now()+".csv";document.body.appendChild(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
-  toast("Exported "+rows.length+" bid(s)");
+  toast("Exported "+plural(rows.length,"bid"));
 }
 
 function bidCard(city,b){
@@ -4735,7 +4741,7 @@ async function renderAdminPanel(){
     <div class="account-email hdr-ic" style="font-size:var(--fs-base);margin-bottom:0.5rem;"><svg class="icon-svg"><use href="#i-mail"/></svg>Campaign Drafts</div>
     ${drafts.drafts.length?drafts.drafts.map(d=>`
       <div class="detail-row" style="align-items:center;">
-        <div class="detail-label" style="flex:1;">${esc(d.subject||"Untitled")} &mdash; ${d.recipients} recipient(s)</div>
+        <div class="detail-label" style="flex:1;">${esc(d.subject||"Untitled")} &mdash; ${plural(d.recipients,"recipient")}</div>
         <button class="btn-ghost" data-draft-send="${esc(d.draft_id)}" style="color:var(--green);border-color:var(--green);padding:0.3rem 0.7rem;font-size:var(--fs-sm);flex-shrink:0;">Send</button>
         <button class="btn-ghost" data-draft-discard="${esc(d.draft_id)}" style="color:var(--red);border-color:var(--red);padding:0.3rem 0.7rem;font-size:var(--fs-sm);flex-shrink:0;">Discard</button>
       </div>`).join(""):`<div class="account-status" style="margin-bottom:0.8rem;">No drafts waiting.</div>`}
@@ -4767,7 +4773,7 @@ async function renderAdminPanel(){
   mc.querySelectorAll("[data-draft-send]").forEach(b=>b.onclick=async()=>{
     if(!confirm("Send this campaign now? This cannot be undone."))return;
     const r=await adminCall("/campaign/approve",{draft_id:b.dataset.draftSend,confirm:true});
-    if(r.ok)toast(`Sent to ${r.sent} recipient(s)${r.failed?`, ${r.failed} failed`:""}`);
+    if(r.ok)toast(`Sent to ${plural(r.sent,"recipient")}${r.failed?`, ${r.failed} failed`:""}`);
     // "Send failed" would be a guess here: the request may well have reached
     // the server. Say what is actually known before anyone clicks again.
     else if(r.reason==="network_error")toast("Lost connection \u2014 check Drafts before resending");

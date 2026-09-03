@@ -331,7 +331,7 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
         <g id="mbids"></g>
       </svg>
       <div class="mapfoot">
-        <div class="mcount"><span id="mn">0</span> bids
+        <div class="mcount"><span id="mn">0</span> <span id="mnw">bids</span>
           <small>found near Springfield, MO</small></div>
         <div class="mfound" id="mfound"></div>
       </div>
@@ -662,7 +662,11 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
     {x:88, y:152,t:"Concrete Street Repair",w:"Republic, MO",   d:"Due Aug 3"},
     {x:250,y:58, t:"Trail Paving Phase 2",  w:"Willard, MO",    d:"Due Aug 14"}];
   const bg=document.getElementById("mbids"), found=document.getElementById("mfound"),
-        nEl=document.getElementById("mn");
+        nEl=document.getElementById("mn"),
+        // The counter runs 0,1,2... under a hard-coded "bids", so the hero
+        // said "1 bids" on every pass of the loop.
+        nWord=document.getElementById("mnw");
+  const setCount=v=>{nEl.textContent=v;nWord.textContent=(v===1?"bid":"bids");};
   // Outer <g> holds the translate attribute, inner <g> takes the scale
   // animation -- a CSS transform replaces the SVG attribute outright, which
   // would stack every marker at the origin.
@@ -687,10 +691,10 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
     d.querySelector("i").textContent=b.d;
     found.appendChild(d);
     while(found.children.length>3)found.removeChild(found.firstChild);
-    nEl.textContent=++n;idx++;timer=setTimeout(reveal,760);
+    setCount(++n);idx++;timer=setTimeout(reveal,760);
   }
   function reset(){markers.forEach(m=>m.classList.remove("on"));
-    found.innerHTML="";n=0;idx=0;nEl.textContent="0";timer=setTimeout(reveal,900);}
+    found.innerHTML="";n=0;idx=0;setCount(0);timer=setTimeout(reveal,900);}
   // Only run while on screen -- a hero animating behind six sections is
   // wasted battery on a phone.
   new IntersectionObserver(es=>{for(const e of es){
