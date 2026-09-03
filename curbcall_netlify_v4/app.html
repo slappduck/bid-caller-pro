@@ -60,13 +60,33 @@
 }
 html,body{height:100%;}
 body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidden;position:fixed;width:100%;-webkit-font-smoothing:antialiased;}
-#app{height:100dvh;display:flex;flex-direction:column;}
+/* inset:0 on a fixed element is exactly the viewport, safe areas included,
+   with no unit to resolve. height:100dvh was leaving a band of page
+   background below the nav once installed to the Home Screen: the shell came
+   out shorter than the screen, so the nav floated above the bottom edge
+   instead of sitting on it. body is already position:fixed, so this changes
+   nothing about how the page scrolls -- .screens is still the one scroll
+   container. */
+#app{position:fixed;inset:0;display:flex;flex-direction:column;}
 
 /* ── Auth screen ── */
 #auth-screen{
   position:fixed;inset:0;z-index:100;background:var(--bg);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  padding:2rem 1.5rem;
+  display:flex;flex-direction:column;align-items:center;
+  /* Scrolls, and starts at the top rather than centring.
+     The signup card is the tallest thing here -- Google button, name, email,
+     password, terms checkbox, two buttons and the sign-in link -- and on a
+     phone it is taller than the screen. There was no overflow anywhere (body
+     is position:fixed;overflow:hidden), so it simply could not be reached.
+     justify-content:center made that worse rather than better: a flex
+     container centring content taller than itself overflows BOTH ends, and
+     the top of an overflowed flex line cannot be scrolled to. That clipped
+     the logo above and the "Already have an account?" link below at the same
+     time. flex-start keeps every pixel reachable. */
+  justify-content:flex-start;
+  overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding:calc(env(safe-area-inset-top) + 2rem) 1.5rem
+          calc(env(safe-area-inset-bottom) + 2rem);
 }
 .auth-logo{font-family:'Bebas Neue',sans-serif;font-size:var(--fs-4xl);letter-spacing:0.06em;margin-bottom:0.2rem;}
 .auth-logo span{color:var(--accent);}

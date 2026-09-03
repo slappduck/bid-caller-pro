@@ -223,3 +223,55 @@ class HiddenLeadsTabTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AuthScreenIsReachableTests(unittest.TestCase):
+    """The sign-up card is taller than a phone screen and had nowhere to go.
+
+    body is position:fixed;overflow:hidden, and #auth-screen had no overflow
+    of its own, so anything past the fold was simply unreachable. It was
+    centred as well, and a flex container centring content taller than itself
+    overflows both ends -- the top of an overflowed flex line cannot be
+    scrolled to at all. The logo above and the "Already have an account?"
+    link below were clipped at the same time, on the one screen a new
+    customer has to get through.
+    """
+
+    def setUp(self):
+        here = os.path.dirname(os.path.abspath(__file__))
+        with open(os.path.join(here, os.pardir, "curbcall_netlify_v4",
+                               "app.html"), encoding="utf-8") as f:
+            self.src = f.read()
+
+    def _rule(self, selector):
+        """The declarations of one rule, comments removed.
+
+        The comments in these rules quote the bad values they replaced, so
+        matching raw text would find "justify-content:center" in a sentence
+        explaining why it is gone.
+        """
+        i = self.src.index(selector + "{")
+        body = self.src[i:self.src.index("}", i)]
+        return re.sub(r"/\*.*?\*/", "", body, flags=re.S)
+
+    def test_the_auth_screen_can_scroll(self):
+        self.assertIn("overflow-y:auto", self._rule("#auth-screen"))
+
+    def test_the_auth_screen_is_not_centre_justified(self):
+        """Centring is what makes the top unreachable once it overflows."""
+        self.assertNotIn("justify-content:center", self._rule("#auth-screen"))
+
+    def test_the_auth_screen_clears_the_notch_and_home_indicator(self):
+        rule = self._rule("#auth-screen")
+        self.assertIn("env(safe-area-inset-top)", rule)
+        self.assertIn("env(safe-area-inset-bottom)", rule)
+
+    def test_the_app_shell_covers_the_whole_viewport(self):
+        """100dvh left a band of page background below the nav once
+        installed. A fixed element with inset:0 has no unit to resolve."""
+        rule = self._rule("#app")
+        self.assertIn("position:fixed", rule)
+        self.assertIn("inset:0", rule)
+
+    def test_the_shell_still_has_exactly_one_scroll_container(self):
+        self.assertIn("flex:1;overflow-y:auto", self._rule(".screens"))
