@@ -709,3 +709,79 @@ So "47 states of hand work" was too optimistic a framing. The real options:
 PDF reading was proven along the way and is worth remembering even though
 Ohio did not need it: `pypdf` is available and extracts ODOT's letting
 documents cleanly, counties intact.
+
+### Phase 6, fifth pass — a fourth state, and the licensing lane closes (2026-09-03)
+
+Colorado is live: 5 placeable rows, the first new state since Alabama.
+
+It was not found by crawling harder. It was already in the crawl's reach and
+being **discarded**. `discover_state_sources.py` chose between candidate pages
+with `listing_score()` -- dated, repeated, project-shaped rows -- and Colorado's
+awards spreadsheet outscored its real "Current & Future Bidding Opportunities"
+page. The same mechanism had South Dakota on a fuel price index (295 dated rows
+of diesel prices), Nebraska on "Policies and Forms", Wyoming on concrete mix
+designs and Maryland on a table of contract size brackets.
+
+`verify_state_sources.py` already knew how to settle this -- run the production
+parser, count rows that survive placement -- but it ran *after* discovery had
+picked. That measurement now decides the pick. Twelve states were pointed at
+pages that could not produce a bid; re-crawling with yield ranking moved one of
+them into production and recorded the rest honestly.
+
+**A latent bug found on the way, worse than the coverage miss.** `kind` was
+missing from the CSV field list in `main()` while the file carried the column,
+so every run of the discovery tool silently blanked it -- and `kind=index` is
+the only thing keeping Alabama resolvable, since its listing URL changes
+address every letting. Any future run would have killed Alabama's 13 rows
+without a word.
+
+**The Bid Express lane is now closed, with an answer rather than a guess.**
+The fourth pass recommended requesting API access. That was done. Infotech
+support (ticket #62120, Alexis Lawson, 2026-09-01):
+
+> "We currently do not have API access for vendors on Bid Express."
+
+Sales was looped in and replied with the Bidx.com / Bidexpress.com product
+split and links to their fee schedules -- a bidder-acquisition answer, not a
+data-licensing one. Their model is selling software to agencies plus fees from
+bidders; a read-only feed to a third-party aggregator works against the second
+half of that. Treat the lane as closed unless they initiate.
+
+One useful fact did come out of it: **bidexpress.com solicitations are free to
+view** once registered; payment is for bid submission. So the paywall is on
+submitting, not on seeing the work.
+
+**Re-run of the third-hop experiment -- do not do this again.** Three hops over
+the 14 crawlable states returned 0. The fourth pass above already recorded the
+same result over all 48. Deeper crawling is settled: it does not work.
+
+**Texas, worked by hand, is dead rather than difficult.** The old notice tree
+on `dot.state.tx.us` publishes a clean labelled-field format that the parser
+could read with a small addition (`Seq No: 3002 County: COLLIN ... Work Type:
+SEAL COAT`, 22 blocks per page). It has not been updated since **January
+2025**. The live site is `txdot.gov`, JavaScript-driven. Do not write a parser
+for the legacy format.
+
+**Where the remaining 45 states actually stand**, measured 2026-09-03 by
+probing each DOT's own bid pages for third-party portal links:
+
+| | states |
+|---|---|
+| Lettings on Infotech platforms (Bidx / Bid Express) | 9 confirmed by link, ~44 by the fourth pass's count |
+| Root serves a JavaScript shell -- little or no crawlable text | AZ, GA, NC, SC, MN and others |
+| Refuse the honest crawler, or robots.txt disallows | KS MA ME MI NH NV / NY VA VT |
+| Crawlable, listing still not located | ~14 |
+
+Arizona deserves a footnote because it looks like a filter bug and is not one.
+`_SKIP_RE` contains "specification", which rejected
+`/business/contracts-and-specifications/current-advertisements` on a word in
+its *path*. Fixing that reaches the page -- which is itself a JavaScript shell
+carrying 1,160 characters of text and zero rows. The filter flaw is real and
+worth fixing if it ever costs a live state; today it costs nothing.
+
+**Carry forward:** the state lever is at four states and the ceiling is
+structural, not effort-limited. The local-agency corpus (6,869 verified pages)
+is the differentiated asset -- platform aggregators are bounded by their own
+customer lists and cannot reach a township that posts a PDF on its own site.
+Effort is better spent there, or on making existing bids better, than on a
+fifth state.
