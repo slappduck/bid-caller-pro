@@ -559,3 +559,48 @@ class FormsAreLabelledTests(unittest.TestCase):
         for tag in re.findall(r"<select[^>]*>", self.src):
             self.assertTrue("aria-label=" in tag or "aria-labelledby=" in tag,
                             f"unlabelled select: {tag}")
+
+
+class ResultMessagesMatchTheScreenTests(unittest.TestCase):
+    """Neither results screen may describe something the customer cannot see.
+
+    Both had the same split: a count from the server decided the sentence,
+    while the list underneath was built from a different field of the same
+    response. When those disagree the app reports success over an empty
+    panel, which reads as broken rather than quiet.
+    """
+
+    def setUp(self):
+        here = os.path.dirname(os.path.abspath(__file__))
+        with open(os.path.join(here, os.pardir, "curbcall_netlify_v4",
+                               "app.html"), encoding="utf-8") as f:
+            self.src = re.sub(r"//.*$", "", f.read(), flags=re.M)
+
+    def test_the_scan_counts_what_it_added(self):
+        self.assertIn("if(total>0||added>0){", self.src)
+
+    def test_upcoming_counts_what_is_on_the_tab(self):
+        self.assertIn("const onTab=Object.values(upcomingData||{})", self.src)
+        self.assertIn("status.textContent=onTab>0", self.src)
+
+    def test_upcoming_no_longer_trusts_the_server_count_alone(self):
+        self.assertNotIn("status.textContent=(d.total||0)>0", self.src)
+
+
+class NavigationClosesAnyOpenSheetTests(unittest.TestCase):
+    """A modal is 85% of the screen tall and covers the nav, so a person
+    cannot navigate out from under one -- but code can, and a refused
+    request calls goTo("account")."""
+
+    def setUp(self):
+        here = os.path.dirname(os.path.abspath(__file__))
+        with open(os.path.join(here, os.pardir, "curbcall_netlify_v4",
+                               "app.html"), encoding="utf-8") as f:
+            self.src = f.read()
+
+    def test_switch_screen_closes_the_modal(self):
+        i = self.src.index("function switchScreen(s){")
+        head = self.src[i:i + 700]
+        self.assertIn("closeModal()", head)
+        self.assertLess(head.index("closeModal()"),
+                        head.index('document.getElementById("screen-"+s)'))

@@ -1735,6 +1735,11 @@ function observeMapSize(obj){
 // works regardless of whether a nav-btn exists for that screen.
 function switchScreen(s){
   if(s==="leads"&&!LEADS_ENABLED)s="scan";
+  // A modal is a bottom sheet 85% of the screen tall, so it covers the nav
+  // and a person cannot normally navigate out from under one. Code can,
+  // though -- a refused request calls goTo("account") -- and that would
+  // leave the sheet hanging over a screen it has nothing to do with.
+  if(typeof closeModal==="function")closeModal();
   document.querySelectorAll(".nav-btn").forEach(x=>x.classList.toggle("active",x.dataset.s===s));
   document.querySelectorAll(".screen").forEach(x=>x.classList.remove("active"));
   document.getElementById("screen-"+s).classList.add("active");
@@ -3274,8 +3279,14 @@ async function runUpcoming(){
     }
     recordRunDuration("upcoming",prog.elapsed());
     store.set("upcoming_feed",upcomingData);queueFeedPush();
-    status.textContent=(d.total||0)>0
-      ?`Done — found ${plural(d.total,"planned project")} near ${d.location||location}.`
+    // Count what is actually on the tab, not what the server said it found.
+    // The same split as the scan path: d.total is the server's number and the
+    // list is built from d.items, so a shape mismatch between them shows
+    // "found 2 planned projects" above a panel reading "Nothing yet". Whatever
+    // the customer can see is what the sentence describes.
+    const onTab=Object.values(upcomingData||{}).reduce((n,v)=>n+(v||[]).length,0);
+    status.textContent=onTab>0
+      ?`Done — found ${plural(onTab,"planned project")} near ${d.location||location}.`
       :"Nothing planned turned up yet. Try a wider radius.";
     if(added>0)toast(`Added ${plural(added,"planned project")}!`);
     renderUpcoming();
@@ -3410,8 +3421,12 @@ async function runLeads(){
     leadsData[city]=have;
     recordRunDuration("leads",prog.elapsed());
     store.set("leads_feed",leadsData);queueFeedPush();
-    status.textContent=(d.total||0)>0
-      ?`Done — found ${plural(d.total,"residential lead")} near ${d.location||location}.`
+    // Same rule as Find and Upcoming: count what is on the tab, not what the
+    // server reported. This flow is behind LEADS_ENABLED today; leaving the
+    // one inconsistent copy behind is how it comes back when that flips.
+    const onTab=Object.values(leadsData||{}).reduce((n,v)=>n+(v||[]).length,0);
+    status.textContent=onTab>0
+      ?`Done — found ${plural(onTab,"residential lead")} near ${d.location||location}.`
       :"No recent driveway/sidewalk permits in this area. Try a wider radius.";
     if(added>0)toast(`Added ${plural(added,"new lead")}!`);
     renderLeads();
