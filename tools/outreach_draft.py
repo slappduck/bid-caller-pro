@@ -101,12 +101,35 @@ def coverage(city, state):
         return None
 
 
-def _looks_like_the_right_town(data, city):
-    """The nearest agency should be in the prospect's own city.
+# The nearest agency has to be close enough that the prospect would recognise
+# it as their own patch. Thirty miles is inside the distance these contractors
+# already drive for a curb job.
+NEAR_ENOUGH_MI = 30.0
 
-    This is the check that would have caught Frankfort: the count came back
-    fine, but `nearest` was full of towns 150 miles away.
+
+def _looks_like_the_right_town(data, city):
+    """Did the location resolve to somewhere near this contractor?
+
+    Frankfort is what this is for: /coverage answered 8 for Frankfort, IL
+    because three Illinois places share the name and the geocoder averaged
+    them into a field 150 miles away.
+
+    This used to test whether the prospect's own town appeared among the
+    three nearest agencies, and that proxy failed in both directions. It held
+    Morici Bros because Milwaukee's three closest entries are Whitefish Bay,
+    South Milwaukee and New Berlin -- suburbs, all within fifteen miles. It
+    held Clauss Brothers because Skippack has no bid page of its own, though
+    Lansdale is eight miles down the road. Both locations had resolved
+    perfectly, and both were the best-fitting prospects on the list.
+
+    The real question was never "is this town in the list" but "how far away
+    is the nearest work", so /coverage returns that distance and this reads
+    it. Falls back to the old name test when talking to a server that has not
+    been deployed yet.
     """
+    near_mi = data.get("nearest_mi")
+    if isinstance(near_mi, (int, float)):
+        return near_mi <= NEAR_ENOUGH_MI
     nearest = data.get("nearest") or []
     if not nearest:
         return False
@@ -114,7 +137,7 @@ def _looks_like_the_right_town(data, city):
     return any(want == n.split(",")[0].strip().lower() for n in nearest[:3])
 
 
-def brief(row, agencies, nearest):
+def brief(row, agencies, nearest, nearest_mi=None):
     """The facts for one prospect. The email gets written by a person."""
     return {
         "slug": row["slug"],
@@ -126,6 +149,7 @@ def brief(row, agencies, nearest):
         "link": f"{SITE}/go/{row['slug']}",
         "angle": row["intro"],
         "nearest": nearest,
+        "nearest_mi": nearest_mi,
     }
 
 
@@ -171,7 +195,8 @@ def main():
         if n < MIN_AGENCIES:
             held.append((row, f"only {n} agencies — too thin to lead with"))
             continue
-        drafts.append(brief(row, n, (data.get("nearest") or [])[:4]))
+        drafts.append(brief(row, n, (data.get("nearest") or [])[:4],
+                            data.get("nearest_mi")))
 
     if args.json:
         print(json.dumps({"drafts": drafts,
@@ -187,6 +212,8 @@ def main():
         print(f"  the fact  {d['agencies']} agencies within {RADIUS} miles")
         print(f"  link      {d['link']}")
         print(f"  angle     {d['angle']}")
+        if d.get("nearest_mi") is not None:
+            print(f"  closest   {d['nearest_mi']} miles away")
         if d["nearest"]:
             print(f"  nearby    {', '.join(d['nearest'])}")
         print()

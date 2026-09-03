@@ -406,6 +406,16 @@ def coverage():
         # plainly in the UI rather than quietly inflating the number.
         "agencies": len(towns),
         "nearest": [f"{c}, {s}" for c, s, _, _ in towns[:8]],
+        # How far the closest one actually is. Without this a caller can only
+        # test whether the asked-for town appears in `nearest`, which is a
+        # bad proxy: Skippack PA has no bid page of its own and its three
+        # closest are Lansdale, Conshohocken and Souderton -- all inside ten
+        # miles, and the location resolved perfectly. That test also passes
+        # things it should not. The honest question is "how far is the
+        # nearest work", and that is a number, so return it.
+        "nearest_mi": (round(_miles_between(center["lat"], center["lon"],
+                                            towns[0][2], towns[0][3]), 1)
+                       if towns else None),
     })
 
 
