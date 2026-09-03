@@ -363,6 +363,64 @@ def _recent_scans(limit=None):
         return []
 
 
+# ── Outreach link clicks, counted first-party ──
+#
+# /go/<slug> is a 200 rewrite to the landing page, one slug per contractor
+# emailed, so the address bar identifies the recipient without a second page
+# existing. Counting those visits was left to Cloudflare Web Analytics, which
+# is a third-party JavaScript beacon: ad blockers strip it, and the reported
+# number is therefore a fraction of the truth with no way to tell what
+# fraction. Eight clicks read as "nobody opened it" when the real figure was
+# unknowable.
+#
+# This counts the same visits from the page to its own backend. A first-party
+# request to the domain the reader is already on survives blockers that drop
+# a third-party script, the number lands in storage we own rather than a
+# retention window we rent, and reading it needs no Cloudflare credential.
+#
+# Deliberately stores no IP, no user agent and no timestamp per visit -- a
+# count and two dates per slug. It answers "did this contractor open it",
+# which is all the outreach needs, and nothing about who or from where.
+_CLICK_KEY = "bidcaller:go_clicks"
+# Slugs are ours, written into _redirects by hand. Anything else is noise or
+# someone poking the endpoint, and a cap stops either filling the store.
+_CLICK_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
+_CLICK_MAX_SLUGS = int(os.environ.get("CLICK_MAX_SLUGS", "500"))
+_click_lock = threading.Lock()
+
+
+@app.route("/click", methods=["POST"])
+def click():
+    """Record that someone opened a /go/<slug> outreach link.
+
+    Public and unauthenticated, like /coverage, because the page doing the
+    reporting is public. The blast radius of that is a wrong count on a
+    private dashboard, which is why nothing here is trusted for anything
+    else and why the store cannot grow without bound.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    slug = str(data.get("slug") or "").strip().lower()
+    if not _CLICK_SLUG_RE.match(slug):
+        return jsonify({"ok": False, "reason": "bad_slug"}), 400
+    now = datetime.datetime.now().isoformat(timespec="seconds")
+    with _click_lock:
+        store = kv_backend.get(_CLICK_KEY, None)
+        if not isinstance(store, dict):
+            store = {}
+        row = store.get(slug)
+        if not isinstance(row, dict):
+            if len(store) >= _CLICK_MAX_SLUGS:
+                # Full. Keep counting the slugs already known rather than
+                # letting an unknown one evict real data.
+                return jsonify({"ok": True, "recorded": False})
+            row = {"n": 0, "first": now}
+        row["n"] = int(row.get("n") or 0) + 1
+        row["last"] = now
+        store[slug] = row
+        kv_backend.set(_CLICK_KEY, store)
+    return jsonify({"ok": True, "recorded": True})
+
+
 @app.route("/coverage", methods=["POST"])
 def coverage():
     """How many verified bid pages we hold within a radius of somewhere.
@@ -1279,6 +1337,17 @@ def diag():
         "email_events": kv_backend.get(_EMAIL_EVENTS_KEY, None),
         "suppressed_count": len(_suppression()),
         "webhook_configured": bool(RESEND_WEBHOOK_SECRET),
+        # Outreach link opens, per recipient slug. Counted first-party, so
+        # unlike the Cloudflare beacon it is not silently reduced by ad
+        # blockers. Still a floor: a security scanner that runs JavaScript
+        # counts as an open, and a forwarded link spreads one slug over
+        # several readers.
+        #
+        # Behind the diag token on purpose. This says which named contractors
+        # opened a cold email -- their behaviour, not ours -- and it first
+        # went on /health, which is public and unauthenticated. A test caught
+        # it. Do not move it back.
+        "go_clicks": kv_backend.get(_CLICK_KEY, None),
         "last_scan": kv_backend.get("bidcaller:last_scan", None),
         "recent_scans": _recent_scans(request.args.get("scans")),
         "feed_audit": kv_backend.get(BID_AUDIT_KEY, None),

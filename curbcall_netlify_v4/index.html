@@ -744,5 +744,49 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
   document.head.appendChild(s);
 })();
 </script>
+
+<!-- Outreach link opens, counted first-party.
+     ================================================================
+     /go/<slug> serves this page, one slug per contractor emailed, and the
+     address bar keeps the slug. Counting those opens was left to the
+     Cloudflare beacon above, which is a third-party script: ad blockers
+     strip it, so the number it reports is some unknown fraction of the
+     truth. Eight opens read as "nobody looked" when nobody could actually
+     say.
+
+     This posts the slug to our own backend instead. A request to the domain
+     the reader is already on gets through blockers that drop a third-party
+     script, and the count lands somewhere we own.
+
+     Fires once per browser session: a reader who scrolls, opens the app and
+     comes back is one person, not three. Sends the slug and nothing else --
+     no identifier is generated here, and the server stores no address.
+
+     Never blocks or breaks the page: keepalive so it survives the click
+     straight through to the app, and every failure is swallowed. A dropped
+     count is worth nothing; a landing page that throws is worth less. -->
+<script>
+(function () {
+  var m = location.pathname.match(/^\/go\/([a-z0-9][a-z0-9_-]{0,31})\/?$/i);
+  if (!m) return;
+  var slug = m[1].toLowerCase();
+  try {
+    var seen = "cc_go_" + slug;
+    if (sessionStorage.getItem(seen)) return;
+    sessionStorage.setItem(seen, "1");
+  } catch (e) {
+    /* Private mode, or storage refused. Counting twice beats not at all. */
+  }
+  try {
+    fetch("https://bid-caller-pro.onrender.com/click", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug: slug }),
+      keepalive: true,
+      mode: "cors"
+    }).catch(function () {});
+  } catch (e) {}
+})();
+</script>
 </body>
 </html>
