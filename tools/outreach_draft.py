@@ -67,12 +67,23 @@ _ROOT = os.path.dirname(_HERE)
 PROSPECTS = os.path.join(_ROOT, "data", "outreach_prospects.csv")
 API = os.environ.get("CURBCALL_API", "https://bid-caller-pro.onrender.com")
 SITE = "https://curbcallpro.com"
-RADIUS = 50
 
-# Below this, the honest number argues against us. Chosen from the real
-# spread: Springfield MO sits at 12 and reads as sparse but real; Frankfort's
-# bogus 8 read as "not covered".
-MIN_AGENCIES = 10
+# Match the app. This quoted 50 while app.html defaults the Find radius to
+# 125, so every email undersold the product against the very screen the
+# recipient would open: Indianapolis reads 15 agencies at 50 miles and 93 at
+# 125, and two of the five emails already sent quoted the 15. The 125 default
+# is not arbitrary either -- it was benchmarked because at 25 miles seven of
+# eight metros returned an empty board, and a contractor will drive 100 miles
+# for a curb job.
+RADIUS = 125
+
+# Below this, the honest number argues against us. Re-set with RADIUS, since
+# a floor calibrated at 50 miles waves through anything at 125. Measured
+# across fifty metros: the thin end is Boise at 13 and Little Rock at 25,
+# while an ordinary market like Springfield MO is 51 and a strong one like
+# Milwaukee is 221. Thirty is the line below which the number stops making
+# the argument for us.
+MIN_AGENCIES = 30
 
 DAILY = 5
 
