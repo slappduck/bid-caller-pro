@@ -176,3 +176,17 @@ end $$;
 drop trigger if exists reviews_reset_approval_trg on reviews;
 create trigger reviews_reset_approval_trg before update on reviews
   for each row execute function reviews_reset_approval();
+
+-- Onboarding, remembered against the ACCOUNT rather than the browser.
+--
+-- The two setup questions were marked done in localStorage only. On iOS the
+-- installed Home Screen app and Safari keep separate storage, so the same
+-- person was asked in each one and reported that the app asks every time; a
+-- new phone or a cleared cache did the same. "create table if not exists"
+-- above never alters an existing table, so this is a separate ALTER.
+--
+-- The app degrades without it: accountHasOnboarded() falls back to "does this
+-- account have any company details filled in", which covers everyone who
+-- answered the second question but not someone who skipped both.
+alter table company_profiles
+  add column if not exists onboarded boolean default false;

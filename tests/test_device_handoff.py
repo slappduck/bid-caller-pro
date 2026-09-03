@@ -180,8 +180,13 @@ class GuardIsWiredInTests(unittest.TestCase):
         # matching that would compare a sentence against a call site.
         code = "\n".join(re.sub(r"//.*$", "", ln) for ln in handler.splitlines())
         self.assertIn("claimDeviceFor", code)
-        self.assertLess(code.index("claimDeviceFor"), code.index("showApp()"),
-                        "claimDeviceFor must run before showApp() reaches syncPullFeeds")
+        # Whatever routes into the app -- routeAfterAuth() today, showApp()
+        # before it -- must come after the claim, because that path is what
+        # reaches syncPullFeeds() and uploads whatever this browser holds.
+        entry = next((n for n in ("routeAfterAuth(", "showApp()") if n in code), None)
+        self.assertIsNotNone(entry, "no route into the app found in the handler")
+        self.assertLess(code.index("claimDeviceFor"), code.index(entry),
+                        f"claimDeviceFor must run before {entry} reaches syncPullFeeds")
 
 
 if __name__ == "__main__":

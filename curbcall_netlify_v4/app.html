@@ -91,6 +91,10 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .auth-logo{font-family:'Bebas Neue',sans-serif;font-size:var(--fs-4xl);letter-spacing:0.06em;margin-bottom:0.2rem;}
 .auth-logo span{color:var(--accent);}
 .auth-tagline{color:var(--text2);font-size:var(--fs-md);margin-bottom:2.2rem;text-align:center;}
+/* Two boxes side by side. They stack under 380px, where a half-width field
+   is narrower than the name going into it. */
+.name-row{display:grid;grid-template-columns:1fr 1fr;gap:0.6rem;margin-bottom:0.8rem;}
+@media (max-width:379px){.name-row{grid-template-columns:1fr;}}
 .auth-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:1.5rem;width:100%;max-width:360px;}
 .auth-title{font-size:var(--fs-xl);font-weight:800;margin-bottom:0.3rem;}
 .auth-sub{color:var(--text2);font-size:var(--fs-base);margin-bottom:1.4rem;}
@@ -719,8 +723,18 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 
     <div id="email-form">
       <div id="name-wrap">
-        <div class="field-label">Your name</div>
-        <input class="input" id="auth-name" placeholder="Jane Doe" style="margin-bottom:0.8rem;" />
+        <div class="name-row">
+          <div>
+            <div class="field-label">First name</div>
+            <input class="input" id="auth-first" autocomplete="given-name"
+                   placeholder="Jane" />
+          </div>
+          <div>
+            <div class="field-label">Last name</div>
+            <input class="input" id="auth-last" autocomplete="family-name"
+                   placeholder="Doe" />
+          </div>
+        </div>
       </div>
       <div class="field-label">Email</div>
       <input class="input" id="auth-email" type="email" inputmode="email" placeholder="you@example.com" />
@@ -1435,7 +1449,14 @@ function showPasswordReset(){
 // and consumed once, the first time a real session appears after signup.
 function capturePendingSignupName(){
   if(authMode!=="signup")return;
-  const name=(document.getElementById("auth-name").value||"").trim();
+  // Two fields, one stored value: everything downstream -- the proposal
+  // drafts, the Account screen, the contact line on a bid -- wants a person's
+  // name as they would write it, not two columns. Joined with whichever
+  // halves were actually filled in, so someone who gives only a first name
+  // does not get a trailing space stored.
+  const first=(document.getElementById("auth-first").value||"").trim();
+  const last=(document.getElementById("auth-last").value||"").trim();
+  const name=[first,last].filter(Boolean).join(" ");
   if(name)store.set("pending_signup_name",name);
 }
 
@@ -1550,8 +1571,7 @@ if(sb)sb.auth.onAuthStateChange((event,session)=>{
     store.set("has_account",true);
     applyPendingSignupName();
     checkAdminStatus();
-    if(onboardingNeeded())showOnboarding();
-    else showApp();
+    routeAfterAuth();
   } else {
     currentUser=null;
     store.set("last_user_email","");
@@ -2400,6 +2420,55 @@ function onbCheckCoverage(){
   },600);
 }
 
+// Where to land after a session appears: the app, or the two setup questions.
+//
+// onboardingNeeded() can only see THIS browser. On iOS the installed Home
+// Screen app and Safari keep separate storage, so the same person answered
+// the same questions in each and it read as "it asks every time". A new
+// phone, a cleared cache or a second computer did the same thing.
+//
+// So a local "not onboarded" is now treated as a question rather than an
+// answer, and the account is asked before anyone is interrupted.
+async function routeAfterAuth(){
+  if(!onboardingNeeded()){showApp();return;}
+  let done=false;
+  try{done=await accountHasOnboarded();}catch(e){done=false;}
+  if(done){store.set(ONBOARD_KEY,true);showApp();return;}
+  showOnboarding();
+}
+
+// Has this ACCOUNT been through setup, on any device?
+//
+// Never blocks the app on a slow network: if the answer does not arrive
+// quickly the caller falls back to what this browser knows, which is the
+// behaviour that shipped before this existed.
+async function accountHasOnboarded(){
+  if(!sb||!currentUser)return false;
+  const ask=(async()=>{
+    const{data,error}=await sb.from("company_profiles").select("*").maybeSingle();
+    if(error||!data)return false;
+    // The column arrives with a migration in supabase_sync_schema.sql. Until
+    // a project runs it the value is simply undefined, and the fallback below
+    // still recognises anyone who filled in any part of their company.
+    if(data.onboarded)return true;
+    return COMPANY_FIELDS.some(k=>data[k]);
+  })();
+  const timeout=new Promise(r=>setTimeout(()=>r(false),4000));
+  return Promise.race([ask,timeout]);
+}
+
+// Record it against the account, so the next device does not ask again.
+// Best effort on purpose: a project that has not run the migration rejects
+// the unknown column, and being unable to remember this must never stop
+// someone finishing setup.
+async function pushOnboarded(){
+  if(!sb||!currentUser||!currentUser.id)return;
+  try{
+    await sb.from("company_profiles")
+      .upsert({user_id:currentUser.id,onboarded:true},{onConflict:"user_id"});
+  }catch(e){/* stays local; the field fallback above still covers most cases */}
+}
+
 function showOnboarding(){
   document.getElementById("app").style.display="none";
   document.getElementById("auth-screen").style.display="";
@@ -2421,6 +2490,7 @@ function onbStep(n){
 
 function finishOnboarding(){
   store.set(ONBOARD_KEY,true);
+  pushOnboarded();
   document.getElementById("onboard-card").style.display="none";
   document.getElementById("auth-card").style.display="";
   showApp();

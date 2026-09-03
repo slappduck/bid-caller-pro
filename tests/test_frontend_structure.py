@@ -304,3 +304,66 @@ class PasswordRulesAgreeTests(unittest.TestCase):
         i = self.src.index("function showPasswordReset()")
         card = self.src[i:i + 1400]
         self.assertIn("At least 8 characters", card)
+
+
+class SignupNameIsTwoFieldsTests(unittest.TestCase):
+    def setUp(self):
+        here = os.path.dirname(os.path.abspath(__file__))
+        with open(os.path.join(here, os.pardir, "curbcall_netlify_v4",
+                               "app.html"), encoding="utf-8") as f:
+            self.src = f.read()
+
+    def test_first_and_last_name_are_separate_inputs(self):
+        self.assertIn('id="auth-first"', self.src)
+        self.assertIn('id="auth-last"', self.src)
+
+    def test_the_old_single_field_is_gone(self):
+        """Left behind, it would be a null getElementById in the capture."""
+        self.assertNotIn('id="auth-name"', self.src)
+        self.assertNotIn('"auth-name"', self.src)
+
+    def test_the_browser_can_autofill_both(self):
+        self.assertIn('autocomplete="given-name"', self.src)
+        self.assertIn('autocomplete="family-name"', self.src)
+
+    def test_they_are_stored_as_one_name(self):
+        """Everything downstream wants a person's name, not two columns."""
+        i = self.src.index("function capturePendingSignupName()")
+        fn = self.src[i:i + 900]
+        self.assertIn("filter(Boolean).join", fn)
+
+
+class OnboardingFollowsTheAccountTests(unittest.TestCase):
+    """It was marked done in localStorage only.
+
+    On iOS the installed Home Screen app and Safari keep separate storage, so
+    the same person answered the same two questions in each and reported that
+    the app asks every time. A second device or a cleared cache did the same.
+    """
+
+    def setUp(self):
+        here = os.path.dirname(os.path.abspath(__file__))
+        with open(os.path.join(here, os.pardir, "curbcall_netlify_v4",
+                               "app.html"), encoding="utf-8") as f:
+            self.src = re.sub(r"//.*$", "", f.read(), flags=re.M)
+        with open(os.path.join(here, os.pardir,
+                               "supabase_sync_schema.sql"), encoding="utf-8") as f:
+            self.sql = f.read()
+
+    def test_the_account_is_asked_before_anyone_is_interrupted(self):
+        i = self.src.index("async function routeAfterAuth()")
+        fn = self.src[i:i + 700]
+        self.assertIn("accountHasOnboarded", fn)
+        self.assertLess(fn.index("accountHasOnboarded"), fn.index("showOnboarding()"))
+
+    def test_finishing_records_it_against_the_account(self):
+        i = self.src.index("function finishOnboarding()")
+        self.assertIn("pushOnboarded", self.src[i:i + 400])
+
+    def test_a_slow_network_cannot_hang_the_app(self):
+        i = self.src.index("async function accountHasOnboarded()")
+        self.assertIn("Promise.race", self.src[i:i + 1200])
+
+    def test_the_column_is_added_by_alter_not_create(self):
+        """create table if not exists never alters an existing table."""
+        self.assertIn("add column if not exists onboarded", self.sql)
