@@ -804,6 +804,74 @@ const store = {
     }
   }
 };
+// ── Whose data is cached on this device ──
+//
+// Sign-out ends the session and clears nothing else, so the previous
+// account's bids, starred jobs, notes, pipeline, company profile and saved
+// searches all stay in localStorage. Sign up as someone new on the same
+// browser and the Bids tab opens already full of the last person's work.
+//
+// It does not stop at looking wrong. syncPullFeeds() finds no server row for
+// a brand-new account and treats whatever this browser holds as the feed to
+// seed it with, so the previous user's bids get UPLOADED into the new
+// account and become its permanent server-side copy. On a shared office
+// computer that is one contractor's pipeline silently handed to another.
+//
+// So the device records which account its cached data belongs to, and a
+// different account signing in starts clean. Same account signing back in
+// keeps its cache, which is the common case and costs a re-sync otherwise.
+const DATA_OWNER_KEY="data_owner_email";
+
+// Everything else is user data and goes. An allowlist rather than a list of
+// keys to delete, so a key added later is cleared by default instead of
+// quietly becoming the next thing that leaks between accounts.
+//
+// "sb-" is Supabase's own session token. Deleting it here would sign the user
+// out during the very sign-in that triggered this.
+const DEVICE_KEYS=new Set([
+  "device_id",       // identifies the browser for trials, not the person
+  "has_account",     // deliberately outlives sign-out: offer Sign in, not Create
+  "bid_id_scheme",   // a data-migration marker
+  "run_durations",   // local performance timings
+  DATA_OWNER_KEY,
+  // Written by the signup form seconds ago and consumed by
+  // applyPendingSignupName() on this very sign-in. It belongs to the person
+  // arriving, not the one who left, so clearing it here would throw away the
+  // name they just typed.
+  "pending_signup_name",
+]);
+
+function clearUserScopedData(){
+  let keys=[],removed=0;
+  try{for(let i=0;i<localStorage.length;i++)keys.push(localStorage.key(i));}
+  catch(_){return 0;}
+  for(const k of keys){
+    if(!k||DEVICE_KEYS.has(k)||k.startsWith("sb-"))continue;
+    try{localStorage.removeItem(k);removed++;}catch(_){}
+  }
+  return removed;
+}
+
+// True when the caller should stop and let the reload take over.
+function claimDeviceFor(email){
+  const who=(email||"").trim().toLowerCase();
+  if(!who)return false;
+  const owner=(store.get(DATA_OWNER_KEY,"")||"").trim().toLowerCase();
+  if(owner===who)return false;              // same person, keep their cache
+  const removed=clearUserScopedData();
+  store.set(DATA_OWNER_KEY,who);
+  // Reload rather than reset every in-memory copy by hand: bidData,
+  // savedBids, notes, pipeline and the rest are already populated by the
+  // time this runs, and missing one would put the cleared data straight back
+  // on screen. The owner is recorded above first, so the reload does not
+  // come back through here.
+  // Only when something was actually carrying over. A brand-new account on a
+  // clean browser removes nothing and must not bounce through a reload on the
+  // first screen it ever shows.
+  if(removed){location.reload();return true;}
+  return false;
+}
+
 function deviceId(){
   let id=store.get("device_id",null);
   if(!id){id="web-"+Math.random().toString(36).slice(2)+Date.now().toString(36);store.set("device_id",id);}
@@ -1444,6 +1512,11 @@ function setMsg(msg,cls){
 if(sb)sb.auth.onAuthStateChange((event,session)=>{
   if(event==="PASSWORD_RECOVERY")return; // handled separately — don't drop into the app mid-reset
   if(session){
+    // Before anything reads or uploads cached data: if this browser's data
+    // belongs to a different account, drop it. Must come first -- showApp()
+    // leads to syncPullFeeds(), which would push the old user's bids into
+    // this new account.
+    if(claimDeviceFor(session.user.email))return;
     currentUser=session.user;
     // Remembered so a later offline start knows this device belongs to a
     // signed-in user and can go straight to their cached bids.
