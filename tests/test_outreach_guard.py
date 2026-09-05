@@ -110,3 +110,65 @@ class DoNotContactTests(unittest.TestCase):
         import inspect
         from tools import outreach_draft as od
         self.assertIn("refusing", inspect.getsource(od.main))
+
+
+class LocationEvidenceTests(unittest.TestCase):
+    """A.C. Moate is in Auburn, Washington. They were emailed about Toledo.
+
+    Candidates come from searching "<city> concrete contractor sidewalk curb",
+    and a contractor with per-city landing pages ranks for cities they merely
+    advertise into. The search answered the question it was asked; nothing
+    checked whether the company had an address near the town whose number the
+    email was about to quote. They replied asking to be removed, which is the
+    correct response to mail about a market you do not work in.
+    """
+
+    def test_a_site_naming_other_states_is_held(self):
+        from tools.verify_prospect_location import evidence
+        import tools.verify_prospect_location as vp
+        orig = vp.state_fetch.fetch
+        vp.state_fetch.fetch = lambda u, **kw: (
+            200, "<p>Serving Auburn, WA and Portland, OR and Reno, NV</p>")
+        try:
+            verdict, note = evidence({"email": "x@acmoate.com",
+                                      "city": "Toledo", "state": "OH"})
+        finally:
+            vp.state_fetch.fetch = orig
+        self.assertEqual(verdict, "no_state")
+        self.assertIn("WA", note)
+
+    def test_the_right_state_passes(self):
+        from tools.verify_prospect_location import evidence
+        import tools.verify_prospect_location as vp
+        orig = vp.state_fetch.fetch
+        vp.state_fetch.fetch = lambda u, **kw: (
+            200, "<p>Rockford, IL 61101 — serving northern Illinois</p>")
+        try:
+            verdict, _ = evidence({"email": "x@concretesystemsinc.net",
+                                   "city": "Rockford", "state": "IL"})
+        finally:
+            vp.state_fetch.fetch = orig
+        self.assertEqual(verdict, "ok")
+
+    def test_a_neighbouring_town_still_passes(self):
+        """Willow Grove serving Skippack, twenty miles off, is the same
+        market and the same coverage number. Only a wrong STATE is fatal."""
+        from tools.verify_prospect_location import evidence
+        import tools.verify_prospect_location as vp
+        orig = vp.state_fetch.fetch
+        vp.state_fetch.fetch = lambda u, **kw: (
+            200, "<p>2401 Wyandotte Rd, Willow Grove, PA 19090</p>")
+        try:
+            verdict, note = evidence({"email": "x@claussbrothers.com",
+                                      "city": "Skippack", "state": "PA"})
+        finally:
+            vp.state_fetch.fetch = orig
+        self.assertEqual(verdict, "ok")
+        self.assertIn("not named", note)
+
+    def test_a_free_mail_address_without_a_website_is_held(self):
+        """gmail.com tells you nothing about who they are."""
+        from tools.verify_prospect_location import evidence
+        verdict, _ = evidence({"email": "someone@gmail.com",
+                               "city": "Philadelphia", "state": "PA"})
+        self.assertEqual(verdict, "no_site")
