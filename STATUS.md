@@ -65,7 +65,7 @@ it.
 
 | Item | What's needed |
 |---|---|
-| **Run `supabase_sync_schema.sql` again** | Adds `terms_acceptances`. Idempotent. Until it runs, `/terms/accept` returns 502 and no consent is recorded — the Terms' disclaimer, liability cap and Missouri governing law bind nobody we can prove agreed |
+| ~~Run `supabase_sync_schema.sql` again~~ | **DONE 2026-09-05.** `terms_acceptances` exists, RLS is on, and an anon insert is refused (42501). Not yet Live: nobody has watched a real signup write a row |
 | **Missouri LLC** | Everything is currently personally liable to Josh Hukel |
 | **E&O / general liability insurance** | Quote it once the LLC exists |
 | **Attorney read of the disclaimers and arbitration clause** | The Terms are written; nobody qualified has read them |
