@@ -76,3 +76,37 @@ class FallsBackWhenTheServerIsOlderTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DoNotContactTests(unittest.TestCase):
+    """"Please remove me from your email list" has to stick.
+
+    A.C. Moate sent exactly that the morning after the first send. Every other
+    rule in this tool is a judgement call the operator can override with
+    --slug, which deliberately ignores status so a wrongly-held row can be
+    forced through. This is the one status that must survive that override,
+    because the cost of getting it wrong lands on someone who already asked
+    once and is not a mistake you can take back.
+    """
+
+    def test_the_statuses_that_mean_never_again(self):
+        from tools.outreach_draft import DO_NOT_CONTACT
+        self.assertIn("unsubscribed", DO_NOT_CONTACT)
+        self.assertIn("bounced", DO_NOT_CONTACT)
+
+    def test_slug_cannot_force_an_unsubscribed_prospect(self):
+        """--slug overrides status on purpose. Not this status."""
+        import inspect
+        from tools import outreach_draft as od
+        src = inspect.getsource(od.main)
+        # The filter has to happen before the --slug branch selects rows.
+        self.assertIn("DO_NOT_CONTACT", src)
+        self.assertLess(src.index("DO_NOT_CONTACT"), src.index('if args.slug:'),
+                        "the block must be applied before --slug picks rows")
+
+    def test_a_refusal_is_reported_rather_than_silent(self):
+        """Silently dropping a slug the operator asked for looks like a bug
+        and invites them to work around it."""
+        import inspect
+        from tools import outreach_draft as od
+        self.assertIn("refusing", inspect.getsource(od.main))

@@ -87,6 +87,13 @@ MIN_AGENCIES = 30
 
 DAILY = 5
 
+# Statuses that mean "never again", enforced below even against --slug.
+# A.C. Moate replied "Please remove me from your email list" the morning after
+# the first send. Honouring that is not a preference, and a list is only as
+# trustworthy as the one row somebody has to remember not to touch -- so the
+# code remembers instead.
+DO_NOT_CONTACT = {"unsubscribed", "bounced", "do-not-contact"}
+
 
 def coverage(city, state):
     """Live agency count for a place, or None if the API will not answer."""
@@ -172,9 +179,20 @@ def main():
     with open(PROSPECTS, newline="", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
 
+    # Someone who asked to be left alone is never drafted again, and unlike
+    # every other rule here that is not a judgement call the operator gets to
+    # override. --slug deliberately ignores status so a held row can be forced
+    # through; this is the one status it must not be able to force.
+    blocked = [r for r in rows if r.get("status") in DO_NOT_CONTACT]
+    rows = [r for r in rows if r.get("status") not in DO_NOT_CONTACT]
+
     if args.slug:
         want = set(args.slug)
         queue = [r for r in rows if r["slug"] in want]
+        refused = sorted(want & {r["slug"] for r in blocked})
+        if refused:
+            print("refusing, these asked to be removed: " + ", ".join(refused),
+                  file=sys.stderr)
     else:
         queue = [r for r in rows if r.get("status") == "ready"][:args.limit]
 
