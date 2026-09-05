@@ -18,14 +18,14 @@
 <meta property="og:site_name" content="CurbCall Pro" />
 <meta property="og:url" content="https://curbcallpro.com/" />
 <meta property="og:title" content="CurbCall Pro — Find Sidewalk, ADA &amp; Curb Bids Near You" />
-<meta property="og:description" content="We watch the bid pages of every city, county, school district and special district in your radius and surface the sidewalk, ADA-ramp and curb &amp; gutter work. 6,869 verified agency bid pages across 52 states." />
+<meta property="og:description" content="We watch the bid pages of every city, county, school district and special district in your radius and surface the sidewalk, ADA-ramp and curb &amp; gutter work. More than 6,800 verified agency bid pages across 52 states." />
 <meta property="og:image" content="https://curbcallpro.com/og-card.png" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
 <meta property="og:image:alt" content="CurbCall Pro — sidewalk, ADA ramp and curb bids near you." />
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="CurbCall Pro — Find Sidewalk, ADA &amp; Curb Bids Near You" />
-<meta name="twitter:description" content="Sidewalk, ADA-ramp and curb &amp; gutter bids from 6,869 verified agency bid pages across 52 states. Check your area free." />
+<meta name="twitter:description" content="Sidewalk, ADA-ramp and curb &amp; gutter bids from more than 6,800 verified agency bid pages across 52 states. Check your area free." />
 <meta name="twitter:image" content="https://curbcallpro.com/og-card.png" />
 <!-- Without these, iOS "Add to Home Screen" on the marketing page gives a
      generated letter tile instead of the logo -- app.html already had them,
@@ -133,6 +133,9 @@ section{padding:4rem 0;}
 /* pricing */
 .prices{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;align-items:stretch;}
 .price{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:1.5rem;display:flex;flex-direction:column;}
+/* Automatic renewal, stated where the buyer decides rather than only in
+   the Terms. Quiet, but present. */
+.renew-note{font-size:.8rem;line-height:1.45;color:#7c8598;margin-top:.6rem;}
 .price.feat{border-color:var(--amber);box-shadow:0 0 0 1px var(--amber) inset;}
 .price .tag{font-family:var(--mono);font-size:0.7rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text3);}
 .price.feat .tag{color:var(--amber);}
@@ -384,7 +387,12 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
     <div class="sec-head">
       <span class="eyebrow">Coverage</span>
       <h2>Check your area first</h2>
-      <p>We hold <b>6,869 verified agency bid pages</b> across 52 states and
+      <!-- "more than 6,800" rather than a precise figure. The exact number was
+           typed by hand and was already wrong by one -- the directory holds 6,868
+           today and moves every time the crawler runs. A claim that has to be
+           re-typed to stay true will eventually be false, and an advertising
+           claim has to be substantiated. A floor stays true as the number grows. -->
+      <p>We hold <b>more than 6,800 verified agency bid pages</b> across 52 states and
          territories &mdash; cities, counties, school districts and special districts.
          Coverage is not even everywhere &mdash; see exactly what's near you before you
          pay a cent.</p>
@@ -464,12 +472,19 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
         <div class="amt">$49<span> / mo</span></div>
         <ul><li>Unlimited nationwide scans</li><li>AI bid extraction</li><li>Save unlimited leads</li><li>Federal + local bids</li><li>Cancel anytime</li></ul>
         <a class="btn btn-amber" href="https://buy.stripe.com/aFa00idzefwuayK6DRejK05">Subscribe monthly</a>
+        <!-- Automatic renewal has to be said before the buyer pays, not only in
+             the Terms. "Cancel anytime" is a benefit; it is not a disclosure
+             that the card gets charged again. -->
+        <p class="renew-note">Renews automatically at $49/month until you cancel.
+           Cancel anytime from the Account screen.</p>
       </div>
       <div class="price">
         <span class="tag">Annual · best value, save $189</span>
         <div class="amt">$399<span> / yr</span></div>
         <ul><li>Everything in Monthly</li><li>About 4 months free</li><li>Priority email support</li><li>Early access to new features</li></ul>
         <a class="btn btn-line" href="https://buy.stripe.com/7sY5kC0Ms6ZYeP00ftejK04">Subscribe annual</a>
+        <p class="renew-note">Renews automatically at $399/year until you cancel.
+           Cancel anytime from the Account screen.</p>
       </div>
     </div>
   </div>

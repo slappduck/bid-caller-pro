@@ -246,6 +246,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .plan.featured{border-color:var(--accent);}
 .plan-name{font-size:var(--fs-sm);color:var(--text2);text-transform:uppercase;letter-spacing:0.08em;}
 .plan-price{font-family:'Bebas Neue',sans-serif;font-size:var(--fs-4xl);line-height:1;margin:0.3rem 0;}
+.renew-note{font-size:var(--fs-sm);line-height:1.45;color:var(--text3);margin-top:0.6rem;}
 .plan-price span{font-family:var(--ui);font-size:var(--fs-base);color:var(--text2);}
 .plan ul{list-style:none;margin:0.7rem 0 1rem;}
 .plan li{font-size:var(--fs-base);color:var(--text2);padding:0.25rem 0;}
@@ -4395,12 +4396,14 @@ function renderAccount(){
         <div class="plan-price">$49<span> / month</span></div>
         <ul><li>Unlimited nationwide bid scans</li><li>AI bid extraction</li><li>Federal + local bids</li><li>Save &amp; track leads</li><li>Cancel anytime</li></ul>
         <a class="btn-primary" style="text-decoration:none;" href="${mLink}" target="_blank">Subscribe Monthly</a>
+        <p class="renew-note">Renews automatically at $49/month until you cancel. Cancel anytime under Billing above.</p>
       </div>
       <div class="plan">
         <div class="plan-name">Pro Annual &mdash; best value, save $189</div>
         <div class="plan-price">$399<span> / year</span></div>
         <ul><li>Everything in Monthly</li><li>About 4 months free</li><li>Priority support</li></ul>
         <a class="btn-ghost" style="text-decoration:none;display:block;text-align:center;" href="${aLink}" target="_blank">Subscribe Annual</a>
+        <p class="renew-note">Renews automatically at $399/year until you cancel. Cancel anytime under Billing above.</p>
       </div>
       <div class="field-label" style="margin-top:1.2rem;">Have a license key?</div>
       <input class="input" id="key-input" placeholder="BCP-..." />

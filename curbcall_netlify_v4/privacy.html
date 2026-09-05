@@ -34,7 +34,7 @@ footer a{color:var(--text3);}
 <div class="wrap">
   <div class="logo"><a href="index.html">&#x1F6A7; Curb<b>Call</b></a></div>
   <h1>Privacy Policy</h1>
-  <div class="updated">Last updated: June 17, 2026</div>
+  <div class="updated">Last updated: September 7, 2026</div>
 
   <div class="note">Short version: we collect the minimum we need to run the Service — your email for your account, what you search for, and your subscription status. We don't sell your personal information.</div>
 
@@ -45,6 +45,10 @@ footer a{color:var(--text3);}
     <li><strong>Account info:</strong> your email address and basic profile when you sign up, including via Google sign-in.</li>
     <li><strong>What you enter:</strong> the ZIP codes, cities, and search radius you use to find bids, and the bids you save.</li>
     <li><strong>A device identifier:</strong> a random ID stored in your browser to manage trials and unlock access.</li>
+    <li><strong>Your location, and only if you ask for it:</strong> tapping <em>Use My
+        Location</em> sends your device's coordinates to a geolocation service to work out
+        which town you are in. We keep the town, not a continuing record of where you go,
+        and nothing is sent unless you tap it.</li>
     <li><strong>Payment info:</strong> handled entirely by Stripe. We receive confirmation of your subscription and your billing email — <strong>we never see or store your full card number.</strong></li>
     <li><strong>Usage data:</strong> basic technical logs needed to operate and secure the Service.</li>
   </ul>
@@ -60,11 +64,19 @@ footer a{color:var(--text3);}
   <h2>3. Service providers we share with</h2>
   <p>We use trusted third parties to run the Service, and share only what's needed:</p>
   <ul>
-    <li><strong>Supabase</strong> — accounts and sign-in (including Google login) and data storage.</li>
+    <li><strong>Supabase</strong> — accounts and sign-in (including Google login), saved bids, and your company profile.</li>
     <li><strong>Stripe</strong> — payment processing.</li>
-    <li><strong>OpenAI</strong> and <strong>Tavily</strong> — to search and extract bid information from public web pages based on your search.</li>
-    <li><strong>SAM.gov</strong> and public geolocation services — to find federal bids and resolve your location.</li>
-    <li><strong>Render</strong> and <strong>Netlify</strong> — hosting.</li>
+    <li><strong>OpenAI</strong> — reads the text of public bid postings to pull out the details.</li>
+    <li><strong>Tavily</strong>, <strong>Brave Search</strong> and <strong>DuckDuckGo</strong> — web
+        searches run on your behalf. These receive the place you are searching for.</li>
+    <li><strong>Zippopotam</strong>, <strong>Nominatim (OpenStreetMap)</strong> and
+        <strong>BigDataCloud</strong> — turn a ZIP, a place name, or your device's location
+        into coordinates so we can measure distance. BigDataCloud is used only if you tap
+        <em>Use My Location</em>.</li>
+    <li><strong>SAM.gov</strong> — federal contract opportunities.</li>
+    <li><strong>Resend</strong> — sends the email we send you, such as bid alerts and account mail.</li>
+    <li><strong>Upstash</strong> — durable storage for scan results and account records.</li>
+    <li><strong>Render</strong> and <strong>Cloudflare</strong> — hosting for the backend and the website.</li>
   </ul>
   <p>We do <strong>not</strong> sell your personal information.</p>
 
