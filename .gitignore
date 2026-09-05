@@ -45,3 +45,8 @@ package-lock.json
 # Prospect/marketing lists: business contact data, and this repo is public.
 data/prospects*.csv
 data/*prospects*.csv
+
+# Who the outreach is signed by, including a home postal address. Commercial
+# email has to carry one, this repo is public, and those two facts must not
+# meet. Kept local, loaded by tools/outreach_draft.py.
+data/sender.env

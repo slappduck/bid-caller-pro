@@ -106,9 +106,40 @@ DAILY = 5
 # The address is not decoration. build_signature() refuses to produce a
 # signature without one, and main() refuses to print briefs, because an email
 # that cannot be signed correctly should not be written in the first place.
-SIGNER = os.environ.get("CURBCALL_SIGNER", "").strip()
-ADDRESS = os.environ.get("CURBCALL_ADDRESS", "").strip()
-PHONE = os.environ.get("CURBCALL_PHONE", "").strip()
+# Read from data/sender.env when it exists, so nobody has to remember to
+# export three variables before every send, and so the address lives exactly
+# one place. That file is gitignored on purpose: commercial email has to carry
+# a postal address, this repo is public, and those two facts must not meet.
+SENDER_ENV = os.path.join(_ROOT, "data", "sender.env")
+
+
+def _load_sender_env(path=SENDER_ENV):
+    """Values from the local sender file. A real environment variable wins,
+    so a one-off send can override without editing anything."""
+    out = {}
+    try:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, _, v = line.partition("=")
+                out[k.strip()] = v.strip()
+    except OSError:
+        pass
+    return out
+
+
+_SENDER = _load_sender_env()
+
+
+def _sender(key):
+    return (os.environ.get(key) or _SENDER.get(key) or "").strip()
+
+
+SIGNER = _sender("CURBCALL_SIGNER")
+ADDRESS = _sender("CURBCALL_ADDRESS")
+PHONE = _sender("CURBCALL_PHONE")
 
 
 def build_signature():
@@ -140,8 +171,9 @@ def signature_problem():
             "US commercial email has to carry a valid physical postal address, "
             "and\nevery one of these is commercial. A PO box counts. Set it and "
             "re-run:\n\n"
-            "  export CURBCALL_SIGNER=\"Josh Surname\"\n"
-            "  export CURBCALL_ADDRESS=\"PO Box 000, Town, ST 00000\"\n"
+            "  # data/sender.env  (gitignored)\n"
+            "  CURBCALL_SIGNER=Your Name\n"
+            "  CURBCALL_ADDRESS=000 Street, Town, ST 00000\n"
             % " and ".join(missing))
 
 # Statuses that mean "never again", enforced below even against --slug.

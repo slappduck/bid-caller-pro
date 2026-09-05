@@ -16,6 +16,7 @@ resolved perfectly and both were held.
 The question was always "how far is the nearest work", which is a number.
 """
 import os
+import re
 import sys
 import unittest
 
@@ -266,3 +267,58 @@ class ResearchHappensBeforeDraftingTests(unittest.TestCase):
     def test_the_reason_names_the_problem(self):
         i = self.src.index("_location_evidence")
         self.assertIn("location unconfirmed", self.src[i:i + 400])
+
+
+class SenderFileTests(unittest.TestCase):
+    """The signer's postal address lives locally, never in the repo.
+
+    Commercial email has to carry a physical address, this repo is public,
+    and the address in question is a home. Those two facts must not meet, so
+    the values come from data/sender.env, which .gitignore excludes.
+    """
+
+    def test_the_sender_file_is_gitignored(self):
+        here = os.path.dirname(os.path.abspath(__file__))
+        with open(os.path.join(here, os.pardir, ".gitignore"),
+                  encoding="utf-8") as f:
+            self.assertIn("data/sender.env", f.read())
+
+    def test_no_postal_address_is_hardcoded_in_the_tool(self):
+        here = os.path.dirname(os.path.abspath(__file__))
+        with open(os.path.join(here, os.pardir, "tools", "outreach_draft.py"),
+                  encoding="utf-8") as f:
+            src = f.read()
+        # Anything shaped like a street address belongs in the gitignored
+        # sender file, never in a file that gets pushed. Writing the real one
+        # into this comment as an example would have defeated the test it is
+        # explaining -- which is exactly what happened on the first draft.
+        hits = re.findall(r"\d{2,6}\s+[A-Z]\.?\s?[A-Za-z]+\s+"
+                          r"(?:St|Street|Ave|Avenue|Rd|Road|Dr|Drive|Ln|Lane|Blvd)\b",
+                          src)
+        self.assertEqual(hits, [], f"postal address in a committed file: {hits}")
+
+    def test_a_real_environment_variable_wins(self):
+        """So a one-off send can override without editing the file."""
+        from tools import outreach_draft as od
+        os.environ["CURBCALL_SIGNER"] = "Someone Else"
+        try:
+            self.assertEqual(od._sender("CURBCALL_SIGNER"), "Someone Else")
+        finally:
+            os.environ.pop("CURBCALL_SIGNER", None)
+
+    def test_a_missing_file_is_not_an_error(self):
+        from tools.outreach_draft import _load_sender_env
+        self.assertEqual(_load_sender_env("/nonexistent/sender.env"), {})
+
+    def test_comments_and_blank_lines_are_ignored(self):
+        import tempfile
+        from tools.outreach_draft import _load_sender_env
+        with tempfile.NamedTemporaryFile("w", suffix=".env", delete=False) as f:
+            f.write("# a note\n\nCURBCALL_SIGNER=Example Name\nbroken line\n")
+            path = f.name
+        try:
+            got = _load_sender_env(path)
+            self.assertEqual(got.get("CURBCALL_SIGNER"), "Example Name")
+            self.assertNotIn("broken line", got)
+        finally:
+            os.unlink(path)
