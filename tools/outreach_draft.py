@@ -87,6 +87,60 @@ MIN_AGENCIES = 30
 
 DAILY = 5
 
+# ── The signature every outreach email ends with ────────────────────────────
+#
+# These went out signed "Josh" and nothing else, which reads as a note from a
+# person rather than a company, and leaves out the one thing US commercial
+# email is actually required to carry: a valid physical postal address.
+#
+# Set these from the environment so the details live in one place and a change
+# cannot half-happen across five hand-written emails:
+#
+#   CURBCALL_SIGNER   full name, as it should appear
+#   CURBCALL_ADDRESS  business mailing address, one line, a PO box is fine
+#   CURBCALL_PHONE    optional
+#
+# The address is not decoration. build_signature() refuses to produce a
+# signature without one, and main() refuses to print briefs, because an email
+# that cannot be signed correctly should not be written in the first place.
+SIGNER = os.environ.get("CURBCALL_SIGNER", "").strip()
+ADDRESS = os.environ.get("CURBCALL_ADDRESS", "").strip()
+PHONE = os.environ.get("CURBCALL_PHONE", "").strip()
+
+
+def build_signature():
+    """The block to paste under every outreach email, or None if not set up.
+
+    The unsubscribe line is explicit rather than implied. "If it's no use
+    just say so" is a real opt-out and was honoured within the hour, but it
+    reads as a pleasantry, and the one time it matters is the time somebody
+    is arguing about whether it was there.
+    """
+    if not SIGNER or not ADDRESS:
+        return None
+    lines = [SIGNER, "CurbCall Pro", SITE.replace("https://", "")]
+    if PHONE:
+        lines.append(PHONE)
+    lines += ["", ADDRESS, "",
+              "Don't want these? Reply and say so and I'll take you off the "
+              "list for good."]
+    return "\n".join(lines)
+
+
+def signature_problem():
+    """Why briefs are being withheld, in words that say what to do."""
+    missing = [n for n, v in (("CURBCALL_SIGNER", SIGNER),
+                              ("CURBCALL_ADDRESS", ADDRESS)) if not v]
+    if not missing:
+        return ""
+    return ("Not drafting: %s not set.\n"
+            "US commercial email has to carry a valid physical postal address, "
+            "and\nevery one of these is commercial. A PO box counts. Set it and "
+            "re-run:\n\n"
+            "  export CURBCALL_SIGNER=\"Josh Surname\"\n"
+            "  export CURBCALL_ADDRESS=\"PO Box 000, Town, ST 00000\"\n"
+            % " and ".join(missing))
+
 # Statuses that mean "never again", enforced below even against --slug.
 # A.C. Moate replied "Please remove me from your email list" the morning after
 # the first send. Honouring that is not a preference, and a list is only as
@@ -170,6 +224,11 @@ def main():
     ap.add_argument("--json", action="store_true", help="machine-readable output")
     args = ap.parse_args()
 
+    problem = signature_problem()
+    if problem:
+        print(problem, file=sys.stderr)
+        return 2
+
     if not os.path.exists(PROSPECTS):
         print(f"no prospect list at {PROSPECTS}\n"
               "It is deliberately not in the repo -- business contact data, "
@@ -240,6 +299,12 @@ def main():
         print("HELD (not drafted):")
         for r, why in held:
             print(f"  {r['slug']:14} {r['company'][:28]:30} {why}")
+    sig = build_signature()
+    if sig and drafts:
+        print("=" * 72)
+        print("SIGN EVERY ONE OF THESE WITH:\n")
+        print(sig)
+        print()
     print(f"\n{len(drafts)} brief(s), {len(held)} held. Write the notes yourself:\n"
           "keep them short, vary them, and do not reuse a sentence between two\n"
           "contractors in the same city.")

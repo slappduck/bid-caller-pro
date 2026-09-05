@@ -172,3 +172,62 @@ class LocationEvidenceTests(unittest.TestCase):
         verdict, _ = evidence({"email": "someone@gmail.com",
                                "city": "Philadelphia", "state": "PA"})
         self.assertEqual(verdict, "no_site")
+
+
+class SignatureTests(unittest.TestCase):
+    """Every outreach email is commercial mail from a business.
+
+    They went out signed "Josh" and nothing else. That reads as a note from a
+    person rather than a company, and it omits the one thing US commercial
+    email is required to carry: a valid physical postal address.
+
+    These set the module's own values rather than mutating os.environ and
+    reloading. The reload version passed on its own and failed once in a full
+    run: a reloaded module and a global environment are both shared state,
+    and whichever test imported outreach_draft next got whatever was left
+    behind.
+    """
+
+    def setUp(self):
+        from tools import outreach_draft as od
+        self.od = od
+        self._saved = (od.SIGNER, od.ADDRESS, od.PHONE)
+
+    def tearDown(self):
+        self.od.SIGNER, self.od.ADDRESS, self.od.PHONE = self._saved
+
+    def _set(self, signer="", address="", phone=""):
+        self.od.SIGNER, self.od.ADDRESS, self.od.PHONE = signer, address, phone
+        return self.od
+
+    def test_no_address_means_no_signature(self):
+        od = self._set(signer="Josh Surname")
+        self.assertIsNone(od.build_signature())
+
+    def test_no_address_stops_the_tool_rather_than_warning(self):
+        """A warning gets scrolled past. This has to be a refusal."""
+        od = self._set(signer="Josh Surname")
+        self.assertIn("CURBCALL_ADDRESS", od.signature_problem())
+
+    def test_no_signer_is_also_refused(self):
+        od = self._set(address="PO Box 1, Town, MO 65605")
+        self.assertIn("CURBCALL_SIGNER", od.signature_problem())
+
+    def test_a_configured_signature_carries_the_postal_address(self):
+        od = self._set(signer="Josh Surname",
+                       address="PO Box 1, Town, MO 65605")
+        sig = od.build_signature()
+        self.assertIn("PO Box 1, Town, MO 65605", sig)
+        self.assertIn("CurbCall Pro", sig)
+        self.assertIn("curbcallpro.com", sig)
+        self.assertEqual(od.signature_problem(), "")
+
+    def test_the_opt_out_is_explicit_not_implied(self):
+        od = self._set(signer="J", address="PO Box 1")
+        self.assertIn("take you off the list", od.build_signature())
+
+    def test_the_phone_is_optional_but_used_when_given(self):
+        od = self._set(signer="J", address="PO Box 1")
+        self.assertNotIn("555", od.build_signature())
+        od = self._set(signer="J", address="PO Box 1", phone="(417) 555-0143")
+        self.assertIn("(417) 555-0143", od.build_signature())
