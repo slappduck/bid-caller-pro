@@ -50,7 +50,11 @@ class DeviceHandoffTests(unittest.TestCase):
 
     def _run(self, initial, email):
         """Run claimDeviceFor(email) over a fake localStorage; return the result."""
-        store_js = _extract(self.src, "const store = {", "function deviceId(){")
+        # Start at the localStorage key constants, not at `store`: DEVICE_KEYS
+        # names several of them, and slicing below their declarations left the
+        # harness throwing ReferenceError on a name the app itself has fine.
+        store_js = _extract(self.src, "const TERMS_METHOD_KEY=",
+                            "function deviceId(){")
         harness = """
 const _data = %s;
 let reloaded = false;

@@ -142,3 +142,45 @@ class CoverageClaimTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ConsentVersionsMatchThePublishedPagesTests(unittest.TestCase):
+    """The version stamped on a consent record has to name a real document.
+
+    Every acceptance row stores TERMS_VERSION and PRIVACY_VERSION. That is the
+    whole point of the record -- "they agreed to the Terms" is weak once the
+    Terms change, and "they accepted 2026-06-17" is only evidence while
+    2026-06-17 is genuinely what terms.html said that day. If the page is
+    edited and the constant is not, every row written afterwards cites a
+    version that never existed.
+    """
+
+    MONTHS = ("January February March April May June July August September "
+              "October November December").split()
+
+    def _published_date(self, page):
+        html = read(WEB, page)
+        m = re.search(r"Last updated:\s*([A-Z][a-z]+)\s+(\d{1,2}),\s*(\d{4})",
+                      html)
+        self.assertIsNotNone(m, "no 'Last updated' date on " + page)
+        month, day, year = m.group(1), int(m.group(2)), m.group(3)
+        self.assertIn(month, self.MONTHS, "unreadable month on " + page)
+        return "%s-%02d-%02d" % (year, self.MONTHS.index(month) + 1, day)
+
+    def _constant(self, name):
+        src = read(ROOT, "license_server.py")
+        m = re.search(name + r'\s*=\s*os\.environ\.get\(\s*"' + name +
+                      r'"\s*,\s*"([\d-]+)"\s*\)', src)
+        self.assertIsNotNone(m, name + " is not a dated constant any more")
+        return m.group(1)
+
+    def test_the_terms_version_is_the_date_on_terms_html(self):
+        self.assertEqual(self._constant("TERMS_VERSION"),
+                         self._published_date("terms.html"),
+                         "TERMS_VERSION and terms.html disagree; consent rows "
+                         "would cite a version nobody can read")
+
+    def test_the_privacy_version_is_the_date_on_privacy_html(self):
+        self.assertEqual(self._constant("PRIVACY_VERSION"),
+                         self._published_date("privacy.html"),
+                         "PRIVACY_VERSION and privacy.html disagree")

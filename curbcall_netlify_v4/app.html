@@ -820,11 +820,20 @@ const sb = HAS_SB ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : nul
 // question of when, not if. Past that point starring a bid or typing a note
 // silently did nothing and the work vanished on reload with no explanation.
 let storageWarned=false;
-// Declared here rather than beside the onboarding code below, which sits
-// ~900 lines further down. onAuthStateChange fires early and calls
-// onboardingNeeded(); a function declaration hoists but a const does not, so
-// keeping these next to their use would put them in the temporal dead zone
-// for exactly that first call.
+// Declared here rather than beside the code that uses them, which sits
+// several hundred lines further down. onAuthStateChange fires early and calls
+// onboardingNeeded(), and DEVICE_KEYS is built just below and names
+// TERMS_METHOD_KEY; a function declaration hoists but a const does not, so
+// keeping these next to their use would put them in the temporal dead zone.
+// TERMS_METHOD_KEY did exactly that once and threw "Cannot access
+// 'TERMS_METHOD_KEY' before initialization" at load, taking the whole app
+// down. Leave them here.
+//
+// TERMS_METHOD_KEY holds which signup route the person took, until a session
+// exists to attach it to: the checkbox is ticked before Supabase has issued
+// anything, and Google and magic-link only come back with a session after a
+// round trip through another site.
+const TERMS_METHOD_KEY="pending_terms_method";
 const ONBOARD_KEY="onboarded";
 const HOME_LOC_KEY="home_location";
 const HOME_RADIUS_KEY="home_radius";
@@ -880,6 +889,10 @@ const DEVICE_KEYS=new Set([
   // arriving, not the one who left, so clearing it here would throw away the
   // name they just typed.
   "pending_signup_name",
+  // Ticked seconds ago by the person now signing in, and not yet posted to
+  // the server. Clearing it here would silently lose the consent record for
+  // the very account being created.
+  TERMS_METHOD_KEY,
 ]);
 
 function clearUserScopedData(){
@@ -1454,6 +1467,30 @@ function showPasswordReset(){
 // redirect for Google OAuth, or an email confirmation link that reopens the
 // app fresh -- so it's stashed in localStorage rather than a JS variable,
 // and consumed once, the first time a real session appears after signup.
+function captureTermsAcceptance(method){
+  if(authMode!=="signup")return;
+  try{localStorage.setItem(TERMS_METHOD_KEY,method);}catch(e){}
+}
+
+// Post it once a session exists. Sends the token, never a user id: the server
+// decides who this is, so a record cannot be written for somebody else.
+async function flushTermsAcceptance(){
+  let method="";
+  try{method=localStorage.getItem(TERMS_METHOD_KEY)||"";}catch(e){}
+  if(!method)return;
+  try{
+    const token=await getSupabaseToken();
+    if(!token)return;
+    const r=await fetch(SERVER+"/terms/accept",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({supabase_token:token,method})});
+    // Only forget it once the server says it is stored. A failed write that
+    // clears the flag would leave an account with no record and nothing to
+    // say so -- worse than no feature, because it looks like evidence exists.
+    if(r.ok){try{localStorage.removeItem(TERMS_METHOD_KEY);}catch(e){}}
+  }catch(e){/* keep the flag; the next sign-in tries again */}
+}
+
 function capturePendingSignupName(){
   if(authMode!=="signup")return;
   // Two fields, one stored value: everything downstream -- the proposal
@@ -1472,6 +1509,7 @@ document.getElementById("google-btn").onclick=async()=>{
   if(authMode==="signup"&&!document.getElementById("terms-check").checked){
     setMsg("Please agree to the Terms and Privacy Policy to continue","err");return;
   }
+  captureTermsAcceptance("google");
   capturePendingSignupName();
   setMsg("","");
   const{error}=await sb.auth.signInWithOAuth({
@@ -1490,6 +1528,7 @@ document.getElementById("email-btn").onclick=async()=>{
   if(authMode==="signup"&&!document.getElementById("terms-check").checked){
     setMsg("Please agree to the Terms and Privacy Policy to continue","err");return;
   }
+  captureTermsAcceptance("signup_form");
   capturePendingSignupName();
   setMsg("","");
   setAuthBusy(true,authMode==="signup"?"Creating account...":"Signing in...");
@@ -1519,6 +1558,7 @@ document.getElementById("magic-btn").onclick=async()=>{
   if(authMode==="signup"&&!document.getElementById("terms-check").checked){
     setMsg("Please agree to the Terms and Privacy Policy to continue","err");return;
   }
+  captureTermsAcceptance("magic_link");
   capturePendingSignupName();
   setMsg("Sending...","");
   const{error}=await sb.auth.signInWithOtp({email,options:{emailRedirectTo:window.location.href}});
@@ -1577,6 +1617,7 @@ if(sb)sb.auth.onAuthStateChange((event,session)=>{
     // account, to someone who has been here before.
     store.set("has_account",true);
     applyPendingSignupName();
+    flushTermsAcceptance();
     checkAdminStatus();
     routeAfterAuth();
   } else {

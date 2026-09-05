@@ -61,6 +61,17 @@ it.
 | **Get one real review** | The review system is built, approval-gated and empty. One quote with a name, company and city outweighs every line of copy on the landing page |
 | **Delete `claude/weekly-upcoming`** | Stale and now dangerous to merge — see above |
 
+### Added 2026-09-05 — legality
+
+| Item | What's needed |
+|---|---|
+| **Run `supabase_sync_schema.sql` again** | Adds `terms_acceptances`. Idempotent. Until it runs, `/terms/accept` returns 502 and no consent is recorded — the Terms' disclaimer, liability cap and Missouri governing law bind nobody we can prove agreed |
+| **Missouri LLC** | Everything is currently personally liable to Josh Hukel |
+| **E&O / general liability insurance** | Quote it once the LLC exists |
+| **Attorney read of the disclaimers and arbitration clause** | The Terms are written; nobody qualified has read them |
+| **Accountant on SaaS sales tax nexus** | Missouri plus wherever subscribers are |
+| **Trademark search on "CurbCall Pro"** | Before spending anything more on the name |
+
 ## Built and pushed, NOT merged (`claude/weekly-upcoming`)
 
 - **Weekly Upcoming scan** — Mondays 12:00 UTC (~7am Central), emails each

@@ -871,6 +871,78 @@ def _supabase_delete_user(user_id):
         return False
 
 
+# ── Terms acceptance ────────────────────────────────────────────────────────
+#
+# The signup checkbox blocked a button in the browser and nothing else. The
+# Terms carry the disclaimer of warranties, the liability cap and the choice
+# of Missouri law, and every one of those binds only somebody who accepted
+# them -- with no record, there was no way to show anyone had.
+#
+# The version is recorded, not just the fact. "They agreed to the Terms" is
+# weak when the Terms change; "they accepted 2026-06-17" is evidence. These
+# constants must match the dates published on terms.html and privacy.html,
+# and a test fails if they drift.
+TERMS_VERSION = os.environ.get("TERMS_VERSION", "2026-06-17")
+PRIVACY_VERSION = os.environ.get("PRIVACY_VERSION", "2026-09-07")
+_ACCEPT_METHODS = {"signup_form", "google", "magic_link"}
+
+
+def _record_terms_acceptance(user, method):
+    """Append one consent row. Returns True when it is safely stored.
+
+    Written server-side with the service-role key rather than by the browser.
+    A client-reported "yes I agreed" is worth exactly what the checkbox it
+    replaces is worth; the point of the record is that the server saw it.
+    """
+    if not (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY):
+        return False
+    uid = (user or {}).get("id")
+    if not uid:
+        return False
+    row = {"user_id": uid,
+           "email": (user.get("email") or "").strip().lower(),
+           "terms_version": TERMS_VERSION,
+           "privacy_version": PRIVACY_VERSION,
+           "method": method if method in _ACCEPT_METHODS else ""}
+    try:
+        req = urllib.request.Request(
+            f"{SUPABASE_URL}/rest/v1/terms_acceptances",
+            data=json.dumps(row).encode("utf-8"),
+            method="POST",
+            headers={"Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+                     "apikey": SUPABASE_SERVICE_ROLE_KEY,
+                     "Content-Type": "application/json",
+                     "Prefer": "return=minimal"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return resp.status in (200, 201, 204)
+    except Exception as ex:
+        # Loud, because a consent record that quietly fails to save is worse
+        # than not having the feature: it looks like evidence exists.
+        print(f"[terms] could not record acceptance: {ex}", flush=True)
+        return False
+
+
+@app.route("/terms/accept", methods=["POST"])
+def terms_accept():
+    """Record that the signed-in account accepted the current Terms.
+
+    Takes a Supabase token, not a user id: the caller says who they claim to
+    be and the server checks it, so a record cannot be written on somebody
+    else's behalf.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    user = _supabase_user(data.get("supabase_token", ""))
+    if not user or not user.get("id"):
+        return jsonify({"ok": False, "reason": "not_signed_in"}), 401
+    if not SUPABASE_SERVICE_ROLE_KEY:
+        return jsonify({"ok": False, "reason": "not_configured"}), 503
+    saved = _record_terms_acceptance(user, str(data.get("method") or ""))
+    if not saved:
+        return jsonify({"ok": False, "reason": "not_recorded"}), 502
+    return jsonify({"ok": True, "terms_version": TERMS_VERSION,
+                    "privacy_version": PRIVACY_VERSION})
+
+
 @app.route("/account/delete", methods=["POST"])
 def account_delete():
     """Delete the signed-in user's account and everything keyed to them.

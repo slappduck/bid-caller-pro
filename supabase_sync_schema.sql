@@ -190,3 +190,37 @@ create trigger reviews_reset_approval_trg before update on reviews
 -- answered the second question but not someone who skipped both.
 alter table company_profiles
   add column if not exists onboarded boolean default false;
+
+-- Who agreed to which Terms, and when.
+--
+-- The signup checkbox blocked the button in the browser and nothing else: no
+-- request, no row, no record. The Terms are doing real work -- disclaimer of
+-- warranties, liability capped at twelve months of fees, Missouri governing
+-- law -- and every one of those binds only somebody who accepted them. There
+-- was no way to show that anyone had.
+--
+-- Append-only by policy: a consent record that can be edited afterwards is
+-- not evidence. There is no update or delete policy on this table, so the
+-- anon and authenticated roles can insert and read their own rows and can do
+-- nothing else to them. Corrections happen by writing a new row.
+--
+-- `version` is the part people leave out and regret. "They agreed to the
+-- Terms" is weak; "they accepted 2026-06-17 at 14:32 UTC" is evidence, and
+-- the Terms will change.
+create table if not exists terms_acceptances (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  email text default '',
+  terms_version text not null,
+  privacy_version text not null,
+  method text default '',          -- signup_form | google | magic_link
+  accepted_at timestamptz not null default now()
+);
+create index if not exists terms_acceptances_user on terms_acceptances (user_id);
+alter table terms_acceptances enable row level security;
+drop policy if exists "Users see their own acceptances" on terms_acceptances;
+create policy "Users see their own acceptances" on terms_acceptances
+  for select using (auth.uid() = user_id);
+-- Writes come from the server with the service-role key, which bypasses RLS.
+-- The browser is deliberately not allowed to insert: a client-reported "yes I
+-- agreed" is worth exactly as much as the checkbox it replaced.
