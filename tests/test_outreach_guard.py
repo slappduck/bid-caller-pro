@@ -231,3 +231,38 @@ class SignatureTests(unittest.TestCase):
         self.assertNotIn("555", od.build_signature())
         od = self._set(signer="J", address="PO Box 1", phone="(417) 555-0143")
         self.assertIn("(417) 555-0143", od.build_signature())
+
+
+class ResearchHappensBeforeDraftingTests(unittest.TestCase):
+    """The location check has to run inside drafting, not beside it.
+
+    It existed as a separate tool that nobody was obliged to run, which is the
+    same as not having it -- and A.C. Moate is what that costs: a Washington
+    contractor told about bid pages near Toledo, and a contact burned for
+    good. A check you have to remember is not a check.
+    """
+
+    def setUp(self):
+        import inspect
+        from tools import outreach_draft as od
+        self.od = od
+        self.src = inspect.getsource(od.main)
+
+    def test_the_check_runs_in_the_draft_loop(self):
+        self.assertIn("_location_evidence", self.src)
+
+    def test_it_runs_before_the_coverage_lookup(self):
+        """Cheapest correct order: do not even ask for a number for a
+        contractor who is in the wrong state."""
+        self.assertLess(self.src.index("_location_evidence"),
+                        self.src.index("coverage(row["))
+
+    def test_a_bad_location_is_held_not_drafted(self):
+        i = self.src.index("_location_evidence")
+        window = self.src[i:i + 400]
+        self.assertIn("held.append", window)
+        self.assertIn("continue", window)
+
+    def test_the_reason_names_the_problem(self):
+        i = self.src.index("_location_evidence")
+        self.assertIn("location unconfirmed", self.src[i:i + 400])

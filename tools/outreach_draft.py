@@ -62,6 +62,9 @@ import sys
 import urllib.error
 import urllib.request
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from tools.verify_prospect_location import evidence as _location_evidence  # noqa: E402
+
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(_HERE)
 PROSPECTS = os.path.join(_ROOT, "data", "outreach_prospects.csv")
@@ -259,6 +262,15 @@ def main():
     for row in queue:
         if not row.get("intro"):
             held.append((row, "no intro written"))
+            continue
+        # Is this contractor actually where the email is about to say they
+        # are? A.C. Moate was told about 243 bid pages near Toledo; they are
+        # in Auburn, Washington, and asked to be removed. That check existed
+        # as a separate tool nobody was obliged to run, which is the same as
+        # not having it -- so it runs here, before a word is drafted.
+        verdict, why = _location_evidence(row)
+        if verdict != "ok":
+            held.append((row, f"location unconfirmed ({why})"))
             continue
         data = coverage(row["city"], row["state"])
         if not data or not data.get("ok"):
