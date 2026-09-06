@@ -1423,12 +1423,29 @@ document.getElementById("toggle-link").onclick=()=>setAuthMode("signin");
 // the screen match the variable.
 setAuthMode(authMode);
 
+// Where Supabase sends the browser back to after an emailed link.
+//
+// Never window.location.href. That carries whatever fragment happens to be in
+// the address bar, and Supabase appends its own "#access_token=..." to
+// whatever it is given. A URL already ending in "#" therefore comes back
+// doubled -- app.html##access_token=... -- and the key parses as
+// "#access_token" rather than "access_token", so supabase-js finds no token,
+// establishes no session, fires no PASSWORD_RECOVERY, and drops the user on
+// the signup screen with no explanation. A real reset link did exactly that.
+//
+// The stray "#" is trivially easy to acquire: any <a href="#"> in the app puts
+// one there. Origin plus pathname is the only part of the current URL that is
+// ever wanted here.
+function authReturnUrl(){
+  return window.location.origin+window.location.pathname;
+}
+
 // ── Forgot password ──
 document.getElementById("forgot-link").onclick=async()=>{
   const email=document.getElementById("auth-email").value.trim();
   if(!email){setMsg("Enter your email above first, then tap this again","err");return;}
   setMsg("Sending reset link...","");
-  const{error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:window.location.href});
+  const{error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:authReturnUrl()});
   if(error){setMsg(error.message,"err");return;}
   setMsg("Check your email for a password reset link.","ok");
 };
@@ -1526,7 +1543,7 @@ document.getElementById("google-btn").onclick=async()=>{
   setMsg("","");
   const{error}=await sb.auth.signInWithOAuth({
     provider:"google",
-    options:{redirectTo:window.location.origin+window.location.pathname}
+    options:{redirectTo:authReturnUrl()}
   });
   if(error)setMsg(error.message,"err");
 };
@@ -1573,7 +1590,7 @@ document.getElementById("magic-btn").onclick=async()=>{
   captureTermsAcceptance("magic_link");
   capturePendingSignupName();
   setMsg("Sending...","");
-  const{error}=await sb.auth.signInWithOtp({email,options:{emailRedirectTo:window.location.href}});
+  const{error}=await sb.auth.signInWithOtp({email,options:{emailRedirectTo:authReturnUrl()}});
   if(error){setMsg(error.message,"err");return;}
   showEmailSent(email);
 };
