@@ -341,6 +341,45 @@ def health():
     return jsonify({"service": "Bid Caller Pro License Server", "status": "ok"})
 
 
+def _terms_acceptance_stats():
+    """Counts only -- never the rows themselves.
+
+    Enough to answer "did that signup record consent?" without this endpoint
+    becoming a way to read who agreed to what. The rows carry email addresses;
+    a count does not, and a count is the whole question being asked.
+
+    `current` uses the versions this server stamps, so a signup recorded
+    against a stale version shows up as a gap between the two numbers rather
+    than looking identical to a healthy one.
+    """
+    if not (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY):
+        return {"configured": False}
+
+    def count(query):
+        req = urllib.request.Request(
+            f"{SUPABASE_URL}/rest/v1/terms_acceptances?select=id&limit=1{query}",
+            headers={"Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+                     "apikey": SUPABASE_SERVICE_ROLE_KEY,
+                     "Prefer": "count=exact"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            # PostgREST reports the total in Content-Range as "0-0/N".
+            rng = resp.headers.get("Content-Range") or ""
+            return int(rng.rsplit("/", 1)[-1])
+
+    try:
+        return {
+            "configured": True,
+            "total": count(""),
+            "current": count(f"&terms_version=eq.{TERMS_VERSION}"
+                             f"&privacy_version=eq.{PRIVACY_VERSION}"),
+            "stamping": {"terms": TERMS_VERSION, "privacy": PRIVACY_VERSION},
+        }
+    except Exception as ex:
+        # Type only. The URL carries the project ref and the message can echo
+        # request detail, and this whole payload is a debugging surface.
+        return {"configured": True, "error": type(ex).__name__}
+
+
 def _recent_scans(limit=None):
     """The scan history, newest first. Never raises — /health must answer even
     when the storage backend is the thing that is broken.
@@ -1497,6 +1536,9 @@ def diag():
         # went on /health, which is public and unauthenticated. A test caught
         # it. Do not move it back.
         "go_clicks": kv_backend.get(_CLICK_KEY, None),
+        # Consent recording, as counts. A signup that silently failed to
+        # record is otherwise invisible until somebody thinks to run SQL.
+        "terms_acceptances": _terms_acceptance_stats(),
         "last_scan": kv_backend.get("bidcaller:last_scan", None),
         "recent_scans": _recent_scans(request.args.get("scans")),
         "feed_audit": kv_backend.get(BID_AUDIT_KEY, None),

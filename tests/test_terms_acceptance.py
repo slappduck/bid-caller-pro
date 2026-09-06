@@ -24,6 +24,7 @@ one is a way this could have been built wrong:
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -318,3 +319,110 @@ class SchemaGuardsTheTableTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DiagCountsTests(unittest.TestCase):
+    """Counts on /diag, so a failed recording is visible without running SQL.
+
+    Two things this must not become: a public leak, and a way to read the
+    rows. The rows carry email addresses and the question being asked is only
+    "did it record?", so the answer is numbers behind the diag token -- the
+    same reasoning that moved go_clicks off /health after it nearly published
+    which named contractors opened a cold email.
+    """
+
+    def setUp(self):
+        self._orig_open = ls.urllib.request.urlopen
+        self._orig_url = ls.SUPABASE_URL
+        self._orig_key = ls.SUPABASE_SERVICE_ROLE_KEY
+        ls.SUPABASE_URL = "https://project.supabase.co"
+        ls.SUPABASE_SERVICE_ROLE_KEY = "svc-key"
+        self.asked = []
+
+        outer = self
+
+        class Resp:
+            def __init__(self, total):
+                self.headers = {"Content-Range": "0-0/%d" % total}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        def fake_open(req, timeout=None):
+            outer.asked.append(req.full_url)
+            filtered = "terms_version=eq." in req.full_url
+            return Resp(2 if filtered else 5)
+        ls.urllib.request.urlopen = fake_open
+
+    def tearDown(self):
+        ls.urllib.request.urlopen = self._orig_open
+        ls.SUPABASE_URL = self._orig_url
+        ls.SUPABASE_SERVICE_ROLE_KEY = self._orig_key
+
+    def test_it_reports_a_total_and_a_current_count(self):
+        got = ls._terms_acceptance_stats()
+        self.assertEqual(got["total"], 5)
+        self.assertEqual(got["current"], 2)
+
+    def test_it_says_which_versions_it_is_stamping(self):
+        """A gap between total and current is only readable alongside these."""
+        got = ls._terms_acceptance_stats()
+        self.assertEqual(got["stamping"],
+                         {"terms": ls.TERMS_VERSION,
+                          "privacy": ls.PRIVACY_VERSION})
+
+    def test_it_asks_for_a_count_not_the_rows(self):
+        ls._terms_acceptance_stats()
+        self.assertTrue(self.asked)
+        for url in self.asked:
+            self.assertIn("limit=1", url)
+            self.assertIn("select=id", url)
+            self.assertNotIn("email", url)
+
+    def test_an_unconfigured_project_says_so_rather_than_erroring(self):
+        ls.SUPABASE_SERVICE_ROLE_KEY = ""
+        self.assertEqual(ls._terms_acceptance_stats(), {"configured": False})
+
+    def test_a_failure_reports_the_type_and_not_the_detail(self):
+        """The URL carries the project ref and messages echo request detail."""
+        def boom(req, timeout=None):
+            raise OSError("connect to https://project.supabase.co failed")
+        ls.urllib.request.urlopen = boom
+        got = ls._terms_acceptance_stats()
+        self.assertEqual(got, {"configured": True, "error": "OSError"})
+
+    def test_it_never_returns_a_row(self):
+        blob = json.dumps(ls._terms_acceptance_stats())
+        self.assertNotIn("@", blob)
+        self.assertNotIn("user_id", blob)
+
+
+class DiagCountsAreNotPublicTests(unittest.TestCase):
+    """/health is unauthenticated. This belongs behind the token."""
+
+    @staticmethod
+    def _body(name):
+        """One function, stopping at the next top-level def.
+
+        Slicing to the next @app.route ran straight past health() into the
+        helper below it and reported a leak that was not there.
+        """
+        src = ls_source()
+        start = src.index("def %s(" % name)
+        end = src.find("\ndef ", start + 1)
+        return src[start:end if end != -1 else len(src)]
+
+    def test_health_does_not_carry_acceptance_counts(self):
+        self.assertNotIn("_terms_acceptance_stats", self._body("health"))
+
+    def test_diag_does(self):
+        self.assertIn("_terms_acceptance_stats", self._body("diag"))
+
+
+def ls_source():
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           os.pardir, "license_server.py"), encoding="utf-8") as f:
+        return re.sub(r"^\s*#.*$", "", f.read(), flags=re.M)
