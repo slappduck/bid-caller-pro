@@ -871,6 +871,14 @@ const store = {
 // different account signing in starts clean. Same account signing back in
 // keeps its cache, which is the common case and costs a re-sync otherwise.
 const DATA_OWNER_KEY="data_owner_email";
+// The account id, which is what actually identifies an account. The email
+// alone does not: deleting an account and signing up again with the same
+// address produces a DIFFERENT account, and matching on the address read
+// that as the same person and kept the old cache. The new account then
+// opened full of the deleted one's bids, and syncPullFeeds() uploaded them
+// into it. Kept alongside the address rather than replacing it so devices
+// that only ever stored an address are not all wiped on their next sign-in.
+const DATA_OWNER_ID_KEY="data_owner_id";
 
 // Everything else is user data and goes. An allowlist rather than a list of
 // keys to delete, so a key added later is cleared by default instead of
@@ -884,6 +892,7 @@ const DEVICE_KEYS=new Set([
   "bid_id_scheme",   // a data-migration marker
   "run_durations",   // local performance timings
   DATA_OWNER_KEY,
+  DATA_OWNER_ID_KEY,
   // Written by the signup form seconds ago and consumed by
   // applyPendingSignupName() on this very sign-in. It belongs to the person
   // arriving, not the one who left, so clearing it here would throw away the
@@ -907,13 +916,31 @@ function clearUserScopedData(){
 }
 
 // True when the caller should stop and let the reload take over.
-function claimDeviceFor(email){
-  const who=(email||"").trim().toLowerCase();
-  if(!who)return false;
+//
+// Takes the user, not the email. An account is its id: an address can be
+// reused by a different account entirely, which is exactly what happens when
+// someone deletes their account and signs up again -- and that read as "same
+// person, keep their cache" until this compared ids.
+//
+// Devices that were claimed before ids were stored hold only an address, so
+// those still fall back to comparing addresses and record the id as they go.
+// Comparing an absent stored id against a real one would treat every existing
+// customer as a stranger and wipe the cache out from under all of them.
+function claimDeviceFor(user){
+  const id=((user&&user.id)||"").trim();
+  const who=((user&&user.email)||"").trim().toLowerCase();
+  if(!id&&!who)return false;
+  const ownerId=(store.get(DATA_OWNER_ID_KEY,"")||"").trim();
   const owner=(store.get(DATA_OWNER_KEY,"")||"").trim().toLowerCase();
-  if(owner===who)return false;              // same person, keep their cache
+  const same=(ownerId&&id)?(ownerId===id):(!!owner&&owner===who);
+  if(same){
+    // Upgrade a legacy claim in passing, so the next comparison is exact.
+    if(id&&!ownerId)store.set(DATA_OWNER_ID_KEY,id);
+    return false;
+  }
   const removed=clearUserScopedData();
   store.set(DATA_OWNER_KEY,who);
+  if(id)store.set(DATA_OWNER_ID_KEY,id);
   // Reload rather than reset every in-memory copy by hand: bidData,
   // savedBids, notes, pipeline and the rest are already populated by the
   // time this runs, and missing one would put the cleared data straight back
@@ -1637,7 +1664,7 @@ if(sb)sb.auth.onAuthStateChange((event,session)=>{
     // belongs to a different account, drop it. Must come first -- showApp()
     // leads to syncPullFeeds(), which would push the old user's bids into
     // this new account.
-    if(claimDeviceFor(session.user.email))return;
+    if(claimDeviceFor(session.user))return;
     currentUser=session.user;
     // Remembered so a later offline start knows this device belongs to a
     // signed-in user and can go straight to their cached bids.

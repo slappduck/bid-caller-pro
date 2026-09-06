@@ -40,7 +40,9 @@ def _extract(src, start_marker, end_marker):
     return src[i:j]
 
 
-class DeviceHandoffTests(unittest.TestCase):
+class _DeviceHarness:
+    """Shared rig: runs the real claimDeviceFor() out of app.html."""
+
     @classmethod
     def setUpClass(cls):
         if not shutil.which("node"):
@@ -48,8 +50,16 @@ class DeviceHandoffTests(unittest.TestCase):
         with open(APP, encoding="utf-8") as f:
             cls.src = f.read()
 
-    def _run(self, initial, email):
-        """Run claimDeviceFor(email) over a fake localStorage; return the result."""
+    def _run(self, initial, email, user_id=None):
+        """Run claimDeviceFor(user) over a fake localStorage; return the result.
+
+        user_id defaults to a value derived from the address, so the existing
+        cases keep meaning "the same account signing in again". The tests that
+        care about a REUSED address pass it explicitly.
+        """
+        if user_id is None:
+            addr = (email or "").strip().lower()
+            user_id = "uid-" + addr if addr else ""
         # Start at the localStorage key constants, not at `store`: DEVICE_KEYS
         # names several of them, and slicing below their declarations left the
         # harness throwing ReferenceError on a name the app itself has fine.
@@ -72,7 +82,8 @@ function toast(){}
 %s
 const stopped = claimDeviceFor(%s);
 console.log(JSON.stringify({ data: _data, reloaded, stopped }));
-""" % (json.dumps(initial), store_js, json.dumps(email))
+""" % (json.dumps(initial), store_js,
+       json.dumps({"id": user_id, "email": email}))
         out = subprocess.run([shutil.which("node"), "-e", harness],
                              capture_output=True, text=True, timeout=60)
         if out.returncode != 0:
@@ -101,6 +112,8 @@ console.log(JSON.stringify({ data: _data, reloaded, stopped }));
             "data_owner_email": json.dumps("first@example.com"),
         }
 
+
+class DeviceHandoffTests(_DeviceHarness, unittest.TestCase):
     def test_a_different_account_gets_a_clean_browser(self):
         r = self._run(self._occupied(), "second@example.com")
         for leaked in ("last_feed", "saved", "notes", "pipeline",
@@ -163,10 +176,73 @@ console.log(JSON.stringify({ data: _data, reloaded, stopped }));
         self.assertEqual(json.loads(r["data"]["pending_signup_name"]),
                          "Second Contractor")
 
-    def test_an_empty_email_changes_nothing(self):
-        r = self._run(self._occupied(), "")
+    def test_a_session_with_no_identity_at_all_changes_nothing(self):
+        """Neither id nor address: there is nobody to claim the device for."""
+        r = self._run(self._occupied(), "", user_id="")
         self.assertIn("last_feed", r["data"])
         self.assertFalse(r["stopped"])
+
+
+class DeletedAndRecreatedAccountTests(_DeviceHarness, unittest.TestCase):
+    """Same address, different account. This is the case that got through.
+
+    Deleting an account and signing up again with the same email produces a
+    new account with a new id. The guard compared addresses, so it concluded
+    "same person, keep their cache": the new account opened holding the
+    deleted one's bids, notes and pipeline, and syncPullFeeds() then uploaded
+    them into it as its permanent server-side copy.
+
+    Server-side deletion was never the problem -- every table cascades from
+    auth.users -- which is exactly why this was easy to misread as one.
+    """
+
+    def test_a_reused_address_on_a_new_account_still_wipes(self):
+        data = self._occupied()
+        data["data_owner_id"] = json.dumps("uid-OLD")
+        r = self._run(data, "first@example.com", user_id="uid-NEW")
+        self.assertNotIn("last_feed", r["data"])
+        self.assertNotIn("pipeline", r["data"])
+        self.assertTrue(r["stopped"], "the reload has to take over")
+
+    def test_the_same_account_signing_in_again_keeps_everything(self):
+        data = self._occupied()
+        data["data_owner_id"] = json.dumps("uid-SAME")
+        r = self._run(data, "first@example.com", user_id="uid-SAME")
+        self.assertIn("last_feed", r["data"])
+        self.assertFalse(r["stopped"])
+
+    def test_a_device_claimed_before_ids_existed_is_not_wiped(self):
+        """Every existing customer stored an address and no id.
+
+        Treating a missing stored id as a mismatch would wipe the cache out
+        from under all of them on their next sign-in.
+        """
+        data = self._occupied()
+        data.pop("data_owner_id", None)
+        r = self._run(data, "first@example.com", user_id="uid-NEW")
+        self.assertIn("last_feed", r["data"], "legacy device was wiped")
+        self.assertFalse(r["stopped"])
+
+    def test_a_legacy_device_records_its_id_so_the_next_check_is_exact(self):
+        data = self._occupied()
+        data.pop("data_owner_id", None)
+        r = self._run(data, "first@example.com", user_id="uid-NEW")
+        self.assertEqual(json.loads(r["data"]["data_owner_id"]), "uid-NEW")
+
+    def test_the_new_owners_id_is_recorded_after_a_wipe(self):
+        data = self._occupied()
+        data["data_owner_id"] = json.dumps("uid-OLD")
+        r = self._run(data, "first@example.com", user_id="uid-NEW")
+        self.assertEqual(json.loads(r["data"]["data_owner_id"]), "uid-NEW")
+
+    def test_the_id_survives_the_wipe_it_causes(self):
+        """It is written after clearUserScopedData(), and must be in
+        DEVICE_KEYS too, or a second sign-in wipes all over again."""
+        data = self._occupied()
+        data["data_owner_id"] = json.dumps("uid-OLD")
+        first = self._run(data, "first@example.com", user_id="uid-NEW")
+        again = self._run(first["data"], "first@example.com", user_id="uid-NEW")
+        self.assertFalse(again["stopped"], "wiped twice for the same account")
 
 
 class GuardIsWiredInTests(unittest.TestCase):
