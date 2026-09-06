@@ -65,7 +65,8 @@ it.
 
 | Item | What's needed |
 |---|---|
-| ~~Run `supabase_sync_schema.sql` again~~ | **DONE 2026-09-05.** `terms_acceptances` exists, RLS is on, and an anon insert is refused (42501). Not yet Live: nobody has watched a real signup write a row |
+| ~~Run `supabase_sync_schema.sql` again~~ | **DONE 2026-09-06 and Live.** A real signup wrote a row: correct address, `2026-06-17` / `2026-09-06`. RLS is on, an anon insert is refused (42501), a unique index makes a repeat write impossible, and the foreign key is dropped so deleting an account no longer destroys the record |
+| **Archive each published policy version** | Storing "they accepted 2026-06-17" is only evidence if what 2026-06-17 SAID can be produced. Editing terms.html or privacy.html overwrites the only copy. Existing rows already cite `2026-09-07`, a privacy version the page no longer shows. Worth solving before there is money at stake |
 | **Missouri LLC** | Everything is currently personally liable to Josh Hukel |
 | **E&O / general liability insurance** | Quote it once the LLC exists |
 | **Attorney read of the disclaimers and arbitration clause** | The Terms are written; nobody qualified has read them |
@@ -80,6 +81,15 @@ it.
 - **`campaign_sender` in `/health`** — the only way to confirm
   `MAILING_ADDRESS` took effect without attempting a real send.
 - **The 9-state sales region section** in this file.
+
+### Fixed 2026-09-06
+
+| What | Notes |
+|---|---|
+| Reset links opened the signup form | `redirectTo` was `window.location.href`, which carries whatever fragment is in the address bar. Supabase appends its own `#access_token=...`, so a trailing `#` came back doubled and the token parsed as `#access_token`. No session, no error, no clue. All three emailed-link flows now share `authReturnUrl()` |
+| One signup wrote two consent rows | `onAuthStateChange` fires more than once per sign-in and the flush is async. Fixed in the browser, the table (unique index) and the server (a duplicate is success, or the browser retries a rejected write forever) |
+| A reused email inherited the old account's data | Deleting an account and signing up again with the same address makes a NEW account. `claimDeviceFor()` compared addresses, kept the cache, and `syncPullFeeds()` uploaded it into the new account. Now compares account ids, with a fallback so existing devices are not wiped |
+| Consent records died with the account | `terms_acceptances` cascaded from `auth.users`. The evidence disappeared exactly when a dispute became likely. Kept now, with the address replaced by a salted hash, and disclosed in three places |
 
 ## Known gaps / not started
 
