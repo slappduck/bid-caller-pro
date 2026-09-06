@@ -21,8 +21,12 @@ one is a way this could have been built wrong:
     worse than having no feature at all, because it looks like evidence
     exists.
 """
+import io
 import json
 import os
+import shutil
+import subprocess
+import tempfile
 import sys
 import unittest
 
@@ -174,6 +178,142 @@ class RecordedRowTests(unittest.TestCase):
         self.assertFalse(
             ls._record_terms_acceptance({"id": "u-9", "email": "a@b.com"},
                                         "signup_form"))
+
+
+class DuplicateWriteTests(unittest.TestCase):
+    """One signup wrote two rows, and the fix is in three places.
+
+    supabase-js fires onAuthStateChange more than once for a single sign-in.
+    flushTermsAcceptance() is async -- it reads the pending flag, then awaits a
+    token and a round trip, and only clears the flag once the server confirms
+    -- so both calls saw the flag set and both posted.
+
+    The browser now guards against re-entering while a flush is in flight, the
+    table has a unique index, and the server treats the resulting rejection as
+    success. The last part matters most: without it the browser would never
+    clear its flag and would retry a permanently rejected write at every single
+    sign-in.
+    """
+
+    def setUp(self):
+        self._orig_open = ls.urllib.request.urlopen
+        self._orig_url = ls.SUPABASE_URL
+        self._orig_key = ls.SUPABASE_SERVICE_ROLE_KEY
+        ls.SUPABASE_URL = "https://project.supabase.co"
+        ls.SUPABASE_SERVICE_ROLE_KEY = "svc-key"
+
+    def tearDown(self):
+        ls.urllib.request.urlopen = self._orig_open
+        ls.SUPABASE_URL = self._orig_url
+        ls.SUPABASE_SERVICE_ROLE_KEY = self._orig_key
+
+    def _raise(self, code, body):
+        def fake_open(req, timeout=None):
+            raise ls.urllib.error.HTTPError(
+                "u", code, "conflict", {},
+                io.BytesIO(json.dumps(body).encode("utf-8")))
+        ls.urllib.request.urlopen = fake_open
+
+    def test_a_row_that_already_exists_counts_as_recorded(self):
+        self._raise(409, {"code": "23505", "message": "duplicate key"})
+        self.assertTrue(
+            ls._record_terms_acceptance({"id": "u-1", "email": "a@b.com"},
+                                        "signup_form"))
+
+    def test_a_foreign_key_conflict_is_still_a_failure(self):
+        """409 alone is not proof; a missing user must not look like consent."""
+        self._raise(409, {"code": "23503", "message": "violates foreign key"})
+        self.assertFalse(
+            ls._record_terms_acceptance({"id": "ghost", "email": "a@b.com"},
+                                        "signup_form"))
+
+    def test_an_unreadable_conflict_body_is_not_assumed_to_be_a_duplicate(self):
+        def fake_open(req, timeout=None):
+            raise ls.urllib.error.HTTPError("u", 409, "conflict", {},
+                                            io.BytesIO(b"<html>nope"))
+        ls.urllib.request.urlopen = fake_open
+        self.assertFalse(
+            ls._record_terms_acceptance({"id": "u-1", "email": "a@b.com"},
+                                        "signup_form"))
+
+    def test_other_http_errors_are_failures(self):
+        self._raise(500, {"message": "boom"})
+        self.assertFalse(
+            ls._record_terms_acceptance({"id": "u-1", "email": "a@b.com"},
+                                        "signup_form"))
+
+
+class BrowserFlushGuardTests(unittest.TestCase):
+    """The browser half, run rather than grepped for.
+
+    A test that only checks the guard variable appears in the file would pass
+    on a guard that is set and never read.
+    """
+
+    def test_two_overlapping_flushes_post_once(self):
+        node = shutil.which("node")
+        if not node:
+            raise unittest.SkipTest("node not available")
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               os.pardir, "curbcall_netlify_v4", "app.html"),
+                  encoding="utf-8") as f:
+            html = f.read()
+        i = html.index("let termsFlushInFlight=false;")
+        j = html.index("\n}", html.index("finally{termsFlushInFlight=false;}")) + 2
+        fn = html[i:j]
+        harness = """
+const TERMS_METHOD_KEY="pending_terms_method";
+const SERVER="https://server.test";
+const _d={pending_terms_method:"signup_form"};
+const localStorage={getItem:k=>k in _d?_d[k]:null,
+  setItem:(k,v)=>{_d[k]=String(v);}, removeItem:k=>{delete _d[k];}};
+let posts=0;
+const getSupabaseToken=async()=>"tok";
+const fetch=async()=>{ posts++;
+  await new Promise(r=>setTimeout(r,20));   // the await that opened the race
+  return {ok:true}; };
+%s
+Promise.all([flushTermsAcceptance(), flushTermsAcceptance()])
+  .then(()=>console.log(JSON.stringify(
+    {posts, flagLeft:_d.pending_terms_method ?? null})));
+""" % fn
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "flush.js")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(harness)
+            out = subprocess.run([node, path], capture_output=True,
+                                 text=True, timeout=60)
+        self.assertEqual(out.returncode, 0, out.stderr[-1500:])
+        got = json.loads(out.stdout.strip().splitlines()[-1])
+        self.assertEqual(got["posts"], 1,
+                         "one signup posted %s consent rows" % got["posts"])
+        self.assertIsNone(got["flagLeft"], "pending flag was not cleared")
+
+
+class SchemaGuardsTheTableTests(unittest.TestCase):
+    """The index is the part that holds when the client is wrong again."""
+
+    def setUp(self):
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               os.pardir, "supabase_sync_schema.sql"),
+                  encoding="utf-8") as f:
+            self.sql = "\n".join(l for l in f.read().splitlines()
+                                 if not l.strip().startswith("--"))
+
+    def test_one_acceptance_per_account_per_version(self):
+        self.assertRegex(
+            self.sql,
+            r"create unique index[^;]*terms_acceptances\s*\("
+            r"\s*user_id\s*,\s*terms_version\s*,\s*privacy_version\s*\)")
+
+    def test_existing_duplicates_are_cleared_before_the_index(self):
+        """Creating the index on a table that already has duplicates fails."""
+        self.assertLess(self.sql.index("delete from terms_acceptances"),
+                        self.sql.index("terms_acceptances_once"))
+
+    def test_the_earliest_row_is_the_one_kept(self):
+        """The moment they agreed, not the moment a retry happened."""
+        self.assertIn("a.id > b.id", self.sql)
 
 
 if __name__ == "__main__":

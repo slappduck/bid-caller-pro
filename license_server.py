@@ -887,6 +887,19 @@ PRIVACY_VERSION = os.environ.get("PRIVACY_VERSION", "2026-09-07")
 _ACCEPT_METHODS = {"signup_form", "google", "magic_link"}
 
 
+def _is_duplicate_row(err):
+    """True when PostgREST refused a write because the row already exists.
+
+    Read from the body rather than assumed from the status: 409 also covers
+    foreign-key conflicts, and treating one of those as success would report a
+    consent record that was never stored.
+    """
+    try:
+        return json.loads(err.read().decode("utf-8", "replace")).get("code") == "23505"
+    except Exception:
+        return False
+
+
 def _record_terms_acceptance(user, method):
     """Append one consent row. Returns True when it is safely stored.
 
@@ -915,6 +928,15 @@ def _record_terms_acceptance(user, method):
                      "Prefer": "return=minimal"})
         with urllib.request.urlopen(req, timeout=15) as resp:
             return resp.status in (200, 201, 204)
+    except urllib.error.HTTPError as ex:
+        # A unique violation means this account already accepted this exact
+        # pair of versions, which is the outcome the caller wanted. Reporting
+        # it as a failure would leave the browser's pending flag set and make
+        # it retry the same rejected write at every sign-in, forever.
+        if ex.code == 409 and _is_duplicate_row(ex):
+            return True
+        print(f"[terms] could not record acceptance: {ex}", flush=True)
+        return False
     except Exception as ex:
         # Loud, because a consent record that quietly fails to save is worse
         # than not having the feature: it looks like evidence exists.

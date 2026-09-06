@@ -1474,10 +1474,21 @@ function captureTermsAcceptance(method){
 
 // Post it once a session exists. Sends the token, never a user id: the server
 // decides who this is, so a record cannot be written for somebody else.
+//
+// Guarded against itself. onAuthStateChange fires more than once for a single
+// sign-in -- INITIAL_SESSION and then SIGNED_IN -- and this is async: it reads
+// the flag, then awaits a token and a round trip, and only clears the flag
+// once the server confirms. Two overlapping calls both saw the flag still set
+// and both posted, so one signup wrote two identical consent rows. The flag
+// cannot be cleared up front instead; a failed request would then lose the
+// record entirely, which is the one outcome worse than a duplicate.
+let termsFlushInFlight=false;
 async function flushTermsAcceptance(){
+  if(termsFlushInFlight)return;
   let method="";
   try{method=localStorage.getItem(TERMS_METHOD_KEY)||"";}catch(e){}
   if(!method)return;
+  termsFlushInFlight=true;
   try{
     const token=await getSupabaseToken();
     if(!token)return;
@@ -1489,6 +1500,7 @@ async function flushTermsAcceptance(){
     // say so -- worse than no feature, because it looks like evidence exists.
     if(r.ok){try{localStorage.removeItem(TERMS_METHOD_KEY);}catch(e){}}
   }catch(e){/* keep the flag; the next sign-in tries again */}
+  finally{termsFlushInFlight=false;}
 }
 
 function capturePendingSignupName(){

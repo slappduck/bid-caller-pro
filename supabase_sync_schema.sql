@@ -224,3 +224,25 @@ create policy "Users see their own acceptances" on terms_acceptances
 -- Writes come from the server with the service-role key, which bypasses RLS.
 -- The browser is deliberately not allowed to insert: a client-reported "yes I
 -- agreed" is worth exactly as much as the checkbox it replaced.
+
+-- One acceptance per account per version.
+--
+-- The browser wrote two identical rows for a single signup: supabase-js fires
+-- onAuthStateChange more than once per sign-in, and the flush is async, so two
+-- calls both saw the pending flag and both posted. The client is fixed, but a
+-- consent table should not depend on a client being correct -- this makes a
+-- repeat write impossible rather than unlikely.
+--
+-- Append-only is unchanged. Re-accepting a version already accepted is not new
+-- information; accepting a NEW version still writes a new row, which is the
+-- whole point of storing the version.
+--
+-- Deduplicate first, keeping the earliest row -- the moment they actually
+-- agreed -- or the index cannot be created.
+delete from terms_acceptances a using terms_acceptances b
+ where a.user_id = b.user_id
+   and a.terms_version = b.terms_version
+   and a.privacy_version = b.privacy_version
+   and a.id > b.id;
+create unique index if not exists terms_acceptances_once
+  on terms_acceptances (user_id, terms_version, privacy_version);
