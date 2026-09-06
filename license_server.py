@@ -883,7 +883,7 @@ def _supabase_delete_user(user_id):
 # constants must match the dates published on terms.html and privacy.html,
 # and a test fails if they drift.
 TERMS_VERSION = os.environ.get("TERMS_VERSION", "2026-06-17")
-PRIVACY_VERSION = os.environ.get("PRIVACY_VERSION", "2026-09-07")
+PRIVACY_VERSION = os.environ.get("PRIVACY_VERSION", "2026-09-06")
 _ACCEPT_METHODS = {"signup_form", "google", "magic_link"}
 
 
@@ -965,6 +965,57 @@ def terms_accept():
                     "privacy_version": PRIVACY_VERSION})
 
 
+def _terms_email_hash(email):
+    """A one-way stand-in for an address that has been asked to disappear.
+
+    Salted with the service-role key so the digest cannot be reproduced from
+    a stolen copy of the table alone: without the salt an attacker can hash
+    a list of candidate addresses and learn who used to be a customer, which
+    is most of what deleting the address was supposed to prevent.
+    """
+    salt = (SUPABASE_SERVICE_ROLE_KEY or "")[:32]
+    digest = hashlib.sha256((salt + "|" + email).encode("utf-8")).hexdigest()
+    return "sha256:" + digest[:32]
+
+
+def _forget_terms_email(user_id, email):
+    """Minimise the consent record instead of deleting it.
+
+    Never delete these. The disclaimer of warranties, the liability cap and
+    the choice of Missouri law bind only somebody who accepted them, and a
+    dispute is most likely with someone who has already left -- so the record
+    has to outlive the account it belongs to.
+
+    What is kept is the proof: which account, which versions, what time. What
+    goes is the address, replaced by a salted hash. A specific later claim can
+    still be checked by hashing the address the claimant gives; what cannot be
+    done is reading off a roster of former customers.
+
+    Best effort by design. A failure here must never block a deletion the user
+    asked for -- their account still goes.
+    """
+    if not (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY and user_id):
+        return False
+    try:
+        req = urllib.request.Request(
+            f"{SUPABASE_URL}/rest/v1/terms_acceptances"
+            f"?user_id=eq.{urllib.parse.quote(str(user_id))}",
+            data=json.dumps({"email": _terms_email_hash(email)}).encode("utf-8"),
+            method="PATCH",
+            headers={"Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+                     "apikey": SUPABASE_SERVICE_ROLE_KEY,
+                     "Content-Type": "application/json",
+                     "Prefer": "return=minimal"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return resp.status in (200, 204)
+    except Exception as ex:
+        # No address in this line: the whole point of the call is to stop
+        # storing it.
+        print(f"[terms] could not minimise acceptance for {user_id}: "
+              f"{type(ex).__name__}", flush=True)
+        return False
+
+
 @app.route("/account/delete", methods=["POST"])
 def account_delete():
     """Delete the signed-in user's account and everything keyed to them.
@@ -999,6 +1050,10 @@ def account_delete():
 
     if not SUPABASE_SERVICE_ROLE_KEY:
         return jsonify({"ok": False, "reason": "not_configured"}), 500
+    # Before the auth user goes. The consent record is deliberately NOT
+    # deleted -- see _forget_terms_email -- but the address in it is.
+    _forget_terms_email(user["id"], email)
+
     if not _supabase_delete_user(user["id"]):
         return jsonify({"ok": False, "reason": "delete_failed"}), 502
 

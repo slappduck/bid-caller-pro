@@ -246,3 +246,24 @@ delete from terms_acceptances a using terms_acceptances b
    and a.id > b.id;
 create unique index if not exists terms_acceptances_once
   on terms_acceptances (user_id, terms_version, privacy_version);
+
+-- Consent records outlive the account.
+--
+-- terms_acceptances cascaded from auth.users, so /account/delete destroyed
+-- the row. The one record needed if a former customer ever disputes the
+-- disclaimer of warranties or the liability cap was the record that
+-- disappeared the moment they left.
+--
+-- Dropping the foreign key keeps user_id as a plain uuid. The RLS select
+-- policy still works for live accounts (auth.uid() = user_id); a deleted
+-- account has no session, so nobody can read its row through the API at all
+-- -- only the service role can, which is what makes it evidence rather than
+-- exposure.
+--
+-- The email is replaced with a one-way hash at deletion time (see
+-- _forget_terms_email in license_server.py), so what survives proves that
+-- account X accepted version Y at time T without keeping a readable list of
+-- former customers' addresses. Retention is disclosed in privacy.html; that
+-- disclosure is what makes keeping it lawful, and the two must stay in step.
+alter table terms_acceptances
+  drop constraint if exists terms_acceptances_user_id_fkey;

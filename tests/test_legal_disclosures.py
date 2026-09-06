@@ -184,3 +184,50 @@ class ConsentVersionsMatchThePublishedPagesTests(unittest.TestCase):
         self.assertEqual(self._constant("PRIVACY_VERSION"),
                          self._published_date("privacy.html"),
                          "PRIVACY_VERSION and privacy.html disagree")
+
+
+class RetentionAfterDeletionIsDisclosedTests(unittest.TestCase):
+    """Keeping data after someone asks to be deleted is lawful only if said.
+
+    Consent records now outlive the account. Retention to defend a legal
+    claim is a recognised exception, but it is an exception to a promise the
+    Privacy Policy makes in writing -- so the policy has to describe it, or
+    the retention itself becomes the violation. These tests exist because the
+    code and the promise are edited in different files, months apart.
+    """
+
+    def test_the_policy_says_a_consent_record_is_kept(self):
+        text = re.sub(r"<[^>]+>", " ", read(WEB, "privacy.html")).lower()
+        self.assertIn("after deletion", text)
+        self.assertTrue("hash" in text,
+                        "the policy must say the address is hashed, not kept")
+
+    def test_the_policy_still_promises_the_rest_is_deleted(self):
+        """A retention notice must not read as 'we keep everything'."""
+        text = re.sub(r"<[^>]+>", " ", read(WEB, "privacy.html")).lower()
+        self.assertIn("is deleted", text)
+
+    def test_the_app_tells_the_user_before_they_confirm(self):
+        """Finding out from the policy afterwards is not consent."""
+        app = read(WEB, "app.html")
+        i = app.index("Permanently removes your account")
+        panel = app[i:i + 600]
+        self.assertIn("hash", panel.lower(),
+                      "the delete screen does not mention what is kept")
+
+    def test_the_cascade_that_destroyed_the_record_is_gone(self):
+        sql = read(ROOT, "supabase_sync_schema.sql")
+        sql = "\n".join(l for l in sql.splitlines()
+                        if not l.strip().startswith("--"))
+        self.assertRegex(
+            sql, r"alter table terms_acceptances\s+drop constraint if exists",
+            "terms_acceptances still cascades from auth.users, so deleting "
+            "an account still destroys the consent record")
+
+    def test_the_server_minimises_rather_than_deletes(self):
+        src = read(ROOT, "license_server.py")
+        src = re.sub(r"^\s*#.*$", "", src, flags=re.M)
+        self.assertIn("_forget_terms_email", src)
+        self.assertNotRegex(
+            src, r"terms_acceptances[^\n]*\bmethod=\"DELETE\"",
+            "consent records must never be deleted outright")
