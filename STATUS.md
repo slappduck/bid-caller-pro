@@ -99,11 +99,20 @@ this is the engineering record of what the software does.
 | Area | Where it stands |
 |---|---|
 | **Statute of limitations** | Consent records kept 10 years after account deletion. NOT because the Terms choose Missouri law -- there is no forum-selection clause, so a customer can sue in their own state and limitations periods are generally procedural. 10 is the longest among MO/IL/IA/KY, the longest in the sales region |
-| **Automatic renewal** | Disclosed at the point of purchase on both plans, restated in the purchase email, cancellable from the Account screen, and annual subscribers are reminded 15-45 days ahead. California's law has no revenue threshold, so it applies from the first CA customer |
+| **Automatic renewal** | Disclosed at the point of purchase on both plans, restated in the purchase email, cancellable from the Account screen. California's law has no revenue threshold, so it applies from the first CA customer. **The 15-45 day reminder is built but not yet armed** -- see below |
 | **CAN-SPAM** | Federal and uniform. Physical address in every commercial email, honoured opt-outs, honest headers |
 | **State privacy laws** | CCPA and the newer state laws gate on $25M revenue or 100k consumers. Nowhere near any threshold. Revisit at scale, not now |
 | **Sales tax nexus** | Economic nexus is generally $100k or 200 transactions per state -- roughly 170 subscribers in one state at $49/mo. Not close. SaaS taxability still varies enough to stay on the accountant's list |
 | **Accessibility (ADA/WCAG)** | Audited 2026-09-08 with axe-core against WCAG 2.1 AA, every page, phone viewport. Four violations found, all fixed, zero remaining. Two were critical: pinch-zoom disabled across the whole app, and an unlabelled radius select on the marketing page. `tools/a11y_audit.js` re-runs it; `tests/test_accessibility.py` pins the regressions |
+
+**The annual renewal reminder needs two settings in Stripe before it works.**
+Stripe's own "upcoming renewals" email has been turned off, so ours is the
+only notice there is -- there is no longer a backstop. It needs
+`invoice.upcoming` enabled on the Live-mode webhook endpoint, and the
+upcoming-renewal timing changed from Stripe's default 7 days to 30 (Settings
+-> Billing -> Prevent failed payments; the same setting drives both). Until
+both are done an annual subscriber gets no reminder and nothing looks broken.
+Not urgent while there are no annual subscribers; required before the first.
 
 Two things only an attorney can settle, both raised and neither resolved:
 a **forum-selection clause** (without one the governing-law clause does less
