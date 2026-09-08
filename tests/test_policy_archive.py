@@ -44,9 +44,12 @@ def published_version(page):
 def comparable(html):
     """The policy text, minus the bits that legitimately differ."""
     html = re.sub(r'<div class="archived-banner".*?</div>\s*', "", html, flags=re.S)
+    # Normalise the subdirectory's relative links BEFORE stripping anything
+    # matched by href: an archived copy carries href="../legal/index.html",
+    # so stripping first silently missed it and reported a false mismatch.
+    html = re.sub(r'href="\.\./([^"]+)"', r'href="\1"', html)
     html = re.sub(r'<div class="updated"><a href="legal/index\.html">'
                   r'Previous versions</a></div>\s*', "", html)
-    html = re.sub(r'href="\.\./([^"]+)"', r'href="\1"', html)
     return re.sub(r"\s+", " ", html).strip()
 
 

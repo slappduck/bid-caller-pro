@@ -15,6 +15,7 @@ full tagged address still stored inside the row.
 These tests pin both halves: the row goes, and it goes for tagged addresses
 too.
 """
+import datetime
 import os
 import sys
 import unittest
@@ -106,40 +107,39 @@ if __name__ == "__main__":
 
 
 class ConsentSurvivesDeletionTests(unittest.TestCase):
-    """The one record that must NOT be deleted, and what goes from it.
+    """The one record that must NOT be deleted, and what happens to it.
 
     terms_acceptances cascaded from auth.users, so deleting an account
-    destroyed the acceptance row. The disclaimer of warranties, the liability
-    cap and the choice of Missouri law bind only somebody who accepted them,
-    and a dispute is likeliest with somebody who has already left -- so the
-    evidence was being thrown away at precisely the moment it started to
-    matter.
+    destroyed the acceptance row -- the evidence was thrown away at exactly
+    the moment a dispute became likely.
 
-    Keeping it is a trade, not a free win: /account/delete is supposed to
-    forget people. So the row is minimised rather than kept whole. The proof
-    stays -- which account, which versions, what time -- and the address is
-    replaced with a salted one-way hash. A later claim can still be checked by
-    hashing the address the claimant provides; a stolen copy of the table does
-    not yield a roster of former customers.
+    An earlier fix replaced the address with a salted hash. That was wrong
+    twice over. The salt was the service-role key, so rotating a credential
+    (routine, and mandatory after a leak) would have made every retained
+    record permanently unverifiable while still looking intact. And a hash is
+    weaker evidence than a plain address in the only situation the record
+    exists for: an address is a screenshot, a hash is a scheme somebody has to
+    explain and reproduce.
+
+    So the address stays, and the retention is bounded instead: the row is
+    stamped with a deletion date and a scheduled job removes it once claims
+    are time-barred. "Kept until claims expire" is both better evidence and a
+    better answer to a privacy question than "kept forever".
     """
 
     def setUp(self):
         self.db = {"revoked": [], "trials": {}, "issued": {}, "emails": {}}
-        self.patched = []
+        self.stamped = []
         self._orig_db, ls._db = ls._db, lambda: self.db
         self._orig_save, ls._save_db = ls._save_db, lambda d: None
         self._orig_user = ls._supabase_user
         self._orig_del = ls._supabase_delete_user
-        self._orig_forget = ls._forget_terms_email
+        self._orig_mark = ls._mark_terms_account_deleted
         self._orig_key = ls.SUPABASE_SERVICE_ROLE_KEY
         ls.SUPABASE_SERVICE_ROLE_KEY = "svc-key"
         ls._supabase_user = lambda tok: {"id": "u-1", "email": "josh@example.com"}
         ls._supabase_delete_user = lambda uid: True
-
-        def forget(uid, email):
-            self.patched.append((uid, email))
-            return True
-        ls._forget_terms_email = forget
+        ls._mark_terms_account_deleted = lambda uid: self.stamped.append(uid) or True
         self.app = ls.app.test_client()
 
     def tearDown(self):
@@ -147,62 +147,109 @@ class ConsentSurvivesDeletionTests(unittest.TestCase):
         ls._save_db = self._orig_save
         ls._supabase_user = self._orig_user
         ls._supabase_delete_user = self._orig_del
-        ls._forget_terms_email = self._orig_forget
+        ls._mark_terms_account_deleted = self._orig_mark
         ls.SUPABASE_SERVICE_ROLE_KEY = self._orig_key
 
     def _delete(self):
         return self.app.post("/account/delete",
                              json={"supabase_token": "t", "device_id": "d1"})
 
-    def test_the_address_is_minimised_on_the_way_out(self):
+    def test_the_record_is_stamped_not_removed(self):
         r = self._delete()
         self.assertEqual(r.status_code, 200)
-        self.assertEqual(self.patched, [("u-1", "josh@example.com")])
+        self.assertEqual(self.stamped, ["u-1"])
 
     def test_it_happens_before_the_auth_user_goes(self):
         """Afterwards the row may already be unreachable."""
         order = []
-        ls._forget_terms_email = lambda uid, e: order.append("minimise") or True
+        ls._mark_terms_account_deleted = lambda uid: order.append("stamp") or True
         ls._supabase_delete_user = lambda uid: order.append("delete") or True
         self._delete()
-        self.assertEqual(order, ["minimise", "delete"])
+        self.assertEqual(order, ["stamp", "delete"])
 
-    def test_a_failure_to_minimise_never_blocks_the_deletion(self):
+    def test_a_failure_to_stamp_never_blocks_the_deletion(self):
         """They asked to be deleted. That has to happen regardless."""
-        ls._forget_terms_email = lambda uid, e: False
+        ls._mark_terms_account_deleted = lambda uid: False
         r = self._delete()
         self.assertEqual(r.status_code, 200)
         self.assertTrue(r.get_json()["ok"])
 
 
-class ForgottenEmailHashTests(unittest.TestCase):
+class RetentionPurgeTests(unittest.TestCase):
+    """What the scheduled job may and may not delete."""
+
     def setUp(self):
+        self.calls = []
+        self._orig_open = ls.urllib.request.urlopen
+        self._orig_url = ls.SUPABASE_URL
         self._orig_key = ls.SUPABASE_SERVICE_ROLE_KEY
-        ls.SUPABASE_SERVICE_ROLE_KEY = "svc-key-value-for-salting-purposes"
+        self._orig_cron = ls.CRON_SECRET
+        ls.SUPABASE_URL = "https://project.supabase.co"
+        ls.SUPABASE_SERVICE_ROLE_KEY = "svc-key"
+        ls.CRON_SECRET = "cron-secret"
+        outer = self
+
+        class Resp:
+            def __enter__(self_):
+                return self_
+
+            def __exit__(self_, *a):
+                return False
+
+            def read(self_):
+                return b"[]"
+
+        def fake_open(req, timeout=None):
+            outer.calls.append((req.get_method(), req.full_url))
+            return Resp()
+        ls.urllib.request.urlopen = fake_open
+        self.app = ls.app.test_client()
 
     def tearDown(self):
+        ls.urllib.request.urlopen = self._orig_open
+        ls.SUPABASE_URL = self._orig_url
         ls.SUPABASE_SERVICE_ROLE_KEY = self._orig_key
+        ls.CRON_SECRET = self._orig_cron
 
-    def test_the_address_does_not_appear_in_the_result(self):
-        out = ls._terms_email_hash("josh@example.com")
-        self.assertNotIn("josh", out)
-        self.assertNotIn("example.com", out)
+    def test_it_never_touches_a_live_customers_record(self):
+        """No deletion date means the account still exists, and a live
+        customer is still bound by what they accepted."""
+        ls._purge_expired_terms_acceptances()
+        method, url = self.calls[0]
+        self.assertEqual(method, "DELETE")
+        self.assertIn("account_deleted_at=not.is.null", url)
 
-    def test_the_same_address_always_gives_the_same_value(self):
-        """Otherwise a later claim could never be checked against it."""
-        self.assertEqual(ls._terms_email_hash("josh@example.com"),
-                         ls._terms_email_hash("josh@example.com"))
+    def test_it_only_removes_records_past_the_period(self):
+        ls._purge_expired_terms_acceptances()
+        _, url = self.calls[0]
+        self.assertIn("account_deleted_at=lt.", url)
 
-    def test_different_addresses_differ(self):
-        self.assertNotEqual(ls._terms_email_hash("a@example.com"),
-                            ls._terms_email_hash("b@example.com"))
+    def test_the_cutoff_is_the_configured_number_of_years_ago(self):
+        got = ls._purge_expired_terms_acceptances()
+        cutoff = datetime.datetime.fromisoformat(got["cutoff"])
+        years = (datetime.datetime.now(datetime.timezone.utc) - cutoff).days / 365.0
+        self.assertAlmostEqual(years, ls.TERMS_RETENTION_YEARS, delta=0.1)
 
-    def test_it_is_salted_so_the_table_alone_cannot_be_reversed(self):
-        """Unsalted, an attacker hashes a candidate list and learns who was
-        a customer -- most of what deleting the address was meant to stop."""
-        first = ls._terms_email_hash("josh@example.com")
-        ls.SUPABASE_SERVICE_ROLE_KEY = "a-completely-different-service-key"
-        self.assertNotEqual(first, ls._terms_email_hash("josh@example.com"))
+    def test_the_endpoint_refuses_without_the_cron_secret(self):
+        r = self.app.post("/terms/purge", json={})
+        self.assertEqual(r.status_code, 403)
+        self.assertEqual(self.calls, [], "it purged anyway")
 
-    def test_it_is_marked_as_a_hash_rather_than_looking_like_an_address(self):
-        self.assertTrue(ls._terms_email_hash("a@b.com").startswith("sha256:"))
+    def test_the_endpoint_refuses_a_wrong_secret(self):
+        r = self.app.post("/terms/purge", json={}, headers={"X-Cron-Secret": "nope"})
+        self.assertEqual(r.status_code, 403)
+        self.assertEqual(self.calls, [])
+
+    def test_the_endpoint_runs_with_the_right_secret(self):
+        r = self.app.post("/terms/purge", json={},
+                          headers={"X-Cron-Secret": "cron-secret"})
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.get_json()["ok"])
+        self.assertEqual(len(self.calls), 1)
+
+    def test_an_unset_cron_secret_does_not_open_the_door(self):
+        """An empty configured secret must not match an empty supplied one."""
+        ls.CRON_SECRET = ""
+        r = self.app.post("/terms/purge", json={}, headers={"X-Cron-Secret": ""})
+        self.assertEqual(r.status_code, 403)
+        self.assertEqual(self.calls, [])

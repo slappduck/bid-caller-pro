@@ -189,31 +189,59 @@ class ConsentVersionsMatchThePublishedPagesTests(unittest.TestCase):
 class RetentionAfterDeletionIsDisclosedTests(unittest.TestCase):
     """Keeping data after someone asks to be deleted is lawful only if said.
 
-    Consent records now outlive the account. Retention to defend a legal
-    claim is a recognised exception, but it is an exception to a promise the
-    Privacy Policy makes in writing -- so the policy has to describe it, or
-    the retention itself becomes the violation. These tests exist because the
-    code and the promise are edited in different files, months apart.
+    Consent records outlive the account. Retention to defend a legal claim is
+    a recognised exception, but it is an exception to a promise the Privacy
+    Policy makes in writing -- so the policy has to describe it, and describe
+    it accurately, or the retention itself becomes the violation.
+
+    An earlier design hashed the address instead of keeping it. That was
+    dropped: the salt was the service-role key, so rotating a credential would
+    have made every retained record permanently unverifiable while still
+    looking intact, and a hash is worse evidence than a plain address in the
+    one situation the record exists for. The address is kept, and the
+    retention is bounded instead.
     """
 
+    NUMBER_WORDS = {"ten": 10, "five": 5, "seven": 7, "three": 3, "twelve": 12}
+
+    def policy_text(self):
+        return re.sub(r"<[^>]+>", " ", read(WEB, "privacy.html")).lower()
+
+    def retention_years_in_code(self):
+        m = re.search(r'TERMS_RETENTION_YEARS\s*=\s*int\(os\.environ\.get\('
+                      r'\s*"TERMS_RETENTION_YEARS"\s*,\s*"(\d+)"\s*\)\)',
+                      read(ROOT, "license_server.py"))
+        self.assertIsNotNone(m, "the retention period is not a constant")
+        return int(m.group(1))
+
     def test_the_policy_says_a_consent_record_is_kept(self):
-        text = re.sub(r"<[^>]+>", " ", read(WEB, "privacy.html")).lower()
+        text = self.policy_text()
         self.assertIn("after deletion", text)
-        self.assertTrue("hash" in text,
-                        "the policy must say the address is hashed, not kept")
+        self.assertIn("accepted", text)
+
+    def test_the_policy_states_how_long_and_agrees_with_the_code(self):
+        """"We keep it for a while" is not a retention notice."""
+        text = self.policy_text()
+        years = self.retention_years_in_code()
+        said = [n for word, n in self.NUMBER_WORDS.items()
+                if re.search(r"\b%s years?\b" % word, text)]
+        said += [int(m) for m in re.findall(r"\b(\d+) years?\b", text)]
+        self.assertIn(years, said,
+                      "the policy does not state the %d-year period the code "
+                      "actually enforces" % years)
 
     def test_the_policy_still_promises_the_rest_is_deleted(self):
         """A retention notice must not read as 'we keep everything'."""
-        text = re.sub(r"<[^>]+>", " ", read(WEB, "privacy.html")).lower()
-        self.assertIn("is deleted", text)
+        self.assertIn("is deleted", self.policy_text())
 
     def test_the_app_tells_the_user_before_they_confirm(self):
         """Finding out from the policy afterwards is not consent."""
         app = read(WEB, "app.html")
         i = app.index("Permanently removes your account")
-        panel = app[i:i + 600]
-        self.assertIn("hash", panel.lower(),
-                      "the delete screen does not mention what is kept")
+        panel = app[i:i + 600].lower()
+        self.assertRegex(panel, r"\b(ten|10) years\b",
+                         "the delete screen does not say how long the "
+                         "consent record is kept")
 
     def test_the_cascade_that_destroyed_the_record_is_gone(self):
         sql = read(ROOT, "supabase_sync_schema.sql")
@@ -224,10 +252,28 @@ class RetentionAfterDeletionIsDisclosedTests(unittest.TestCase):
             "terms_acceptances still cascades from auth.users, so deleting "
             "an account still destroys the consent record")
 
-    def test_the_server_minimises_rather_than_deletes(self):
-        src = read(ROOT, "license_server.py")
-        src = re.sub(r"^\s*#.*$", "", src, flags=re.M)
-        self.assertIn("_forget_terms_email", src)
-        self.assertNotRegex(
-            src, r"terms_acceptances[^\n]*\bmethod=\"DELETE\"",
-            "consent records must never be deleted outright")
+    def test_deletion_stamps_the_record_rather_than_removing_it(self):
+        src = re.sub(r"^\s*#.*$", "", read(ROOT, "license_server.py"), flags=re.M)
+        body = src[src.index("def account_delete("):]
+        body = body[:body.index("\ndef ")] if "\ndef " in body else body
+        self.assertIn("_mark_terms_account_deleted", body)
+
+    def test_the_scheduled_purge_is_the_only_thing_that_deletes_them(self):
+        """A bounded promise is only true if exactly one thing enforces it,
+        and nothing else can quietly remove a record early."""
+        src = re.sub(r"^\s*#.*$", "", read(ROOT, "license_server.py"), flags=re.M)
+        deleters = re.findall(
+            r'def (\w+)\([^)]*\):(?:(?!\ndef ).)*?terms_acceptances'
+            r'(?:(?!\ndef ).)*?method="DELETE"', src, re.S)
+        self.assertEqual(deleters, ["_purge_expired_terms_acceptances"],
+                         "unexpected deleter(s) of terms_acceptances: %s"
+                         % deleters)
+
+    def test_something_actually_runs_the_purge(self):
+        """Otherwise the policy promises a deletion that never happens."""
+        wf = os.path.join(ROOT, ".github", "workflows",
+                          "purge-expired-consent.yml")
+        self.assertTrue(os.path.exists(wf), "no scheduled purge job")
+        text = read(wf)
+        self.assertIn("/terms/purge", text)
+        self.assertIn("schedule:", text)

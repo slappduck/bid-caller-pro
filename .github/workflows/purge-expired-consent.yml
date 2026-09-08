@@ -1,0 +1,56 @@
+name: Purge expired consent records
+
+# terms_acceptances is append-only and deliberately outlives the accounts it
+# belongs to: the disclaimer of warranties, the liability cap and the choice
+# of Missouri law bind only somebody who accepted them, and a dispute is
+# likeliest with somebody who has already left.
+#
+# "Kept forever" is a much worse answer to a privacy question than "kept until
+# claims are time-barred, then deleted", and the second one is only true if
+# something actually deletes them. This is that something.
+#
+# It only ever touches rows whose account is already gone. A live customer is
+# still bound by what they accepted, so their row has no deletion date and is
+# never a candidate.
+#
+# Monthly is plenty for a ten-year window -- this is a promise being kept, not
+# a queue being drained.
+#
+# Same two repo secrets the other scheduled jobs use: BIDCALLER_SERVER_URL and
+# CRON_SECRET. Without them the endpoint replies 403 and nothing happens.
+#
+# Run it any time without waiting: Actions tab -> this workflow -> Run workflow.
+
+on:
+  schedule:
+    # 08:00 UTC on the 1st = ~3am US Central, before the daily jobs.
+    - cron: "0 8 1 * *"
+  workflow_dispatch:
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete consent records past their retention period
+        env:
+          SERVER: ${{ secrets.BIDCALLER_SERVER_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$SERVER" ] || [ -z "$CRON_SECRET" ]; then
+            echo "BIDCALLER_SERVER_URL or CRON_SECRET not set — skipping."
+            exit 0
+          fi
+          # Render instances sleep; the first request wakes it.
+          code=$(curl -sS -o /tmp/purge.json -w '%{http_code}' \
+            --max-time 600 \
+            -X POST "$SERVER/terms/purge" \
+            -H 'Content-Type: application/json' \
+            -H "X-Cron-Secret: $CRON_SECRET" \
+            -d '{}')
+          echo "HTTP $code"
+          cat /tmp/purge.json
+          echo
+          # Worth failing on. A purge that silently stops running turns a
+          # bounded retention promise into an indefinite one, and nothing
+          # else would reveal it.
+          [ "$code" = "200" ]

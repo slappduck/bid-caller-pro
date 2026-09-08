@@ -267,3 +267,23 @@ create unique index if not exists terms_acceptances_once
 -- disclosure is what makes keeping it lawful, and the two must stay in step.
 alter table terms_acceptances
   drop constraint if exists terms_acceptances_user_id_fkey;
+
+-- When the account behind a consent record was deleted.
+--
+-- The record is kept to evidence agreement to the Terms, so it has to outlive
+-- the account. It does not have to outlive the period in which anyone could
+-- sue over it, and "we keep this forever" is a much worse answer to a privacy
+-- question than "we keep it until claims are time-barred, then it goes".
+--
+-- Measured from deletion rather than from acceptance, because a claim can
+-- arise from the last day of the relationship, not the first. Somebody who
+-- signed up in 2026 and left in 2036 is exposed until 2046, and purging on
+-- acceptance date would have destroyed the evidence in 2036.
+--
+-- NULL means the account still exists, and those rows are never purged: a
+-- live customer is still bound by what they accepted.
+alter table terms_acceptances
+  add column if not exists account_deleted_at timestamptz;
+create index if not exists terms_acceptances_deleted
+  on terms_acceptances (account_deleted_at)
+  where account_deleted_at is not null;

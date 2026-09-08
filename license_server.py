@@ -922,7 +922,7 @@ def _supabase_delete_user(user_id):
 # constants must match the dates published on terms.html and privacy.html,
 # and a test fails if they drift.
 TERMS_VERSION = os.environ.get("TERMS_VERSION", "2026-06-17")
-PRIVACY_VERSION = os.environ.get("PRIVACY_VERSION", "2026-09-06")
+PRIVACY_VERSION = os.environ.get("PRIVACY_VERSION", "2026-09-08")
 _ACCEPT_METHODS = {"signup_form", "google", "magic_link"}
 
 
@@ -1004,42 +1004,55 @@ def terms_accept():
                     "privacy_version": PRIVACY_VERSION})
 
 
-def _terms_email_hash(email):
-    """A one-way stand-in for an address that has been asked to disappear.
+# How long a consent record outlives the account it belongs to.
+#
+# Not Missouri's period, despite the Terms choosing Missouri law. Choice of
+# law is not choice of forum: there is no forum-selection clause, so a
+# customer in another state can sue where they live, and limitations periods
+# are generally treated as procedural -- the court applies its OWN, not the
+# one the contract picked. The relevant number is therefore the longest period
+# among the states customers are actually in, not the one in the clause.
+#
+# Ten covers it. Missouri, Illinois, Iowa and Kentucky sit at ten for written
+# contracts and are the longest in the sales region; the states outside it we
+# have approached are shorter. Missouri itself offers ten on a writing for the
+# payment of money (RSMo 516.110) and five on other written contracts
+# (516.120), and which one a subscription falls under is exactly the question
+# this is not the place to settle -- another reason to take the longer figure.
+#
+# Keeping evidence a few years past the point it could be needed costs
+# nothing. Destroying it three years early cannot be undone. Confirm the
+# period with the attorney, along with whether to add a forum-selection
+# clause, and change the number here.
+TERMS_RETENTION_YEARS = int(os.environ.get("TERMS_RETENTION_YEARS", "10"))
 
-    Salted with the service-role key so the digest cannot be reproduced from
-    a stolen copy of the table alone: without the salt an attacker can hash
-    a list of candidate addresses and learn who used to be a customer, which
-    is most of what deleting the address was supposed to prevent.
-    """
-    salt = (SUPABASE_SERVICE_ROLE_KEY or "")[:32]
-    digest = hashlib.sha256((salt + "|" + email).encode("utf-8")).hexdigest()
-    return "sha256:" + digest[:32]
 
+def _mark_terms_account_deleted(user_id):
+    """Stamp the consent record instead of hashing or removing it.
 
-def _forget_terms_email(user_id, email):
-    """Minimise the consent record instead of deleting it.
+    An earlier version replaced the address with a salted hash. Two things
+    were wrong with that. The salt was the service-role key, so rotating a
+    credential -- routine, and mandatory after any leak -- would have made
+    every retained record permanently unverifiable while still looking
+    intact. And a hash is worse evidence in practice: a plain address is a
+    screenshot, a hash is a scheme that has to be explained and reproduced.
 
-    Never delete these. The disclaimer of warranties, the liability cap and
-    the choice of Missouri law bind only somebody who accepted them, and a
-    dispute is most likely with someone who has already left -- so the record
-    has to outlive the account it belongs to.
+    So the address stays and the row gets a deletion date, which is what makes
+    the retention bounded and answerable rather than indefinite.
 
-    What is kept is the proof: which account, which versions, what time. What
-    goes is the address, replaced by a salted hash. A specific later claim can
-    still be checked by hashing the address the claimant gives; what cannot be
-    done is reading off a roster of former customers.
-
-    Best effort by design. A failure here must never block a deletion the user
-    asked for -- their account still goes.
+    Best effort. A failure here must never block a deletion somebody asked
+    for -- their account still goes.
     """
     if not (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY and user_id):
         return False
     try:
         req = urllib.request.Request(
             f"{SUPABASE_URL}/rest/v1/terms_acceptances"
-            f"?user_id=eq.{urllib.parse.quote(str(user_id))}",
-            data=json.dumps({"email": _terms_email_hash(email)}).encode("utf-8"),
+            f"?user_id=eq.{urllib.parse.quote(str(user_id))}"
+            f"&account_deleted_at=is.null",
+            data=json.dumps({
+                "account_deleted_at":
+                    datetime.datetime.now(datetime.timezone.utc).isoformat()}).encode("utf-8"),
             method="PATCH",
             headers={"Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
                      "apikey": SUPABASE_SERVICE_ROLE_KEY,
@@ -1048,11 +1061,58 @@ def _forget_terms_email(user_id, email):
         with urllib.request.urlopen(req, timeout=15) as resp:
             return resp.status in (200, 204)
     except Exception as ex:
-        # No address in this line: the whole point of the call is to stop
-        # storing it.
-        print(f"[terms] could not minimise acceptance for {user_id}: "
+        # Type only: the URL carries the project ref.
+        print(f"[terms] could not stamp deletion for {user_id}: "
               f"{type(ex).__name__}", flush=True)
         return False
+
+
+def _purge_expired_terms_acceptances():
+    """Delete consent records whose retention period has run.
+
+    Only rows belonging to accounts that are already gone -- a live customer
+    is still bound by what they accepted, so account_deleted_at is null for
+    them and they are never touched.
+
+    This is the one place in the codebase permitted to delete from this
+    table, and it is why the policy can promise a bounded retention rather
+    than "indefinitely".
+    """
+    if not (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY):
+        return {"ok": False, "reason": "not_configured"}
+    cutoff = (datetime.datetime.now(datetime.timezone.utc)
+              - datetime.timedelta(days=365 * TERMS_RETENTION_YEARS)).isoformat()
+    try:
+        req = urllib.request.Request(
+            f"{SUPABASE_URL}/rest/v1/terms_acceptances"
+            f"?account_deleted_at=not.is.null"
+            f"&account_deleted_at=lt.{urllib.parse.quote(cutoff)}",
+            method="DELETE",
+            headers={"Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+                     "apikey": SUPABASE_SERVICE_ROLE_KEY,
+                     "Prefer": "return=representation,count=exact"})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            body = resp.read().decode("utf-8", "replace")
+            try:
+                purged = len(json.loads(body))
+            except Exception:
+                purged = 0
+            return {"ok": True, "purged": purged, "cutoff": cutoff,
+                    "retention_years": TERMS_RETENTION_YEARS}
+    except Exception as ex:
+        print(f"[terms] purge failed: {type(ex).__name__}", flush=True)
+        return {"ok": False, "reason": type(ex).__name__}
+
+
+@app.route("/terms/purge", methods=["POST"])
+def terms_purge():
+    """Scheduled cleanup. Gated by CRON_SECRET, like the other cron jobs."""
+    data = request.get_json(force=True, silent=True) or {}
+    token = data.get("token") or request.headers.get("X-Cron-Secret", "")
+    if not CRON_SECRET or not hmac.compare_digest(token, CRON_SECRET):
+        return jsonify({"ok": False, "reason": "unauthorized"}), 403
+    result = _purge_expired_terms_acceptances()
+    return jsonify(result), (200 if result.get("ok") else 503)
 
 
 @app.route("/account/delete", methods=["POST"])
@@ -1090,8 +1150,9 @@ def account_delete():
     if not SUPABASE_SERVICE_ROLE_KEY:
         return jsonify({"ok": False, "reason": "not_configured"}), 500
     # Before the auth user goes. The consent record is deliberately NOT
-    # deleted -- see _forget_terms_email -- but the address in it is.
-    _forget_terms_email(user["id"], email)
+    # deleted -- see _mark_terms_account_deleted -- it is dated, so the
+    # retention period has something to run from.
+    _mark_terms_account_deleted(user["id"])
 
     if not _supabase_delete_user(user["id"]):
         return jsonify({"ok": False, "reason": "delete_failed"}), 502
