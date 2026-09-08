@@ -91,6 +91,26 @@ it.
 | A reused email inherited the old account's data | Deleting an account and signing up again with the same address makes a NEW account. `claimDeviceFor()` compared addresses, kept the cache, and `syncPullFeeds()` uploaded it into the new account. Now compares account ids, with a fallback so existing devices are not wiped |
 | Consent records died with the account | `terms_acceptances` cascaded from `auth.users`. The evidence disappeared exactly when a dispute became likely. Kept now, with the address replaced by a salted hash, and disclosed in three places |
 
+### Compliance position, selling into all states (2026-09-08)
+
+Where the exposure actually is, and what covers it. Not legal advice --
+this is the engineering record of what the software does.
+
+| Area | Where it stands |
+|---|---|
+| **Statute of limitations** | Consent records kept 10 years after account deletion. NOT because the Terms choose Missouri law -- there is no forum-selection clause, so a customer can sue in their own state and limitations periods are generally procedural. 10 is the longest among MO/IL/IA/KY, the longest in the sales region |
+| **Automatic renewal** | Disclosed at the point of purchase on both plans, restated in the purchase email, cancellable from the Account screen, and annual subscribers are reminded 15-45 days ahead. California's law has no revenue threshold, so it applies from the first CA customer |
+| **CAN-SPAM** | Federal and uniform. Physical address in every commercial email, honoured opt-outs, honest headers |
+| **State privacy laws** | CCPA and the newer state laws gate on $25M revenue or 100k consumers. Nowhere near any threshold. Revisit at scale, not now |
+| **Sales tax nexus** | Economic nexus is generally $100k or 200 transactions per state -- roughly 170 subscribers in one state at $49/mo. Not close. SaaS taxability still varies enough to stay on the accountant's list |
+| **Accessibility (ADA/WCAG)** | **Not audited.** The one open item on this table that is purely engineering work, and consumer-facing sites do draw claims |
+
+Two things only an attorney can settle, both raised and neither resolved:
+a **forum-selection clause** (without one the governing-law clause does less
+work than it looks like it does, and a dispute could be heard anywhere), and
+**whether to add arbitration at all** -- there is currently none, despite an
+earlier note in this file implying otherwise.
+
 ## Known gaps / not started
 
 - **Bonfire / OpenGov / PlanetBids adapters.** Researched, all three look

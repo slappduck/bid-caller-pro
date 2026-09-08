@@ -1198,7 +1198,28 @@ def _stripe_verify(payload, sig_header):
         return False
 
 
-def _send_key_email(email, key):
+BILLING_PORTAL = ("https://billing.stripe.com/p/login/"
+                  "3cIcN4an28420Yad2fejK00")
+
+# What a subscriber is owed in writing after they pay, beyond the key.
+#
+# California's automatic-renewal law wants the renewal terms and the way to
+# cancel restated in an acknowledgement AFTER the purchase, not only on the
+# page where the buyer clicked. It has no revenue threshold, so it applies
+# from the first California customer -- and the states that copied it work the
+# same way. The purchase screen already says this; saying it again here is the
+# part that was missing.
+def _renewal_terms_text(plan):
+    price = "$399/year" if plan == "annual" else "$49/month"
+    return ("Your subscription renews automatically at "
+            f"{price} until you cancel.\n"
+            "Cancel any time from the Account screen in the app, or here:\n"
+            f"    {BILLING_PORTAL}\n"
+            "Cancelling stops future charges; access continues to the end of "
+            "the period you have already paid for.")
+
+
+def _send_key_email(email, key, plan="monthly"):
     """Email the license key to the buyer (only if Resend is configured)."""
     if not email:
         return
@@ -1206,7 +1227,110 @@ def _send_key_email(email, key):
                 "Thanks for subscribing to Bid Caller Pro!\n\n"
                 f"Your license key:\n\n    {key}\n\n"
                 "If the app didn't unlock automatically, open it, go to the Plan "
-                "tab, paste the key under 'Have a license key?', and tap Activate.")
+                "tab, paste the key under 'Have a license key?', and tap Activate.\n\n"
+                + _renewal_terms_text(plan) + "\n\n"
+                + (MAILING_ADDRESS or ""))
+
+
+# ── Renewal reminders ───────────────────────────────────────────────────────
+#
+# A subscription of a year or more has to be reminded before it renews --
+# California asks for 15 to 45 days' notice, and an annual plan is exactly the
+# case the rule exists for: a charge arriving twelve months after the last
+# time anyone thought about it.
+#
+# Driven by Stripe's invoice.upcoming webhook, which needs no Stripe API key --
+# this server holds only the webhook secret. Stripe sends it 7 days ahead by
+# DEFAULT, which is outside the window the law asks for, so the notice period
+# is set in the Stripe dashboard (Settings -> Billing -> Subscriptions ->
+# upcoming invoice webhook) and checked here rather than assumed.
+RENEWAL_NOTICE_MIN_DAYS = int(os.environ.get("RENEWAL_NOTICE_MIN_DAYS", "15"))
+RENEWAL_NOTICE_MAX_DAYS = int(os.environ.get("RENEWAL_NOTICE_MAX_DAYS", "45"))
+_RENEWAL_SENT_KEY = "bidcaller:renewal_reminders"
+
+
+def _days_until(unix_ts):
+    try:
+        delta = datetime.datetime.fromtimestamp(
+            float(unix_ts), datetime.timezone.utc) - datetime.datetime.now(
+                datetime.timezone.utc)
+        return delta.days
+    except Exception:
+        return None
+
+
+def _send_renewal_reminder(email, plan, renews_on, days_out):
+    if not email:
+        return False
+    when = renews_on or "shortly"
+    price = "$399" if plan == "annual" else "$49"
+    _send_email(
+        email,
+        "Your CurbCall Pro subscription renews soon",
+        f"This is a reminder that your annual CurbCall Pro subscription "
+        f"renews on {when} (about {days_out} days from now).\n\n"
+        f"You will be charged {price}.\n\n"
+        + _renewal_terms_text(plan) + "\n\n"
+        "No action is needed if you want to continue.\n\n"
+        + (MAILING_ADDRESS or ""))
+    return True
+
+
+def _handle_upcoming_invoice(db, obj):
+    """Remind an annual subscriber before the card is charged again.
+
+    Returns a short string for the log and for tests. Monthly plans are not
+    reminded: the rule is about terms of a year or more, and a monthly notice
+    every month is noise that trains people to ignore the one that matters.
+    """
+    cust = obj.get("customer") or ""
+    info = (db.get("customers", {}) or {}).get(cust)
+    if not info:
+        return "unknown_customer"
+    if (info.get("plan") or "monthly") != "annual":
+        return "monthly_no_reminder"
+
+    days_out = _days_until(obj.get("next_payment_attempt")
+                           or obj.get("period_end"))
+    if days_out is None:
+        return "no_date"
+    if not (RENEWAL_NOTICE_MIN_DAYS <= days_out <= RENEWAL_NOTICE_MAX_DAYS):
+        # Loud: a reminder outside the window is not a reminder that counts,
+        # and the cause is a Stripe dashboard setting nobody would think to
+        # check. Silence here would look exactly like compliance.
+        print(f"[stripe] upcoming invoice {days_out} days out, outside the "
+              f"{RENEWAL_NOTICE_MIN_DAYS}-{RENEWAL_NOTICE_MAX_DAYS} day "
+              f"notice window -- change the upcoming-invoice webhook timing "
+              f"in Stripe", flush=True)
+        return "outside_window"
+
+    # Stripe retries webhooks. Two identical warnings read as a billing error.
+    invoice_id = obj.get("id") or f"{cust}:{obj.get('next_payment_attempt')}"
+    try:
+        sent = kv_backend.get(_RENEWAL_SENT_KEY, None) or {}
+    except Exception:
+        sent = {}
+    if invoice_id in sent:
+        return "already_sent"
+
+    renews_on = ""
+    try:
+        renews_on = datetime.datetime.fromtimestamp(
+            float(obj.get("next_payment_attempt") or obj.get("period_end")),
+            datetime.timezone.utc).strftime("%B %-d, %Y")
+    except Exception:
+        pass
+    _send_renewal_reminder(info.get("email", ""), "annual", renews_on, days_out)
+    sent[invoice_id] = int(time.time())
+    # Keep the newest few hundred; this only exists to stop a duplicate.
+    if len(sent) > 500:
+        for k in sorted(sent, key=sent.get)[:len(sent) - 500]:
+            sent.pop(k, None)
+    try:
+        kv_backend.set(_RENEWAL_SENT_KEY, sent)
+    except Exception:
+        pass
+    return "sent"
 
 
 # ── Admin error alerts: know about a crash before a customer reports it ──
@@ -2085,7 +2209,7 @@ def stripe_webhook():
         if ref_code:
             _apply_referral_reward(db, ref_code, email, device)
         _save_db(db)
-        _send_key_email(email, key)
+        _send_key_email(email, key, plan)
         print(f"[stripe] issued {plan} key for {email or device}", flush=True)
 
     elif etype == "invoice.paid":
@@ -2096,6 +2220,10 @@ def stripe_webhook():
                        info.get("plan", "monthly"))
             _save_db(db)
             print(f"[stripe] renewed for {cust}", flush=True)
+
+    elif etype == "invoice.upcoming":
+        outcome = _handle_upcoming_invoice(db, obj)
+        print(f"[stripe] upcoming invoice: {outcome}", flush=True)
 
     elif etype in ("customer.subscription.deleted", "customer.subscription.paused"):
         cust = obj.get("customer") or ""
