@@ -38,7 +38,7 @@
 :root{
   --bg:#0b0d14; --panel:#13162a; --card:#1c2035; --line:#2a2f4a;
   --amber:#f59e0b; --amber-d:#d97706; --green:#22c55e; --blue:#3b82f6;
-  --text:#f1f5f9; --text2:#9aa4ba; --text3:#5b6479;
+  --text:#f1f5f9; --text2:#9aa4ba; --text3:#8b93a7;
   --ui:'Inter',sans-serif; --display:'Bebas Neue',sans-serif; --mono:'DM Mono',monospace;
 }
 html{scroll-behavior:smooth;}
@@ -403,7 +403,7 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
                style="flex:1;min-width:11rem;background:var(--bg);border:1px solid var(--line);
                       border-radius:10px;padding:0.75rem 0.9rem;color:var(--text);
                       font-family:var(--ui);font-size:1rem;" />
-        <select id="cov-radius"
+        <select id="cov-radius" aria-label="Search radius in miles"
                 style="background:var(--bg);border:1px solid var(--line);border-radius:10px;
                        padding:0.75rem 0.6rem;color:var(--text);font-family:var(--ui);">
           <option value="25">25 mi</option>
@@ -522,7 +522,7 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
      390px screen it pushed the footer 56px past the edge and made the whole
      page scroll sideways. -->
 <div class="wrap" style="margin-top:1rem;color:var(--text3);font-size:0.78rem;overflow-wrap:anywhere;">
-    Questions? <a href="mailto:support@curbcallpro.com" style="color:var(--amber);">support@curbcallpro.com</a> &mdash; a real person answers.<br />
+    Questions? <a href="mailto:support@curbcallpro.com" style="color:var(--amber);text-decoration:underline;">support@curbcallpro.com</a> &mdash; a real person answers.<br />
     © 2026 CurbCall Pro by Oblique Systems. Payments powered by Stripe.</div>
 </footer>
 

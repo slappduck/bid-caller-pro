@@ -103,7 +103,7 @@ this is the engineering record of what the software does.
 | **CAN-SPAM** | Federal and uniform. Physical address in every commercial email, honoured opt-outs, honest headers |
 | **State privacy laws** | CCPA and the newer state laws gate on $25M revenue or 100k consumers. Nowhere near any threshold. Revisit at scale, not now |
 | **Sales tax nexus** | Economic nexus is generally $100k or 200 transactions per state -- roughly 170 subscribers in one state at $49/mo. Not close. SaaS taxability still varies enough to stay on the accountant's list |
-| **Accessibility (ADA/WCAG)** | **Not audited.** The one open item on this table that is purely engineering work, and consumer-facing sites do draw claims |
+| **Accessibility (ADA/WCAG)** | Audited 2026-09-08 with axe-core against WCAG 2.1 AA, every page, phone viewport. Four violations found, all fixed, zero remaining. Two were critical: pinch-zoom disabled across the whole app, and an unlabelled radius select on the marketing page. `tools/a11y_audit.js` re-runs it; `tests/test_accessibility.py` pins the regressions |
 
 Two things only an attorney can settle, both raised and neither resolved:
 a **forum-selection clause** (without one the governing-law clause does less

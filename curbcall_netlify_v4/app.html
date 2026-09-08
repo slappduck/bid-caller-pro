@@ -8,7 +8,13 @@
      status bar the app draws edge to edge, so without this the header sits
      under the clock and the nav under the home indicator. Invisible in
      Safari, because browser chrome covers both zones. -->
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<!-- No maximum-scale and no user-scalable=no. Blocking pinch-zoom fails
+     WCAG 1.4.4 and is a real barrier for anyone who needs to enlarge
+     text; axe rates it critical. The usual reason to set it -- iOS
+     zooming in when a form field is focused -- only happens below 16px,
+     and .input is 16px, so the lock was buying nothing. The one place
+     that was under 16px (the filter row) is raised below. -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <meta name="theme-color" content="#0d0f18" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -433,7 +439,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 
 /* ── Filter/sort row (Bids tab) ── */
 .filter-row{display:flex;gap:0.5rem;margin-bottom:0.8rem;}
-.filter-row input,.filter-row select{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:0.6rem 0.8rem;color:var(--text);font-size:var(--fs-base);font-family:var(--ui);}
+.filter-row input,.filter-row select{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:0.6rem 0.8rem;color:var(--text);font-size:1rem;font-family:var(--ui);}
 .filter-row input{flex:1;min-width:0;}
 .filter-row select{flex-shrink:0;max-width:130px;}
 
