@@ -923,7 +923,10 @@ def _supabase_delete_user(user_id):
 # and a test fails if they drift.
 TERMS_VERSION = os.environ.get("TERMS_VERSION", "2026-06-17")
 PRIVACY_VERSION = os.environ.get("PRIVACY_VERSION", "2026-09-08")
-_ACCEPT_METHODS = {"signup_form", "google", "magic_link"}
+# "reaccept" is an existing user agreeing to a version published after
+# they signed up. Recorded distinctly so the record shows which
+# acceptances were made at signup and which on a re-prompt.
+_ACCEPT_METHODS = {"signup_form", "google", "magic_link", "reaccept"}
 
 
 def _is_duplicate_row(err):
@@ -981,6 +984,59 @@ def _record_terms_acceptance(user, method):
         # than not having the feature: it looks like evidence exists.
         print(f"[terms] could not record acceptance: {ex}", flush=True)
         return False
+
+
+def _has_accepted_current(user_id):
+    """Has this account accepted the versions being published right now?
+
+    Returns None when the question cannot be answered -- no configuration, a
+    failed query -- and the caller treats that as "do not prompt". Nagging a
+    paying customer because a database call failed is worse than a late
+    re-acceptance, and the Terms already provide that continued use after a
+    posted change counts.
+    """
+    if not (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY and user_id):
+        return None
+    try:
+        url = (f"{SUPABASE_URL}/rest/v1/terms_acceptances"
+               f"?select=id&limit=1"
+               f"&user_id=eq.{urllib.parse.quote(str(user_id))}"
+               f"&terms_version=eq.{urllib.parse.quote(TERMS_VERSION)}"
+               f"&privacy_version=eq.{urllib.parse.quote(PRIVACY_VERSION)}")
+        req = urllib.request.Request(
+            url, headers={"Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+                          "apikey": SUPABASE_SERVICE_ROLE_KEY})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return bool(json.loads(resp.read().decode("utf-8")))
+    except Exception as ex:
+        print(f"[terms] could not check acceptance: {type(ex).__name__}",
+              flush=True)
+        return None
+
+
+@app.route("/terms/status", methods=["POST"])
+def terms_status():
+    """Whether this signed-in account still needs to accept what is published.
+
+    The Terms and the Privacy Policy change. Somebody who agreed in June has
+    not agreed to a September rewrite, and "continued use means you accept"
+    is a weaker thing to rely on than a record of them clicking. This is what
+    lets the app ask.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    user = _supabase_user(data.get("supabase_token", ""))
+    if not user or not user.get("id"):
+        return jsonify({"ok": False, "reason": "not_signed_in"}), 401
+    accepted = _has_accepted_current(user["id"])
+    return jsonify({
+        "ok": True,
+        # Unknown is reported as "no prompt". Never block or nag on a failed
+        # lookup -- see _has_accepted_current.
+        "needs_acceptance": (accepted is False),
+        "known": accepted is not None,
+        "terms_version": TERMS_VERSION,
+        "privacy_version": PRIVACY_VERSION,
+    })
 
 
 @app.route("/terms/accept", methods=["POST"])
@@ -4597,7 +4653,7 @@ def _sam_scrub(text):
     return re.sub(r"(api_key=)[^&\s]+", r"\1<redacted>", str(text or ""))
 
 
-def _sam_fetch(state, ncode=None, ccode=None):
+def _sam_fetch(state, ncode=None, ccode=None, timeout=None, limit=None):
     """One page of opportunities for a state, narrowed server-side.
 
     Returns None if the request itself failed, [] if it genuinely matched
@@ -4620,10 +4676,15 @@ def _sam_fetch(state, ncode=None, ccode=None):
         "api_key": SAM_API_KEY,
         "postedFrom": (today - datetime.timedelta(days=SAM_WINDOW_DAYS)).strftime("%m/%d/%Y"),
         "postedTo": today.strftime("%m/%d/%Y"),
-        "state": state,
-        "limit": str(SAM_PAGE_LIMIT),
+        "limit": str(limit or SAM_PAGE_LIMIT),
         "offset": "0",
     }
+    # No state means the whole country in one request. Only the refresh job
+    # asks for that: six national queries cover every state, where filtering
+    # per state costs six requests PER state and is what made the live path
+    # unaffordable inside a scan.
+    if state:
+        params["state"] = state
     if ncode:
         params["ncode"] = ncode
     if ccode:
@@ -4633,7 +4694,7 @@ def _sam_fetch(state, ncode=None, ccode=None):
         req = urllib.request.Request(
             url, headers={"Accept": "application/json",
                           "User-Agent": CRAWLER_UA})
-        with urllib.request.urlopen(req, timeout=SAM_TIMEOUT) as resp:
+        with urllib.request.urlopen(req, timeout=timeout or SAM_TIMEOUT) as resp:
             data = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         # The status is the whole diagnosis: 403 is a rejected key, 404 a
@@ -6356,6 +6417,139 @@ def _federal_states(center, radius):
     return [s for s in states if s]
 
 
+# ── Federal opportunities, fetched out of band ──────────────────────────────
+#
+# SAM's authenticated search does not answer inside a scan. Measured against
+# the live service: a REJECTED request comes back in 0.6s, while an
+# authenticated one -- even a two-day window asking for a single row -- does
+# not return in forty seconds. Production agreed: nine consecutive failures,
+# and exactly two timeouts per scan at six seconds each, which is the whole
+# twelve-second federal budget spent to learn nothing.
+#
+# No timeout value fixes that. SAM_TIMEOUT sits inside FEDERAL_BUDGET_SEC
+# inside a scan somebody is watching; raising either only makes the scan
+# slower while still failing. The answer is to stop asking during the scan.
+#
+# So a scheduled job asks instead, where a slow API costs nobody anything, and
+# scans read what it left behind. Two things fall out of that:
+#
+#   * Federal bids start appearing at all, for the first time.
+#   * Twelve and a half seconds comes off the critical path of every scan.
+#
+# The refresh queries NATIONALLY, once per trade code -- six requests for the
+# whole country. The live path had to filter by state server-side, which costs
+# six requests per state and is exactly what made it unaffordable.
+FEDERAL_CACHE_KEY = "bidcaller:federal_cache"
+FEDERAL_CACHE_MAX_AGE_H = float(os.environ.get("FEDERAL_CACHE_MAX_AGE_H", "36"))
+SAM_REFRESH_TIMEOUT = int(os.environ.get("SAM_REFRESH_TIMEOUT", "120"))
+SAM_REFRESH_LIMIT = int(os.environ.get("SAM_REFRESH_LIMIT", "1000"))
+
+
+def _federal_refresh():
+    """Pull every concrete-trade federal notice in the country into the KV.
+
+    Slow on purpose. Nothing is waiting on it.
+    """
+    if not SAM_API_KEY:
+        return {"ok": False, "reason": "no_key"}
+    queries = ([({"ncode": n}, True) for n in federal_bids.CONCRETE_NAICS] +
+               [({"ccode": c}, False) for c in federal_bids.CONCRETE_PSC])
+    rows, seen, failed, attempted = [], set(), 0, 0
+    for params, trusted in queries:
+        attempted += 1
+        try:
+            opps = _sam_fetch(None, timeout=SAM_REFRESH_TIMEOUT,
+                              limit=SAM_REFRESH_LIMIT, **params)
+        except Exception:
+            opps = None
+        if opps is None:
+            failed += 1
+            continue
+        for opp in opps:
+            if not _is_construction(opp):
+                continue
+            if not trusted and not bid_sources.looks_relevant(opp.get("title")):
+                continue
+            # Amendments repeat a solicitation under a new notice id.
+            key = (opp.get("solicitationNumber") or opp.get("noticeId") or "").lower()
+            if key and key in seen:
+                continue
+            seen.add(key)
+            try:
+                bid, city, perf_state = _normalize_opp(opp)
+            except Exception:
+                continue
+            if not bid:
+                continue
+            bid["city"], bid["state"] = city, perf_state
+            rows.append(bid)
+    # Never replace a good cache with the wreckage of a failed run. A scan
+    # reading yesterday's federal bids is fine; reading none because the
+    # refresh had a bad night is the outage this exists to prevent.
+    if failed == attempted:
+        return {"ok": False, "reason": "all_queries_failed",
+                "attempted": attempted}
+    payload = {"at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+               "rows": rows, "queries": attempted, "failed": failed}
+    try:
+        kv_backend.set(FEDERAL_CACHE_KEY, payload)
+    except Exception as ex:
+        return {"ok": False, "reason": type(ex).__name__}
+    return {"ok": True, "rows": len(rows), "queries": attempted,
+            "failed": failed}
+
+
+def _federal_cache_age_h():
+    """Hours since the last successful refresh, or None if there is none."""
+    try:
+        blob = kv_backend.get(FEDERAL_CACHE_KEY, None) or {}
+        at = datetime.datetime.fromisoformat(blob.get("at"))
+    except Exception:
+        return None
+    if at.tzinfo is None:
+        at = at.replace(tzinfo=datetime.timezone.utc)
+    return (datetime.datetime.now(datetime.timezone.utc)
+            - at).total_seconds() / 3600.0
+
+
+def _federal_cached(states, stats):
+    """Federal notices for these states, straight out of the KV. No network.
+
+    Returns None when there is nothing usable to read, so the caller can fall
+    back to the live path rather than reporting a quiet radius.
+    """
+    age = _federal_cache_age_h()
+    if age is None:
+        _bump(stats, "federal_cache_missing")
+        return None
+    if age > FEDERAL_CACHE_MAX_AGE_H:
+        # Stale enough that a closed solicitation could be shown as open.
+        _bump(stats, "federal_cache_stale")
+        return None
+    try:
+        rows = (kv_backend.get(FEDERAL_CACHE_KEY, None) or {}).get("rows") or []
+    except Exception:
+        _bump(stats, "federal_cache_missing")
+        return None
+    want = {str(s).upper() for s in states}
+    hits = [b for b in rows if str(b.get("state") or "").upper() in want]
+    if stats is not None:
+        stats["federal_from_cache"] = (stats.get("federal_from_cache", 0)
+                                       + len(hits))
+    return hits
+
+
+@app.route("/run-federal-refresh", methods=["POST"])
+def run_federal_refresh():
+    """Scheduled. Gated by CRON_SECRET, like the other cron jobs."""
+    data = request.get_json(force=True, silent=True) or {}
+    token = data.get("token") or request.headers.get("X-Cron-Secret", "")
+    if not CRON_SECRET or not hmac.compare_digest(token, CRON_SECRET):
+        return jsonify({"ok": False, "reason": "unauthorized"}), 403
+    result = _federal_refresh()
+    return jsonify(result), (200 if result.get("ok") else 503)
+
+
 def _federal_keyed(states, stats, deadline=None):
     """Candidates from the documented, keyed API.
 
@@ -6553,7 +6747,11 @@ def _run_federal_sources(center, radius, grouped, cdb, city_coords=None,
     states = _federal_states(center, radius)
     if not states:
         return 0
-    if _federal_breaker_open():
+    # Only the LIVE path is worth resting. A breaker opened by SAM timing out
+    # must not also switch off a cache read that costs a millisecond and
+    # cannot fail in the same way -- that would keep federal bids hidden for
+    # exactly as long as the thing that made them work.
+    if _federal_breaker_open() and _federal_cache_age_h() is None:
         # Resting. Costs one skipped source on one scan; the alternative is
         # paying thirty seconds a scan to fail at the same thing.
         _bump(stats, "federal_resting")
@@ -6561,14 +6759,24 @@ def _run_federal_sources(center, radius, grouped, cdb, city_coords=None,
     # One clock for the stage, handed to whichever transport runs -- and to
     # the fallback if the keyed one gives out, so a failing key cannot spend
     # the federal allowance twice.
-    deadline = time.time() + FEDERAL_BUDGET_SEC
-    use_keyed = bool(SAM_API_KEY) and not _keyed_breaker_open()
-    if SAM_API_KEY and not use_keyed:
-        # The documented API is resting; the public one reads the same
-        # public-domain data and is currently the only one that answers.
-        _bump(stats, "federal_keyed_resting")
-    bids = (_federal_keyed(states, stats, deadline) if use_keyed
-            else _federal_public(states, stats, deadline))
+    # The cache first, and usually only the cache. It is filled by
+    # /run-federal-refresh on a schedule, where SAM being slow costs nobody
+    # anything; reading it is a dictionary lookup. The live paths below stay
+    # as the fallback for a project that has never run the job, or whose
+    # refresh has been failing long enough for the data to go stale.
+    cached = _federal_cached(states, stats)
+    if cached is not None:
+        bids = cached
+        deadline = time.time() + FEDERAL_BUDGET_SEC   # unused; kept for shape
+    else:
+        deadline = time.time() + FEDERAL_BUDGET_SEC
+        use_keyed = bool(SAM_API_KEY) and not _keyed_breaker_open()
+        if SAM_API_KEY and not use_keyed:
+            # The documented API is resting; the public one reads the same
+            # public-domain data and is currently the only one that answers.
+            _bump(stats, "federal_keyed_resting")
+        bids = (_federal_keyed(states, stats, deadline) if use_keyed
+                else _federal_public(states, stats, deadline))
     # "Answered" means the transport worked, not that it found anything --
     # a genuinely quiet radius must not trip the breaker.
     answered = bool(bids) or bool(stats and (stats.get("federal_search_ok")

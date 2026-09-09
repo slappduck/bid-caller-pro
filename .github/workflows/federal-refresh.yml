@@ -1,0 +1,62 @@
+name: Refresh federal opportunities
+
+# SAM's authenticated search does not answer inside a scan. Measured against
+# the live service, a rejected request returns in 0.6s while an authenticated
+# one does not return in forty seconds -- even asking for a two-day window and
+# a single row. Production matched: nine consecutive failures, and exactly two
+# six-second timeouts per scan, which is the entire twelve-second federal
+# budget spent to learn nothing.
+#
+# No timeout value fixes that inside a scan somebody is watching. So this job
+# does the asking, where slowness costs nobody anything, and scans read what it
+# leaves in the KV store. Federal bids start working, and twelve and a half
+# seconds comes off every scan.
+#
+# Six requests cover the whole country -- one per concrete trade code, with no
+# state filter. The live path had to narrow by state, which costs six requests
+# per state and is what made it unaffordable.
+#
+# Twice daily: federal notices are not urgent, but a single daily run means one
+# bad night leaves the cache a day and a half old, and scans start falling back
+# to the live path that does not work.
+#
+# Same two repo secrets the other scheduled jobs use: BIDCALLER_SERVER_URL and
+# CRON_SECRET. Without them the endpoint replies 403 and nothing happens.
+#
+# Run it any time without waiting: Actions tab -> this workflow -> Run workflow.
+
+on:
+  schedule:
+    # 07:00 and 19:00 UTC — before the daily alert jobs, and again mid-day.
+    - cron: "0 7,19 * * *"
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pull federal opportunities into the cache
+        env:
+          SERVER: ${{ secrets.BIDCALLER_SERVER_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$SERVER" ] || [ -z "$CRON_SECRET" ]; then
+            echo "BIDCALLER_SERVER_URL or CRON_SECRET not set — skipping."
+            exit 0
+          fi
+          # Deliberately generous: the whole point is that this is allowed to
+          # be slow. Six national queries against an API that has been taking
+          # tens of seconds each, plus a cold start on Render.
+          code=$(curl -sS -o /tmp/federal.json -w '%{http_code}' \
+            --max-time 900 \
+            -X POST "$SERVER/run-federal-refresh" \
+            -H 'Content-Type: application/json' \
+            -H "X-Cron-Secret: $CRON_SECRET" \
+            -d '{}')
+          echo "HTTP $code"
+          cat /tmp/federal.json
+          echo
+          # Worth failing on. If this stops running the cache goes stale, scans
+          # fall back to the live path that does not work, and federal bids
+          # quietly disappear again -- which is the state this replaced.
+          [ "$code" = "200" ]

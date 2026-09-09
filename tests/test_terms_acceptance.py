@@ -426,3 +426,162 @@ def ls_source():
     with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                            os.pardir, "license_server.py"), encoding="utf-8") as f:
         return re.sub(r"^\s*#.*$", "", f.read(), flags=re.M)
+
+
+class ReacceptanceStatusTests(unittest.TestCase):
+    """Existing accounts have to agree to a version published after they joined.
+
+    Somebody who signed up in June did not agree to a September rewrite.
+    "Continued use means you accept" is in the Terms, and it is a much weaker
+    thing to rely on than a record of them clicking -- especially now that
+    every acceptance stores which version it was.
+
+    The failure mode to avoid is nagging: a lookup that cannot be answered
+    must not turn into a prompt, or an outage in Supabase becomes an
+    interruption for every paying customer at once.
+    """
+
+    def setUp(self):
+        self._orig_user = ls._supabase_user
+        self._orig_has = ls._has_accepted_current
+        self._orig_key = ls.SUPABASE_SERVICE_ROLE_KEY
+        ls.SUPABASE_SERVICE_ROLE_KEY = "svc-key"
+        ls._supabase_user = lambda tok: (
+            {"id": "u-1", "email": "josh@example.com"} if tok == "good" else None)
+        self.app = ls.app.test_client()
+
+    def tearDown(self):
+        ls._supabase_user = self._orig_user
+        ls._has_accepted_current = self._orig_has
+        ls.SUPABASE_SERVICE_ROLE_KEY = self._orig_key
+
+    def _status(self, token="good"):
+        return self.app.post("/terms/status",
+                             json={"supabase_token": token})
+
+    def test_an_account_missing_the_current_version_is_asked(self):
+        ls._has_accepted_current = lambda uid: False
+        body = self._status().get_json()
+        self.assertTrue(body["needs_acceptance"])
+        self.assertTrue(body["known"])
+
+    def test_an_account_already_on_it_is_left_alone(self):
+        ls._has_accepted_current = lambda uid: True
+        self.assertFalse(self._status().get_json()["needs_acceptance"])
+
+    def test_an_unanswerable_lookup_never_prompts(self):
+        """A Supabase outage must not interrupt every customer at once."""
+        ls._has_accepted_current = lambda uid: None
+        body = self._status().get_json()
+        self.assertFalse(body["needs_acceptance"])
+        self.assertFalse(body["known"])
+
+    def test_it_reports_the_versions_being_asked_about(self):
+        ls._has_accepted_current = lambda uid: False
+        body = self._status().get_json()
+        self.assertEqual(body["terms_version"], ls.TERMS_VERSION)
+        self.assertEqual(body["privacy_version"], ls.PRIVACY_VERSION)
+
+    def test_a_signed_out_caller_gets_nothing(self):
+        r = self._status(token="forged")
+        self.assertEqual(r.status_code, 401)
+
+    def test_reaccept_is_a_method_the_server_will_store(self):
+        """Otherwise the re-prompt writes a row with a blank method."""
+        self.assertIn("reaccept", ls._ACCEPT_METHODS)
+
+
+class HasAcceptedCurrentTests(unittest.TestCase):
+    def setUp(self):
+        self.asked = []
+        self._open = ls.urllib.request.urlopen
+        self._url, self._key = ls.SUPABASE_URL, ls.SUPABASE_SERVICE_ROLE_KEY
+        ls.SUPABASE_URL = "https://project.supabase.co"
+        ls.SUPABASE_SERVICE_ROLE_KEY = "svc-key"
+
+    def tearDown(self):
+        ls.urllib.request.urlopen = self._open
+        ls.SUPABASE_URL, ls.SUPABASE_SERVICE_ROLE_KEY = self._url, self._key
+
+    def _rows(self, rows):
+        outer = self
+
+        class Resp:
+            def __enter__(self_):
+                return self_
+
+            def __exit__(self_, *a):
+                return False
+
+            def read(self_):
+                return json.dumps(rows).encode()
+
+        def fake(req, timeout=None):
+            outer.asked.append(req.full_url)
+            return Resp()
+        ls.urllib.request.urlopen = fake
+
+    def test_a_row_for_the_current_versions_means_accepted(self):
+        self._rows([{"id": 1}])
+        self.assertIs(ls._has_accepted_current("u-1"), True)
+
+    def test_no_row_means_not_accepted(self):
+        self._rows([])
+        self.assertIs(ls._has_accepted_current("u-1"), False)
+
+    def test_it_asks_about_both_versions_and_that_user(self):
+        self._rows([])
+        ls._has_accepted_current("u-1")
+        url = self.asked[0]
+        self.assertIn("user_id=eq.u-1", url)
+        self.assertIn(ls.TERMS_VERSION, url)
+        self.assertIn(ls.PRIVACY_VERSION, url)
+
+    def test_a_failure_is_unknown_rather_than_not_accepted(self):
+        """Not-accepted would prompt. Unknown does not."""
+        def boom(req, timeout=None):
+            raise OSError("down")
+        ls.urllib.request.urlopen = boom
+        self.assertIsNone(ls._has_accepted_current("u-1"))
+
+    def test_no_configuration_is_unknown_too(self):
+        ls.SUPABASE_SERVICE_ROLE_KEY = ""
+        self.assertIsNone(ls._has_accepted_current("u-1"))
+
+
+class ReacceptancePromptTests(unittest.TestCase):
+    """The app half."""
+
+    def setUp(self):
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               os.pardir, "curbcall_netlify_v4", "app.html"),
+                  encoding="utf-8") as f:
+            html = f.read()
+        body = "\n".join(re.findall(
+            r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", html, re.S))
+        self.js = re.sub(r"^\s*//.*$", "", body, flags=re.M)
+
+    def test_it_is_checked_when_a_session_appears(self):
+        self.assertIn("checkTermsCurrent()", self.js)
+
+    def test_accepting_records_it_as_a_reacceptance(self):
+        i = self.js.index("function showTermsUpdate")
+        self.assertIn('method:"reaccept"', self.js[i:i + 3000])
+
+    def test_a_failed_write_does_not_let_them_through(self):
+        """Waving them in leaves an account that looks like it agreed and
+        cannot be shown to have."""
+        i = self.js.index("function showTermsUpdate")
+        block = self.js[i:i + 3000]
+        self.assertIn("if(!saved)", block)
+        self.assertLess(block.index("if(!saved)"), block.index("showApp()"))
+
+    def test_there_is_a_way_out_that_is_not_agreeing(self):
+        i = self.js.index("function showTermsUpdate")
+        self.assertIn("signOut", self.js[i:i + 3000])
+
+    def test_the_prompt_links_to_both_documents(self):
+        i = self.js.index("function showTermsUpdate")
+        block = self.js[i:i + 3000]
+        self.assertIn("terms.html", block)
+        self.assertIn("privacy.html", block)

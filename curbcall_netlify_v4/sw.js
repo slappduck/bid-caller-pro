@@ -15,9 +15,22 @@
 //
 // API calls (Render backend, Supabase REST) and map tiles are still never
 // cached — bid data, auth, and the map must never be served stale.
-const SHELL_CACHE = "curbcall-shell-v48";
-const ASSET_CACHE = "curbcall-assets-v48";
+const SHELL_CACHE = "curbcall-shell-v49";
+const ASSET_CACHE = "curbcall-assets-v49";
 const KEEP = [SHELL_CACHE, ASSET_CACHE];
+
+// The published Terms and Privacy Policy, which must never be served stale.
+//
+// They were ordinary shell files: stale-while-revalidate, so an installed app
+// showed the copy it cached weeks ago and only refreshed afterwards. That is
+// the right trade for the app shell and the wrong one here, because the server
+// records which VERSION of these documents an account accepted. Showing a
+// reader the old text while filing consent against the new one breaks exactly
+// the property the version archive exists to guarantee.
+//
+// Network-first with a cache fallback: correct when there is a connection,
+// still readable in a truck with no bars.
+const LEGAL_FILES = ["terms.html", "privacy.html"];
 
 const SHELL_FILES = [
   "app.html",
@@ -134,9 +147,30 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  const here = url.origin === self.location.origin;
+  const matches = (list) => list.some(
+    (f) => url.pathname.endsWith("/" + f) || url.pathname === "/" + f);
+
+  // ── Legal documents: network-first ──
+  // Freshness beats speed for these. They are small, rarely opened, and the
+  // one thing they must never be is out of date.
+  if (here && (matches(LEGAL_FILES) || url.pathname.includes("/legal/"))) {
+    event.respondWith(
+      fetch(event.request)
+        .then((res) => {
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(SHELL_CACHE).then((cache) => cache.put(event.request, copy));
+          }
+          return res;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
   // ── Our own shell: stale-while-revalidate ──
-  const isShellFile = url.origin === self.location.origin &&
-    SHELL_FILES.some((f) => url.pathname.endsWith("/" + f) || url.pathname === "/" + f);
+  const isShellFile = here && matches(SHELL_FILES);
   if (!isShellFile) return; // API calls and map tiles hit the network normally
 
   event.respondWith(

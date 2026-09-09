@@ -1553,6 +1553,81 @@ async function flushTermsAcceptance(){
   finally{termsFlushInFlight=false;}
 }
 
+// ── Re-accepting updated Terms ──────────────────────────────────────────────
+//
+// The Terms and the Privacy Policy change. Somebody who agreed in June has
+// not agreed to a September rewrite, and "continued use means you accept" is
+// a much weaker thing to rely on than a record of them clicking. So an
+// existing account is asked once per published version.
+//
+// Never blocks on a failed check. The server answers "unknown" when it cannot
+// look the answer up, and unknown means do not prompt -- interrupting a
+// paying customer because a database call timed out is worse than a late
+// re-acceptance, which the Terms already cover.
+async function checkTermsCurrent(){
+  try{
+    const token=await getSupabaseToken();
+    if(!token)return;
+    const r=await fetchWithTimeout(SERVER+"/terms/status",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({supabase_token:token})},15000);
+    if(!r.ok)return;
+    const d=await r.json();
+    if(d&&d.ok&&d.needs_acceptance)showTermsUpdate(d);
+  }catch(e){/* offline or slow: ask again next launch */}
+}
+
+function showTermsUpdate(info){
+  document.getElementById("app").style.display="none";
+  document.getElementById("auth-screen").style.display="flex";
+  const card=document.getElementById("auth-card");
+  card.style.display="";
+  const onb=document.getElementById("onboard-card");
+  if(onb)onb.style.display="none";
+  const sent=document.getElementById("auth-sent-card");
+  if(sent)sent.style.display="none";
+  card.innerHTML=`
+    <div class="auth-title">We&rsquo;ve updated our Terms</div>
+    <div class="auth-sub">Please review and accept to keep using CurbCall Pro.
+      Your account and saved bids are untouched.</div>
+    <div class="field-hint" style="margin:0.6rem 0 0.9rem;">
+      <a href="terms.html" target="_blank" rel="noopener">Terms of Service</a>
+      (${esc(info.terms_version||"")}) &nbsp;&middot;&nbsp;
+      <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>
+      (${esc(info.privacy_version||"")})
+    </div>
+    <button class="btn-primary" id="terms-accept-btn">I agree</button>
+    <button class="btn-ghost" id="terms-decline-btn">Not now &mdash; sign out</button>
+    <div class="auth-msg" id="auth-msg"></div>`;
+  document.getElementById("terms-accept-btn").onclick=async()=>{
+    const btn=document.getElementById("terms-accept-btn");
+    btn.disabled=true;btn.textContent="Saving...";
+    let saved=false;
+    try{
+      const token=await getSupabaseToken();
+      const r=await fetchWithTimeout(SERVER+"/terms/accept",{
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({supabase_token:token,method:"reaccept"})},15000);
+      saved=r.ok;
+    }catch(e){saved=false;}
+    if(!saved){
+      // Do not wave them through on a failed write. The whole point is the
+      // record; letting them in without one leaves an account that looks
+      // like it agreed and cannot be shown to have.
+      btn.disabled=false;btn.textContent="I agree";
+      setMsg(offlineOrServer(),"err");
+      return;
+    }
+    card.innerHTML="";
+    document.getElementById("auth-screen").style.display="none";
+    showApp();
+  };
+  document.getElementById("terms-decline-btn").onclick=async()=>{
+    try{await sb.auth.signOut();}catch(e){}
+    location.reload();
+  };
+}
+
 function capturePendingSignupName(){
   if(authMode!=="signup")return;
   // Two fields, one stored value: everything downstream -- the proposal
@@ -1680,6 +1755,7 @@ if(sb)sb.auth.onAuthStateChange((event,session)=>{
     store.set("has_account",true);
     applyPendingSignupName();
     flushTermsAcceptance();
+    checkTermsCurrent();
     checkAdminStatus();
     routeAfterAuth();
   } else {
