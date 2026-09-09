@@ -4463,8 +4463,23 @@ function renderAccount(){
   // if pricing changes.
   const pendingRef=(()=>{try{return localStorage.getItem("pending_ref")||"";}catch(e){return"";}})();
   const refId=pendingRef?deviceId()+REFERRAL_SEP+pendingRef:deviceId();
-  const mLink=`https://buy.stripe.com/aFa00idzefwuayK6DRejK05?client_reference_id=${encodeURIComponent(refId)}`;
-  const aLink=`https://buy.stripe.com/7sY5kC0Ms6ZYeP00ftejK04?client_reference_id=${encodeURIComponent(refId)}`;
+  // Pre-fill the checkout with the signed-in address.
+  //
+  // The webhook files a new key under the email used AT STRIPE, while
+  // /mykey looks it up by the signed-in account email. Those are the same
+  // string right up until someone pays with a personal card that autofills
+  // a different address -- and then the key exists, is paid for, and cannot
+  // be found. The device id below covers the machine they bought on; it does
+  // nothing for the second device, where an unknown device and a mismatched
+  // email both miss and a paying customer sees "Trial expired, subscribe
+  // below". Pre-filling makes the two addresses agree by default.
+  //
+  // Stripe leaves the field editable, so this is a default and not a
+  // guarantee -- the receipt email still carries the key, and the note under
+  // the Subscribe buttons says so.
+  const pre=email?`&prefilled_email=${encodeURIComponent(email)}`:"";
+  const mLink=`https://buy.stripe.com/aFa00idzefwuayK6DRejK05?client_reference_id=${encodeURIComponent(refId)}${pre}`;
+  const aLink=`https://buy.stripe.com/7sY5kC0Ms6ZYeP00ftejK04?client_reference_id=${encodeURIComponent(refId)}${pre}`;
 
   body.innerHTML=`
     <div class="account-card" style="display:flex;align-items:center;gap:0.9rem;">
@@ -4509,6 +4524,12 @@ function renderAccount(){
         <p class="renew-note">Renews automatically at $399/year until you cancel. Cancel anytime under Billing above.</p>
       </div>
       <div class="field-label" style="margin-top:1.2rem;">Have a license key?</div>
+      <!-- Named for the case that actually strands people. Unlocking is
+           automatic when the checkout address matches the account; when it
+           does not, this box is the way through, and someone who has just
+           paid needs to be told that here rather than left to guess. -->
+      <p class="renew-note" style="margin-top:0;">Already paid and still locked? If you used a different email address at
+        checkout, paste the key from your receipt email here.</p>
       <input class="input" id="key-input" placeholder="BCP-..." />
       <button class="btn-ghost" id="activate-btn">Activate Key</button>
     </div>

@@ -267,3 +267,99 @@ class ReferralTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PaidWithADifferentEmailTests(unittest.TestCase):
+    """The case that strands a paying customer on their second device.
+
+    A key is filed under the address used AT STRIPE. /mykey looks it up by the
+    signed-in account address. Those are the same string right up until
+    somebody pays with a personal card that autofills a different one -- a
+    contractor buying business software, which is most of them.
+
+    The device that ran the checkout still works, because the payment link
+    carries its id. The next device does not: unknown device, mismatched
+    email, both miss, and somebody who has paid is shown "Trial expired,
+    subscribe below" -- which invites a second subscription.
+
+    So a device match now also files the key under the verified account
+    address. The address comes from the Supabase token, never from the request
+    body: claiming a licence by typing somebody else's email is the exact hole
+    ClaimTests above exists to keep shut.
+    """
+
+    def setUp(self):
+        self.db = {"revoked": [], "trials": {}, "issued": {}, "emails": {},
+                   "devices": {}}
+        self._orig_db, ls._db = ls._db, lambda: self.db
+        self._orig_save, ls._save_db = ls._save_db, lambda d: None
+        self._orig_verify = ls._verify_supabase_token
+        ls._verify_supabase_token = lambda tok: (
+            "account@example.com" if tok == "good" else "")
+        self.app = ls.app.test_client()
+        # Bought on the phone, paying as personal@example.com.
+        self.key = ls._issue_for(self.db, "personal@example.com", "phone",
+                                 "monthly")
+
+    def tearDown(self):
+        ls._db = self._orig_db
+        ls._save_db = self._orig_save
+        ls._verify_supabase_token = self._orig_verify
+
+    def _ask(self, device, token="good"):
+        return self.app.post("/mykey", json={"device_id": device,
+                                             "supabase_token": token}).get_json()
+
+    def test_the_device_that_bought_it_still_unlocks(self):
+        self.assertTrue(self._ask("phone")["ok"])
+
+    def test_the_purchase_email_is_not_the_account_email(self):
+        """The precondition. If this ever stops being true the rest is moot."""
+        self.assertIn("personal@example.com", self.db["emails"])
+        self.assertNotIn("account@example.com", self.db["emails"])
+
+    def test_a_second_device_was_locked_out_and_now_is_not(self):
+        self._ask("phone")                      # the fix files it on this call
+        self.assertTrue(self._ask("laptop")["ok"],
+                        "a paying customer is locked out on a second device")
+
+    def test_without_visiting_on_the_paying_device_it_still_cannot_guess(self):
+        """The fix is a record made from a verified session, not a search."""
+        self.assertFalse(self._ask("laptop")["ok"])
+
+    def test_the_account_email_is_taken_from_the_token_not_the_body(self):
+        r = self.app.post("/mykey", json={
+            "device_id": "phone", "supabase_token": "good",
+            "email": "attacker@example.com"}).get_json()
+        self.assertTrue(r["ok"])
+        self.assertIn("account@example.com", self.db["emails"])
+        self.assertNotIn("attacker@example.com", self.db["emails"])
+
+    def test_an_unverified_session_files_nothing(self):
+        self.assertTrue(self._ask("phone", token="forged")["ok"])
+        self.assertNotIn("account@example.com", self.db["emails"])
+
+    def test_it_does_not_steal_an_address_from_a_live_licence(self):
+        """That address may already own a different, working licence."""
+        other = ls._issue_for(self.db, "account@example.com", "other-device",
+                              "annual")
+        self._ask("phone")
+        self.assertEqual(self.db["emails"]["account@example.com"], other,
+                         "overwrote a live licence with a different one")
+
+    def test_it_does_replace_a_dead_one(self):
+        """An expired key is precisely what a new purchase replaces."""
+        self.db["emails"]["account@example.com"] = "BCP-NOT-A-REAL-KEY"
+        self._ask("phone")
+        self.assertEqual(self.db["emails"]["account@example.com"], self.key)
+
+    def test_a_revoked_prior_key_is_also_replaced(self):
+        old = ls._issue_for(self.db, "account@example.com", "old", "monthly")
+        self.db["revoked"].append(old)
+        self._ask("phone")
+        self.assertEqual(self.db["emails"]["account@example.com"], self.key)
+
+    def test_a_revoked_key_still_does_not_unlock_anything(self):
+        self.db["revoked"].append(self.key)
+        self.assertFalse(self._ask("phone")["ok"])
+        self.assertNotIn("account@example.com", self.db["emails"])

@@ -2270,6 +2270,31 @@ def mykey():
         # Remember the device so later calls take the fast path.
         db.setdefault("devices", {})[device] = key
         _save_db(db)
+    elif device:
+        # Matched by DEVICE. File the key under the signed-in account too, so
+        # the next device this person uses can find it.
+        #
+        # A key is filed under the address used at Stripe. Those are the same
+        # string until somebody pays with a personal card that autofills a
+        # different one -- and then the phone they bought on works (this
+        # device mapping) while their laptop does not: unknown device,
+        # mismatched email, both miss, and a paying customer is told the trial
+        # has expired. The account email is taken from a verified Supabase
+        # token, never from the request body, so this cannot be used to claim
+        # somebody else's licence.
+        acct = _verify_supabase_token(data.get("supabase_token", ""))
+        if acct:
+            emails = db.setdefault("emails", {})
+            existing = emails.get(acct.lower())
+            # Do not overwrite a mapping that still works -- that address may
+            # belong to a different, live licence. Replacing a dead one is the
+            # point: an expired key is exactly what a new purchase replaces.
+            if existing != key:
+                prior_ok = bool(existing) and verify_key(existing)[0] and \
+                    existing not in db.get("revoked", [])
+                if not prior_ok:
+                    emails[acct.lower()] = key
+                    _save_db(db)
     return jsonify({"ok": True, "key": key, "plan": plan, "expires": exp[:10]})
 
 

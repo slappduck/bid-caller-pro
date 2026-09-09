@@ -503,7 +503,14 @@ class BillingIsWhereYouAreSentTests(unittest.TestCase):
                                "app.html"), encoding="utf-8") as f:
             src = f.read()
         i = src.index("function renderAccount(){")
-        body = src[i:i + 14000]
+        # To the next top-level function, not a fixed number of characters.
+        # This was src[i:i + 14000], and renderAccount() is 24k: "Delete
+        # account" sat at 14163, so the first addition anywhere above it
+        # dropped the card out of the window and the test failed with
+        # "substring not found" -- reporting a missing card rather than the
+        # ordering it exists to check.
+        end = src.find("\nfunction ", i + 1)
+        body = src[i:end if end != -1 else len(src)]
         # Comments out. These notes explain the ordering by naming the very
         # cards being ordered ("below Stats, Alerts, Company Info, ..."), so
         # a raw index finds the sentence rather than the card.
