@@ -381,6 +381,64 @@ def _terms_acceptance_stats():
         return {"configured": True, "error": type(ex).__name__}
 
 
+_PIPELINE_STATES = ("submitted", "won", "lost", "passed")
+
+
+def _wins_summary():
+    """Does the product actually get contractors work?
+
+    The most valuable question the system could not answer. Customers mark a
+    bid submitted, won, lost or passed, and that sits per-user in Supabase
+    where nothing ever looked at it in aggregate -- so "is this product
+    working" had no number behind it, only opinion.
+
+    It matters twice over. A contractor who wins a job does not cancel, so
+    this predicts retention better than any usage metric. And one real win is
+    the first testimonial, which outweighs every line of copy on the landing
+    page.
+
+    Counts only. Row contents never leave Supabase; the one thing derived
+    from identities is how many DISTINCT customers have won something, and
+    only the number is returned.
+    """
+    if not (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY):
+        return {"configured": False}
+
+    def head_count(query):
+        req = urllib.request.Request(
+            f"{SUPABASE_URL}/rest/v1/saved_bids?select=bid_id&limit=1{query}",
+            headers={"Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+                     "apikey": SUPABASE_SERVICE_ROLE_KEY,
+                     "Prefer": "count=exact"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            rng = resp.headers.get("Content-Range") or ""
+            return int(rng.rsplit("/", 1)[-1])
+
+    try:
+        out = {"configured": True, "saved_total": head_count("")}
+        for state in _PIPELINE_STATES:
+            out[state] = head_count(f"&pipeline=eq.{state}")
+        decided = out["won"] + out["lost"]
+        # Only meaningful once a few jobs have been decided; the raw counts
+        # sit beside it so a 100% win rate on one job reads as what it is.
+        out["win_rate_pct"] = (round(100.0 * out["won"] / decided, 1)
+                               if decided else None)
+        # How many people, not how many jobs. One customer winning five is a
+        # very different business from five customers winning one each.
+        req = urllib.request.Request(
+            f"{SUPABASE_URL}/rest/v1/saved_bids"
+            f"?select=user_id&pipeline=eq.won&limit=1000",
+            headers={"Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+                     "apikey": SUPABASE_SERVICE_ROLE_KEY})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            rows = json.loads(resp.read().decode("utf-8"))
+        out["customers_who_have_won"] = len({r.get("user_id") for r in rows
+                                             if r.get("user_id")})
+        return out
+    except Exception as ex:
+        return {"configured": True, "error": type(ex).__name__}
+
+
 def _bi_summary(db=None):
     """Trial-to-paid, churn and lifetime, computed from the lifecycle log.
 
@@ -991,8 +1049,8 @@ def _supabase_delete_user(user_id):
 # weak when the Terms change; "they accepted 2026-06-17" is evidence. These
 # constants must match the dates published on terms.html and privacy.html,
 # and a test fails if they drift.
-TERMS_VERSION = os.environ.get("TERMS_VERSION", "2026-06-17")
-PRIVACY_VERSION = os.environ.get("PRIVACY_VERSION", "2026-09-08")
+TERMS_VERSION = os.environ.get("TERMS_VERSION", "2026-09-09")
+PRIVACY_VERSION = os.environ.get("PRIVACY_VERSION", "2026-09-09")
 # "reaccept" is an existing user agreeing to a version published after
 # they signed up. Recorded distinctly so the record shows which
 # acceptances were made at signup and which on a re-prompt.
@@ -1852,6 +1910,8 @@ def diag():
         "terms_acceptances": _terms_acceptance_stats(),
         # Trial -> paid -> churn, aggregated. Counts and medians, no names.
         "business": _bi_summary(),
+        # Whether the product produces work. Counts only.
+        "outcomes": _wins_summary(),
         "last_scan": kv_backend.get("bidcaller:last_scan", None),
         "recent_scans": _recent_scans(request.args.get("scans")),
         "feed_audit": kv_backend.get(BID_AUDIT_KEY, None),

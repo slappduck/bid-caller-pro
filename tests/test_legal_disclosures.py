@@ -277,3 +277,100 @@ class RetentionAfterDeletionIsDisclosedTests(unittest.TestCase):
         text = read(wf)
         self.assertIn("/terms/purge", text)
         self.assertIn("schedule:", text)
+
+
+class TermsCoverTheBasicsTests(unittest.TestCase):
+    """Clauses whose absence costs nothing until the day it costs everything.
+
+    Found by reading the Terms against the code. None of these existed:
+
+      * No licence grant. Section 5 forbade reselling the data while nothing
+        above it ever granted a licence -- you cannot restrict what you never
+        conveyed, and the product IS a compiled dataset.
+      * No severability. If a court voided one provision -- the liability cap
+        being the likeliest -- nothing said the rest survived.
+      * No indemnification, so a customer's misuse was our cost.
+      * No forum-selection clause. Choosing Missouri LAW without choosing
+        Missouri COURTS leaves a dispute to be heard wherever the customer
+        lives, under that state's procedure.
+    """
+
+    def text(self):
+        return re.sub(r"<[^>]+>", " ", read(WEB, "terms.html")).lower()
+
+    def test_a_licence_is_actually_granted(self):
+        t = self.text()
+        self.assertIn("licence", t)
+        self.assertRegex(t, r"limited,?\s+revocable")
+
+    def test_ownership_of_the_compiled_feed_is_claimed(self):
+        """The postings are public. The compilation is the product."""
+        self.assertIn("compiled", self.text())
+
+    def test_there_is_a_severability_clause(self):
+        self.assertRegex(self.text(), r"unenforceable")
+
+    def test_there_is_an_indemnity(self):
+        self.assertRegex(self.text(), r"claim against us")
+
+    def test_disputes_have_a_forum_not_just_a_governing_law(self):
+        t = self.text()
+        self.assertIn("missouri", t)
+        self.assertRegex(t, r"courts located in missouri|missouri courts")
+
+    def test_a_price_change_has_a_notice_period(self):
+        """"We'll give notice" without a number is whatever the strictest
+        state says it is."""
+        self.assertRegex(self.text(), r"\b(30|thirty) days\b")
+
+    def test_the_changes_clause_describes_the_prompt_that_exists(self):
+        """The software asks for re-acceptance. The clause should say so,
+        or the document and the behaviour are two different promises."""
+        self.assertIn("accept the new version", self.text())
+
+    def test_the_section_numbers_have_no_gaps(self):
+        heads = re.findall(r"<h2>(\d+)\.", read(WEB, "terms.html"))
+        nums = [int(n) for n in heads]
+        self.assertEqual(nums, list(range(1, len(nums) + 1)),
+                         "renumbering left a gap: %s" % nums)
+
+
+class PrivacyCoversEveryDataFlowTests(unittest.TestCase):
+    """Three flows the policy never mentioned, all of them live in the code."""
+
+    def text(self):
+        return re.sub(r"<[^>]+>", " ", read(WEB, "privacy.html")).lower()
+
+    def test_published_reviews_are_disclosed(self):
+        """reviews stores display_name, company and quote, and approved rows
+        appear on the marketing site."""
+        t = self.text()
+        self.assertIn("review", t)
+        self.assertRegex(t, r"shown publicly|public")
+
+    def test_contacts_shown_on_a_bid_are_disclosed(self):
+        self.assertRegex(self.text(), r"contracting officer|purchasing agent")
+
+    def test_plan_holders_are_disclosed(self):
+        """_attach_plan_holders() shows other contractors who took plans."""
+        self.assertIn("plan holder", self.text())
+
+    def test_the_outreach_list_is_disclosed_with_a_way_off_it(self):
+        t = self.text()
+        self.assertIn("opt out", t)
+        self.assertIn("support@curbcallpro.com", t)
+
+    def test_there_is_a_security_statement(self):
+        self.assertRegex(self.text(), r"encrypted")
+
+    def test_breach_notification_is_promised(self):
+        self.assertIn("breach", self.text())
+
+    def test_billing_retention_has_a_number(self):
+        self.assertRegex(self.text(), r"seven years|7 years")
+
+    def test_the_section_numbers_have_no_gaps(self):
+        heads = re.findall(r"<h2>(\d+)\.", read(WEB, "privacy.html"))
+        nums = [int(n) for n in heads]
+        self.assertEqual(nums, list(range(1, len(nums) + 1)),
+                         "renumbering left a gap: %s" % nums)

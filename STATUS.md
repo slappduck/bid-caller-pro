@@ -114,6 +114,19 @@ upcoming-renewal timing changed from Stripe's default 7 days to 30 (Settings
 both are done an annual subscriber gets no reminder and nothing looks broken.
 Not urgent while there are no annual subscribers; required before the first.
 
+**Legal drafting done 2026-09-09.** The Terms gained a licence grant and a
+claim of ownership over the compiled feed (section 5 forbade reselling data
+that had never been licensed), a severability and entire-agreement clause, an
+indemnity, a forum-selection clause naming Missouri courts, a 30-day
+price-change notice, and a changes clause that describes the re-acceptance
+prompt the software actually shows. The Privacy Policy gained the three data
+flows it never disclosed -- published reviews, contacts shown on a bid, plan
+holders, plus the outreach list and how to get off it -- along with a security
+statement, a breach-notification promise, an honest account of edge cookies,
+and a seven-year figure for billing records. Both are version 2026-09-09,
+archived, and existing accounts will be re-prompted. Tests fail if any clause
+is dropped or the numbering gaps.
+
 Two things only an attorney can settle, both raised and neither resolved:
 a **forum-selection clause** (without one the governing-law clause does less
 work than it looks like it does, and a dispute could be heard anywhere), and
@@ -134,8 +147,8 @@ they are the ones most easily lost.
 | How long a customer lasts before cancelling | Yes -- median days. Previously impossible: a cancellation appended a key to a flat list with no date, plan or reason |
 | Which plan sells | Yes -- `plans_sold` |
 | How many are paying right now | Yes -- `people.paying_now` |
-| Whether the product produces WINS | **No.** The pipeline status a customer sets (submitted / won / lost) lives per-user in Supabase and is never aggregated. This is the most valuable unanswered question in the product: a customer who wins a job never churns, and one real win is worth more than every line of copy on the landing page |
-| Engagement -- scans per active customer per week | **No.** The best early warning of churn, and it is not collected |
+| Whether the product produces WINS | Yes -- `outcomes` on `/diag`: submitted, won, lost, passed, win rate, and how many distinct customers have won. Counts only; no row content leaves Supabase |
+| Engagement -- scans per active customer per week | **No.** The best early warning of churn -- people stop using a thing weeks before they cancel it -- and it is not collected |
 | Landing page -> signup conversion | **No.** `/click` counts outreach link opens only |
 
 Events carry a short salted hash, never an address: enough to follow one

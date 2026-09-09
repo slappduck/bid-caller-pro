@@ -167,3 +167,112 @@ class EventsAreRecordedWhereTheyHappenTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WinsSummaryTests(unittest.TestCase):
+    """Whether the product actually gets contractors work.
+
+    Customers mark a bid submitted, won, lost or passed. That sat per-user in
+    Supabase and nothing ever read it in aggregate, so "is this product
+    working" had no number behind it -- only opinion. It is also the question
+    that predicts retention best: a contractor who wins a job does not cancel.
+
+    The constraint is that row contents never leave Supabase. The only thing
+    derived from identities is how many DISTINCT customers have won, and only
+    the count is returned.
+    """
+
+    def setUp(self):
+        self.asked = []
+        self._open = ls.urllib.request.urlopen
+        self._url, self._key = ls.SUPABASE_URL, ls.SUPABASE_SERVICE_ROLE_KEY
+        ls.SUPABASE_URL = "https://project.supabase.co"
+        ls.SUPABASE_SERVICE_ROLE_KEY = "svc-key"
+        self.counts = {"": 40, "submitted": 9, "won": 3, "lost": 1, "passed": 2}
+        self.won_rows = [{"user_id": "u-1"}, {"user_id": "u-1"},
+                         {"user_id": "u-2"}]
+        outer = self
+
+        class Resp:
+            def __init__(self, n=0, body=b"[]"):
+                self.headers = {"Content-Range": "0-0/%d" % n}
+                self._body = body
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def read(self):
+                return self._body
+
+        def fake(req, timeout=None):
+            url = req.full_url
+            outer.asked.append(url)
+            if "select=user_id" in url:
+                return Resp(body=json.dumps(outer.won_rows).encode())
+            for state in ls._PIPELINE_STATES:
+                if "pipeline=eq.%s" % state in url:
+                    return Resp(outer.counts[state])
+            return Resp(outer.counts[""])
+        ls.urllib.request.urlopen = fake
+
+    def tearDown(self):
+        ls.urllib.request.urlopen = self._open
+        ls.SUPABASE_URL, ls.SUPABASE_SERVICE_ROLE_KEY = self._url, self._key
+
+    def test_every_pipeline_state_is_counted(self):
+        out = ls._wins_summary()
+        for state in ls._PIPELINE_STATES:
+            self.assertEqual(out[state], self.counts[state], state)
+
+    def test_the_win_rate_ignores_undecided_jobs(self):
+        """3 won, 1 lost -> 75%. The 9 still submitted are not losses."""
+        self.assertEqual(ls._wins_summary()["win_rate_pct"], 75.0)
+
+    def test_no_decided_jobs_yields_no_rate_rather_than_zero(self):
+        """Zero would read as 'we lose everything'."""
+        self.counts["won"] = self.counts["lost"] = 0
+        self.assertIsNone(ls._wins_summary()["win_rate_pct"])
+
+    def test_it_counts_people_not_just_jobs(self):
+        """One customer winning five is a different business from five
+        customers winning one each."""
+        self.assertEqual(ls._wins_summary()["customers_who_have_won"], 2)
+
+    def test_no_row_content_is_returned(self):
+        blob = json.dumps(ls._wins_summary())
+        for leak in ("user_id", "u-1", "title", "@"):
+            self.assertNotIn(leak, blob)
+
+    def test_it_asks_for_counts_not_rows(self):
+        ls._wins_summary()
+        for url in self.asked:
+            if "select=user_id" in url:
+                continue
+            self.assertIn("limit=1", url)
+
+    def test_an_unconfigured_project_says_so(self):
+        ls.SUPABASE_SERVICE_ROLE_KEY = ""
+        self.assertEqual(ls._wins_summary(), {"configured": False})
+
+    def test_a_failure_reports_the_type_and_not_the_detail(self):
+        def boom(req, timeout=None):
+            raise OSError("connect to https://project.supabase.co failed")
+        ls.urllib.request.urlopen = boom
+        self.assertEqual(ls._wins_summary(),
+                         {"configured": True, "error": "OSError"})
+
+    def test_it_is_behind_the_diag_token(self):
+        import re
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               os.pardir, "license_server.py"),
+                  encoding="utf-8") as f:
+            src = re.sub(r"^\s*#.*$", "", f.read(), flags=re.M)
+        health = src[src.index("def health("):]
+        health = health[:health.index("\ndef ")]
+        self.assertNotIn("_wins_summary", health)
+        diag = src[src.index("def diag("):]
+        diag = diag[:diag.index("\ndef ")]
+        self.assertIn("_wins_summary()", diag)
