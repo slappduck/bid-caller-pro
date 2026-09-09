@@ -296,6 +296,7 @@ def trial():
 
     started = datetime.datetime.now()
     trials[trial_key] = {"started": started.isoformat(), "email": email}
+    _bi_note(db, "trial_started", email)
     _save_db(db)
     end = started + datetime.timedelta(days=TRIAL_DAYS)
     return jsonify({"ok": True, "active": True, "days_left": TRIAL_DAYS,
@@ -378,6 +379,75 @@ def _terms_acceptance_stats():
         # Type only. The URL carries the project ref and the message can echo
         # request detail, and this whole payload is a debugging surface.
         return {"configured": True, "error": type(ex).__name__}
+
+
+def _bi_summary(db=None):
+    """Trial-to-paid, churn and lifetime, computed from the lifecycle log.
+
+    Counts and medians only. Nothing here names anybody, which is what makes
+    it safe to read from a diagnostics endpoint.
+    """
+    try:
+        log = (db if db is not None else _db()).get(LIFECYCLE_KEY) or []
+    except Exception:
+        return {"events": 0}
+
+    def when(row):
+        try:
+            t = datetime.datetime.fromisoformat(row["at"])
+            return t if t.tzinfo else t.replace(tzinfo=datetime.timezone.utc)
+        except Exception:
+            return None
+
+    first = {}          # id -> {event: earliest time}
+    counts = {}
+    plans = {}
+    for row in log:
+        ev = row.get("event", "")
+        counts[ev] = counts.get(ev, 0) + 1
+        if ev == "subscribed" and row.get("plan"):
+            plans[row["plan"]] = plans.get(row["plan"], 0) + 1
+        who, t = row.get("id"), when(row)
+        if not who or t is None:
+            continue
+        seen = first.setdefault(who, {})
+        if ev not in seen or t < seen[ev]:
+            seen[ev] = t
+
+    def median(xs):
+        xs = sorted(xs)
+        if not xs:
+            return None
+        mid = len(xs) // 2
+        return round(xs[mid] if len(xs) % 2 else (xs[mid - 1] + xs[mid]) / 2, 1)
+
+    trials = {w for w, e in first.items() if "trial_started" in e}
+    paid = {w for w, e in first.items() if "subscribed" in e}
+    churned = {w for w, e in first.items() if "churned" in e}
+
+    to_paid = [(first[w]["subscribed"] - first[w]["trial_started"]).days
+               for w in trials & paid]
+    lifetime = [(first[w]["churned"] - first[w]["subscribed"]).days
+                for w in paid & churned]
+
+    return {
+        "events": len(log),
+        "counts": counts,
+        "plans_sold": plans,
+        "people": {"trialled": len(trials), "paid": len(paid),
+                   "churned": len(churned),
+                   "paying_now": len(paid - churned)},
+        # The number that decides whether the funnel works at all.
+        "trial_to_paid_pct": (round(100.0 * len(trials & paid) / len(trials), 1)
+                              if trials else None),
+        "median_days_trial_to_paid": median(to_paid),
+        "median_days_subscribed_before_churn": median(lifetime),
+        # Churn as a share of everyone who ever paid. Meaningless below a
+        # handful of customers, which is exactly why the raw counts are here
+        # beside it rather than the rate alone.
+        "churn_pct_of_paid": (round(100.0 * len(churned) / len(paid), 1)
+                              if paid else None),
+    }
 
 
 def _recent_scans(limit=None):
@@ -1780,6 +1850,8 @@ def diag():
         # Consent recording, as counts. A signup that silently failed to
         # record is otherwise invisible until somebody thinks to run SQL.
         "terms_acceptances": _terms_acceptance_stats(),
+        # Trial -> paid -> churn, aggregated. Counts and medians, no names.
+        "business": _bi_summary(),
         "last_scan": kv_backend.get("bidcaller:last_scan", None),
         "recent_scans": _recent_scans(request.args.get("scans")),
         "feed_audit": kv_backend.get(BID_AUDIT_KEY, None),
@@ -2265,6 +2337,8 @@ def stripe_webhook():
         if ref_code:
             _apply_referral_reward(db, ref_code, email, device)
         _save_db(db)
+        _bi_note(db, "subscribed", email, plan)
+        _save_db(db)
         _send_key_email(email, key, plan)
         print(f"[stripe] issued {plan} key for {email or device}", flush=True)
 
@@ -2274,6 +2348,8 @@ def stripe_webhook():
         if info:
             _issue_for(db, info.get("email", ""), info.get("device", ""),
                        info.get("plan", "monthly"))
+            _bi_note(db, "renewed", info.get("email", ""),
+                     info.get("plan", "monthly"))
             _save_db(db)
             print(f"[stripe] renewed for {cust}", flush=True)
 
@@ -2289,6 +2365,10 @@ def stripe_webhook():
             key = db.get("emails", {}).get(email)
             if key and key not in db.setdefault("revoked", []):
                 db["revoked"].append(key)
+            # The date, the plan and which of the two Stripe events it was.
+            # A flat list of dead keys answered none of that.
+            _bi_note(db, "churned", email, info.get("plan", ""),
+                     {"reason": etype.rsplit(".", 1)[-1]})
             _save_db(db)
             print(f"[stripe] revoked for {cust}", flush=True)
 
@@ -3198,6 +3278,54 @@ def _admin_email_set():
 
 def _is_admin_email(email):
     return bool(email) and email.strip().lower() in _admin_email_set()
+
+
+# ── Business intelligence: the lifecycle log ────────────────────────────────
+#
+# What the system knew before this: that a licence key is dead. Not when, not
+# after how long, not what the person was paying. Cancellations appended a key
+# to a flat list -- db["revoked"] -- with no date and no reason, so "how long
+# does a customer last" and "did churn move after a price change" were
+# unanswerable, and unanswerable permanently: a date not written down at the
+# moment it happened cannot be recovered afterwards.
+#
+# That is the argument for instrumenting now rather than when there is enough
+# data to be interesting. The first ten customers are the ones whose behaviour
+# decides whether this business works, and they are also the ones most easily
+# lost.
+#
+# No addresses. Each entry carries a short salted hash of the trial identity,
+# which is enough to follow ONE person's trial -> paid -> churn arc and to
+# compute a lifetime, and useless for reading off who the customers are. An
+# aggregate is the only thing anybody needs here.
+LIFECYCLE_KEY = "lifecycle"
+LIFECYCLE_MAX = int(os.environ.get("LIFECYCLE_MAX", "20000"))
+
+
+def _bi_id(email):
+    """A stable, non-reversible handle for one customer."""
+    ident = _trial_identity(email or "")
+    if not ident:
+        return ""
+    salt = (SUPABASE_SERVICE_ROLE_KEY or ADMIN_TOKEN or "curbcall")[:32]
+    return hashlib.sha256((salt + "|bi|" + ident).encode("utf-8")).hexdigest()[:16]
+
+
+def _bi_note(db, event, email="", plan="", extra=None):
+    """Append one lifecycle event. Never raises -- BI must not break billing."""
+    try:
+        log = db.setdefault(LIFECYCLE_KEY, [])
+        row = {"at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+               "event": event, "id": _bi_id(email)}
+        if plan:
+            row["plan"] = plan
+        if extra:
+            row.update(extra)
+        log.append(row)
+        if len(log) > LIFECYCLE_MAX:
+            del log[:len(log) - LIFECYCLE_MAX]
+    except Exception:
+        pass
 
 
 def _trial_identity(email):

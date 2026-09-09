@@ -120,6 +120,28 @@ work than it looks like it does, and a dispute could be heard anywhere), and
 **whether to add arbitration at all** -- there is currently none, despite an
 earlier note in this file implying otherwise.
 
+### Business intelligence (added 2026-09-09)
+
+What is now recorded, and why it was recorded before there was anybody to
+measure: a date nobody wrote down at the moment it happened cannot be
+recovered afterwards. The first ten customers decide whether this works, and
+they are the ones most easily lost.
+
+| Question | Answerable? |
+|---|---|
+| What share of trials convert to paid | Yes -- `trial_to_paid_pct` on `/diag` |
+| How long a trial takes to convert | Yes -- median days |
+| How long a customer lasts before cancelling | Yes -- median days. Previously impossible: a cancellation appended a key to a flat list with no date, plan or reason |
+| Which plan sells | Yes -- `plans_sold` |
+| How many are paying right now | Yes -- `people.paying_now` |
+| Whether the product produces WINS | **No.** The pipeline status a customer sets (submitted / won / lost) lives per-user in Supabase and is never aggregated. This is the most valuable unanswered question in the product: a customer who wins a job never churns, and one real win is worth more than every line of copy on the landing page |
+| Engagement -- scans per active customer per week | **No.** The best early warning of churn, and it is not collected |
+| Landing page -> signup conversion | **No.** `/click` counts outreach link opens only |
+
+Events carry a short salted hash, never an address: enough to follow one
+person's trial -> paid -> churn arc, useless for enumerating customers. The
+rollup is counts and medians only, behind the diag token.
+
 ## Known gaps / not started
 
 - **Bonfire / OpenGov / PlanetBids adapters.** Researched, all three look
