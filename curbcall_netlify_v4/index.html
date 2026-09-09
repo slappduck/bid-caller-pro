@@ -30,8 +30,77 @@
 <!-- Without these, iOS "Add to Home Screen" on the marketing page gives a
      generated letter tile instead of the logo -- app.html already had them,
      this page did not, and this is the page most people land on first. -->
-<link rel="icon" href="/icon-192.png" />
+<!-- .ico first: browsers and several crawlers request /favicon.ico by
+     path regardless of what is declared, and it was a 404. The file
+     carries a purpose-made 16px rather than leaving a 512 to be
+     downscaled on the fly, which is what a search result renders. -->
+<link rel="icon" href="/favicon.ico" sizes="any" />
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
 <link rel="apple-touch-icon" href="/icon-192.png" />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://curbcallpro.com/#org",
+      "name": "CurbCall Pro",
+      "alternateName": [
+        "CurbCallPro",
+        "Curb Call Pro"
+      ],
+      "url": "https://curbcallpro.com/",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://curbcallpro.com/icon-512.png",
+        "width": 512,
+        "height": 512
+      },
+      "email": "support@curbcallpro.com",
+      "description": "CurbCall Pro finds open sidewalk, ADA ramp and curb and gutter bids for concrete contractors by scanning municipal, county and federal sources."
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://curbcallpro.com/#site",
+      "url": "https://curbcallpro.com/",
+      "name": "CurbCall Pro",
+      "publisher": {
+        "@id": "https://curbcallpro.com/#org"
+      }
+    },
+    {
+      "@type": "SoftwareApplication",
+      "name": "CurbCall Pro",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Web, iOS, Android",
+      "url": "https://curbcallpro.com/",
+      "publisher": {
+        "@id": "https://curbcallpro.com/#org"
+      },
+      "description": "Scans municipal and government sites for live sidewalk, ADA ramp and curb and gutter bids, and organises them into a feed for concrete contractors.",
+      "offers": [
+        {
+          "@type": "Offer",
+          "price": "49.00",
+          "priceCurrency": "USD",
+          "name": "Monthly",
+          "category": "subscription",
+          "url": "https://curbcallpro.com/#pricing"
+        },
+        {
+          "@type": "Offer",
+          "price": "399.00",
+          "priceCurrency": "USD",
+          "name": "Annual",
+          "category": "subscription",
+          "url": "https://curbcallpro.com/#pricing"
+        }
+      ]
+    }
+  ]
+}
+</script>
+
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}

@@ -659,6 +659,9 @@ def health_detail():
     """
     # Never call out to a provider here: this endpoint has to stay instant and
     # free, and a hung upstream must not make the health check itself look down.
+    # Read once, from the durable record: in-memory is empty after
+    # every restart, which is exactly when somebody is looking.
+    sam = _sam_health_read()
     backends = {
         "openai": bool(OPENAI_API_KEY),          # AI bid extraction — /scan is inert without it
         "brave_search": bool(BRAVE_API_KEY),     # primary local search
@@ -753,7 +756,7 @@ def health_detail():
             "(last: %s); federal bids are coming from sam.gov's public "
             "search instead, which is working. Retries automatically."
             % ((_breakers().get("keyed") or {}).get("fails", 0),
-                 _sam_health["last_status"]))
+                 sam["last_status"]))
     if _federal_breaker_open():
         notes.append(
             "Federal bids are paused: SAM has failed %d scans in a row "
@@ -761,8 +764,8 @@ def health_detail():
             "are unaffected -- federal contributed 2 bids across the last "
             "ten scans, so this costs little."
             % ((_breakers().get("federal") or {}).get("fails", 0),
-                 _sam_health["last_status"]))
-    if backends["sam_gov"] and _sam_health["last_status"] == 403:
+                 sam["last_status"]))
+    if backends["sam_gov"] and sam["last_status"] == 403:
         problems.append(
             "SAM_API_KEY is being rejected (403 API_KEY_INVALID). Federal "
             "bids are still arriving via sam.gov's public search, so this is "
@@ -770,7 +773,7 @@ def health_detail():
             "key at https://api.data.gov/signup and set SAM_API_KEY to it — "
             "a key from sam.gov's own profile page is a different credential "
             "and will not work here.")
-    elif backends["sam_gov"] and _sam_health["last_status"] == 429:
+    elif backends["sam_gov"] and sam["last_status"] == 429:
         notes.append("SAM_API_KEY is rate-limited (429). Federal bids fall "
                      "back to sam.gov's public search meanwhile.")
     if not backends["sam_gov"]:
@@ -826,7 +829,10 @@ def health_detail():
             "endpoint": SAM_SEARCH_URL,
             "key_configured": bool(SAM_API_KEY),
             "window_days": SAM_WINDOW_DAYS,
-            "last_status": _sam_health["last_status"],
+            "last_status": sam["last_status"],
+            # When that status was recorded. A status with no time
+            # beside it cannot be told from one three restarts old.
+            "last_status_at": sam["at"],
             # Whether the source is currently being rested, and how close it
             # is to being. Without this a federal count of zero looks the
             # same whether SAM is down or the radius is simply quiet.
@@ -870,7 +876,7 @@ def health_detail():
             "model": OPENAI_MODEL,                    # OPENAI_MODEL
         },
     })
-    body["sam_gov"]["last_error"] = _sam_health["last_error"]
+    body["sam_gov"]["last_error"] = sam["last_error"]
     body["brave_search"]["last_error"] = brave["last_error"]
     body["tavily"]["last_error"] = tav["last_error"]
     body["email"]["last_error"] = email_health["last_error"]
@@ -4833,7 +4839,45 @@ SAM_TIMEOUT = int(os.environ.get("SAM_TIMEOUT", "6"))
 # of from a scan funnel that only says "failed". The API key is NEVER in here:
 # it travels as a query parameter, so anything derived from the URL is scrubbed
 # before it is stored.
+# Why a SAM request failed, kept where a restart cannot erase it.
+#
+# This was a bare module dict. The failure COUNTER lives in the KV store and
+# survives, so /health would report consecutive_failures: 9 beside
+# last_status: None -- the alarm outliving the only field that explains it.
+# Render restarts on every deploy and after idling, so in practice the
+# diagnosis was gone before anyone looked, which is most of why federal bids
+# were broken for days without anyone being able to say what was wrong.
+_SAM_HEALTH_KEY = "bidcaller:sam_health"
 _sam_health = {"last_status": None, "last_error": ""}
+
+
+def _sam_health_note(status, error=""):
+    """Record the outcome of a SAM request, in memory and durably."""
+    _sam_health["last_status"] = status
+    _sam_health["last_error"] = error
+    try:
+        kv_backend.set(_SAM_HEALTH_KEY, {
+            "last_status": status, "last_error": error,
+            "at": datetime.datetime.now(datetime.timezone.utc).isoformat()})
+    except Exception:
+        pass   # In-memory is still better than nothing.
+
+
+def _sam_health_read():
+    """The last known outcome, preferring whatever survived a restart.
+
+    In-memory wins when it has something: it is this process's own truth and
+    cannot be staler than the store.
+    """
+    if _sam_health["last_status"] is not None:
+        return dict(_sam_health, at="")
+    try:
+        blob = kv_backend.get(_SAM_HEALTH_KEY, None) or {}
+    except Exception:
+        blob = {}
+    return {"last_status": blob.get("last_status"),
+            "last_error": blob.get("last_error", ""),
+            "at": blob.get("at", "")}
 
 
 def _sam_scrub(text):
@@ -4887,20 +4931,18 @@ def _sam_fetch(state, ncode=None, ccode=None, timeout=None, limit=None):
     except urllib.error.HTTPError as e:
         # The status is the whole diagnosis: 403 is a rejected key, 404 a
         # wrong endpoint, 429 a rate limit. "failed" alone sent us guessing.
-        _sam_health["last_status"] = e.code
-        _sam_health["last_error"] = _sam_scrub(str(e))
+        _sam_health_note(e.code, _sam_scrub(str(e)))
         return None
     except Exception as e:
         # NOT None. None is reserved for "no request has been made"; a
         # timeout that reported None was read as a key problem for a whole
         # round of diagnosis when the key was fine and SAM was just slow.
-        _sam_health["last_status"] = (
+        _sam_health_note(
             "timeout" if isinstance(e, (socket.timeout, TimeoutError))
-            or "timed out" in str(e).lower() else "error")
-        _sam_health["last_error"] = _sam_scrub("%s: %s" % (type(e).__name__, e))
+            or "timed out" in str(e).lower() else "error",
+            _sam_scrub("%s: %s" % (type(e).__name__, e)))
         return None
-    _sam_health["last_status"] = 200
-    _sam_health["last_error"] = ""
+    _sam_health_note(200, "")
     return data.get("opportunitiesData") or []
 
 

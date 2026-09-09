@@ -6,6 +6,7 @@ do not contain, and only the centre state was ever asked. These pin each of
 those so they cannot come back.
 """
 import os
+import re
 import sys
 import time
 import unittest
@@ -412,15 +413,25 @@ class RejectedKeyIsReportedTests(unittest.TestCase):
         with open(os.path.join(root, "license_server.py"), encoding="utf-8") as fh:
             self.src = fh.read()
 
+    def _branch(self, status):
+        """The block that handles this SAM status, whatever it is read from.
+
+        These used to match `_sam_health["last_status"] == 403` literally and
+        broke the day that read moved behind a helper -- the diagnosis is now
+        loaded once per request so it can survive a restart. The status is
+        what the test is about; the variable holding it is not.
+        """
+        m = re.search(r'\w+\["last_status"\] == %d' % status, self.src)
+        self.assertIsNotNone(m, "no branch handles SAM status %d" % status)
+        return self.src[m.start():m.start() + 900]
+
     def test_a_403_is_reported_as_a_problem(self):
-        i = self.src.index('_sam_health["last_status"] == 403')
-        block = self.src[i:i + 900]
+        block = self._branch(403)
         self.assertIn("problems.append", block)
         self.assertIn("API_KEY_INVALID", block)
 
     def test_the_message_names_the_actual_fix(self):
-        i = self.src.index('_sam_health["last_status"] == 403')
-        block = self.src[i:i + 900]
+        block = self._branch(403)
         self.assertIn("api.data.gov/signup", block)
         # The commonest cause, and the one that cost the time here.
         self.assertIn("sam.gov's own profile page", block)
@@ -428,15 +439,13 @@ class RejectedKeyIsReportedTests(unittest.TestCase):
     def test_it_says_this_is_not_an_outage(self):
         """The public fallback keeps federal bids flowing, so a rejected key
         must not read as 'federal bids are down'."""
-        i = self.src.index('_sam_health["last_status"] == 403')
-        block = self.src[i:i + 900]
+        block = self._branch(403)
         self.assertIn("not an outage", block)
 
     def test_a_rate_limit_is_a_note_not_a_problem(self):
         """429 is temporary and the fallback covers it, so it must not mark
         the whole service degraded."""
-        i = self.src.index('_sam_health["last_status"] == 429')
-        block = self.src[i:i + 400]
+        block = self._branch(429)[:400]
         self.assertIn("notes.append", block)
         self.assertNotIn("problems.append", block)
 

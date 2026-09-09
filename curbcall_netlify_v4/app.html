@@ -1201,19 +1201,35 @@ async function pushFeeds(){
   }catch(e){/* a failed feed upload costs nothing local — try again next scan */}
 }
 
+// Whether the server has been asked yet about this account's feed, and what
+// it said. maybeFirstScan() used to decide by looking at bidData, which on a
+// new device is empty for the first second or two of every launch simply
+// because the answer has not arrived -- so an existing customer signing in on
+// a new phone got an unrequested 90-second scan of wherever they happened to
+// be. showApp() starts autoFillZip() and syncPullFeeds() in the same tick and
+// the geolocation callback usually wins.
+let feedSyncState="pending";   // pending | empty | has-bids | failed
 async function syncPullFeeds(){
-  if(!sb||!currentUser)return;
+  if(!sb||!currentUser){feedSyncState="failed";return;}
   let data;
   try{
     const res=await sb.from(FEED_TABLE).select("*").maybeSingle();
-    if(res.error)return;  // table not created yet -> feature is simply inert
+    if(res.error){feedSyncState="failed";return;}  // table not created yet -> feature is simply inert
     data=res.data;
-  }catch(e){return;}
+  }catch(e){feedSyncState="failed";return;}
+  // The column is "bids" -- same one read below. An account with any of the
+  // three feeds is an existing customer, not a new one.
+  feedSyncState=(data&&(Object.keys(data.bids||{}).length
+                        ||Object.keys(data.upcoming||{}).length
+                        ||Object.keys(data.leads||{}).length))
+    ?"has-bids":"empty";
   if(!data){
     // Nothing stored yet: seed the account from whatever this browser has,
     // so the first device to sign in doesn't lose its feed to an empty cloud.
     if(Object.keys(bidData).length||Object.keys(upcomingData).length
        ||Object.keys(leadsData).length)pushFeeds();
+    // A genuinely new account. This is the one case a first scan is FOR.
+    maybeFirstScan();
     return;
   }
   // Last writer wins, by the timestamp the writing device recorded. Only
@@ -1230,6 +1246,10 @@ async function syncPullFeeds(){
   store.set("lead_status",leadStatus);
   feedsUpdatedAt=data.updated_at||new Date().toISOString();
   store.set("feeds_updated_at",feedsUpdatedAt);
+  // The sync has now answered, so the first-scan decision can be made on
+  // fact. Without this the only caller is the geolocation callback, which
+  // fires first and finds "pending" -- correct, and then nothing tries again.
+  maybeFirstScan();
   const active=(id)=>document.getElementById(id).classList.contains("active");
   if(active("screen-feed"))renderFeed();
   if(active("screen-upcoming"))renderUpcoming();
@@ -2716,6 +2736,15 @@ function finishOnboarding(){
 const FIRST_SCAN_KEY="first_scan_done";
 function maybeFirstScan(){
   if(store.get(FIRST_SCAN_KEY,false))return;
+  // Wait for the server's answer instead of guessing from an empty cache.
+  //
+  // Every other guard here is DEVICE-local, and on a new device they are all
+  // absent for the same reason: it is a new device. So an existing customer
+  // signing in on a second phone passed every one of them and was given an
+  // unrequested 90-second scan -- the exact thing the comment below promises
+  // cannot happen. "pending" means the answer is still in flight; the next
+  // call, after the sync lands, decides properly.
+  if(feedSyncState==="pending"||feedSyncState==="has-bids")return;
   if(Object.keys(bidData||{}).length)return;       // already has bids
   if(store.get("last_scan_debug",null))return;     // has scanned before
   const input=document.getElementById("loc-input");

@@ -8,6 +8,7 @@ so, and that it never echoes a secret's value.
 import io
 import json
 import os
+import re
 import sys
 import unittest
 from unittest.mock import patch
@@ -584,3 +585,85 @@ class VersionFieldTests(unittest.TestCase):
         os.environ.pop("RENDER_GIT_COMMIT", None)
         body = self.app.get("/health").get_json()
         self.assertEqual(body["version"], "")
+
+
+class SamDiagnosisSurvivesARestartTests(unittest.TestCase):
+    """/health reported "consecutive_failures: 9" beside "last_status: None".
+
+    The failure COUNTER lives in the KV store and survives a restart. The
+    reason -- 403 rejected key, 404 wrong endpoint, 429 rate limit, timeout --
+    was a bare module dict, so it was wiped by every deploy and every wake
+    from idle. In practice the alarm outlived the only field that explains it,
+    which is most of why federal bids were broken for days with nobody able to
+    say what was wrong.
+    """
+
+    def setUp(self):
+        self.store = {}
+        self._g, self._s = ls.kv_backend.get, ls.kv_backend.set
+        ls.kv_backend.get = lambda k, d=None: self.store.get(k, d)
+        ls.kv_backend.set = lambda k, v: self.store.__setitem__(k, v)
+        self._saved = dict(ls._sam_health)
+
+    def tearDown(self):
+        ls.kv_backend.get, ls.kv_backend.set = self._g, self._s
+        ls._sam_health.update(self._saved)
+
+    def _restart(self):
+        """What a Render deploy does to module state, and nothing else."""
+        ls._sam_health["last_status"] = None
+        ls._sam_health["last_error"] = ""
+
+    def test_a_failure_is_written_somewhere_durable(self):
+        ls._sam_health_note(403, "API_KEY_INVALID")
+        self.assertEqual(self.store[ls._SAM_HEALTH_KEY]["last_status"], 403)
+
+    def test_it_is_still_there_after_a_restart(self):
+        ls._sam_health_note(403, "API_KEY_INVALID")
+        self._restart()
+        got = ls._sam_health_read()
+        self.assertEqual(got["last_status"], 403)
+        self.assertEqual(got["last_error"], "API_KEY_INVALID")
+
+    def test_it_is_dated_so_a_stale_one_is_recognisable(self):
+        """A status with no time beside it cannot be told from one three
+        restarts old."""
+        ls._sam_health_note("timeout", "timed out")
+        self._restart()
+        self.assertTrue(ls._sam_health_read()["at"])
+
+    def test_this_process_wins_over_the_stored_copy(self):
+        """In-memory is this process's own truth and cannot be staler."""
+        self.store[ls._SAM_HEALTH_KEY] = {"last_status": 403,
+                                          "last_error": "old", "at": "then"}
+        ls._sam_health_note(200, "")
+        self.assertEqual(ls._sam_health_read()["last_status"], 200)
+
+    def test_nothing_recorded_anywhere_reads_as_unknown(self):
+        self._restart()
+        self.assertIsNone(ls._sam_health_read()["last_status"])
+
+    def test_a_dead_kv_store_does_not_break_a_scan(self):
+        """Losing the diagnosis is survivable; failing the request is not."""
+        def boom(*a, **k):
+            raise RuntimeError("kv down")
+        ls.kv_backend.set = boom
+        ls._sam_health_note(429, "rate limited")
+        self.assertEqual(ls._sam_health["last_status"], 429)
+
+    def test_a_dead_kv_store_does_not_break_reading_either(self):
+        def boom(*a, **k):
+            raise RuntimeError("kv down")
+        self._restart()
+        ls.kv_backend.get = boom
+        self.assertIsNone(ls._sam_health_read()["last_status"])
+
+    def test_health_reports_the_durable_value_not_the_wiped_one(self):
+        src = re.sub(r"^\s*#.*$", "", open(
+            os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                         os.pardir, "license_server.py"),
+            encoding="utf-8").read(), flags=re.M)
+        body = src[src.index("def health_detail():"):]
+        body = body[:body.index("\ndef ")]
+        self.assertIn("_sam_health_read()", body)
+        self.assertNotIn('_sam_health["last_status"]', body)
