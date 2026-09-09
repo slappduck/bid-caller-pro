@@ -613,6 +613,7 @@ class SamDiagnosisSurvivesARestartTests(unittest.TestCase):
         """What a Render deploy does to module state, and nothing else."""
         ls._sam_health["last_status"] = None
         ls._sam_health["last_error"] = ""
+        ls._sam_health["at"] = ""
 
     def test_a_failure_is_written_somewhere_durable(self):
         ls._sam_health_note(403, "API_KEY_INVALID")
@@ -631,6 +632,15 @@ class SamDiagnosisSurvivesARestartTests(unittest.TestCase):
         ls._sam_health_note("timeout", "timed out")
         self._restart()
         self.assertTrue(ls._sam_health_read()["at"])
+
+    def test_the_live_path_is_dated_too(self):
+        """The first version stamped only the stored copy, so a running
+        process reported a status with no time -- the same gap this change
+        exists to close, one layer down. A real scan exposed it immediately.
+        """
+        ls._sam_health_note("timeout", "timed out")
+        self.assertTrue(ls._sam_health_read()["at"],
+                        "in-memory diagnosis carries no timestamp")
 
     def test_this_process_wins_over_the_stored_copy(self):
         """In-memory is this process's own truth and cannot be staler."""

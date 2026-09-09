@@ -4848,17 +4848,21 @@ SAM_TIMEOUT = int(os.environ.get("SAM_TIMEOUT", "6"))
 # diagnosis was gone before anyone looked, which is most of why federal bids
 # were broken for days without anyone being able to say what was wrong.
 _SAM_HEALTH_KEY = "bidcaller:sam_health"
-_sam_health = {"last_status": None, "last_error": ""}
+_sam_health = {"last_status": None, "last_error": "", "at": ""}
 
 
 def _sam_health_note(status, error=""):
     """Record the outcome of a SAM request, in memory and durably."""
+    at = datetime.datetime.now(datetime.timezone.utc).isoformat()
     _sam_health["last_status"] = status
     _sam_health["last_error"] = error
+    # Stamped in memory too. Without this the live path reported a status with
+    # no time beside it -- the exact gap this whole change exists to close,
+    # reintroduced one layer down and visible the moment a real scan ran.
+    _sam_health["at"] = at
     try:
         kv_backend.set(_SAM_HEALTH_KEY, {
-            "last_status": status, "last_error": error,
-            "at": datetime.datetime.now(datetime.timezone.utc).isoformat()})
+            "last_status": status, "last_error": error, "at": at})
     except Exception:
         pass   # In-memory is still better than nothing.
 
@@ -4870,7 +4874,9 @@ def _sam_health_read():
     cannot be staler than the store.
     """
     if _sam_health["last_status"] is not None:
-        return dict(_sam_health, at="")
+        return {"last_status": _sam_health["last_status"],
+                "last_error": _sam_health["last_error"],
+                "at": _sam_health.get("at", "")}
     try:
         blob = kv_backend.get(_SAM_HEALTH_KEY, None) or {}
     except Exception:
