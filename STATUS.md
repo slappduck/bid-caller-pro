@@ -61,6 +61,14 @@ it.
 | **Get one real review** | The review system is built, approval-gated and empty. One quote with a name, company and city outweighs every line of copy on the landing page |
 | **Delete `claude/weekly-upcoming`** | Stale and now dangerous to merge — see above |
 
+### Added 2026-09-10 — legal docs
+
+| Item | What's needed |
+|---|---|
+| **Push and deploy the 2026-09-10 legal update** | Committed locally (`ca6b73b`), not pushed. Netlify won't serve the new terms.html/privacy.html and Render won't stamp the new `TERMS_VERSION`/`PRIVACY_VERSION` until it's pushed and both redeploy. Existing accounts get re-prompted to accept once live |
+| **Register a DMCA designated agent** | copyright.gov/dmca-directory, ~$6 and your business info — has to be done by Josh, not something that can be automated. Terms section 15 already names a complaints contact (`support@curbcallpro.com`) and cites 17 U.S.C. §512, but full safe-harbor protection only attaches once an agent is actually on file with the Copyright Office |
+| **Confirm DPAs are on file with Supabase, Stripe, OpenAI, Resend, Render, Cloudflare, Upstash** | Not checkable from the repo — these are account-level agreements with each vendor, not code. Worth doing once, not urgent while under the state-privacy-law thresholds noted below |
+
 ### Added 2026-09-05 — legality
 
 | Item | What's needed |
@@ -104,6 +112,8 @@ this is the engineering record of what the software does.
 | **State privacy laws** | CCPA and the newer state laws gate on $25M revenue or 100k consumers. Nowhere near any threshold. Revisit at scale, not now |
 | **Sales tax nexus** | Economic nexus is generally $100k or 200 transactions per state -- roughly 170 subscribers in one state at $49/mo. Not close. SaaS taxability still varies enough to stay on the accountant's list |
 | **Accessibility (ADA/WCAG)** | Audited 2026-09-08 with axe-core against WCAG 2.1 AA, every page, phone viewport. Four violations found, all fixed, zero remaining. Two were critical: pinch-zoom disabled across the whole app, and an unlabelled radius select on the marketing page. `tools/a11y_audit.js` re-runs it; `tests/test_accessibility.py` pins the regressions |
+| **CCPA/CPRA rights section** | Added 2026-09-10. Privacy Policy section 8 names the CCPA categories collected, states we neither sell nor share (the "share" concept — cross-context behavioral advertising — is legally distinct from "sale" and was previously undisclosed), and gives a request channel with the statutory 10-day acknowledgment / 45-day response window. Still gated on the same $25M/100k-consumer threshold noted above; added anyway since it costs nothing and a CA resident can now find the section by name |
+| **DMCA / copyright complaints** | Added 2026-09-10. Terms section 15 gives reviewers-of-others'-content a notice-and-takedown contact and cites 17 U.S.C. §512. Not yet full §512 safe harbor — that requires registering a designated agent with the Copyright Office, on Josh's list above |
 
 **The annual renewal reminder needs two settings in Stripe before it works.**
 Stripe's own "upcoming renewals" email has been turned off, so ours is the
