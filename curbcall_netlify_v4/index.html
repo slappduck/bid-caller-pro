@@ -291,9 +291,16 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
 /* ── section rhythm ────────────────────────────────────────── */
 /* Six sections in a row all read eyebrow -> big heading -> card grid on the
    same flat ground. Changing the GROUND is the cheapest way to break that
-   without touching a word of copy. */
-.band{background:var(--panel);border-block:1px solid var(--line);}
-.band-soft{background:linear-gradient(180deg,#13162a,#0b0d14);}
+   without touching a word of copy.
+   A separate class from .band on purpose: .band is already the small
+   bordered, centered, rounded CTA card near the footer. Reusing that name
+   here once made #features and #pricing inherit its border-radius, full
+   border, padding and text-align:center -- centering every heading and
+   paragraph in both sections and framing them in a card border nobody
+   asked for, because CSS only overrides the properties a later rule
+   actually redeclares. */
+.ground{background:var(--panel);border-block:1px solid var(--line);}
+.ground-soft{background:linear-gradient(180deg,#13162a,#0b0d14);}
 .narrow .wrap{max-width:760px;}
 
 /* ── scroll reveal ─────────────────────────────────────────── */
@@ -429,7 +436,7 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
 
 <div class="hazard"></div>
 
-<section id="features" class="band">
+<section id="features" class="ground">
   <div class="wrap">
     <div class="sec-head">
       <span class="eyebrow">Built for concrete crews</span>
@@ -522,7 +529,7 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
   </div>
 </section>
 
-<section id="pricing" class="band band-soft">
+<section id="pricing" class="ground ground-soft">
   <div class="wrap">
     <div class="sec-head">
       <span class="eyebrow">Pricing</span>
