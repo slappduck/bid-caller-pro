@@ -439,6 +439,152 @@ def _wins_summary():
         return {"configured": True, "error": type(ex).__name__}
 
 
+ENGAGEMENT_WINDOW_DAYS = int(os.environ.get("ENGAGEMENT_WINDOW_DAYS", "28"))
+
+
+_VISIT_KEY = "bidcaller:site_visits"
+_VISIT_DAYS = int(os.environ.get("SITE_VISIT_DAYS", "60"))
+_visit_lock = threading.Lock()
+
+
+@app.route("/visit", methods=["POST"])
+def visit():
+    """Count one visit to the marketing site, by day.
+
+    /click counts outreach links only, so the one number that says whether
+    the landing page works -- visitors who become trials -- could not be
+    computed at all. This is the numerator's other half.
+
+    Public and unauthenticated, like /coverage and /click: the page doing the
+    reporting is public, so the worst case is a wrong count on a private
+    dashboard. No addresses, no identifiers, no per-visitor row -- a date and
+    a tally, which is all the ratio needs.
+    """
+    day = datetime.datetime.now().strftime("%Y-%m-%d")
+    with _visit_lock:
+        try:
+            store = kv_backend.get(_VISIT_KEY, None)
+            if not isinstance(store, dict):
+                store = {}
+            store[day] = int(store.get(day, 0)) + 1
+            # Bounded: keep the recent window, drop the rest. A counter that
+            # grows forever is a slow outage.
+            for old in sorted(store)[:-_VISIT_DAYS]:
+                store.pop(old, None)
+            kv_backend.set(_VISIT_KEY, store)
+        except Exception:
+            return jsonify({"ok": True, "recorded": False})
+    return jsonify({"ok": True, "recorded": True})
+
+
+def _funnel_summary(db=None):
+    """Visitors to the marketing site, and how many became trials.
+
+    Both sides come from counts already being kept: site visits by day, and
+    trial_started events in the lifecycle log. Deliberately a RATIO of two
+    tallies rather than a per-visitor journey -- following individuals across
+    the site would mean identifying them, and the question does not require
+    it.
+    """
+    since = (datetime.datetime.now(datetime.timezone.utc)
+             - datetime.timedelta(days=_VISIT_DAYS))
+    try:
+        store = kv_backend.get(_VISIT_KEY, None) or {}
+    except Exception:
+        store = {}
+    visits = 0
+    for day, n in (store.items() if isinstance(store, dict) else []):
+        try:
+            if datetime.datetime.strptime(day, "%Y-%m-%d").replace(
+                    tzinfo=datetime.timezone.utc) >= since:
+                visits += int(n)
+        except Exception:
+            continue
+    try:
+        log = (db if db is not None else _db()).get(LIFECYCLE_KEY) or []
+    except Exception:
+        log = []
+    trials = 0
+    for row in log:
+        if row.get("event") != "trial_started":
+            continue
+        try:
+            t = datetime.datetime.fromisoformat(row["at"])
+            if t.tzinfo is None:
+                t = t.replace(tzinfo=datetime.timezone.utc)
+            if t >= since:
+                trials += 1
+        except Exception:
+            continue
+    return {
+        "window_days": _VISIT_DAYS,
+        "site_visits": visits,
+        "signups_started": trials,
+        # Nothing rather than zero when nobody has visited: zero would read
+        # as "the page converts nobody" when it means "nobody came".
+        "visit_to_trial_pct": (round(100.0 * trials / visits, 2)
+                               if visits else None),
+    }
+
+
+def _engagement(db=None):
+    """How often the people paying for this actually use it.
+
+    The earliest churn signal there is. Somebody stops opening a tool weeks
+    before they cancel it, so cancellations tell you about a decision already
+    made while this tells you about one being made.
+
+    Counted per person per week over a rolling window, from the same lifecycle
+    log as everything else -- no new storage, and no addresses, because a
+    scan event carries the same salted handle the rest of the log uses.
+    """
+    try:
+        log = (db if db is not None else _db()).get(LIFECYCLE_KEY) or []
+    except Exception:
+        return {"events": 0}
+    now = datetime.datetime.now(datetime.timezone.utc)
+    cutoff = now - datetime.timedelta(days=ENGAGEMENT_WINDOW_DAYS)
+    weeks = max(1.0, ENGAGEMENT_WINDOW_DAYS / 7.0)
+
+    per_person, last_seen = {}, {}
+    for row in log:
+        if row.get("event") != "scanned":
+            continue
+        who = row.get("id")
+        if not who:
+            continue
+        try:
+            t = datetime.datetime.fromisoformat(row["at"])
+            if t.tzinfo is None:
+                t = t.replace(tzinfo=datetime.timezone.utc)
+        except Exception:
+            continue
+        if t > last_seen.get(who, cutoff - datetime.timedelta(days=9999)):
+            last_seen[who] = t
+        if t >= cutoff:
+            per_person[who] = per_person.get(who, 0) + 1
+
+    rates = sorted(v / weeks for v in per_person.values())
+
+    def median(xs):
+        if not xs:
+            return None
+        mid = len(xs) // 2
+        return round(xs[mid] if len(xs) % 2 else (xs[mid - 1] + xs[mid]) / 2, 2)
+
+    # Silent for a fortnight is the number worth acting on: it is a customer
+    # deciding to leave, and unlike a cancellation it is still reversible.
+    quiet = sum(1 for t in last_seen.values() if (now - t).days >= 14)
+    return {
+        "window_days": ENGAGEMENT_WINDOW_DAYS,
+        "active_people": len(per_person),
+        "scans_in_window": sum(per_person.values()),
+        "median_scans_per_week": median(rates),
+        "busiest_scans_per_week": round(rates[-1], 2) if rates else None,
+        "silent_14d_or_more": quiet,
+    }
+
+
 def _bi_summary(db=None):
     """Trial-to-paid, churn and lifetime, computed from the lifecycle log.
 
@@ -1918,6 +2064,11 @@ def diag():
         "business": _bi_summary(),
         # Whether the product produces work. Counts only.
         "outcomes": _wins_summary(),
+        # How often paying customers actually use it -- the earliest churn
+        # signal, and unlike a cancellation it is still reversible.
+        "engagement": _engagement(),
+        # Does the marketing page work: visitors in, trials out.
+        "funnel": _funnel_summary(),
         "last_scan": kv_backend.get("bidcaller:last_scan", None),
         "recent_scans": _recent_scans(request.args.get("scans")),
         "feed_audit": kv_backend.get(BID_AUDIT_KEY, None),
@@ -7590,27 +7741,42 @@ def _perform_scan(location, radius, force=False, _progress_token=""):
         # would be by running many at once.
         if known_towns:
             deadline = time.time() + KNOWN_TOWN_BUDGET_SEC
-            with ThreadPoolExecutor(max_workers=KNOWN_TOWN_WORKERS) as ex:
+            # NOT a `with` block. Its __exit__ calls shutdown(wait=True), so
+            # once the budget expired the phase still sat waiting for every
+            # fetch already in flight -- sixteen of them, each under its own
+            # request timeout. The budget bounded how long we WAITED for
+            # results and not how long the phase took, which is not a budget.
+            # A live scan spent 88 seconds inside a 40-second one.
+            ex = ThreadPoolExecutor(max_workers=KNOWN_TOWN_WORKERS)
+            try:
                 futures = [ex.submit(_run_known_town, t) for t in known_towns]
                 try:
                     for f in as_completed(futures,
                                           timeout=max(1.0, deadline - time.time())):
                         local_raw += f.result()
                 except FuturesTimeout:
-                    # Out of time. Cancel whatever has not started; the few
-                    # already in flight finish under their own request
-                    # timeouts. Their results are still collected below.
-                    skipped = sum(1 for f in futures if f.cancel())
+                    # Out of time. Take what finished and stop waiting.
+                    done = 0
                     for f in futures:
                         if f.done() and not f.cancelled():
                             try:
                                 local_raw += f.result()
+                                done += 1
                             except Exception:
                                 pass
-                    if skipped:
-                        drop_stats["known_towns_out_of_time"] = skipped
-                        print(f"[scan] known-town budget spent, {skipped} town(s) "
-                              f"not read", flush=True)
+                    unfinished = len(futures) - done
+                    if unfinished:
+                        drop_stats["known_towns_out_of_time"] = unfinished
+                        print(f"[scan] known-town budget spent, {unfinished} "
+                              f"town(s) not read", flush=True)
+            finally:
+                # Cancel what has not started and do not wait for what has.
+                # The running threads finish into nothing; their work is lost,
+                # which is exactly what a spent budget is supposed to mean.
+                try:
+                    ex.shutdown(wait=False, cancel_futures=True)
+                except TypeError:          # cancel_futures is 3.9+
+                    ex.shutdown(wait=False)
 
         drop_stats["ms_towns"] = int((time.time() - _t_towns) * 1000)
 
@@ -7745,6 +7911,19 @@ def scan():
         return jsonify({"ok": False, "reason": "not_licensed"}), 403
     if not location:
         return jsonify({"ok": False, "reason": "no_location"})
+
+    # Who scanned, for the engagement rollup. The address is resolved from
+    # the verified token and immediately reduced to the same salted handle the
+    # rest of the lifecycle log uses -- a scan record must not become a way to
+    # read off who the customers are or where they work.
+    try:
+        _who = _verify_supabase_token(supabase_token) if supabase_token else ""
+        if _who:
+            _db_ = _db()
+            _bi_note(_db_, "scanned", _who)
+            _save_db(_db_)
+    except Exception:
+        pass    # A metric is never worth failing a scan over.
 
     outcome = _perform_scan(location, radius, force=bool(data.get("force")),
                             _progress_token=str(data.get("progress_token") or ""))

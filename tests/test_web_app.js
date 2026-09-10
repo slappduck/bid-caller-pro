@@ -503,6 +503,15 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
         return route.fulfill({ status: 200, contentType: "application/json",
                                body: '{"ok":false,"reason":"no_key"}' });
       }
+      // The Diagnostics card is admin-only (see the isAdmin guard in
+      // renderAccount). This block used to sign in as an ordinary user and
+      // then assert the card's contents, so it had been failing since the
+      // card was gated -- five checks reporting an app fault that was a
+      // deliberate access rule.
+      if (u.includes("/admin/whoami")) {
+        return route.fulfill({ status: 200, contentType: "application/json",
+                               body: '{"ok":true,"is_admin":true}' });
+      }
       if (host === "cdn.jsdelivr.net") {
         return route.fulfill({ status: 200, contentType: "application/javascript",
                                body: SB_STUB });
@@ -521,8 +530,21 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await page.locator("#scan-btn").click();
     await page.waitForTimeout(1200);
 
+    // The Diagnostics card is admin-only, and this block boots through
+    // bootOffline() -- supabase-js never loads, so checkAdminStatus() returns
+    // before it can ask the server and isAdmin stays false. Stubbing
+    // /admin/whoami cannot help because nothing calls it. Set the flag at the
+    // seam instead: what is under test here is the card's CONTENTS, not the
+    // access rule that decides who sees it.
+    await page.evaluate(() => { isAdmin = true; });
     await page.evaluate(() => goTo("account"));
-    await page.waitForTimeout(1200);
+    await page.waitForTimeout(600);
+    // The backend lines come from /health, which the card fetches on demand
+    // rather than at render.
+    await page.evaluate(async () => {
+      if (typeof loadHealth === "function") await loadHealth();
+    });
+    await page.waitForTimeout(900);
 
     const card = await page.locator("#account-body").innerText();
     check("the discard count is surfaced, not just the kept count",

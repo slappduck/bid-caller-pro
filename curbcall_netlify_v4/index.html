@@ -871,6 +871,34 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
     }).catch(function () {});
   } catch (e) {}
 })();
+
+// Count the visit itself, not only outreach links.
+//
+// /click answers "did this contractor open my email". It cannot answer the
+// question that decides whether the marketing page is worth anything: how
+// many people who arrive here start a trial. That needs a denominator.
+//
+// Once per browser session, so a reload or a scroll back to the top does not
+// inflate it. No identifier of any kind is sent -- the server keeps a tally
+// per day, which is all a ratio needs.
+(function () {
+  try {
+    var seen = "visit_counted";
+    if (sessionStorage.getItem(seen)) return;
+    sessionStorage.setItem(seen, "1");
+  } catch (e) {
+    /* Private mode, or storage refused. Counting twice beats not at all. */
+  }
+  try {
+    fetch("https://bid-caller-pro.onrender.com/visit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+      keepalive: true,
+      mode: "cors"
+    }).catch(function () {});
+  } catch (e) {}
+})();
 </script>
 </body>
 </html>
