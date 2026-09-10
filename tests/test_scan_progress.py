@@ -1,18 +1,18 @@
-"""A scan took 79 seconds median because its sources waited in line.
+"""A scan takes over a minute and the bar was a guess.
 
-Measured across ten real scans: towns 41%, search 34%, state 12%, federal 12%.
-State letting pages and SAM talk to entirely different hosts from the search
-backends, so nothing about them required waiting their turn -- their seconds
-were being added to the wall clock instead of overlapping it.
+It was driven by how long a scan usually takes, so it counted up whether
+anything was happening or not -- a stalled scan and a working one looked
+identical for the whole minute, which is what makes a tool feel broken when
+it is fine.
 
-They now start before the search-and-read phase and are collected after it.
-Each fills its OWN dict: _place_bid() dedupes against the bucket it writes
-into, and making every source thread-safe by inspection is the kind of change
-that looks fine and corrupts a feed at three in the morning. Separate dicts
-cost one merge and are correct by construction.
+The scan now publishes where it actually is and the app reads it. Entirely
+additive on purpose: /scan is unchanged, the record is best-effort, and a
+client that cannot read it falls back to the old estimate. Nothing here is
+allowed to fail a scan for the sake of a status line.
 
-The merge has to redo the dedupe, because a state letting page and a municipal
-portal genuinely do carry the same job.
+(The other half of that change -- overlapping the independent phases -- was
+reverted after measurement: on half a vCPU it made every phase slower. See
+the comment above the state stage in license_server.py.)
 """
 import os
 import re
@@ -21,81 +21,6 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import license_server as ls
-
-
-def source():
-    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                           os.pardir, "license_server.py"), encoding="utf-8") as f:
-        return re.sub(r"^\s*#.*$", "", f.read(), flags=re.M)
-
-
-class MergeTests(unittest.TestCase):
-    def bid(self, title, deadline="2026-10-01", city="Aurora"):
-        return {"title": title, "deadline": deadline, "city": city}
-
-    def test_new_bids_are_added(self):
-        into = {"Aurora, MO": [self.bid("Sidewalk")]}
-        ls._merge_grouped(into, {"Aurora, MO": [self.bid("ADA Ramps", "2026-11-01")]})
-        self.assertEqual(len(into["Aurora, MO"]), 2)
-
-    def test_the_same_job_from_two_sources_is_not_shown_twice(self):
-        """A state letting page and a municipal portal carry the same job."""
-        into = {"Aurora, MO": [self.bid("Sidewalk Replacement")]}
-        stats = {}
-        ls._merge_grouped(into, {"Aurora, MO": [self.bid("Sidewalk Replacement")]},
-                          stats)
-        self.assertEqual(len(into["Aurora, MO"]), 1)
-        self.assertEqual(stats["merge_duplicate"], 1)
-
-    def test_a_new_town_creates_its_bucket(self):
-        into = {}
-        ls._merge_grouped(into, {"Joplin, MO": [self.bid("Curb", city="Joplin")]})
-        self.assertEqual(list(into), ["Joplin, MO"])
-
-    def test_duplicates_inside_the_incoming_batch_collapse_too(self):
-        into = {}
-        ls._merge_grouped(into, {"Aurora, MO": [self.bid("Curb"), self.bid("Curb")]})
-        self.assertEqual(len(into["Aurora, MO"]), 1)
-
-    def test_an_empty_or_missing_batch_is_harmless(self):
-        into = {"Aurora, MO": [self.bid("Sidewalk")]}
-        ls._merge_grouped(into, None)
-        ls._merge_grouped(into, {})
-        self.assertEqual(len(into["Aurora, MO"]), 1)
-
-
-class StagesRunConcurrentlyTests(unittest.TestCase):
-    def setUp(self):
-        self.src = source()
-
-    def test_state_and_federal_start_before_the_search_phase(self):
-        i_state = self.src.index('_stage_async(\n            drop_stats, "state"')
-        i_search = self.src.index("_t_search = time.time()")
-        self.assertLess(i_state, i_search,
-                        "the independent sources still wait their turn")
-
-    def test_they_are_collected_before_enrichment(self):
-        """Their rows must go through the same deadline and enrichment passes
-        as everything else -- only the waiting was supposed to change."""
-        i_merge = self.src.index("_merge_grouped(grouped, own, drop_stats)")
-        i_enrich = self.src.index('"enrich", scan_deadline')
-        self.assertLess(i_merge, i_enrich)
-
-    def test_each_writes_to_its_own_dict(self):
-        self.assertIn("_state_grouped, _federal_grouped = {}, {}", self.src)
-        self.assertIn("center, radius, _state_grouped, city_coords", self.src)
-
-    def test_a_failing_source_does_not_take_the_scan_with_it(self):
-        i = self.src.index("for fut, own in ((_state_fut")
-        block = self.src[i:i + 900]
-        self.assertIn("except Exception", block)
-        self.assertIn("stage_failed", block)
-
-    def test_it_still_times_each_stage(self):
-        """The timings are what justified this change; losing them would make
-        the next one guesswork."""
-        i = self.src.index("def _stage_async(")
-        self.assertIn('stats["ms_" + name]', self.src[i:i + 1400])
 
 
 class ProgressChannelTests(unittest.TestCase):
@@ -153,6 +78,13 @@ class ProgressChannelTests(unittest.TestCase):
     def test_writing_is_refused_for_a_bad_token(self):
         ls._progress_note("../x", "searching", 1)
         self.assertEqual(self.store, {})
+
+    def test_the_scan_publishes_at_each_phase(self):
+        import inspect
+        src = inspect.getsource(ls._perform_scan)
+        for phase in ("searching", "reading_towns", "checking_details",
+                      "finishing"):
+            self.assertIn('"%s"' % phase, src)
 
 
 class AppSideTests(unittest.TestCase):

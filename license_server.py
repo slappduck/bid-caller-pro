@@ -7135,59 +7135,6 @@ def scan_progress():
                     "found": rec.get("found"), "done": rec.get("done")})
 
 
-def _merge_grouped(into, other, stats=None):
-    """Fold one phase's results into the main feed, dropping duplicates.
-
-    Phases that run concurrently each fill their OWN dict rather than sharing
-    one. _place_bid() dedupes against the bucket it is writing into, and
-    making every source thread-safe by inspection is the kind of change that
-    looks fine and corrupts a feed at three in the morning. Separate dicts
-    cost one merge and are correct by construction.
-
-    The merge has to redo the dedupe _place_bid() would have done, because a
-    state letting page and a municipal portal genuinely do carry the same job.
-    """
-    for label, bids in (other or {}).items():
-        bucket = into.setdefault(label, [])
-        keys = {_bid_dupe_key(b) for b in bucket}
-        for bid in bids:
-            key = _bid_dupe_key(bid)
-            if key[0] and key in keys:
-                if stats is not None:
-                    stats["merge_duplicate"] = stats.get("merge_duplicate", 0) + 1
-                continue
-            keys.add(key)
-            bucket.append(bid)
-
-
-def _stage_async(stats, name, deadline, fn, *args, **kw):
-    """_stage(), but the caller decides when to wait for it.
-
-    Returns (future, own_grouped) or (None, None) when the stage is skipped.
-    The phases this is used for -- state letting pages and SAM -- talk to
-    entirely different hosts from the search-and-read phase, so running them
-    at the same time costs nobody anything and takes their seconds off the
-    wall clock instead of adding them to it.
-    """
-    if deadline is not None and time.time() >= deadline:
-        if stats is not None:
-            stats["skipped_" + name] = 1
-        return None, None
-    ex = ThreadPoolExecutor(max_workers=1)
-    t0 = time.time()
-
-    def run():
-        try:
-            return fn(*args, **kw)
-        finally:
-            if stats is not None:
-                stats["ms_" + name] = int((time.time() - t0) * 1000)
-    try:
-        return ex.submit(run), ex
-    finally:
-        ex.shutdown(wait=False)
-
-
 def _stage(stats, name, deadline, fn, *args, **kw):
     """Run one optional scan stage, timing it and skipping it if the scan is
     out of time.
@@ -7626,20 +7573,7 @@ def _perform_scan(location, radius, force=False, _progress_token=""):
         # ones meant optimising what could be seen: federal showed up at 30
         # seconds and got three rounds of attention while the search-and-read
         # phase, which is most of a scan, reported nothing at all.
-        # State letting pages and SAM talk to entirely different hosts from
-        # the search backends below, so they have no reason to wait their
-        # turn. Started here, collected after the search-and-read phase:
-        # their seconds come off the wall clock instead of being added to it.
-        # Each fills its own dict -- see _merge_grouped.
         _progress_note(_progress_token, "searching")
-        _state_grouped, _federal_grouped = {}, {}
-        _state_fut, _ = _stage_async(
-            drop_stats, "state", scan_deadline, _run_state_sources,
-            center, radius, _state_grouped, city_coords, drop_stats)
-        _federal_fut, _ = _stage_async(
-            drop_stats, "federal", scan_deadline, _run_federal_sources,
-            center, radius, _federal_grouped, cdb, city_coords, drop_stats, pdb)
-
         _t_search = time.time()
         with ThreadPoolExecutor(max_workers=4) as ex:
             futures = [ex.submit(_run_center)] + [ex.submit(_run_anchor, a) for a in anchors]
@@ -7695,23 +7629,27 @@ def _perform_scan(location, radius, force=False, _progress_token=""):
                 "Render's outbound IP has been blocked by DuckDuckGo.",
             )
 
-    # ---- STATE and FEDERAL: collected, having run alongside the search ----
-    # Both were started before the search-and-read phase. They still land
-    # before enrichment, so their rows go through the same deadline, dedupe
-    # and enrichment passes as everything else -- only the waiting changed.
-    for fut, own in ((_state_fut, _state_grouped),
-                     (_federal_fut, _federal_grouped)):
-        if fut is None:
-            continue
-        try:
-            fut.result(timeout=max(1.0, (scan_deadline or time.time() + 60)
-                                   - time.time()))
-        except Exception as ex:
-            # A source that fails or overruns must not take the scan with it.
-            # The bids it did place before failing are still merged below.
-            drop_stats["stage_failed"] = drop_stats.get("stage_failed", 0) + 1
-            print(f"[scan] parallel stage failed: {type(ex).__name__}", flush=True)
-        _merge_grouped(grouped, own, drop_stats)
+    # ---- STATE: DOT letting pages for every state the radius touches ----
+    # Sequential, deliberately, and this was tried the other way.
+    #
+    # Overlapping these with the search-and-read phase looked free: different
+    # hosts, no shared backend. Measured on the real instance it made every
+    # phase slower -- towns went from 17-47s to 88s, search from 24s to 91s.
+    # Render Starter is half a vCPU, and HTML parsing is CPU-bound behind the
+    # GIL, so two more busy threads slow the sixteen already running rather
+    # than fitting beside them. Worse, the known-town budget only bounds how
+    # long we WAIT: fetches already in flight when it expires still have to
+    # finish, so slowing each fetch blew a 40-second budget out to 88.
+    #
+    # The lesson is about the machine, not the idea. On a bigger instance this
+    # is worth revisiting -- with a measurement, not an assumption.
+    _stage(drop_stats, "state", scan_deadline, _run_state_sources,
+           center, radius, grouped, city_coords, drop_stats)
+
+    # ---- FEDERAL: SAM.gov across every state the radius touches ----
+    _stage(drop_stats, "federal", scan_deadline, _run_federal_sources,
+           center, radius, grouped, cdb, city_coords, drop_stats, pdb)
+
     _progress_note(_progress_token, "checking_details",
                    sum(len(v) for v in grouped.values()))
 

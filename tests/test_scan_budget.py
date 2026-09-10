@@ -83,14 +83,6 @@ class BudgetTests(unittest.TestCase):
                          "bid-producing stages must be started before "
                          "enrichment")
 
-    def test_every_bid_producing_stage_is_collected_before_enrichment(self):
-        """Starting early is only safe if the results still land in time to
-        be enriched and deduped with everything else."""
-        import inspect
-        src = inspect.getsource(ls._perform_scan)
-        self.assertLess(src.index("_merge_grouped(grouped, own, drop_stats)"),
-                        self._stage_at(src, "enrich"))
-
     def test_the_additive_stages_are_the_ones_guarded(self):
         """The core town-and-portal read must always run -- skipping it would
         return an empty scan rather than a shorter one."""
@@ -101,13 +93,7 @@ class BudgetTests(unittest.TestCase):
         self.assertNotIn('_stage(drop_stats, "known"', src)
         self.assertNotIn('_stage_async(drop_stats, "known"', src)
 
-    def test_the_async_helper_checks_the_same_deadline(self):
-        """Otherwise moving a stage off the main thread would quietly remove
-        its budget guard."""
-        import inspect
-        src = inspect.getsource(ls._stage_async)
-        self.assertIn("time.time() >= deadline", src)
-        self.assertIn('stats["skipped_" + name]', src)
+
 
     def test_the_clock_starts_after_the_cache_check(self):
         """A cached hit returns before any of this; it must not start a
