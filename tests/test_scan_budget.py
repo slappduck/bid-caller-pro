@@ -8,6 +8,7 @@ it finished and banked 32 bids, the best result any scan had produced, and
 the phone had already shown "that took too long".
 """
 import os
+import re
 import sys
 import time
 import unittest
@@ -57,16 +58,38 @@ class BudgetTests(unittest.TestCase):
         self.assertLess(ls.SCAN_BUDGET_SEC, 150)
         self.assertGreaterEqual(ls.SCAN_BUDGET_SEC, 120)
 
+    @staticmethod
+    def _stage_at(src, name):
+        """Where a stage is started, whichever helper starts it.
+
+        State and federal moved to _stage_async so they can run alongside the
+        search phase instead of queueing behind it. Both helpers check the
+        same deadline; matching only the synchronous spelling made these tests
+        fail on a change that did not touch what they are about.
+        """
+        m = re.search(r'_stage(?:_async)?\(\s*\n?\s*drop_stats, "%s"' % name, src)
+        assert m, "no stage starts %r" % name
+        return m.start()
+
     def test_enrichment_is_the_stage_sacrificed_first(self):
         """It adds no bids -- it fills contacts and deadlines on bids already
         found. So a slow scan should lose phone numbers before it loses
         listings, which the stage ORDER is what guarantees."""
         import inspect
         src = inspect.getsource(ls._perform_scan)
-        order = [src.index('_stage(drop_stats, "%s"' % n)
+        order = [self._stage_at(src, n)
                  for n in ("state", "federal", "agency", "enrich")]
         self.assertEqual(order, sorted(order),
-                         "bid-producing stages must run before enrichment")
+                         "bid-producing stages must be started before "
+                         "enrichment")
+
+    def test_every_bid_producing_stage_is_collected_before_enrichment(self):
+        """Starting early is only safe if the results still land in time to
+        be enriched and deduped with everything else."""
+        import inspect
+        src = inspect.getsource(ls._perform_scan)
+        self.assertLess(src.index("_merge_grouped(grouped, own, drop_stats)"),
+                        self._stage_at(src, "enrich"))
 
     def test_the_additive_stages_are_the_ones_guarded(self):
         """The core town-and-portal read must always run -- skipping it would
@@ -74,8 +97,17 @@ class BudgetTests(unittest.TestCase):
         import inspect
         src = inspect.getsource(ls._perform_scan)
         for stage in ("state", "federal", "agency", "enrich"):
-            self.assertIn('_stage(drop_stats, "%s"' % stage, src)
+            self._stage_at(src, stage)          # raises if unguarded
         self.assertNotIn('_stage(drop_stats, "known"', src)
+        self.assertNotIn('_stage_async(drop_stats, "known"', src)
+
+    def test_the_async_helper_checks_the_same_deadline(self):
+        """Otherwise moving a stage off the main thread would quietly remove
+        its budget guard."""
+        import inspect
+        src = inspect.getsource(ls._stage_async)
+        self.assertIn("time.time() >= deadline", src)
+        self.assertIn('stats["skipped_" + name]', src)
 
     def test_the_clock_starts_after_the_cache_check(self):
         """A cached hit returns before any of this; it must not start a

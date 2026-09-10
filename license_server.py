@@ -7075,6 +7075,119 @@ ENRICH_MAX = int(os.environ.get("SCAN_ENRICH_MAX", "14"))
 SCAN_BUDGET_SEC = float(os.environ.get("SCAN_BUDGET_SEC", "135"))
 
 
+# ── Live scan progress ──────────────────────────────────────────────────────
+#
+# A scan takes over a minute and the app showed a bar driven by a guess at how
+# long it usually takes. It counts up whether anything is happening or not,
+# which is the one thing a progress bar must not do -- a stalled scan and a
+# working one looked identical, and a minute of that is what makes a tool feel
+# broken even when it is fine.
+#
+# The scan publishes where it actually is, and the app reads it. Deliberately
+# additive: /scan is unchanged, the record is best-effort, and a client that
+# cannot read it falls back to the old estimate. Nothing here is allowed to
+# fail a scan.
+_PROGRESS_RE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
+_PROGRESS_TTL_SEC = int(os.environ.get("SCAN_PROGRESS_TTL", "600"))
+
+
+def _progress_key(token):
+    return "bidcaller:scan_progress:" + token
+
+
+def _progress_note(token, phase, found=None, done=False):
+    """Publish one step of a running scan. Never raises."""
+    if not token or not _PROGRESS_RE.match(str(token)):
+        return
+    try:
+        kv_backend.set(_progress_key(token), {
+            "phase": phase,
+            "found": found,
+            "done": bool(done),
+            "at": time.time(),
+        })
+    except Exception:
+        pass
+
+
+@app.route("/scan/progress", methods=["POST"])
+def scan_progress():
+    """Where the caller's scan has got to. Cheap, and safe to poll.
+
+    Carries no bid content -- a phase name and a count -- so it needs no
+    licence check: the token is a random string the caller just minted, and
+    knowing one tells you nothing you did not already know.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    token = str(data.get("token") or "")
+    if not _PROGRESS_RE.match(token):
+        return jsonify({"ok": False, "reason": "bad_token"}), 400
+    try:
+        rec = kv_backend.get(_progress_key(token), None)
+    except Exception:
+        rec = None
+    if not rec:
+        return jsonify({"ok": True, "known": False})
+    # Anything older than the TTL is a scan that died without finishing.
+    if time.time() - float(rec.get("at") or 0) > _PROGRESS_TTL_SEC:
+        return jsonify({"ok": True, "known": False})
+    return jsonify({"ok": True, "known": True, "phase": rec.get("phase"),
+                    "found": rec.get("found"), "done": rec.get("done")})
+
+
+def _merge_grouped(into, other, stats=None):
+    """Fold one phase's results into the main feed, dropping duplicates.
+
+    Phases that run concurrently each fill their OWN dict rather than sharing
+    one. _place_bid() dedupes against the bucket it is writing into, and
+    making every source thread-safe by inspection is the kind of change that
+    looks fine and corrupts a feed at three in the morning. Separate dicts
+    cost one merge and are correct by construction.
+
+    The merge has to redo the dedupe _place_bid() would have done, because a
+    state letting page and a municipal portal genuinely do carry the same job.
+    """
+    for label, bids in (other or {}).items():
+        bucket = into.setdefault(label, [])
+        keys = {_bid_dupe_key(b) for b in bucket}
+        for bid in bids:
+            key = _bid_dupe_key(bid)
+            if key[0] and key in keys:
+                if stats is not None:
+                    stats["merge_duplicate"] = stats.get("merge_duplicate", 0) + 1
+                continue
+            keys.add(key)
+            bucket.append(bid)
+
+
+def _stage_async(stats, name, deadline, fn, *args, **kw):
+    """_stage(), but the caller decides when to wait for it.
+
+    Returns (future, own_grouped) or (None, None) when the stage is skipped.
+    The phases this is used for -- state letting pages and SAM -- talk to
+    entirely different hosts from the search-and-read phase, so running them
+    at the same time costs nobody anything and takes their seconds off the
+    wall clock instead of adding them to it.
+    """
+    if deadline is not None and time.time() >= deadline:
+        if stats is not None:
+            stats["skipped_" + name] = 1
+        return None, None
+    ex = ThreadPoolExecutor(max_workers=1)
+    t0 = time.time()
+
+    def run():
+        try:
+            return fn(*args, **kw)
+        finally:
+            if stats is not None:
+                stats["ms_" + name] = int((time.time() - t0) * 1000)
+    try:
+        return ex.submit(run), ex
+    finally:
+        ex.shutdown(wait=False)
+
+
 def _stage(stats, name, deadline, fn, *args, **kw):
     """Run one optional scan stage, timing it and skipping it if the scan is
     out of time.
@@ -7320,7 +7433,7 @@ def _apply_stale_year(bid):
     return bid
 
 
-def _perform_scan(location, radius, force=False):
+def _perform_scan(location, radius, force=False, _progress_token=""):
     """Core of /scan: resolve a location, search local + federal sources, rank
     and cache the result. Extracted out of the /scan route so the saved-search
     alert job can run the exact same pipeline (portal directory, DDG failover,
@@ -7513,12 +7626,28 @@ def _perform_scan(location, radius, force=False):
         # ones meant optimising what could be seen: federal showed up at 30
         # seconds and got three rounds of attention while the search-and-read
         # phase, which is most of a scan, reported nothing at all.
+        # State letting pages and SAM talk to entirely different hosts from
+        # the search backends below, so they have no reason to wait their
+        # turn. Started here, collected after the search-and-read phase:
+        # their seconds come off the wall clock instead of being added to it.
+        # Each fills its own dict -- see _merge_grouped.
+        _progress_note(_progress_token, "searching")
+        _state_grouped, _federal_grouped = {}, {}
+        _state_fut, _ = _stage_async(
+            drop_stats, "state", scan_deadline, _run_state_sources,
+            center, radius, _state_grouped, city_coords, drop_stats)
+        _federal_fut, _ = _stage_async(
+            drop_stats, "federal", scan_deadline, _run_federal_sources,
+            center, radius, _federal_grouped, cdb, city_coords, drop_stats, pdb)
+
         _t_search = time.time()
         with ThreadPoolExecutor(max_workers=4) as ex:
             futures = [ex.submit(_run_center)] + [ex.submit(_run_anchor, a) for a in anchors]
             for f in as_completed(futures):
                 local_raw += f.result()
         drop_stats["ms_search"] = int((time.time() - _t_search) * 1000)
+        _progress_note(_progress_token, "reading_towns",
+                       sum(len(v) for v in grouped.values()))
         _t_towns = time.time()
 
         # Separate pool from the search-driven jobs above: these are a direct
@@ -7566,19 +7695,25 @@ def _perform_scan(location, radius, force=False):
                 "Render's outbound IP has been blocked by DuckDuckGo.",
             )
 
-    # ---- STATE: DOT letting pages for every state the radius touches ----
-    # Placed before SAM.gov and before enrichment so state rows go through the
-    # same deadline, dedupe and enrichment passes as everything else. One
-    # fetch per state, at most four states in a 125-mile circle.
-    _stage(drop_stats, "state", scan_deadline, _run_state_sources,
-           center, radius, grouped, city_coords, drop_stats)
-
-    # ---- FEDERAL: SAM.gov across every state the radius touches ----
-    # No longer gated on SAM_API_KEY: with a key it uses the documented API,
-    # without one it reads sam.gov's own public search. Same public-domain
-    # data either way, so the feature is not dark until somebody registers.
-    _stage(drop_stats, "federal", scan_deadline, _run_federal_sources,
-           center, radius, grouped, cdb, city_coords, drop_stats, pdb)
+    # ---- STATE and FEDERAL: collected, having run alongside the search ----
+    # Both were started before the search-and-read phase. They still land
+    # before enrichment, so their rows go through the same deadline, dedupe
+    # and enrichment passes as everything else -- only the waiting changed.
+    for fut, own in ((_state_fut, _state_grouped),
+                     (_federal_fut, _federal_grouped)):
+        if fut is None:
+            continue
+        try:
+            fut.result(timeout=max(1.0, (scan_deadline or time.time() + 60)
+                                   - time.time()))
+        except Exception as ex:
+            # A source that fails or overruns must not take the scan with it.
+            # The bids it did place before failing are still merged below.
+            drop_stats["stage_failed"] = drop_stats.get("stage_failed", 0) + 1
+            print(f"[scan] parallel stage failed: {type(ex).__name__}", flush=True)
+        _merge_grouped(grouped, own, drop_stats)
+    _progress_note(_progress_token, "checking_details",
+                   sum(len(v) for v in grouped.values()))
 
     # Read the posting behind every bid that still has no contact and no
     # deadline. Enrichment used to happen only inside the structured CivicPlus
@@ -7597,6 +7732,8 @@ def _perform_scan(location, radius, force=False):
 
     _stage(drop_stats, "enrich", scan_deadline, _enrich_placed_bids,
            grouped, drop_stats)
+    _progress_note(_progress_token, "finishing",
+                   sum(len(v) for v in grouped.values()))
     _flag_misplaced_bids(grouped, pdb, drop_stats)
 
     for city_bids in grouped.values():
@@ -7671,7 +7808,8 @@ def scan():
     if not location:
         return jsonify({"ok": False, "reason": "no_location"})
 
-    outcome = _perform_scan(location, radius, force=bool(data.get("force")))
+    outcome = _perform_scan(location, radius, force=bool(data.get("force")),
+                            _progress_token=str(data.get("progress_token") or ""))
     if outcome is None:
         return jsonify({"ok": False, "reason": "location_not_found"})
     return jsonify({"ok": True, **outcome})
