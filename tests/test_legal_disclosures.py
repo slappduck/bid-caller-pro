@@ -374,3 +374,51 @@ class PrivacyCoversEveryDataFlowTests(unittest.TestCase):
         nums = [int(n) for n in heads]
         self.assertEqual(nums, list(range(1, len(nums) + 1)),
                          "renumbering left a gap: %s" % nums)
+
+
+class CopyrightComplaintsAreDisclosedTests(unittest.TestCase):
+    """No notice-and-takedown process existed for the one place users post
+    their own content: reviews. A safe-harbor clause is worthless without a
+    contact a claimant can actually find and use."""
+
+    def text(self):
+        return re.sub(r"<[^>]+>", " ", read(WEB, "terms.html")).lower()
+
+    def test_there_is_a_copyright_complaints_process(self):
+        t = self.text()
+        self.assertRegex(t, r"copyright")
+        self.assertIn("support@curbcallpro.com", t)
+
+    def test_it_names_the_statute(self):
+        """So a claimant (and a court) knows which process is being followed."""
+        self.assertRegex(self.text(), r"digital millennium copyright act|17 u\.s\.c")
+
+
+class CaliforniaPrivacyRightsAreDisclosedTests(unittest.TestCase):
+    """CCPA/CPRA requires a rights section a California resident can find by
+    name -- "we don't sell your data" covers sale but not the separate
+    "sharing" concept, and neither one names the statutory rights themselves.
+    """
+
+    def text(self):
+        return re.sub(r"<[^>]+>", " ", read(WEB, "privacy.html")).lower()
+
+    def test_the_section_exists_and_is_findable_by_name(self):
+        self.assertRegex(self.text(), r"ccpa|california consumer privacy act")
+
+    def test_it_names_know_delete_correct_and_non_discrimination(self):
+        t = self.text()
+        for word in ("know", "delete", "correct", "discrimination"):
+            with self.subTest(right=word):
+                self.assertIn(word, t)
+
+    def test_it_addresses_sharing_not_just_sale(self):
+        """CCPA's opt-out covers sale AND cross-context behavioral
+        advertising 'sharing' -- naming only 'sale' leaves the second
+        undisclosed."""
+        self.assertIn("share", self.text())
+
+    def test_it_gives_a_request_channel_and_a_response_window(self):
+        t = self.text()
+        self.assertIn("support@curbcallpro.com", t)
+        self.assertRegex(t, r"45 (calendar )?days")

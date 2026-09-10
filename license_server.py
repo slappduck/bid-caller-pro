@@ -1201,8 +1201,8 @@ def _supabase_delete_user(user_id):
 # weak when the Terms change; "they accepted 2026-06-17" is evidence. These
 # constants must match the dates published on terms.html and privacy.html,
 # and a test fails if they drift.
-TERMS_VERSION = os.environ.get("TERMS_VERSION", "2026-09-09")
-PRIVACY_VERSION = os.environ.get("PRIVACY_VERSION", "2026-09-09")
+TERMS_VERSION = os.environ.get("TERMS_VERSION", "2026-09-10")
+PRIVACY_VERSION = os.environ.get("PRIVACY_VERSION", "2026-09-10")
 # "reaccept" is an existing user agreeing to a version published after
 # they signed up. Recorded distinctly so the record shows which
 # acceptances were made at signup and which on a re-prompt.
