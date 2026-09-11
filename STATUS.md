@@ -9,6 +9,29 @@ someone has seen it work — not when the code is written.
 
 ---
 
+## Retired 2026-09-10 — the Windows desktop app
+
+Deleted `app.py` and its desktop-only support modules (`applog.py`,
+`auth_client.py`, `data_sync.py`, `map_view.py`, `radius_scanner.py`,
+`regional_printer.py`, `subscription.py`), plus the build tooling
+(`BidCallerPro.spec`, `installer.iss`, `icon.ico`) and its test file
+(`tests/test_app_pure_helpers.py`).
+
+**Why:** two UIs for one product meant every feature got hand-ported into
+tkinter separately from the web app, in a different language. The desktop
+app had already drifted ~3 weeks behind `app.html` and was falling further
+back every time the web app shipped something. The marketing site's
+Windows download link was already pulled on 2026-09-02 (see the FAQ:
+"No — CurbCall Pro runs right in your browser... Add it to your home
+screen and it works like an app on your phone") — `app.html` already ships
+a full PWA (`manifest.webmanifest` + `sw.js`), so the exe wasn't buying
+anything the browser doesn't already cover. No live customers depend on
+the installed exe, so nothing server-side changed — `license_server.py`'s
+endpoints are shared with the web app and untouched.
+
+Recoverable from git history if ever needed again; nothing to revert on
+Render or Cloudflare since neither served the exe.
+
 ## Live now (merged to main, deployed)
 
 | What | Notes |
