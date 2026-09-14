@@ -14,6 +14,10 @@
 - **Finding new leads** — `LEAD_GEN_PLAYBOOK.md`.
 - **Where things live** — the site is on Cloudflare Workers (not Netlify), the
   backend on Render, data in Supabase and Upstash.
+- **Scheduled jobs** — every job in `CRON_EXPECTED` (license_server.py) must
+  call `_cron_beat` on success, or the watchdog pages forever about a job that
+  can never report. There is a test for this. Adding a cron means: endpoint,
+  heartbeat, `CRON_EXPECTED` entry, workflow.
 
 # Never commit
 

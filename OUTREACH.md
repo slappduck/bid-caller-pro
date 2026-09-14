@@ -171,9 +171,47 @@ mail that gets read and mail that gets binned.
 ## After sending
 
 1. Set `status` to `sent` and fill `sent_date` in the CSV.
-2. Watch for replies. Any request to be removed → set status to `unsubscribed`
-   **that day**. The code then refuses that row forever, including via `--slug`.
-3. A bounce → `bounced`.
+2. Watch for replies. Any request to be removed is honoured **that day**:
+
+   ```bash
+   python3 tools/outreach_optout.py someone@example.com
+   python3 tools/outreach_optout.py --reason bounced a@x.com
+   python3 tools/outreach_optout.py --dry-run someone@example.com
+   ```
+
+Use the tool rather than editing the CSV by hand. The failure it prevents is
+quiet: a status typed `unsubscribe` instead of `unsubscribed` is not an error
+anywhere — it is simply a value the draft guard doesn't recognise, so the row
+stays eligible and the person who asked to be left alone gets a second email.
+That is the exact outcome the guard exists to prevent, and a CAN-SPAM
+violation on top.
+
+It writes atomically, keeps the previous file as `.bak`, and never walks a
+final status backwards. It also **reports other live rows at the same
+company** without changing them — someone saying "take us off your list" is
+usually speaking for the company, but which mailboxes a request covers is
+your judgement, not a domain match.
+
+## Backing up the two files that exist once
+
+`data/outreach_prospects.csv` and `data/sender.env` are gitignored on purpose
+and live on exactly one disk. Everything else in this project exists in at
+least three places.
+
+Losing the prospect list would not just lose the leads — it would lose the
+**opt-outs**, and those cannot be rebuilt by searching again. Every row marked
+`unsubscribed` is someone who asked once and would have to be emailed a second
+time to discover they had asked.
+
+```bash
+python3 tools/backup_local_data.py "C:/Users/Josh/OneDrive/curbcall-backup"
+python3 tools/backup_local_data.py ~/Backups/curbcall --list
+```
+
+Point it at a folder that syncs **off the machine**. A second copy on the same
+disk survives a mistake but not a failure. Dated copies, verified by hash, and
+pruned after `--keep` days (default 60). On Windows, Task Scheduler will run it
+daily; it prints nothing unless something is wrong.
 
 ## Never
 
