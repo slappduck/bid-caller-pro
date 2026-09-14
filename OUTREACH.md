@@ -51,6 +51,7 @@ Columns:
 | `city` | plain name, no ZIP — this is what `/coverage` is asked about |
 | `state` | two letters |
 | `intro` | the one personal line. A row without it is held, on purpose. |
+| `website` | optional. Only needed when the email is free-mail (gmail, yahoo) and the domain can't be derived from it. |
 | `status` | `ready` \| `hold` \| `sent` \| `unsubscribed` \| `bounced` \| `do-not-contact` |
 | `sent_date` | filled in by hand after sending |
 
@@ -111,6 +112,39 @@ undersold the product against the very screen the recipient would open.
 
 If you change `RADIUS`, re-derive `MIN_AGENCIES` — a floor calibrated at 50 miles
 waves everything through at 125.
+
+## Researching the intro line
+
+```bash
+python3 tools/outreach_research.py            # every ready row
+python3 tools/outreach_research.py --slug ccg # one, ignoring status
+python3 tools/outreach_research.py --json
+```
+
+Reads each prospect's own site and reports what's on it — founding year,
+what they actually build, service area, scale, public-works signals — with
+**the sentence each fact came from**, so you can see its origin before you
+repeat it to a stranger.
+
+It does not write the intro. It removes the blank page.
+
+**Dated claims are flagged with their age.** Columbia Curb & Gutter were
+emailed about their 2001 SBA award: true, checkable, the third paragraph of
+their homepage, and twenty-five years old. Leading with it told the reader
+exactly how far down the page the sender got. The tool now prints that under
+`dated -- do not lead with these`.
+
+**Specific beats generic.** "Slip-formed barrier and cold milling" is an
+opener; "concrete" is not. Narrow trades are reported in preference to broad
+ones.
+
+Look for the fact that *changes the pitch*, not just a fact. CCG runs its own
+trucking fleet and delivers for contractors across Missouri and neighbouring
+states — so the 125-mile radius is their haul range, not their town. Same
+number, completely different argument, and far stronger.
+
+A row that reports `nothing readable` or `free-mail address and no website
+column` needs a `website` value or hand research. Don't send on a guess.
 
 ## Writing the email
 
