@@ -1728,33 +1728,74 @@ def _cron_beat(job):
         print(f"[cron] heartbeat for {job} failed: {ex}", flush=True)
 
 
-def _cron_status():
-    """[{job, last, hours, overdue}] for every job we expect to hear from."""
+def _cron_status(record=False):
+    """[{job, last, hours, overdue}] for every job we expect to hear from.
+
+    A job that has never reported is not yet late: it may simply not have
+    come round. The first check of an unknown job records when it was first
+    seen and gives it one full interval to report before it counts as
+    overdue -- otherwise the monthly consent purge is "overdue" every day
+    for a month after deploy, and a watchdog that cries daily is one nobody
+    reads, which is the failure this whole thing exists to prevent.
+
+    `record` is only true for the watchdog itself, so that merely rendering
+    the weekly digest cannot start somebody's grace period.
+    """
+    # An empty record and an unreadable one are different answers. Empty
+    # means "nothing has reported yet", which may be fine. Unreadable means
+    # the store this depends on is broken, and then nothing can be confirmed
+    # about anything -- which is a fault in its own right, not a grace period.
+    unreadable = False
     try:
         beats = kv_backend.get(CRON_HEARTBEAT_KEY, None) or {}
     except Exception:
-        beats = {}
+        beats, unreadable = {}, True
     now = datetime.datetime.now(datetime.timezone.utc)
-    out = []
+    first_seen = beats.get("_first_seen") or {}
+    out, changed = [], False
     for job, max_h in sorted(CRON_EXPECTED.items()):
         last = beats.get(job)
-        hours = None
+        hours, corrupt = None, False
         if last:
             try:
                 hours = round(
                     (now - datetime.datetime.fromisoformat(last))
                     .total_seconds() / 3600.0, 1)
             except Exception:
-                last = None
+                # Something reported, and we cannot read when. Never grace:
+                # a job with a garbled beat has already run at least once,
+                # so there is nothing to wait for.
+                last, corrupt = None, True
+        if hours is not None:
+            overdue = hours > max_h
+        elif corrupt or unreadable:
+            overdue = True
+        else:
+            seen = first_seen.get(job)
+            if not seen and record:
+                first_seen[job] = now.isoformat()
+                changed = True
+                seen = first_seen[job]
+            try:
+                waited = ((now - datetime.datetime.fromisoformat(seen))
+                          .total_seconds() / 3600.0) if seen else 0.0
+            except Exception:
+                waited = max_h + 1     # unreadable: assume the worst
+            overdue = waited > max_h
         out.append({"job": job, "last": last, "hours": hours,
-                    "max_hours": max_h,
-                    "overdue": hours is None or hours > max_h})
+                    "max_hours": max_h, "overdue": overdue})
+    if changed:
+        try:
+            beats["_first_seen"] = first_seen
+            kv_backend.set(CRON_HEARTBEAT_KEY, beats)
+        except Exception as ex:
+            print(f"[cron] could not record first_seen: {ex}", flush=True)
     return out
 
 
 def _cron_watchdog():
     """Alert on jobs that have gone quiet. Returns the full status either way."""
-    rows = _cron_status()
+    rows = _cron_status(record=True)
     late = [r for r in rows if r["overdue"]]
     if late:
         lines = []

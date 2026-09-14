@@ -46,6 +46,30 @@ class PlacementTests(unittest.TestCase):
                        "lat": ROLLINGWOOD[0], "lon": ROLLINGWOOD[1]}
         self.coords = {("rollingwood", "CA"): ROLLINGWOOD,
                        ("duarte", "CA"): DUARTE}
+        # _place_bid resolves a stated city through _city_coords, which
+        # geocodes over the network before the city_coords dict below is ever
+        # consulted. So these two towns were being looked up live, and the
+        # suite's verdict depended on a third party: Duarte answers, and
+        # Rollingwood (population ~2,900) does not answer reliably at all.
+        #
+        # That is the intermittent failure that has been showing up in full
+        # runs and never reproducing on its own. It is not one-in-twelve by
+        # chance -- the rest of the suite spends the geocoder's rate limit
+        # first, so whether this test passes depends on how much ran before
+        # it. Alone it is fast enough to succeed; in the full suite it is not.
+        #
+        # The fixture already carries both towns' real coordinates. Serve
+        # them from there and the test measures _place_bid, which is what it
+        # was written to measure.
+        geo = patch.object(
+            ls, "_geo_from_city",
+            side_effect=lambda city, state: (
+                {"lat": self.coords[(city.lower(), state.upper())][0],
+                 "lon": self.coords[(city.lower(), state.upper())][1],
+                 "city": city, "state": state}
+                if (city.lower(), state.upper()) in self.coords else None))
+        geo.start()
+        self.addCleanup(geo.stop)
 
     def _place(self, **bid):
         grouped, stats = {}, {}

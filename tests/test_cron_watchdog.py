@@ -46,11 +46,47 @@ class WatchdogTests(unittest.TestCase):
         self.store[ls.CRON_HEARTBEAT_KEY] = {
             job: ago(hours) for job in ls.CRON_EXPECTED}
 
-    def test_a_job_that_never_reported_is_overdue_not_fine(self):
-        """An empty record is the ten-silent-runs case. It must not read ok."""
+    def test_a_job_seen_for_the_first_time_gets_its_interval_before_alerting(self):
+        """Deploy is not evidence of failure. The monthly consent purge has
+        not missed anything an hour after release, and a watchdog that says
+        so every day for a month is one nobody reads by February."""
+        out = ls._cron_watchdog()
+        self.assertEqual(out["overdue"], [])
+        self.assertEqual(self.sent, [])
+
+    def test_a_job_that_never_reported_within_its_interval_is_overdue(self):
+        """The ten-silent-runs case, once the grace period has run out."""
+        ls._cron_watchdog()          # first sighting starts the clock
+        self.store[ls.CRON_HEARTBEAT_KEY]["_first_seen"] = {
+            job: ago(24 * 45) for job in ls.CRON_EXPECTED}
         out = ls._cron_watchdog()
         self.assertEqual(sorted(out["overdue"]), sorted(ls.CRON_EXPECTED))
         self.assertTrue(self.sent)
+
+    def test_the_grace_clock_starts_once_and_is_not_reset_by_looking(self):
+        """Otherwise every check renews the grace and nothing is ever late."""
+        ls._cron_watchdog()
+        started = dict(self.store[ls.CRON_HEARTBEAT_KEY]["_first_seen"])
+        ls._cron_watchdog()
+        self.assertEqual(self.store[ls.CRON_HEARTBEAT_KEY]["_first_seen"],
+                         started)
+
+    def test_rendering_the_digest_does_not_start_anybodys_grace_period(self):
+        """Only the watchdog records. A read must not have a side effect."""
+        ls._cron_status()
+        self.assertNotIn("_first_seen",
+                         self.store.get(ls.CRON_HEARTBEAT_KEY, {}))
+
+    def test_a_heartbeat_survives_the_first_seen_bookkeeping(self):
+        ls._cron_watchdog()
+        ls._cron_beat("bid-audit")
+        self.assertIn("bid-audit", self.store[ls.CRON_HEARTBEAT_KEY])
+        self.assertIn("_first_seen", self.store[ls.CRON_HEARTBEAT_KEY])
+
+    def test_first_seen_is_not_mistaken_for_a_job(self):
+        ls._cron_watchdog()
+        self.assertNotIn("_first_seen",
+                         [r["job"] for r in ls._cron_status()])
 
     def test_all_jobs_fresh_sends_nothing(self):
         """A watchdog that emails daily stops being read within a week."""
@@ -85,6 +121,9 @@ class WatchdogTests(unittest.TestCase):
         self.assertIn("50", detail)
 
     def test_a_never_run_job_says_so_in_words(self):
+        ls._cron_watchdog()          # first sighting starts the clock
+        self.store[ls.CRON_HEARTBEAT_KEY]["_first_seen"] = {
+            job: ago(24 * 45) for job in ls.CRON_EXPECTED}
         ls._cron_watchdog()
         self.assertIn("never reported a success", self.sent[0][1])
 
