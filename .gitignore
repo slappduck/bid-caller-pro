@@ -50,3 +50,8 @@ data/*prospects*.csv
 # email has to carry one, this repo is public, and those two facts must not
 # meet. Kept local, loaded by tools/outreach_draft.py.
 data/sender.env
+
+# AI-drafted emails: each one names a real prospect, their address, and the
+# specifics researched about their business. Generated locally by
+# tools/outreach_ai_draft.py, reviewed, sent, then no reason to keep in git.
+data/outreach_drafts/

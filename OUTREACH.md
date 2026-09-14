@@ -86,6 +86,7 @@ not meet.
 CURBCALL_SIGNER=Your Name
 CURBCALL_ADDRESS=000 Street, Town, ST 00000
 CURBCALL_PHONE=optional
+ANTHROPIC_API_KEY=optional, only for outreach_ai_draft.py
 ```
 
 Without `SIGNER` and `ADDRESS` the tool refuses to draft at all. An email that
@@ -167,6 +168,33 @@ Tone, from direct feedback on rejected drafts:
 
 At five a day this is a couple of minutes each, and it's the difference between
 mail that gets read and mail that gets binned.
+
+## Optional: letting a model write the first draft
+
+`tools/outreach_ai_draft.py` exists for when typing five a day by hand is the
+bottleneck, not the research. It does **not** replace anything above — it sits
+inside the same guards (location check, live agency count, do-not-contact) and
+adds one step: it calls Claude to write the actual prose, grounded only in
+what `outreach_research.py` found on the prospect's own site. A prospect with
+nothing readable is held, same as any other guard failure — never drafted
+from a blank page.
+
+```bash
+python3 tools/outreach_ai_draft.py            # next 5 ready prospects
+python3 tools/outreach_ai_draft.py --slug procon
+```
+
+Needs `ANTHROPIC_API_KEY` — export it, or add a line to `data/sender.env`
+(same gitignored file as the signature settings). Voice/tone lives in
+`tools/outreach_voice.md`, editable without touching the script — it already
+encodes the same rejected-draft lessons as the section above (no em dashes,
+must not read as AI-written, vary structure between companies).
+
+It writes one file per prospect to `data/outreach_drafts/` (gitignored — each
+one names a real prospect and what was researched about them) and **sends
+nothing and updates no CSV row**. Read every draft before sending, same as a
+hand-written one — a batch of AI drafts that all sound like the same voice
+reproduces the exact failure the section above describes, just faster.
 
 ## After sending
 
