@@ -1448,6 +1448,8 @@ def terms_purge():
     if not CRON_SECRET or not hmac.compare_digest(token, CRON_SECRET):
         return jsonify({"ok": False, "reason": "unauthorized"}), 403
     result = _purge_expired_terms_acceptances()
+    if result.get("ok"):
+        _cron_beat("purge-expired-consent")
     return jsonify(result), (200 if result.get("ok") else 503)
 
 
@@ -1689,6 +1691,96 @@ def _alert_admin(subject, detail):
     _send_email(SUPPORT_EMAIL, f"[CurbCall Pro] {subject}", detail[:4000])
 
 
+# ── Are the scheduled jobs actually running? ──
+#
+# Every alert in this file fires from inside a request Flask completed. The
+# federal refresh failed ten consecutive scheduled runs without sending one,
+# because its worker was killed at the platform timeout before any handler
+# ran -- a dead job is exactly the case the error handler cannot report.
+#
+# So the jobs check in when they succeed, and this notices when one stops.
+# A heartbeat catches what reading the run history would not: a workflow
+# disabled, a secret rotated, a schedule quietly dropped, GitHub Actions
+# down. Silence is the signal, so silence has to be what is measured.
+CRON_HEARTBEAT_KEY = "bidcaller:cron_heartbeats"
+
+# job -> how many hours may pass before it is overdue. Generous: this should
+# fire when a job is broken, not when a run was slow, or it gets ignored,
+# which is how the last one went unnoticed for three days.
+CRON_EXPECTED = {
+    "saved-search-alerts": 36,
+    "upcoming-alerts": 192,      # weekly
+    "bid-audit": 36,
+    "federal-refresh": 36,       # twice daily; matches the cache max age
+    "purge-expired-consent": 960,  # monthly
+}
+
+
+def _cron_beat(job):
+    """Record that `job` finished successfully. Never raises."""
+    try:
+        beats = kv_backend.get(CRON_HEARTBEAT_KEY, None) or {}
+        beats[job] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        kv_backend.set(CRON_HEARTBEAT_KEY, beats)
+    except Exception as ex:
+        print(f"[cron] heartbeat for {job} failed: {ex}", flush=True)
+
+
+def _cron_status():
+    """[{job, last, hours, overdue}] for every job we expect to hear from."""
+    try:
+        beats = kv_backend.get(CRON_HEARTBEAT_KEY, None) or {}
+    except Exception:
+        beats = {}
+    now = datetime.datetime.now(datetime.timezone.utc)
+    out = []
+    for job, max_h in sorted(CRON_EXPECTED.items()):
+        last = beats.get(job)
+        hours = None
+        if last:
+            try:
+                hours = round(
+                    (now - datetime.datetime.fromisoformat(last))
+                    .total_seconds() / 3600.0, 1)
+            except Exception:
+                last = None
+        out.append({"job": job, "last": last, "hours": hours,
+                    "max_hours": max_h,
+                    "overdue": hours is None or hours > max_h})
+    return out
+
+
+def _cron_watchdog():
+    """Alert on jobs that have gone quiet. Returns the full status either way."""
+    rows = _cron_status()
+    late = [r for r in rows if r["overdue"]]
+    if late:
+        lines = []
+        for r in late:
+            when = ("has never reported a success" if r["hours"] is None
+                    else "last succeeded %.1fh ago (expected every %dh)"
+                         % (r["hours"], r["max_hours"]))
+            lines.append("  - %s %s" % (r["job"], when))
+        _alert_admin(
+            "Scheduled job not reporting: " + late[0]["job"],
+            "These jobs have gone quiet:\n" + "\n".join(lines) +
+            "\n\nA job that stops running fails silently -- the server only "
+            "alerts on errors it can catch inside a request, and a worker "
+            "killed at the platform timeout never gets that far.\n\n"
+            "Check https://github.com/slappduck/bid-caller-pro/actions")
+    return {"ok": True, "jobs": rows, "overdue": [r["job"] for r in late]}
+
+
+@app.route("/run-cron-watchdog", methods=["POST"])
+def run_cron_watchdog():
+    """Daily. Emails only when a scheduled job has gone quiet."""
+    data = request.get_json(force=True, silent=True) or {}
+    token = data.get("token") or request.headers.get("X-Cron-Secret", "")
+    if not CRON_SECRET or not hmac.compare_digest(token, CRON_SECRET):
+        return jsonify({"ok": False, "reason": "unauthorized"}), 403
+    return jsonify(_cron_watchdog()), 200
+
+
 # ── Saved-search alerts: Supabase admin access + new-bid emails ──
 # Uses the service-role key to read across ALL users' saved_searches (bypasses
 # the row-level-security policies the anon key is normally scoped by) and to
@@ -1852,6 +1944,8 @@ def run_saved_search_alerts():
     if not CRON_SECRET or not hmac.compare_digest(token, CRON_SECRET):
         return jsonify({"ok": False, "reason": "unauthorized"}), 403
     result = _run_saved_search_alerts()
+    if result.get("ok"):
+        _cron_beat("saved-search-alerts")
     return jsonify(result), (200 if result.get("ok") else 500)
 
 
@@ -2368,6 +2462,8 @@ def run_bid_audit():
     if not CRON_SECRET or not hmac.compare_digest(token, CRON_SECRET):
         return jsonify({"ok": False, "reason": "unauthorized"}), 403
     result = _run_bid_audit(data.get("sample"))
+    if result.get("ok"):
+        _cron_beat("bid-audit")
     return jsonify(result), (200 if result.get("ok") else 500)
 
 
@@ -2380,6 +2476,8 @@ def run_upcoming_alerts():
     if not CRON_SECRET or not hmac.compare_digest(token, CRON_SECRET):
         return jsonify({"ok": False, "reason": "unauthorized"}), 403
     result = _run_upcoming_alerts()
+    if result.get("ok"):
+        _cron_beat("upcoming-alerts")
     return jsonify(result), (200 if result.get("ok") else 500)
 
 
@@ -6829,6 +6927,24 @@ def _federal_states(center, radius):
 FEDERAL_CACHE_KEY = "bidcaller:federal_cache"
 FEDERAL_CACHE_MAX_AGE_H = float(os.environ.get("FEDERAL_CACHE_MAX_AGE_H", "36"))
 SAM_REFRESH_TIMEOUT = int(os.environ.get("SAM_REFRESH_TIMEOUT", "120"))
+
+# The refresh is allowed to be slow, but not unbounded. Six trade codes at a
+# 120s per-request timeout is 720 seconds of rope, and the worker is killed
+# long before that: every one of the first ten scheduled runs died at exactly
+# 240 seconds with an HTTP 500, because a killed worker cannot return the
+# clean 503 this endpoint was written to send. It also cannot run Flask's
+# error handler, so _alert_admin never fired and the failures were silent.
+#
+# So the whole job gets one wall clock, set under the platform's limit, and
+# no single query may spend what is left of it.
+FEDERAL_REFRESH_BUDGET_SEC = int(
+    os.environ.get("FEDERAL_REFRESH_BUDGET_SEC", "200"))
+
+# SAM being down does not get better on query four. Twelve consecutive
+# failures were logged against the live service while each run still worked
+# patiently through all six codes; stopping early turns a four-minute death
+# into a ten-second report of what is actually wrong.
+REFRESH_GIVE_UP_AFTER = int(os.environ.get("REFRESH_GIVE_UP_AFTER", "3"))
 SAM_REFRESH_LIMIT = int(os.environ.get("SAM_REFRESH_LIMIT", "1000"))
 
 
@@ -6842,16 +6958,27 @@ def _federal_refresh():
     queries = ([({"ncode": n}, True) for n in federal_bids.CONCRETE_NAICS] +
                [({"ccode": c}, False) for c in federal_bids.CONCRETE_PSC])
     rows, seen, failed, attempted = [], set(), 0, 0
+    deadline = time.time() + FEDERAL_REFRESH_BUDGET_SEC
+    consecutive, ran_dry = 0, ""
     for params, trusted in queries:
+        left = deadline - time.time()
+        if left <= 5:
+            ran_dry = "budget_exhausted"
+            break
         attempted += 1
         try:
-            opps = _sam_fetch(None, timeout=SAM_REFRESH_TIMEOUT,
+            opps = _sam_fetch(None, timeout=min(SAM_REFRESH_TIMEOUT, int(left)),
                               limit=SAM_REFRESH_LIMIT, **params)
         except Exception:
             opps = None
         if opps is None:
             failed += 1
+            consecutive += 1
+            if consecutive >= REFRESH_GIVE_UP_AFTER:
+                ran_dry = "sam_unavailable"
+                break
             continue
+        consecutive = 0
         for opp in opps:
             if not _is_construction(opp):
                 continue
@@ -6873,9 +7000,10 @@ def _federal_refresh():
     # Never replace a good cache with the wreckage of a failed run. A scan
     # reading yesterday's federal bids is fine; reading none because the
     # refresh had a bad night is the outage this exists to prevent.
-    if failed == attempted:
-        return {"ok": False, "reason": "all_queries_failed",
-                "attempted": attempted}
+    if failed == attempted or not attempted:
+        return {"ok": False, "reason": ran_dry or "all_queries_failed",
+                "attempted": attempted,
+                "sam_status": _sam_health_read().get("last_status")}
     payload = {"at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                "rows": rows, "queries": attempted, "failed": failed}
     try:
@@ -6883,7 +7011,7 @@ def _federal_refresh():
     except Exception as ex:
         return {"ok": False, "reason": type(ex).__name__}
     return {"ok": True, "rows": len(rows), "queries": attempted,
-            "failed": failed}
+            "failed": failed, "partial": ran_dry or ""}
 
 
 def _federal_cache_age_h():
@@ -6934,6 +7062,8 @@ def run_federal_refresh():
     if not CRON_SECRET or not hmac.compare_digest(token, CRON_SECRET):
         return jsonify({"ok": False, "reason": "unauthorized"}), 403
     result = _federal_refresh()
+    if result.get("ok"):
+        _cron_beat("federal-refresh")
     return jsonify(result), (200 if result.get("ok") else 503)
 
 

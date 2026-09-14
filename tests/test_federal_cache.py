@@ -157,9 +157,52 @@ class RefreshTests(unittest.TestCase):
         ls._sam_fetch = lambda *a, **k: None
         out = ls._federal_refresh()
         self.assertFalse(out["ok"])
-        self.assertEqual(out["reason"], "all_queries_failed")
+        # Reported as SAM being down rather than as six separate failures:
+        # the run now stops after REFRESH_GIVE_UP_AFTER consecutive misses
+        # instead of spending the full per-query timeout on each remaining
+        # code, which is what killed the worker on all ten scheduled runs.
+        self.assertEqual(out["reason"], "sam_unavailable")
         self.assertEqual(self.store[ls.FEDERAL_CACHE_KEY]["rows"][0]["title"],
                          "kept")
+
+    def test_a_dead_sam_stops_the_run_instead_of_working_through_every_code(self):
+        """Ten scheduled runs died at 240s doing exactly this patiently."""
+        calls = []
+
+        def down(*a, **k):
+            calls.append(k)
+            return None
+
+        ls._sam_fetch = down
+        out = ls._federal_refresh()
+        self.assertFalse(out["ok"])
+        self.assertEqual(len(calls), ls.REFRESH_GIVE_UP_AFTER)
+        self.assertEqual(out["attempted"], ls.REFRESH_GIVE_UP_AFTER)
+
+    def test_no_single_query_may_outlast_the_budget(self):
+        """A 120s per-query timeout must not be handed a 10s remainder."""
+        seen = []
+        ls._sam_fetch = lambda *a, **k: seen.append(k.get("timeout")) or None
+        original = ls.FEDERAL_REFRESH_BUDGET_SEC
+        ls.FEDERAL_REFRESH_BUDGET_SEC = 30
+        try:
+            ls._federal_refresh()
+        finally:
+            ls.FEDERAL_REFRESH_BUDGET_SEC = original
+        self.assertTrue(seen)
+        self.assertLessEqual(max(seen), 30)
+
+    def test_an_exhausted_budget_is_reported_not_hidden(self):
+        """Partial beats silent: the caller has to be able to see it stopped."""
+        original = ls.FEDERAL_REFRESH_BUDGET_SEC
+        ls.FEDERAL_REFRESH_BUDGET_SEC = 0
+        try:
+            out = ls._federal_refresh()
+        finally:
+            ls.FEDERAL_REFRESH_BUDGET_SEC = original
+        self.assertFalse(out["ok"])
+        self.assertEqual(out["reason"], "budget_exhausted")
+        self.assertEqual(out["attempted"], 0)
 
     def test_a_partial_failure_still_stores_what_it_got(self):
         seq = [None, [self._opp()], None, [], None, []]

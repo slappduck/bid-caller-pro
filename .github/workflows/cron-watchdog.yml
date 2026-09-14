@@ -1,0 +1,64 @@
+name: Check the scheduled jobs are running
+
+# Every alert the server sends fires from inside a request Flask finished.
+# That leaves one gap, and the federal refresh fell straight into it: its
+# worker was killed at the platform timeout, so no handler ran, so no email
+# went out. Ten consecutive failed runs, twice a day, silent for three days.
+# Nobody found it by being told; it was found by going and looking.
+#
+# GitHub does email on a failed workflow. Those emails were arriving and were
+# not being read, which is the same as not having them.
+#
+# So the jobs check in when they succeed and this asks the server whether any
+# of them has gone quiet. A heartbeat catches what reading the run history
+# would miss: a workflow disabled, a secret rotated, a schedule dropped, or
+# Actions itself down. Silence is the failure, so silence is what is measured.
+#
+# It emails SUPPORT_EMAIL only when something is actually overdue, so a run
+# that says nothing means everything reported in. Deliberately quiet: an
+# alert that arrives daily stops being read within a week, which is how the
+# last one was missed.
+#
+# Same two repo secrets as the other jobs: BIDCALLER_SERVER_URL and
+# CRON_SECRET. Without them the endpoint replies 403 and nothing happens.
+#
+# Run it any time: Actions tab -> this workflow -> Run workflow.
+
+on:
+  schedule:
+    # 13:00 UTC = ~8am US Central, after the overnight jobs have all had
+    # their turn, and at an hour the report will actually be read.
+    - cron: "0 13 * * *"
+  workflow_dispatch:
+
+jobs:
+  watchdog:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ask which scheduled jobs have gone quiet
+        env:
+          SERVER: ${{ secrets.BIDCALLER_SERVER_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$SERVER" ] || [ -z "$CRON_SECRET" ]; then
+            echo "BIDCALLER_SERVER_URL or CRON_SECRET not set — skipping."
+            exit 0
+          fi
+          # Render instances sleep; the first request wakes it.
+          code=$(curl -sS -o /tmp/watchdog.json -w '%{http_code}' \
+            --max-time 300 \
+            -X POST "$SERVER/run-cron-watchdog" \
+            -H 'Content-Type: application/json' \
+            -H "X-Cron-Secret: $CRON_SECRET" \
+            -d '{}')
+          echo "HTTP $code"
+          cat /tmp/watchdog.json
+          echo
+          [ "$code" = "200" ]
+          # Fail the run when something is overdue, so the Actions list shows
+          # red as well as the email going out. Two channels, because the
+          # single channel is what failed last time.
+          if grep -q '"overdue": *\[[^]]' /tmp/watchdog.json; then
+            echo "::error::A scheduled job has gone quiet — see the list above."
+            exit 1
+          fi
