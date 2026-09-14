@@ -1,0 +1,48 @@
+name: Weekly numbers
+
+# _bi_summary, _funnel_summary, _engagement and _wins_summary were all built
+# and then left somewhere you had to remember to go and look, which is the
+# same as not having them. This posts them.
+#
+# It is also the outer dead-man's-switch. The cron watchdog reports only when
+# something is wrong, so a watchdog that has itself died looks exactly like a
+# quiet week. A mail that is meant to arrive every Monday is a failure you
+# notice by its absence -- the one kind of monitoring that does not itself
+# need monitoring.
+#
+# Same two repo secrets as the other jobs: BIDCALLER_SERVER_URL and
+# CRON_SECRET. Without them the endpoint replies 403 and nothing happens.
+#
+# Run it any time: Actions tab -> this workflow -> Run workflow.
+
+on:
+  schedule:
+    # 13:00 UTC Monday = ~8am US Central, start of the working week.
+    - cron: "0 13 * * 1"
+  workflow_dispatch:
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send the weekly numbers
+        env:
+          SERVER: ${{ secrets.BIDCALLER_SERVER_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$SERVER" ] || [ -z "$CRON_SECRET" ]; then
+            echo "BIDCALLER_SERVER_URL or CRON_SECRET not set — skipping."
+            exit 0
+          fi
+          # Render instances sleep; the first request wakes it. The digest
+          # reads Supabase for outcomes, so give it room.
+          code=$(curl -sS -o /tmp/digest.json -w '%{http_code}' \
+            --max-time 300 \
+            -X POST "$SERVER/run-weekly-digest" \
+            -H 'Content-Type: application/json' \
+            -H "X-Cron-Secret: $CRON_SECRET" \
+            -d '{}')
+          echo "HTTP $code"
+          cat /tmp/digest.json
+          echo
+          [ "$code" = "200" ]

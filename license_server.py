@@ -1712,6 +1712,8 @@ CRON_EXPECTED = {
     "upcoming-alerts": 192,      # weekly
     "bid-audit": 36,
     "federal-refresh": 36,       # twice daily; matches the cache max age
+    "trial-reminders": 36,
+    "weekly-digest": 192,        # weekly; its absence is the outer alarm
     "purge-expired-consent": 960,  # monthly
 }
 
@@ -1769,6 +1771,181 @@ def _cron_watchdog():
             "killed at the platform timeout never gets that far.\n\n"
             "Check https://github.com/slappduck/bid-caller-pro/actions")
     return {"ok": True, "jobs": rows, "overdue": [r["job"] for r in late]}
+
+
+# ── Telling somebody their trial is about to end ──
+#
+# There was a reminder for people already paying and none for people who had
+# not started. A seven-day trial that ends without a word is a cancellation
+# nobody had to decide on, and the whole funnel to date has converted zero.
+#
+# One email, two days out, once. Not a sequence: five a day of hand-written
+# outreach is the acquisition channel, and a drip campaign aimed at the
+# handful of people who did sign up would be the same mail-merge mistake in
+# a different envelope.
+APP_URL = os.environ.get("APP_URL", "https://curbcallpro.com/app.html")
+TRIAL_NOTICE_DAYS_OUT = int(os.environ.get("TRIAL_NOTICE_DAYS_OUT", "2"))
+
+
+def _has_paid_licence(db, email):
+    """True if this address already holds a live key. Deliberately not
+    _license_is_active, which counts an active trial as active -- here that
+    would suppress the email for exactly the people it is written for."""
+    key = ((db.get("emails") or {}).get((email or "").lower()) or "").strip()
+    if not key or key in (db.get("revoked") or []):
+        return False
+    try:
+        return bool(verify_key(key)[0])
+    except Exception:
+        return False
+
+
+def _send_trial_ending(email, days_left, ends_on):
+    when = "tomorrow" if days_left <= 1 else "in %d days" % days_left
+    _send_email(
+        email,
+        "Your CurbCall Pro trial ends %s" % when,
+        "Your free trial ends %s (%s).\n\n"
+        "Nothing happens automatically -- there is no card on file, so it "
+        "simply stops. If you want to keep the bid feed running, you can "
+        "pick a plan from the Account screen:\n\n"
+        "    %s\n\n"
+        "If it was not useful, no reply is needed. If it was nearly useful, "
+        "tell me what was missing and I will read it myself.\n\n"
+        "Joshua Hukel\nCurbCall Pro\n%s"
+        % (when, ends_on, APP_URL, MAILING_ADDRESS or ""))
+
+
+def _run_trial_reminders(now=None):
+    """One notice per trial, TRIAL_NOTICE_DAYS_OUT before it lapses."""
+    now = now or datetime.datetime.now()
+    db = _db()
+    trials = db.get("trials") or {}
+    sent, skipped, changed = [], 0, False
+    for rec in trials.values():
+        email = (rec.get("email") or "").strip()
+        if not email or rec.get("ending_notice_at"):
+            skipped += 1
+            continue
+        try:
+            ends = (datetime.datetime.fromisoformat(rec["started"])
+                    + datetime.timedelta(days=TRIAL_DAYS))
+        except Exception:
+            skipped += 1
+            continue
+        left_days = (ends - now).total_seconds() / 86400.0
+        if left_days <= 0 or left_days > TRIAL_NOTICE_DAYS_OUT:
+            skipped += 1
+            continue
+        if _has_paid_licence(db, email):
+            skipped += 1
+            continue
+        try:
+            _send_trial_ending(email, max(1, int(left_days) + 1),
+                               ends.isoformat()[:10])
+        except Exception as ex:
+            print(f"[trial] reminder failed for {email}: {ex}", flush=True)
+            continue
+        # Written whether or not the send is later found to have bounced:
+        # a duplicate "your trial ends" is worse than a missed one.
+        rec["ending_notice_at"] = now.isoformat()
+        changed = True
+        sent.append(email)
+    if changed:
+        _save_db(db)
+    return {"ok": True, "sent": len(sent), "skipped": skipped}
+
+
+@app.route("/run-trial-reminders", methods=["POST"])
+def run_trial_reminders():
+    """Daily. Emails trials that lapse within TRIAL_NOTICE_DAYS_OUT."""
+    data = request.get_json(force=True, silent=True) or {}
+    token = data.get("token") or request.headers.get("X-Cron-Secret", "")
+    if not CRON_SECRET or not hmac.compare_digest(token, CRON_SECRET):
+        return jsonify({"ok": False, "reason": "unauthorized"}), 403
+    result = _run_trial_reminders()
+    if result.get("ok"):
+        _cron_beat("trial-reminders")
+    return jsonify(result), (200 if result.get("ok") else 500)
+
+
+# ── The weekly note about how the business is actually doing ──
+#
+# _bi_summary, _funnel_summary, _engagement and _wins_summary were all built
+# and then left where somebody had to remember to go and look at them, which
+# is the same as not having them. Numbers nobody reads do not inform anything.
+#
+# This is also the outer dead-man's-switch. The watchdog reports only when
+# something is wrong, so a watchdog that has itself stopped is indistinguishable
+# from a quiet week. A mail that is supposed to arrive every Monday is a
+# failure you notice by its absence, which is the one kind of monitoring that
+# does not need monitoring of its own.
+def _digest_sections():
+    """[(heading, {k: v})]. Every source wrapped: one bad summary must not
+    cost the whole mail, since the weeks it breaks are the interesting ones."""
+    out = []
+    for heading, fn in (("Funnel", _funnel_summary),
+                        ("Lifecycle", _bi_summary),
+                        ("Engagement", _engagement),
+                        ("Outcomes", _wins_summary)):
+        try:
+            data = fn()
+        except Exception as ex:
+            out.append((heading, {"unavailable": type(ex).__name__}))
+            continue
+        out.append((heading, data if isinstance(data, dict) else {"value": data}))
+    return out
+
+
+def _digest_text(sections, crons):
+    lines = ["CurbCall Pro — week to %s"
+             % datetime.date.today().isoformat(), ""]
+    for heading, data in sections:
+        lines.append(heading)
+        if not data:
+            lines.append("  (nothing recorded)")
+        for k, v in data.items():
+            if isinstance(v, dict):
+                v = ", ".join("%s %s" % (a, b) for a, b in v.items())
+            lines.append("  %-28s %s" % (k, "-" if v is None else v))
+        lines.append("")
+    late = [c for c in crons if c["overdue"]]
+    lines.append("Scheduled jobs")
+    if late:
+        for c in late:
+            lines.append("  OVERDUE  %-24s %s" % (
+                c["job"], "never" if c["hours"] is None
+                else "%.1fh ago" % c["hours"]))
+    else:
+        lines.append("  all %d reporting" % len(crons))
+    lines.append("")
+    lines.append("This arrives every Monday. If it stops, something is wrong "
+                 "with the scheduler itself.")
+    return "\n".join(lines)
+
+
+def _run_weekly_digest():
+    sections = _digest_sections()
+    crons = _cron_status()
+    text = _digest_text(sections, crons)
+    if not SUPPORT_EMAIL:
+        return {"ok": False, "reason": "no_support_email"}
+    _send_email(SUPPORT_EMAIL, "[CurbCall Pro] Weekly numbers", text)
+    return {"ok": True, "sections": len(sections),
+            "overdue": [c["job"] for c in crons if c["overdue"]]}
+
+
+@app.route("/run-weekly-digest", methods=["POST"])
+def run_weekly_digest():
+    """Weekly. The numbers, plus whether the schedulers are alive."""
+    data = request.get_json(force=True, silent=True) or {}
+    token = data.get("token") or request.headers.get("X-Cron-Secret", "")
+    if not CRON_SECRET or not hmac.compare_digest(token, CRON_SECRET):
+        return jsonify({"ok": False, "reason": "unauthorized"}), 403
+    result = _run_weekly_digest()
+    if result.get("ok"):
+        _cron_beat("weekly-digest")
+    return jsonify(result), (200 if result.get("ok") else 500)
 
 
 @app.route("/run-cron-watchdog", methods=["POST"])

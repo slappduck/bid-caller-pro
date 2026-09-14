@@ -1,0 +1,55 @@
+name: Remind trials that are about to end
+
+# There was a reminder for people already paying and none for people who had
+# not started yet. A seven-day trial that ends without a word is a
+# cancellation nobody had to decide on.
+#
+# One email, two days out, once per trial. Not a sequence: the acquisition
+# channel is five hand-written emails a day, and a drip aimed at the few
+# people who did sign up would be the same mail-merge mistake in a different
+# envelope.
+#
+# Daily, because a trial can lapse on any day of the week. The endpoint is
+# idempotent -- it stamps ending_notice_at on the trial record -- so running
+# it twice in a day sends nothing twice.
+#
+# Same two repo secrets as the other jobs: BIDCALLER_SERVER_URL and
+# CRON_SECRET. Without them the endpoint replies 403 and nothing happens.
+#
+# Run it any time: Actions tab -> this workflow -> Run workflow.
+
+on:
+  schedule:
+    # 15:00 UTC = ~10am US Central. A working hour: this asks somebody to
+    # make a purchase decision, and 3am mail gets opened with the overnight
+    # pile and deleted with it.
+    - cron: "0 15 * * *"
+  workflow_dispatch:
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Email trials lapsing within the notice window
+        env:
+          SERVER: ${{ secrets.BIDCALLER_SERVER_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$SERVER" ] || [ -z "$CRON_SECRET" ]; then
+            echo "BIDCALLER_SERVER_URL or CRON_SECRET not set — skipping."
+            exit 0
+          fi
+          # Render instances sleep; the first request wakes it.
+          code=$(curl -sS -o /tmp/trials.json -w '%{http_code}' \
+            --max-time 300 \
+            -X POST "$SERVER/run-trial-reminders" \
+            -H 'Content-Type: application/json' \
+            -H "X-Cron-Secret: $CRON_SECRET" \
+            -d '{}')
+          echo "HTTP $code"
+          cat /tmp/trials.json
+          echo
+          # Worth failing on. A trial reminder that silently stops running
+          # looks exactly like having no trials, and the cron watchdog only
+          # knows this job is alive because a success reports a heartbeat.
+          [ "$code" = "200" ]
