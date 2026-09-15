@@ -167,6 +167,14 @@ class MainGuardTests(unittest.TestCase):
         self.assertEqual(rc, 2)
         self.assertEqual(os.listdir(self.dest), [])
 
+    def test_a_slug_that_is_not_a_safe_filename_is_held_not_drafted(self):
+        A.PROSPECTS = write_csv([row("../../etc/whoops")])
+        called = []
+        A._location_evidence = lambda r: called.append(r) or ("ok", "")
+        self.run_main(["--dest", self.dest])
+        self.assertEqual(called, [])
+        self.assertEqual(os.listdir(self.dest), [])
+
     def test_a_prospect_with_nothing_readable_is_held_not_drafted(self):
         A.PROSPECTS = write_csv([row("acme")])
         A.research = lambda r: {"problem": "nothing readable at acme.com"}

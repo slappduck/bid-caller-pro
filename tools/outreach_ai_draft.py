@@ -28,6 +28,7 @@ data/sender.env (already gitignored -- see OUTREACH.md).
 import argparse
 import csv
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -44,6 +45,13 @@ _ROOT = os.path.dirname(_HERE)
 DRAFTS_DIR = os.path.join(_ROOT, "data", "outreach_drafts")
 VOICE_FILE = os.path.join(_HERE, "outreach_voice.md")
 MODEL = "claude-opus-5"
+
+# The draft filename is built from the CSV's slug column. Slugs are typed by
+# hand (see OUTREACH.md: "add the slug to the CSV, add the redirect line"),
+# so this is a typo guard, not a defense against an attacker -- but a slug
+# containing a path separator has no business writing outside DRAFTS_DIR
+# either way.
+_SAFE_SLUG = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 def voice():
@@ -144,6 +152,9 @@ def main():
     os.makedirs(args.dest, exist_ok=True)
     written, held = [], []
     for row in queue:
+        if not _SAFE_SLUG.match(row["slug"]):
+            held.append((row, "slug is not a safe filename"))
+            continue
         verdict, why = _location_evidence(row)
         if verdict != "ok":
             held.append((row, f"location unconfirmed ({why})"))
