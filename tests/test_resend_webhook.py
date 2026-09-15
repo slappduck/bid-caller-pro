@@ -156,6 +156,15 @@ class WebhookTests(unittest.TestCase):
         r = self._post({"type": "email.something_new", "data": {}})
         self.assertEqual(r.status_code, 200)
 
+    def test_a_non_string_non_list_to_field_does_not_crash(self):
+        """Resend's real API only ever sends a string or a list of strings,
+        but this endpoint's whole point is to never 500 on webhook data it
+        doesn't recognise -- found during a systematic edge-case review."""
+        ev = {"type": "email.complained", "data": {"to": 12345}}
+        r = self._post(ev)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(ls._suppression(), set())
+
     def test_several_recipients_on_one_event_are_all_suppressed(self):
         ev = {"type": "email.complained",
               "data": {"to": ["a@x.com", "b@x.com"]}}

@@ -561,6 +561,53 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── A /health response that parses but isn't a usable object ──
+  // r.json() only throws on unparseable JSON. A response that parses fine but
+  // comes back as `null` -- a sleeping Render instance answered by an edge
+  // proxy/error page that happens to have a JSON content-type, or the server
+  // itself misbehaving -- used to sail through loadHealth() as "success" and
+  // then throw on lastHealth.backends, leaving the Diagnostics card stuck on
+  // "Checking server..." forever with no way to tell it had already failed.
+  console.log("\nA /health body that parses to null doesn't wedge the Diagnostics card");
+  {
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      if (u.includes("/health")) {
+        return route.fulfill({ status: 200, contentType: "application/json", body: "null" });
+      }
+      if (host === "cdn.jsdelivr.net") {
+        return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      }
+      if (host.endsWith("supabase.co") || host.endsWith("onrender.com")) return route.abort();
+      return route.continue();
+    });
+    await page.addInitScript(seedSignedIn, {});
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(900);
+    await page.evaluate(() => { if (typeof bootOffline === "function") bootOffline(); });
+    await page.evaluate(() => { isAdmin = true; });
+    await page.evaluate(() => goTo("account"));
+    await page.waitForTimeout(300);
+
+    let threw = false;
+    try {
+      await page.evaluate(async () => { await loadHealth(); });
+    } catch (e) { threw = true; }
+    await page.waitForTimeout(200);
+
+    check("loadHealth() does not throw on a null body", !threw);
+    const card = await page.locator("#diag-health").innerText();
+    check("the card says so instead of sitting on \"Checking server...\"",
+      !/Checking server/i.test(card), card);
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   // ── 8. Saved-search throttling ──
   console.log("\nSaved searches are not re-scanned on every app open");
   {

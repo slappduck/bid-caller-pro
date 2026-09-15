@@ -709,3 +709,27 @@ class KeyedTransportBreakerTests(unittest.TestCase):
         for _ in range(ls._FEDERAL_TRIP_AFTER + 2):
             ls._federal_keyed(["MO"], {}, time.time() + 10)
         self.assertFalse(ls._keyed_breaker_open())
+
+
+class MalformedEntryTests(unittest.TestCase):
+    """SAM's documented schema is a list of objects, but this codebase has
+    been burned before by external data not matching its docs. _is_construction
+    and _normalize_opp both call opp.get() with no isinstance guard, so one
+    non-dict row used to be able to raise AttributeError out of the per-state,
+    per-trade-code loop -- killing every remaining query in the run, not just
+    that one row. Found during a systematic edge-case review."""
+
+    OPP = KeyedTransportTests.OPP
+
+    def setUp(self):
+        self._fetch, self._key = ls._sam_fetch, ls.SAM_API_KEY
+        ls.SAM_API_KEY = "test-key"
+
+    def tearDown(self):
+        ls._sam_fetch, ls.SAM_API_KEY = self._fetch, self._key
+
+    def test_a_non_dict_entry_does_not_crash_the_keyed_path(self):
+        ls._sam_fetch = (lambda state, ncode=None, ccode=None:
+                         ["not-a-dict", None, self.OPP])
+        bids = ls._federal_keyed(["MO"], {})
+        self.assertEqual(len(bids), 1)

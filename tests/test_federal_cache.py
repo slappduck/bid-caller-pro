@@ -217,6 +217,17 @@ class RefreshTests(unittest.TestCase):
         self.assertFalse(out["ok"])
         self.assertNotIn(ls.FEDERAL_CACHE_KEY, self.store)
 
+    def test_a_non_dict_entry_in_the_response_does_not_crash_the_run(self):
+        """SAM's documented schema is a list of objects, but this endpoint has
+        surprised this codebase before. _is_construction and _normalize_opp
+        both assume opp.get() works; one bad row must be skipped, not take
+        out every remaining NAICS/PSC query for the whole nightly run.
+        Found during a systematic edge-case review."""
+        ls._sam_fetch = lambda *a, **k: ["not-a-dict", None, self._opp()]
+        out = ls._federal_refresh()
+        self.assertTrue(out["ok"])
+        self.assertEqual(out["rows"], 1)
+
 
 class RefreshEndpointTests(unittest.TestCase):
     def setUp(self):

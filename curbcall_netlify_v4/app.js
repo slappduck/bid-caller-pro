@@ -2031,6 +2031,16 @@ async function loadHealth(){
     const r=await fetchWithTimeout(
       SERVER+"/health", tok?{headers:{"X-Admin-Token":tok}}:{}, 45000);
     lastHealth=await r.json();
+    // r.json() only throws on unparseable JSON -- a response that parses to
+    // null or a bare scalar (a proxy/CDN error page that happens to be valid
+    // JSON, or the server itself misbehaving) sails through as "success" and
+    // left this reading lastHealth.backends on null, throwing right past the
+    // rest of this function and leaving the card stuck on "Checking server...".
+    if(!lastHealth||typeof lastHealth!=="object"){
+      box.textContent="Couldn't reach the server (it may be waking up — try again).";
+      lastHealth=null;
+      return;
+    }
   }catch(e){
     box.textContent="Couldn't reach the server (it may be waking up — try again).";
     return;

@@ -205,7 +205,12 @@ def resend_webhook():
     data = event.get("data") if isinstance(event.get("data"), dict) else {}
 
     to = data.get("to")
-    addresses = [to] if isinstance(to, str) else list(to or [])
+    # isinstance-gated rather than list(to or []) directly: Resend's own API
+    # always sends a string or a list of strings, but a non-iterable value
+    # here (an int, a bool) would make list(to) raise instead of degrading
+    # to "no addresses in this event" -- and this endpoint's whole point is
+    # to never 500 on webhook data it doesn't recognise.
+    addresses = [to] if isinstance(to, str) else (to if isinstance(to, list) else [])
     addresses = [str(a).strip().lower() for a in addresses if str(a or "").strip()]
 
     _record_email_event(kind or "unknown")

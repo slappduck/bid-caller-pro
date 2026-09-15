@@ -73,5 +73,45 @@ class TrialFarmingIsBlockedTests(unittest.TestCase):
         self.assertEqual(len(self.db["trials"]), 1)
 
 
+class CorruptTrialRecordTests(unittest.TestCase):
+    """_license_is_active gates every /scan, /residential-leads and /upcoming
+    request. admin_list() already skips a trial record it can't parse rather
+    than crash (try/except around fromisoformat) -- this function read the
+    same shape of record without that guard, so a single corrupted "started"
+    timestamp 500'd every request from that customer until someone noticed
+    and hand-edited the record. Found during a systematic edge-case review."""
+
+    def setUp(self):
+        self._orig_db = ls._db
+        self._orig_verify = ls._verify_supabase_token
+
+    def tearDown(self):
+        ls._db = self._orig_db
+        ls._verify_supabase_token = self._orig_verify
+
+    def test_a_corrupted_email_trial_record_does_not_crash(self):
+        db = {"revoked": [], "issued": {}, "emails": {},
+              "trials": {"email:corrupt@x.com":
+                         {"started": "not-a-real-timestamp"}}}
+        ls._db = lambda: db
+        ls._verify_supabase_token = lambda token: "corrupt@x.com"
+        # Must not raise, and a corrupted record cannot be verified as an
+        # active trial -- fails closed rather than granting access on data
+        # that cannot be checked.
+        self.assertFalse(ls._license_is_active("", "dev", supabase_token="t"))
+
+    def test_a_corrupted_device_trial_record_does_not_crash(self):
+        db = {"revoked": [], "issued": {}, "emails": {},
+              "trials": {"baddevice": {"started": "not-a-real-timestamp"}}}
+        ls._db = lambda: db
+        self.assertFalse(ls._license_is_active("", "baddevice"))
+
+    def test_a_trial_record_missing_started_entirely_does_not_crash(self):
+        db = {"revoked": [], "issued": {}, "emails": {},
+              "trials": {"baddevice": {}}}
+        ls._db = lambda: db
+        self.assertFalse(ls._license_is_active("", "baddevice"))
+
+
 if __name__ == "__main__":
     unittest.main()

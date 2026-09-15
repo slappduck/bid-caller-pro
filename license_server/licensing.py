@@ -2,7 +2,11 @@
 @app.route("/validate", methods=["POST"])
 def validate():
     data = request.get_json(force=True, silent=True) or {}
-    key = data.get("key", "")
+    # .get(x) or default, not .get(x, default) -- a JSON body of {"key": null}
+    # has "key" present with value None, so the second form's default never
+    # applies and .strip() below throws. Same pattern already used safely by
+    # trial()'s device_id and revoke()'s key, just below.
+    key = data.get("key") or ""
     db = _db()
     if key.strip().upper() in db.get("revoked", []):
         return jsonify({"valid": False, "reason": "revoked"})
@@ -66,12 +70,15 @@ def issue():
         return jsonify({"ok": False, "reason": "admin_not_configured"}), 503
     if not _admin_ok(data.get("admin_token")):
         return jsonify({"ok": False, "reason": "unauthorized"}), 401
-    plan = data.get("plan", "monthly")
-    months = 12 if plan == "annual" else int(data.get("months", 1))
+    # Same {"plan": null} hazard as /validate's key -- .get(x) or default,
+    # not .get(x, default). A null months value hits the same class of bug
+    # via int(None), so it gets the same treatment.
+    plan = data.get("plan") or "monthly"
+    months = 12 if plan == "annual" else int(data.get("months") or 1)
     key, exp = make_key(plan, months)
     db = _db()
     db.setdefault("issued", {})[key] = {
-        "plan": plan, "expires": exp[:10], "email": data.get("email", ""),
+        "plan": plan, "expires": exp[:10], "email": data.get("email") or "",
         "issued": datetime.datetime.now().isoformat()[:10],
     }
     _save_db(db)
