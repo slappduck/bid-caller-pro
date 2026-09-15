@@ -62,6 +62,109 @@ class AdminTokenTests(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
 
 
+class VerifyKeyEdgeCaseTests(unittest.TestCase):
+    """verify_key() gates every paid feature and had no direct unit test at
+    all -- only ever exercised indirectly through higher-level flows. Found
+    during a systematic edge-case review of license_server/core.py."""
+
+    def test_lowercase_and_padded_keys_still_verify(self):
+        key, _ = ls.make_key("monthly", 1)
+        valid, plan, exp, reason = ls.verify_key("  " + key.lower() + "  ")
+        self.assertTrue(valid)
+        self.assertEqual(plan, "monthly")
+
+    def test_wrong_number_of_dash_separated_parts_is_bad_format(self):
+        for key in ("BCP-MON", "BCP-MON-20260101-SIG-EXTRA", "not-a-key-at-all"):
+            with self.subTest(key=key):
+                valid, plan, exp, reason = ls.verify_key(key)
+                self.assertFalse(valid)
+                self.assertEqual(reason, "bad_format")
+
+    def test_a_non_numeric_date_is_bad_date_not_a_crash(self):
+        valid, plan, exp, reason = ls.verify_key("BCP-MON-NOTADATE-DEADBEEF")
+        self.assertFalse(valid)
+        self.assertEqual(reason, "bad_date")
+
+    def test_a_tampered_signature_is_rejected(self):
+        key, _ = ls.make_key("monthly", 1)
+        tampered = key[:-1] + ("0" if key[-1] != "0" else "1")
+        valid, plan, exp, reason = ls.verify_key(tampered)
+        self.assertFalse(valid)
+        self.assertEqual(reason, "bad_signature")
+
+    def test_a_key_past_its_expiry_is_reported_expired_not_bad_signature(self):
+        import datetime
+        key, _ = ls._make_key_with_expiry(
+            "monthly", datetime.datetime.now() - datetime.timedelta(days=1))
+        valid, plan, exp, reason = ls.verify_key(key)
+        self.assertFalse(valid)
+        self.assertEqual(reason, "expired")
+        # The plan/expiry still come back on an expired key -- callers (like
+        # /validate) may want to show "your plan expired on X", not just "no".
+        self.assertEqual(plan, "monthly")
+        self.assertIsNotNone(exp)
+
+    def test_an_unrecognised_plan_code_falls_back_to_monthly(self):
+        """make_key() only ever produces MON/ANN, so this path is reachable
+        only via a hand-crafted key -- documenting it rather than treating
+        it as untested behaviour. It cannot be forged without LICENSE_SECRET,
+        since the signature is checked against whatever plan this resolves
+        to, not the plan code the caller wrote into the string."""
+        import datetime
+        date_str = (datetime.datetime.now()
+                    + datetime.timedelta(days=1)).strftime("%Y%m%d")
+        sig = hmac.new(ls.LICENSE_SECRET.encode(), f"monthly|{date_str}".encode(),
+                       hashlib.sha256).hexdigest()[:16].upper()
+        valid, plan, exp, reason = ls.verify_key(f"BCP-XYZ-{date_str}-{sig}")
+        self.assertTrue(valid)
+        self.assertEqual(plan, "monthly")
+
+
+class NullJsonValueTests(unittest.TestCase):
+    """{"key": null} is a JSON body with the field PRESENT, valued None --
+    different from the field being absent. data.get("key", "") only applies
+    its default in the absent case, so code written as if that covered both
+    let a null value reach .strip()/[:3] downstream and crash. Found during a
+    systematic edge-case review, not from a bug report -- these 500s were
+    live in production with nothing to notice them."""
+
+    def setUp(self):
+        self.client = ls.app.test_client()
+
+    def test_a_null_key_is_reported_as_bad_format_not_a_server_error(self):
+        with patch.object(ls, "_db", return_value={"revoked": []}):
+            r = self.client.post("/validate", json={"key": None})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.get_json(), {"valid": False, "reason": "bad_format"})
+
+    def test_a_missing_key_behaves_the_same_as_a_null_one(self):
+        with patch.object(ls, "_db", return_value={"revoked": []}):
+            r = self.client.post("/validate", json={})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.get_json(), {"valid": False, "reason": "bad_format"})
+
+    def test_a_null_plan_defaults_to_monthly_instead_of_crashing(self):
+        with patch.object(ls, "ADMIN_TOKEN", REAL_TOKEN), \
+             patch.object(ls, "_db", return_value={"issued": {}}), \
+             patch.object(ls, "_save_db"):
+            r = self.client.post(
+                "/issue", json={"admin_token": REAL_TOKEN, "plan": None})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.get_json()["plan"], "monthly")
+
+    def test_a_null_months_defaults_to_one_instead_of_crashing(self):
+        with patch.object(ls, "ADMIN_TOKEN", REAL_TOKEN), \
+             patch.object(ls, "_db", return_value={"issued": {}}), \
+             patch.object(ls, "_save_db"):
+            r = self.client.post(
+                "/issue", json={"admin_token": REAL_TOKEN, "plan": "monthly",
+                                "months": None})
+        self.assertEqual(r.status_code, 200)
+        key = r.get_json()["key"]
+        valid, plan, exp, reason = ls.verify_key(key)
+        self.assertTrue(valid)
+
+
 class ClaimTests(unittest.TestCase):
     """Restoring a purchase must prove who you are, not just name an email."""
 
