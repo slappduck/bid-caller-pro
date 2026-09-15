@@ -3278,6 +3278,12 @@ def _federal_refresh():
             continue
         consecutive = 0
         for opp in opps:
+            # SAM's documented schema is a list of objects, but this loop is
+            # the only thing standing between one malformed entry and an
+            # AttributeError that would kill the whole refresh -- every
+            # remaining NAICS/PSC query for the run, not just this one row.
+            if not isinstance(opp, dict):
+                continue
             if not _is_construction(opp):
                 continue
             if not trusted and not bid_sources.looks_relevant(opp.get("title")):
@@ -3415,6 +3421,11 @@ def _federal_keyed(states, stats, deadline=None):
                 continue
             _bump(stats, "federal_search_ok")
             for opp in opps:
+                # See the matching guard in the keyed path above: one
+                # malformed entry must not take down every remaining
+                # state/trade pair in this run.
+                if not isinstance(opp, dict):
+                    continue
                 if not _is_construction(opp):
                     continue
                 if not trusted and not bid_sources.looks_relevant(
@@ -3429,7 +3440,10 @@ def _federal_keyed(states, stats, deadline=None):
                     _bump(stats, "federal_amendment_collapsed")
                     continue
                 seen.add(key)
-                bid, city, perf_state = _normalize_opp(opp)
+                try:
+                    bid, city, perf_state = _normalize_opp(opp)
+                except Exception:
+                    continue
                 bid["city"], bid["state"] = city, perf_state
                 out.append(bid)
     # A rejected key must not mean no federal bids at all. The public
