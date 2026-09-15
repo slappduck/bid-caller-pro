@@ -1,0 +1,30 @@
+name: Run tests
+
+# Every other workflow in this folder is a scheduled cron job, not CI --
+# nothing here ran the test suite automatically before this file existed.
+# 1,724 tests is a real safety net, but a safety net nobody is required to
+# pull is not much of one: a breaking change could reach main and only be
+# discovered by whoever happens to run the tests by hand, or not at all.
+#
+# This runs the full suite on every push and every pull request, so a
+# regression shows up as a red check before it reaches production, not after.
+# The suite needs no real secrets to run -- every external call (Supabase,
+# Resend, SAM.gov, the search providers) is stubbed in the tests themselves --
+# so no repo secrets are configured here.
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run the test suite
+        run: python -m unittest discover -s tests
