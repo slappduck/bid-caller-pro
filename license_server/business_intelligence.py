@@ -443,9 +443,22 @@ def _license_is_active(key, device, supabase_token=None):
             trials = db.setdefault("trials", {})
             trial_key = f"email:{_trial_identity(email)}"
             if trial_key in trials:
-                started = datetime.datetime.fromisoformat(trials[trial_key]["started"])
-                if datetime.datetime.now() <= started + datetime.timedelta(days=TRIAL_DAYS):
-                    return True
+                try:
+                    started = datetime.datetime.fromisoformat(
+                        trials[trial_key]["started"])
+                except (KeyError, TypeError, ValueError) as ex:
+                    # A trial record that exists but can't be read is not the
+                    # same question as "is the trial still running" -- same
+                    # admin_list() already skips a record it can't parse
+                    # rather than crash. Every route that gates on this
+                    # function would otherwise 500 for this one customer on
+                    # every request until the record is fixed by hand.
+                    print(f"[license] unreadable trial record for {trial_key}: "
+                          f"{ex}", flush=True)
+                else:
+                    if datetime.datetime.now() <= started + datetime.timedelta(
+                            days=TRIAL_DAYS):
+                        return True
             else:
                 # First time this account scans — start their trial
                 trials[trial_key] = {"started": datetime.datetime.now().isoformat(),
@@ -456,9 +469,14 @@ def _license_is_active(key, device, supabase_token=None):
     # 3. Anonymous device-based trial (legacy / no account)
     trials = db.get("trials", {})
     if device in trials:
-        started = datetime.datetime.fromisoformat(trials[device]["started"])
-        if datetime.datetime.now() <= started + datetime.timedelta(days=TRIAL_DAYS):
-            return True
+        try:
+            started = datetime.datetime.fromisoformat(trials[device]["started"])
+        except (KeyError, TypeError, ValueError) as ex:
+            print(f"[license] unreadable trial record for device {device!r}: "
+                  f"{ex}", flush=True)
+        else:
+            if datetime.datetime.now() <= started + datetime.timedelta(days=TRIAL_DAYS):
+                return True
 
     return False
 
