@@ -168,8 +168,14 @@ TRIAL_DAYS = 7
 UPSTASH_URL = os.environ.get("UPSTASH_REDIS_REST_URL", "").rstrip("/")
 UPSTASH_TOKEN = os.environ.get("UPSTASH_REDIS_REST_TOKEN", "")
 _LIC_KEY = "bidcaller:license_db"
-_LOCAL_LIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "license_db.json")
-_LOCAL_CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scan_cache.json")
+# NOTE: this file now lives one directory deeper than the original
+# license_server.py did (repo_root/license_server.py -> repo_root/
+# license_server/<this file>.py), and its __file__ reflects that. The
+# extra os.path.dirname(...) below is only to keep this path resolving
+# to the exact same repo_root-relative location as before the split --
+# not a behavior change.
+_LOCAL_LIC = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "license_db.json")
+_LOCAL_CACHE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scan_cache.json")
 
 
 def _empty_lic():
@@ -241,6 +247,8 @@ def verify_key(key):
     if datetime.datetime.now() > exp_dt:
         return False, plan, exp_dt.isoformat(), "expired"
     return True, plan, exp_dt.isoformat(), "ok"
+
+
 
 
 @app.route("/validate", methods=["POST"])
@@ -340,6 +348,8 @@ def revoke():
 @app.route("/", methods=["GET"])
 def health():
     return jsonify({"service": "Bid Caller Pro License Server", "status": "ok"})
+
+
 
 
 def _terms_acceptance_stats():
@@ -674,6 +684,139 @@ def _recent_scans(limit=None):
         return list(reversed(history))[:limit]
     except Exception:
         return []
+
+
+
+
+# ═══════════════════════════════════════════════════════════
+# LICENSE / TRIAL GATE
+# ═══════════════════════════════════════════════════════════
+# Accounts that never trial-expire and never need a subscription -- for
+# testing the live product with a real signed-in account instead of resetting
+# a device trial. A comma-separated env var, same pattern as MAILING_ADDRESS
+# and FROM_EMAIL: nobody's email address belongs in a public repo.
+ADMIN_EMAILS = os.environ.get("ADMIN_EMAILS", "")
+
+
+def _admin_email_set():
+    return {e.strip().lower() for e in ADMIN_EMAILS.split(",") if e.strip()}
+
+
+def _is_admin_email(email):
+    return bool(email) and email.strip().lower() in _admin_email_set()
+
+
+# ── Business intelligence: the lifecycle log ────────────────────────────────
+#
+# What the system knew before this: that a licence key is dead. Not when, not
+# after how long, not what the person was paying. Cancellations appended a key
+# to a flat list -- db["revoked"] -- with no date and no reason, so "how long
+# does a customer last" and "did churn move after a price change" were
+# unanswerable, and unanswerable permanently: a date not written down at the
+# moment it happened cannot be recovered afterwards.
+#
+# That is the argument for instrumenting now rather than when there is enough
+# data to be interesting. The first ten customers are the ones whose behaviour
+# decides whether this business works, and they are also the ones most easily
+# lost.
+#
+# No addresses. Each entry carries a short salted hash of the trial identity,
+# which is enough to follow ONE person's trial -> paid -> churn arc and to
+# compute a lifetime, and useless for reading off who the customers are. An
+# aggregate is the only thing anybody needs here.
+LIFECYCLE_KEY = "lifecycle"
+LIFECYCLE_MAX = int(os.environ.get("LIFECYCLE_MAX", "20000"))
+
+
+def _bi_id(email):
+    """A stable, non-reversible handle for one customer."""
+    ident = _trial_identity(email or "")
+    if not ident:
+        return ""
+    salt = (SUPABASE_SERVICE_ROLE_KEY or ADMIN_TOKEN or "curbcall")[:32]
+    return hashlib.sha256((salt + "|bi|" + ident).encode("utf-8")).hexdigest()[:16]
+
+
+def _bi_note(db, event, email="", plan="", extra=None):
+    """Append one lifecycle event. Never raises -- BI must not break billing."""
+    try:
+        log = db.setdefault(LIFECYCLE_KEY, [])
+        row = {"at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+               "event": event, "id": _bi_id(email)}
+        if plan:
+            row["plan"] = plan
+        if extra:
+            row.update(extra)
+        log.append(row)
+        if len(log) > LIFECYCLE_MAX:
+            del log[:len(log) - LIFECYCLE_MAX]
+    except Exception:
+        pass
+
+
+def _trial_identity(email):
+    """Normalize an email for TRIAL-ELIGIBILITY purposes only -- never for
+    license-key lookups, which must stay exact. Strips a +tag from the local
+    part: josh+1@gmail.com and josh+2@gmail.com deliver to the same inbox on
+    Gmail, Outlook, Fastmail and most other providers, so without this, a free
+    7-day trial (no card required, and every scan spends real OpenAI/search
+    budget) could be farmed indefinitely from one real inbox."""
+    email = (email or "").strip().lower()
+    local, sep, domain = email.partition("@")
+    if not sep:
+        return email
+    return f"{local.split('+', 1)[0]}@{domain}"
+
+
+def _license_is_active(key, device, supabase_token=None):
+    """Return True if this request has a valid license, active trial,
+    OR a signed-in Supabase account (email-based trial counts too)."""
+    key = (key or "").strip().upper()
+    db = _db()
+
+    # 1. Valid license key
+    if key and key not in db.get("revoked", []):
+        valid, _, _, _ = verify_key(key)
+        if valid:
+            return True
+
+    # 2. Supabase account — check if their email has a key, or give them a trial
+    if supabase_token:
+        email = _verify_supabase_token(supabase_token)
+        if email:
+            if _is_admin_email(email):
+                return True
+            # email has an active issued key?
+            ekey = db.get("emails", {}).get(email)
+            if ekey and ekey not in db.get("revoked", []):
+                ev, _, _, _ = verify_key(ekey)
+                if ev:
+                    return True
+            # email-based trial -- normalized, so josh+1@ and josh+2@ can't
+            # each claim their own free trial off one real inbox
+            trials = db.setdefault("trials", {})
+            trial_key = f"email:{_trial_identity(email)}"
+            if trial_key in trials:
+                started = datetime.datetime.fromisoformat(trials[trial_key]["started"])
+                if datetime.datetime.now() <= started + datetime.timedelta(days=TRIAL_DAYS):
+                    return True
+            else:
+                # First time this account scans — start their trial
+                trials[trial_key] = {"started": datetime.datetime.now().isoformat(),
+                                     "email": email}
+                _save_db(db)
+                return True
+
+    # 3. Anonymous device-based trial (legacy / no account)
+    trials = db.get("trials", {})
+    if device in trials:
+        started = datetime.datetime.fromisoformat(trials[device]["started"])
+        if datetime.datetime.now() <= started + datetime.timedelta(days=TRIAL_DAYS):
+            return True
+
+    return False
+
+
 
 
 # ── Outreach link clicks, counted first-party ──
@@ -1027,6 +1170,8 @@ def health_detail():
     body["tavily"]["last_error"] = tav["last_error"]
     body["email"]["last_error"] = email_health["last_error"]
     return jsonify(body)
+
+
 # ═══════════════════════════════════════════════════════════
 # PAYMENTS: Stripe webhook -> auto-issue keys (survives restarts)
 # ═══════════════════════════════════════════════════════════
@@ -1121,6 +1266,135 @@ def _send_email(to, subject, text, reply_to=None, headers=None):
         _email_note(False, 0, str(ex))
         print(f"[email] send to {to} failed: {ex}", flush=True)
         return False
+
+
+
+# ── Delivery feedback from Resend ───────────────────────────────────────────
+# Sending to an address that no longer exists is how a domain's reputation
+# dies: mailbox providers read repeated hard bounces and spam complaints as
+# evidence the sender does not maintain a list, and start filing everything
+# from that domain in junk -- including the trial keys and bid alerts real
+# customers are waiting on. The list has to clean itself.
+#
+# Two events matter and they are treated differently:
+#
+#   email.bounced     suppress only a PERMANENT bounce. A transient one is a
+#                     full mailbox or greylisting, and retiring a good address
+#                     over a temporary condition loses a real prospect.
+#   email.complained  suppress always, immediately. Somebody pressed "this is
+#                     spam"; there is no reading of that which permits another
+#                     message, and it is the single most damaging signal a
+#                     sender can accumulate.
+RESEND_WEBHOOK_SECRET = _env_secret("RESEND_WEBHOOK_SECRET", "")
+# Replay window for a signed webhook, in seconds. Svix's own default.
+WEBHOOK_TOLERANCE_SEC = int(os.environ.get("WEBHOOK_TOLERANCE_SEC", "300"))
+_EMAIL_EVENTS_KEY = "bidcaller:email_events"
+
+
+def _svix_signature_ok(secret, msg_id, timestamp, raw_body, header):
+    """Verify a Svix-signed webhook, which is what Resend sends.
+
+    Signed content is "{id}.{timestamp}.{body}", HMAC-SHA256 under the
+    base64 secret, and the header carries a space-separated list of
+    "v1,<sig>" so a secret can be rotated without dropping deliveries.
+
+    Verification is not optional here. This endpoint writes to the
+    suppression list, so an unauthenticated version would let anyone
+    permanently silence any address we mail -- including every prospect at
+    once, quietly, with no error anywhere.
+    """
+    if not secret or not msg_id or not timestamp or not header:
+        return False
+    try:
+        age = abs(time.time() - int(timestamp))
+    except (TypeError, ValueError):
+        return False
+    if age > WEBHOOK_TOLERANCE_SEC:
+        return False       # replay of an old, legitimately-signed delivery
+    key = secret.split("_", 1)[1] if secret.startswith("whsec_") else secret
+    try:
+        key_bytes = base64.b64decode(key)
+    except Exception:
+        return False
+    signed = f"{msg_id}.{timestamp}.".encode() + raw_body
+    expected = base64.b64encode(
+        hmac.new(key_bytes, signed, hashlib.sha256).digest()).decode()
+    for part in str(header).split():
+        _, _, supplied = part.partition(",")
+        if supplied and hmac.compare_digest(supplied, expected):
+            return True
+    return False
+
+
+def _record_email_event(kind):
+    counts = kv_backend.get(_EMAIL_EVENTS_KEY, None)
+    counts = counts if isinstance(counts, dict) else {}
+    counts[kind] = int(counts.get(kind, 0)) + 1
+    counts["last_at"] = datetime.datetime.now().isoformat(timespec="seconds")
+    kv_backend.set(_EMAIL_EVENTS_KEY, counts)
+
+
+def _is_permanent_bounce(data):
+    """Resend reports the class on the bounce object. Anything not clearly
+    permanent is left alone -- a full mailbox empties."""
+    bounce = data.get("bounce") if isinstance(data.get("bounce"), dict) else {}
+    blob = " ".join(str(bounce.get(k) or "") for k in
+                    ("type", "subType", "sub_type", "message")).lower()
+    if "transient" in blob or "temporary" in blob or "soft" in blob:
+        return False
+    return "permanent" in blob or "hard" in blob or "suppressed" in blob
+
+
+@app.route("/webhooks/resend", methods=["POST"])
+def resend_webhook():
+    """Bounces and spam complaints, straight onto the do-not-email list.
+
+    Answers 200 to anything correctly signed, including events it does not
+    act on: a non-2xx tells Resend to retry, and retrying an event we simply
+    do not care about accomplishes nothing but noise.
+    """
+    if not RESEND_WEBHOOK_SECRET:
+        # Refusing beats accepting unsigned writes to the suppression list.
+        return jsonify({"ok": False, "reason": "webhook_not_configured"}), 503
+    raw = request.get_data() or b""
+    if not _svix_signature_ok(RESEND_WEBHOOK_SECRET,
+                              request.headers.get("svix-id"),
+                              request.headers.get("svix-timestamp"),
+                              raw, request.headers.get("svix-signature")):
+        # Counted, because from our side a mistyped secret and a webhook
+        # nobody has pointed at us yet look identical: both leave the event
+        # counters empty. One is a five-second fix and the other needs no
+        # action at all, and without this there is no way to tell which --
+        # until months later when the list turns out never to have cleaned
+        # itself. A signed request that fails is the loudest possible signal
+        # that the secret does not match; it should not be silent.
+        _record_email_event("rejected_bad_signature")
+        return jsonify({"ok": False, "reason": "bad_signature"}), 401
+
+    try:
+        event = json.loads(raw.decode("utf-8") or "{}")
+    except (ValueError, UnicodeDecodeError):
+        return jsonify({"ok": False, "reason": "unparseable"}), 400
+    kind = str(event.get("type") or "").strip().lower()
+    data = event.get("data") if isinstance(event.get("data"), dict) else {}
+
+    to = data.get("to")
+    addresses = [to] if isinstance(to, str) else list(to or [])
+    addresses = [str(a).strip().lower() for a in addresses if str(a or "").strip()]
+
+    _record_email_event(kind or "unknown")
+    suppressed = []
+    if kind == "email.complained" or (kind == "email.bounced"
+                                      and _is_permanent_bounce(data)):
+        for addr in addresses:
+            if _suppress(addr):
+                suppressed.append(addr)
+        if suppressed:
+            _record_email_event("suppressed")
+            print(f"[campaign] {kind}: suppressed {len(suppressed)} address(es)",
+                  flush=True)
+    return jsonify({"ok": True, "event": kind, "suppressed": len(suppressed)})
+
 
 # Saved-search email alerts (/run-saved-search-alerts, see below). Both are
 # OPTIONAL and the feature is inert (returns "not_configured") until both are
@@ -1520,6 +1794,8 @@ def account_delete():
     # remove someone should not write their address into a log line on the
     # way out.
     return jsonify({"ok": True})
+
+
 
 
 def _stripe_verify(payload, sig_header):
@@ -1999,6 +2275,8 @@ def run_cron_watchdog():
     return jsonify(_cron_watchdog()), 200
 
 
+
+
 # ── Saved-search alerts: Supabase admin access + new-bid emails ──
 # Uses the service-role key to read across ALL users' saved_searches (bypasses
 # the row-level-security policies the anon key is normally scoped by) and to
@@ -2277,6 +2555,8 @@ def _run_upcoming_alerts():
     return {"ok": True, "searches_checked": len(searches),
             "users_checked": len(users_checked),
             "emails_sent": emails_sent, "errors": errors}
+
+
 
 
 # ── Full data export (admin-only) ──
@@ -2731,6 +3011,8 @@ def _issue_for(db, email, device, plan):
     if device:
         db.setdefault("devices", {})[device] = key
     return key
+
+
 
 
 # ── Referrals: give-a-month-get-a-month ──
@@ -3338,131 +3620,8 @@ def campaign_suppression():
     return jsonify({"ok": True, "count": len(current), "suppressed": current})
 
 
-# ── Delivery feedback from Resend ───────────────────────────────────────────
-# Sending to an address that no longer exists is how a domain's reputation
-# dies: mailbox providers read repeated hard bounces and spam complaints as
-# evidence the sender does not maintain a list, and start filing everything
-# from that domain in junk -- including the trial keys and bid alerts real
-# customers are waiting on. The list has to clean itself.
-#
-# Two events matter and they are treated differently:
-#
-#   email.bounced     suppress only a PERMANENT bounce. A transient one is a
-#                     full mailbox or greylisting, and retiring a good address
-#                     over a temporary condition loses a real prospect.
-#   email.complained  suppress always, immediately. Somebody pressed "this is
-#                     spam"; there is no reading of that which permits another
-#                     message, and it is the single most damaging signal a
-#                     sender can accumulate.
-RESEND_WEBHOOK_SECRET = _env_secret("RESEND_WEBHOOK_SECRET", "")
-# Replay window for a signed webhook, in seconds. Svix's own default.
-WEBHOOK_TOLERANCE_SEC = int(os.environ.get("WEBHOOK_TOLERANCE_SEC", "300"))
-_EMAIL_EVENTS_KEY = "bidcaller:email_events"
 
 
-def _svix_signature_ok(secret, msg_id, timestamp, raw_body, header):
-    """Verify a Svix-signed webhook, which is what Resend sends.
-
-    Signed content is "{id}.{timestamp}.{body}", HMAC-SHA256 under the
-    base64 secret, and the header carries a space-separated list of
-    "v1,<sig>" so a secret can be rotated without dropping deliveries.
-
-    Verification is not optional here. This endpoint writes to the
-    suppression list, so an unauthenticated version would let anyone
-    permanently silence any address we mail -- including every prospect at
-    once, quietly, with no error anywhere.
-    """
-    if not secret or not msg_id or not timestamp or not header:
-        return False
-    try:
-        age = abs(time.time() - int(timestamp))
-    except (TypeError, ValueError):
-        return False
-    if age > WEBHOOK_TOLERANCE_SEC:
-        return False       # replay of an old, legitimately-signed delivery
-    key = secret.split("_", 1)[1] if secret.startswith("whsec_") else secret
-    try:
-        key_bytes = base64.b64decode(key)
-    except Exception:
-        return False
-    signed = f"{msg_id}.{timestamp}.".encode() + raw_body
-    expected = base64.b64encode(
-        hmac.new(key_bytes, signed, hashlib.sha256).digest()).decode()
-    for part in str(header).split():
-        _, _, supplied = part.partition(",")
-        if supplied and hmac.compare_digest(supplied, expected):
-            return True
-    return False
-
-
-def _record_email_event(kind):
-    counts = kv_backend.get(_EMAIL_EVENTS_KEY, None)
-    counts = counts if isinstance(counts, dict) else {}
-    counts[kind] = int(counts.get(kind, 0)) + 1
-    counts["last_at"] = datetime.datetime.now().isoformat(timespec="seconds")
-    kv_backend.set(_EMAIL_EVENTS_KEY, counts)
-
-
-def _is_permanent_bounce(data):
-    """Resend reports the class on the bounce object. Anything not clearly
-    permanent is left alone -- a full mailbox empties."""
-    bounce = data.get("bounce") if isinstance(data.get("bounce"), dict) else {}
-    blob = " ".join(str(bounce.get(k) or "") for k in
-                    ("type", "subType", "sub_type", "message")).lower()
-    if "transient" in blob or "temporary" in blob or "soft" in blob:
-        return False
-    return "permanent" in blob or "hard" in blob or "suppressed" in blob
-
-
-@app.route("/webhooks/resend", methods=["POST"])
-def resend_webhook():
-    """Bounces and spam complaints, straight onto the do-not-email list.
-
-    Answers 200 to anything correctly signed, including events it does not
-    act on: a non-2xx tells Resend to retry, and retrying an event we simply
-    do not care about accomplishes nothing but noise.
-    """
-    if not RESEND_WEBHOOK_SECRET:
-        # Refusing beats accepting unsigned writes to the suppression list.
-        return jsonify({"ok": False, "reason": "webhook_not_configured"}), 503
-    raw = request.get_data() or b""
-    if not _svix_signature_ok(RESEND_WEBHOOK_SECRET,
-                              request.headers.get("svix-id"),
-                              request.headers.get("svix-timestamp"),
-                              raw, request.headers.get("svix-signature")):
-        # Counted, because from our side a mistyped secret and a webhook
-        # nobody has pointed at us yet look identical: both leave the event
-        # counters empty. One is a five-second fix and the other needs no
-        # action at all, and without this there is no way to tell which --
-        # until months later when the list turns out never to have cleaned
-        # itself. A signed request that fails is the loudest possible signal
-        # that the secret does not match; it should not be silent.
-        _record_email_event("rejected_bad_signature")
-        return jsonify({"ok": False, "reason": "bad_signature"}), 401
-
-    try:
-        event = json.loads(raw.decode("utf-8") or "{}")
-    except (ValueError, UnicodeDecodeError):
-        return jsonify({"ok": False, "reason": "unparseable"}), 400
-    kind = str(event.get("type") or "").strip().lower()
-    data = event.get("data") if isinstance(event.get("data"), dict) else {}
-
-    to = data.get("to")
-    addresses = [to] if isinstance(to, str) else list(to or [])
-    addresses = [str(a).strip().lower() for a in addresses if str(a or "").strip()]
-
-    _record_email_event(kind or "unknown")
-    suppressed = []
-    if kind == "email.complained" or (kind == "email.bounced"
-                                      and _is_permanent_bounce(data)):
-        for addr in addresses:
-            if _suppress(addr):
-                suppressed.append(addr)
-        if suppressed:
-            _record_email_event("suppressed")
-            print(f"[campaign] {kind}: suppressed {len(suppressed)} address(es)",
-                  flush=True)
-    return jsonify({"ok": True, "event": kind, "suppressed": len(suppressed)})
 
 
 # ═══════════════════════════════════════════════════════════
@@ -3795,133 +3954,6 @@ def admin_list():
                     }})
 
 
-# ═══════════════════════════════════════════════════════════
-# LICENSE / TRIAL GATE
-# ═══════════════════════════════════════════════════════════
-# Accounts that never trial-expire and never need a subscription -- for
-# testing the live product with a real signed-in account instead of resetting
-# a device trial. A comma-separated env var, same pattern as MAILING_ADDRESS
-# and FROM_EMAIL: nobody's email address belongs in a public repo.
-ADMIN_EMAILS = os.environ.get("ADMIN_EMAILS", "")
-
-
-def _admin_email_set():
-    return {e.strip().lower() for e in ADMIN_EMAILS.split(",") if e.strip()}
-
-
-def _is_admin_email(email):
-    return bool(email) and email.strip().lower() in _admin_email_set()
-
-
-# ── Business intelligence: the lifecycle log ────────────────────────────────
-#
-# What the system knew before this: that a licence key is dead. Not when, not
-# after how long, not what the person was paying. Cancellations appended a key
-# to a flat list -- db["revoked"] -- with no date and no reason, so "how long
-# does a customer last" and "did churn move after a price change" were
-# unanswerable, and unanswerable permanently: a date not written down at the
-# moment it happened cannot be recovered afterwards.
-#
-# That is the argument for instrumenting now rather than when there is enough
-# data to be interesting. The first ten customers are the ones whose behaviour
-# decides whether this business works, and they are also the ones most easily
-# lost.
-#
-# No addresses. Each entry carries a short salted hash of the trial identity,
-# which is enough to follow ONE person's trial -> paid -> churn arc and to
-# compute a lifetime, and useless for reading off who the customers are. An
-# aggregate is the only thing anybody needs here.
-LIFECYCLE_KEY = "lifecycle"
-LIFECYCLE_MAX = int(os.environ.get("LIFECYCLE_MAX", "20000"))
-
-
-def _bi_id(email):
-    """A stable, non-reversible handle for one customer."""
-    ident = _trial_identity(email or "")
-    if not ident:
-        return ""
-    salt = (SUPABASE_SERVICE_ROLE_KEY or ADMIN_TOKEN or "curbcall")[:32]
-    return hashlib.sha256((salt + "|bi|" + ident).encode("utf-8")).hexdigest()[:16]
-
-
-def _bi_note(db, event, email="", plan="", extra=None):
-    """Append one lifecycle event. Never raises -- BI must not break billing."""
-    try:
-        log = db.setdefault(LIFECYCLE_KEY, [])
-        row = {"at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-               "event": event, "id": _bi_id(email)}
-        if plan:
-            row["plan"] = plan
-        if extra:
-            row.update(extra)
-        log.append(row)
-        if len(log) > LIFECYCLE_MAX:
-            del log[:len(log) - LIFECYCLE_MAX]
-    except Exception:
-        pass
-
-
-def _trial_identity(email):
-    """Normalize an email for TRIAL-ELIGIBILITY purposes only -- never for
-    license-key lookups, which must stay exact. Strips a +tag from the local
-    part: josh+1@gmail.com and josh+2@gmail.com deliver to the same inbox on
-    Gmail, Outlook, Fastmail and most other providers, so without this, a free
-    7-day trial (no card required, and every scan spends real OpenAI/search
-    budget) could be farmed indefinitely from one real inbox."""
-    email = (email or "").strip().lower()
-    local, sep, domain = email.partition("@")
-    if not sep:
-        return email
-    return f"{local.split('+', 1)[0]}@{domain}"
-
-
-def _license_is_active(key, device, supabase_token=None):
-    """Return True if this request has a valid license, active trial,
-    OR a signed-in Supabase account (email-based trial counts too)."""
-    key = (key or "").strip().upper()
-    db = _db()
-
-    # 1. Valid license key
-    if key and key not in db.get("revoked", []):
-        valid, _, _, _ = verify_key(key)
-        if valid:
-            return True
-
-    # 2. Supabase account — check if their email has a key, or give them a trial
-    if supabase_token:
-        email = _verify_supabase_token(supabase_token)
-        if email:
-            if _is_admin_email(email):
-                return True
-            # email has an active issued key?
-            ekey = db.get("emails", {}).get(email)
-            if ekey and ekey not in db.get("revoked", []):
-                ev, _, _, _ = verify_key(ekey)
-                if ev:
-                    return True
-            # email-based trial -- normalized, so josh+1@ and josh+2@ can't
-            # each claim their own free trial off one real inbox
-            trials = db.setdefault("trials", {})
-            trial_key = f"email:{_trial_identity(email)}"
-            if trial_key in trials:
-                started = datetime.datetime.fromisoformat(trials[trial_key]["started"])
-                if datetime.datetime.now() <= started + datetime.timedelta(days=TRIAL_DAYS):
-                    return True
-            else:
-                # First time this account scans — start their trial
-                trials[trial_key] = {"started": datetime.datetime.now().isoformat(),
-                                     "email": email}
-                _save_db(db)
-                return True
-
-    # 3. Anonymous device-based trial (legacy / no account)
-    trials = db.get("trials", {})
-    if device in trials:
-        started = datetime.datetime.fromisoformat(trials[device]["started"])
-        if datetime.datetime.now() <= started + datetime.timedelta(days=TRIAL_DAYS):
-            return True
-
-    return False
 
 
 # ═══════════════════════════════════════════════════════════
@@ -6705,7 +6737,13 @@ def _place_bid(grouped, bid, center, radius, db, default_city="", city_coords=No
 # non-negotiable.
 # ═══════════════════════════════════════════════════════════
 
-STATE_SOURCES_CSV = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+# NOTE: this file now lives one directory deeper than the original
+# license_server.py did (repo_root/license_server.py -> repo_root/
+# license_server/<this file>.py), and its __file__ reflects that. The
+# extra os.path.dirname(...) below is only to keep this path resolving
+# to the exact same repo_root-relative location as before the split --
+# not a behavior change.
+STATE_SOURCES_CSV = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                  "data", "state_bid_sources.csv")
 STATE_SOURCE_MIN_USABLE = int(os.environ.get("STATE_SOURCE_MIN_USABLE", "2"))
 STATE_SOURCE_TIMEOUT = float(os.environ.get("STATE_SOURCE_TIMEOUT", "20"))
@@ -7572,6 +7610,8 @@ ENRICH_MAX = int(os.environ.get("SCAN_ENRICH_MAX", "14"))
 # scan loses is phone numbers, not listings, and the bid-producing stages
 # have to be well past the budget before they are touched at all.
 SCAN_BUDGET_SEC = float(os.environ.get("SCAN_BUDGET_SEC", "135"))
+
+
 
 
 # ── Live scan progress ──────────────────────────────────────────────────────
