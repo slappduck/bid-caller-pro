@@ -1,0 +1,20 @@
+version: 2
+updates:
+  # requirements.txt is now version-pinned (see the commit that added
+  # docs/environment_variables.md and this file). Pinning buys reproducible
+  # deploys, but it also means nothing updates on its own anymore -- a known
+  # vulnerability in a pinned version just sits there unless something says
+  # so. This is that something.
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  # Keeps actions/checkout, actions/setup-python, etc. current in every
+  # workflow under .github/workflows/.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
