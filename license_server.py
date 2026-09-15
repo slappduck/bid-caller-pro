@@ -804,9 +804,22 @@ def _license_is_active(key, device, supabase_token=None):
             trials = db.setdefault("trials", {})
             trial_key = f"email:{_trial_identity(email)}"
             if trial_key in trials:
-                started = datetime.datetime.fromisoformat(trials[trial_key]["started"])
-                if datetime.datetime.now() <= started + datetime.timedelta(days=TRIAL_DAYS):
-                    return True
+                try:
+                    started = datetime.datetime.fromisoformat(
+                        trials[trial_key]["started"])
+                except (KeyError, TypeError, ValueError) as ex:
+                    # A trial record that exists but can't be read is not the
+                    # same question as "is the trial still running" -- same
+                    # admin_list() already skips a record it can't parse
+                    # rather than crash. Every route that gates on this
+                    # function would otherwise 500 for this one customer on
+                    # every request until the record is fixed by hand.
+                    print(f"[license] unreadable trial record for {trial_key}: "
+                          f"{ex}", flush=True)
+                else:
+                    if datetime.datetime.now() <= started + datetime.timedelta(
+                            days=TRIAL_DAYS):
+                        return True
             else:
                 # First time this account scans — start their trial
                 trials[trial_key] = {"started": datetime.datetime.now().isoformat(),
@@ -817,9 +830,14 @@ def _license_is_active(key, device, supabase_token=None):
     # 3. Anonymous device-based trial (legacy / no account)
     trials = db.get("trials", {})
     if device in trials:
-        started = datetime.datetime.fromisoformat(trials[device]["started"])
-        if datetime.datetime.now() <= started + datetime.timedelta(days=TRIAL_DAYS):
-            return True
+        try:
+            started = datetime.datetime.fromisoformat(trials[device]["started"])
+        except (KeyError, TypeError, ValueError) as ex:
+            print(f"[license] unreadable trial record for device {device!r}: "
+                  f"{ex}", flush=True)
+        else:
+            if datetime.datetime.now() <= started + datetime.timedelta(days=TRIAL_DAYS):
+                return True
 
     return False
 
@@ -1386,7 +1404,12 @@ def resend_webhook():
     data = event.get("data") if isinstance(event.get("data"), dict) else {}
 
     to = data.get("to")
-    addresses = [to] if isinstance(to, str) else list(to or [])
+    # isinstance-gated rather than list(to or []) directly: Resend's own API
+    # always sends a string or a list of strings, but a non-iterable value
+    # here (an int, a bool) would make list(to) raise instead of degrading
+    # to "no addresses in this event" -- and this endpoint's whole point is
+    # to never 500 on webhook data it doesn't recognise.
+    addresses = [to] if isinstance(to, str) else (to if isinstance(to, list) else [])
     addresses = [str(a).strip().lower() for a in addresses if str(a or "").strip()]
 
     _record_email_event(kind or "unknown")
@@ -5579,10 +5602,10 @@ def extract():
     data = request.get_json(force=True, silent=True) or {}
     if not _license_is_active(data.get("key", ""), data.get("device_id", "")):
         return jsonify({"ok": False, "reason": "not_licensed"}), 403
-    text = data.get("text", "")
+    text = data.get("text") or ""
     if not text.strip():
         return jsonify({"ok": True, "bids": []})
-    bids = _ai_extract(data.get("city", "Unknown"), text)
+    bids = _ai_extract(data.get("city") or "Unknown", text)
     if bids is None:
         return jsonify({"ok": False, "reason": "ai_error"}), 500
     return jsonify({"ok": True, "bids": bids})

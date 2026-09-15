@@ -165,6 +165,35 @@ class NullJsonValueTests(unittest.TestCase):
         self.assertTrue(valid)
 
 
+class ExtractNullJsonValueTests(unittest.TestCase):
+    """Same bug class as NullJsonValueTests above, found in search_sources.py's
+    /extract: {"text": null} is a JSON body with "text" PRESENT, valued None.
+    data.get("text", "") only applies its default when the field is absent, so
+    the null value reached text.strip() and crashed with a 500 instead of the
+    empty-bids response an absent/empty text already got."""
+
+    def setUp(self):
+        self.client = ls.app.test_client()
+        self._license_patch = patch.object(ls, "_license_is_active", return_value=True)
+        self._license_patch.start()
+        self.addCleanup(self._license_patch.stop)
+
+    def test_a_null_text_returns_no_bids_instead_of_a_server_error(self):
+        r = self.client.post("/extract", json={"key": "X", "device_id": "Y",
+                                                "text": None})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.get_json(), {"ok": True, "bids": []})
+
+    def test_a_null_city_falls_back_to_unknown_not_none(self):
+        with patch.object(ls, "_ai_extract", return_value=[]) as mock_extract:
+            r = self.client.post(
+                "/extract",
+                json={"key": "X", "device_id": "Y", "text": "some bid text",
+                      "city": None})
+        self.assertEqual(r.status_code, 200)
+        mock_extract.assert_called_once_with("Unknown", "some bid text")
+
+
 class ClaimTests(unittest.TestCase):
     """Restoring a purchase must prove who you are, not just name an email."""
 

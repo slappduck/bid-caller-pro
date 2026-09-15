@@ -1614,10 +1614,10 @@ def extract():
     data = request.get_json(force=True, silent=True) or {}
     if not _license_is_active(data.get("key", ""), data.get("device_id", "")):
         return jsonify({"ok": False, "reason": "not_licensed"}), 403
-    text = data.get("text", "")
+    text = data.get("text") or ""
     if not text.strip():
         return jsonify({"ok": True, "bids": []})
-    bids = _ai_extract(data.get("city", "Unknown"), text)
+    bids = _ai_extract(data.get("city") or "Unknown", text)
     if bids is None:
         return jsonify({"ok": False, "reason": "ai_error"}), 500
     return jsonify({"ok": True, "bids": bids})
