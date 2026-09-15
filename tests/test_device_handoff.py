@@ -31,7 +31,7 @@ import sys
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-APP = os.path.join(HERE, os.pardir, "curbcall_netlify_v4", "app.html")
+APP = os.path.join(HERE, os.pardir, "curbcall_netlify_v4", "app.js")
 
 
 def _extract(src, start_marker, end_marker):

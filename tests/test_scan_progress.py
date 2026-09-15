@@ -90,11 +90,9 @@ class ProgressChannelTests(unittest.TestCase):
 class AppSideTests(unittest.TestCase):
     def setUp(self):
         with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                               os.pardir, "curbcall_netlify_v4", "app.html"),
+                               os.pardir, "curbcall_netlify_v4", "app.js"),
                   encoding="utf-8") as f:
-            html = f.read()
-        body = "\n".join(re.findall(
-            r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", html, re.S))
+            body = f.read()
         self.js = re.sub(r"^\s*//.*$", "", body, flags=re.M)
 
     def test_the_scan_sends_a_progress_token(self):

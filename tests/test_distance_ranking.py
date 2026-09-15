@@ -82,9 +82,12 @@ class ClientTests(unittest.TestCase):
     """Structural: the card and the sort live in app.html."""
 
     def setUp(self):
-        with open(os.path.join(HERE, "curbcall_netlify_v4", "app.html"),
-                  encoding="utf-8") as fh:
-            self.app = fh.read()
+        web = os.path.join(HERE, "curbcall_netlify_v4")
+        parts = []
+        for name in ("app.html", "styles.css", "app.js"):
+            with open(os.path.join(web, name), encoding="utf-8") as fh:
+                parts.append(fh.read())
+        self.app = "\n".join(parts)
 
     def test_the_card_shows_the_distance(self):
         card = self.app[self.app.index("function bidCard("):]

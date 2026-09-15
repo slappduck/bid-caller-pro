@@ -9,13 +9,28 @@ import re
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-APP = os.path.join(ROOT, "curbcall_netlify_v4", "app.html")
-SW = os.path.join(ROOT, "curbcall_netlify_v4", "sw.js")
+WEB_DIR = os.path.join(ROOT, "curbcall_netlify_v4")
+APP = os.path.join(WEB_DIR, "app.html")
+APP_CSS = os.path.join(WEB_DIR, "styles.css")
+APP_JS = os.path.join(WEB_DIR, "app.js")
+SW = os.path.join(WEB_DIR, "sw.js")
 
 
 def _read(path):
     with open(path, encoding="utf-8") as fh:
         return fh.read()
+
+
+def _read_app_all():
+    """app.html's markup, styles.css and app.js concatenated, in that order.
+
+    app.html used to hold all three inline; it was split out for
+    maintainability (styles.css, app.js) with zero behaviour change. Tests
+    whose lookups span more than one of the three -- a markup id near a CSS
+    rule, a JS function that also touches an HTML attribute -- read the
+    reassembled whole rather than being rewritten around the split.
+    """
+    return _read(APP) + "\n" + _read(APP_CSS) + "\n" + _read(APP_JS)
 
 
 class MapSizingTests(unittest.TestCase):
@@ -25,7 +40,7 @@ class MapSizingTests(unittest.TestCase):
     a guess about when layout finishes; the observer is the actual event."""
 
     def setUp(self):
-        self.app = _read(APP)
+        self.app = _read(APP_JS)
 
     def test_map_settle_observes_the_container(self):
         body = self.app[self.app.index("function mapSettle("):]
@@ -53,7 +68,7 @@ class CompanyProfileSyncTests(unittest.TestCase):
     again."""
 
     def setUp(self):
-        self.app = _read(APP)
+        self.app = _read(APP_JS)
 
     def test_push_and_pull_share_one_field_list(self):
         self.assertIn("const COMPANY_FIELDS=", self.app)
@@ -96,7 +111,7 @@ class DiagnosticsGatingTests(unittest.TestCase):
     history -- and its buttons must not exist for them either."""
 
     def setUp(self):
-        self.app = _read(APP)
+        self.app = _read(APP_JS)
 
     def test_the_card_only_renders_for_an_admin(self):
         self.assertIn("${isAdmin?renderDiagnostics():\"\"}", self.app)
@@ -156,10 +171,7 @@ class FindRadiusDefaultTests(unittest.TestCase):
     """
 
     def setUp(self):
-        here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        with open(os.path.join(here, "curbcall_netlify_v4", "app.html"),
-                  encoding="utf-8") as fh:
-            self.app = fh.read()
+        self.app = _read_app_all()
 
     def test_the_find_row_defaults_to_the_widest_radius(self):
         row = re.search(r'id="radius-row">(.*?)</div>\s*</div>', self.app, re.S)
@@ -193,10 +205,7 @@ class HiddenLeadsTabTests(unittest.TestCase):
     """
 
     def setUp(self):
-        here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        with open(os.path.join(here, "curbcall_netlify_v4", "app.html"),
-                  encoding="utf-8") as fh:
-            self.app = fh.read()
+        self.app = _read_app_all()
 
     def test_the_flag_exists_and_is_off(self):
         self.assertRegex(self.app, r"const LEADS_ENABLED\s*=\s*false")
@@ -238,10 +247,7 @@ class AuthScreenIsReachableTests(unittest.TestCase):
     """
 
     def setUp(self):
-        here = os.path.dirname(os.path.abspath(__file__))
-        with open(os.path.join(here, os.pardir, "curbcall_netlify_v4",
-                               "app.html"), encoding="utf-8") as f:
-            self.src = f.read()
+        self.src = _read(APP_CSS)
 
     def _rule(self, selector):
         """The declarations of one rule, comments removed.
@@ -288,10 +294,7 @@ class PasswordRulesAgreeTests(unittest.TestCase):
     """
 
     def setUp(self):
-        here = os.path.dirname(os.path.abspath(__file__))
-        with open(os.path.join(here, os.pardir, "curbcall_netlify_v4",
-                               "app.html"), encoding="utf-8") as f:
-            self.src = re.sub(r"//.*$", "", f.read(), flags=re.M)
+        self.src = re.sub(r"//.*$", "", _read(APP_JS), flags=re.M)
 
     def test_every_password_check_uses_the_same_minimum(self):
         found = set(re.findall(r"password[^;]{0,12}\.length<(\d+)", self.src))
@@ -308,10 +311,7 @@ class PasswordRulesAgreeTests(unittest.TestCase):
 
 class SignupNameIsTwoFieldsTests(unittest.TestCase):
     def setUp(self):
-        here = os.path.dirname(os.path.abspath(__file__))
-        with open(os.path.join(here, os.pardir, "curbcall_netlify_v4",
-                               "app.html"), encoding="utf-8") as f:
-            self.src = f.read()
+        self.src = _read_app_all()
 
     def test_first_and_last_name_are_separate_inputs(self):
         self.assertIn('id="auth-first"', self.src)
@@ -343,9 +343,7 @@ class OnboardingFollowsTheAccountTests(unittest.TestCase):
 
     def setUp(self):
         here = os.path.dirname(os.path.abspath(__file__))
-        with open(os.path.join(here, os.pardir, "curbcall_netlify_v4",
-                               "app.html"), encoding="utf-8") as f:
-            self.src = re.sub(r"//.*$", "", f.read(), flags=re.M)
+        self.src = re.sub(r"//.*$", "", _read(APP_JS), flags=re.M)
         with open(os.path.join(here, os.pardir,
                                "supabase_sync_schema.sql"), encoding="utf-8") as f:
             self.sql = f.read()
@@ -380,10 +378,7 @@ class TapTargetsTests(unittest.TestCase):
     """
 
     def setUp(self):
-        here = os.path.dirname(os.path.abspath(__file__))
-        with open(os.path.join(here, os.pardir, "curbcall_netlify_v4",
-                               "app.html"), encoding="utf-8") as f:
-            self.src = f.read()
+        self.src = _read_app_all()
 
     def _near(self, needle, span=320):
         i = self.src.index(needle)
@@ -408,10 +403,7 @@ class AvatarPlaceholderTests(unittest.TestCase):
     """It centred nothing, so an account with no photo showed a bare ring."""
 
     def setUp(self):
-        here = os.path.dirname(os.path.abspath(__file__))
-        with open(os.path.join(here, os.pardir, "curbcall_netlify_v4",
-                               "app.html"), encoding="utf-8") as f:
-            self.src = f.read()
+        self.src = _read(APP_JS)
 
     def test_the_placeholder_gets_an_initial(self):
         self.assertIn("function avatarInitial()", self.src)
@@ -432,10 +424,7 @@ class ScanResultAgreesWithTheListTests(unittest.TestCase):
     """
 
     def setUp(self):
-        here = os.path.dirname(os.path.abspath(__file__))
-        with open(os.path.join(here, os.pardir, "curbcall_netlify_v4",
-                               "app.html"), encoding="utf-8") as f:
-            self.src = re.sub(r"//.*$", "", f.read(), flags=re.M)
+        self.src = re.sub(r"//.*$", "", _read(APP_JS), flags=re.M)
 
     def test_anything_added_counts_as_a_result(self):
         self.assertIn("if(total>0||added>0){", self.src)
@@ -444,10 +433,7 @@ class ScanResultAgreesWithTheListTests(unittest.TestCase):
 
 class DestructiveActionIsNotFirstTests(unittest.TestCase):
     def setUp(self):
-        here = os.path.dirname(os.path.abspath(__file__))
-        with open(os.path.join(here, os.pardir, "curbcall_netlify_v4",
-                               "app.html"), encoding="utf-8") as f:
-            self.src = f.read()
+        self.src = _read_app_all()
 
     def test_export_comes_before_clear_all_bids(self):
         self.assertLess(self.src.index('id="export-feed-btn"'),
@@ -469,10 +455,7 @@ class ConnectionErrorsAreHonestTests(unittest.TestCase):
     """
 
     def setUp(self):
-        here = os.path.dirname(os.path.abspath(__file__))
-        with open(os.path.join(here, os.pardir, "curbcall_netlify_v4",
-                               "app.html"), encoding="utf-8") as f:
-            self.src = f.read()
+        self.src = _read(APP_JS)
 
     def test_no_message_blames_the_users_connection_outright(self):
         code = re.sub(r"//.*$", "", self.src, flags=re.M)
@@ -498,10 +481,7 @@ class BillingIsWhereYouAreSentTests(unittest.TestCase):
     """
 
     def setUp(self):
-        here = os.path.dirname(os.path.abspath(__file__))
-        with open(os.path.join(here, os.pardir, "curbcall_netlify_v4",
-                               "app.html"), encoding="utf-8") as f:
-            src = f.read()
+        src = _read(APP_JS)
         i = src.index("function renderAccount(){")
         # To the next top-level function, not a fixed number of characters.
         # This was src[i:i + 14000], and renderAccount() is 24k: "Delete
@@ -553,10 +533,7 @@ class FormsAreLabelledTests(unittest.TestCase):
     """
 
     def setUp(self):
-        here = os.path.dirname(os.path.abspath(__file__))
-        with open(os.path.join(here, os.pardir, "curbcall_netlify_v4",
-                               "app.html"), encoding="utf-8") as f:
-            self.src = f.read()
+        self.src = _read(APP)
 
     def test_the_email_field_can_be_autofilled(self):
         i = self.src.index('id="auth-email"')
@@ -578,10 +555,7 @@ class ResultMessagesMatchTheScreenTests(unittest.TestCase):
     """
 
     def setUp(self):
-        here = os.path.dirname(os.path.abspath(__file__))
-        with open(os.path.join(here, os.pardir, "curbcall_netlify_v4",
-                               "app.html"), encoding="utf-8") as f:
-            self.src = re.sub(r"//.*$", "", f.read(), flags=re.M)
+        self.src = re.sub(r"//.*$", "", _read(APP_JS), flags=re.M)
 
     def test_the_scan_counts_what_it_added(self):
         self.assertIn("if(total>0||added>0){", self.src)
@@ -600,10 +574,7 @@ class NavigationClosesAnyOpenSheetTests(unittest.TestCase):
     request calls goTo("account")."""
 
     def setUp(self):
-        here = os.path.dirname(os.path.abspath(__file__))
-        with open(os.path.join(here, os.pardir, "curbcall_netlify_v4",
-                               "app.html"), encoding="utf-8") as f:
-            self.src = f.read()
+        self.src = _read(APP_JS)
 
     def test_switch_screen_closes_the_modal(self):
         i = self.src.index("function switchScreen(s){")

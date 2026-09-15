@@ -30,8 +30,21 @@ WEB = os.path.join(ROOT, "curbcall_netlify_v4")
 
 
 def read(*parts):
-    with open(os.path.join(*parts), encoding="utf-8") as f:
-        return f.read()
+    path = os.path.join(*parts)
+    with open(path, encoding="utf-8") as f:
+        content = f.read()
+    # app.html's CSS and JS now live in their own files (styles.css, app.js),
+    # split out for maintainability -- some of the markup these tests look
+    # for (e.g. the Subscribe buttons, the delete-account disclosure) is
+    # actually built by app.js's template strings, not the static HTML. Treat
+    # "app.html" as the whole page: its markup plus its styles and script.
+    if os.path.basename(path) == "app.html":
+        for sibling in ("styles.css", "app.js"):
+            sib_path = os.path.join(os.path.dirname(path), sibling)
+            if os.path.exists(sib_path):
+                with open(sib_path, encoding="utf-8") as f:
+                    content += "\n" + f.read()
+    return content
 
 
 class ProcessorsAreDisclosedTests(unittest.TestCase):

@@ -39,7 +39,17 @@ def pages():
 
 def read(path):
     with open(path, encoding="utf-8") as f:
-        return f.read()
+        content = f.read()
+    # app.html's CSS now lives in its own file (styles.css), split out for
+    # maintainability. Every check here treats "the page's markup+CSS" as one
+    # string, so append it -- harmless for the HTML-only checks (viewport
+    # meta, <select> tags) since CSS text matches neither pattern.
+    if os.path.basename(path) == "app.html":
+        css_path = os.path.join(os.path.dirname(path), "styles.css")
+        if os.path.exists(css_path):
+            with open(css_path, encoding="utf-8") as f:
+                content += "\n" + f.read()
+    return content
 
 
 def _luminance(hex_colour):

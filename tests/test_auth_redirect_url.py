@@ -28,16 +28,14 @@ import tempfile
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-APP = os.path.join(HERE, os.pardir, "curbcall_netlify_v4", "app.html")
+APP_JS = os.path.join(HERE, os.pardir, "curbcall_netlify_v4", "app.js")
 
 
 def source():
-    with open(APP, encoding="utf-8") as f:
-        html = f.read()
+    with open(APP_JS, encoding="utf-8") as f:
+        body = f.read()
     # Comments explain this exact bug and name the thing being banned, so a
     # naive scan matches the prose instead of the code. Strip them first.
-    body = "\n".join(re.findall(r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>",
-                                html, re.S))
     return re.sub(r"^\s*//.*$", "", body, flags=re.M)
 
 

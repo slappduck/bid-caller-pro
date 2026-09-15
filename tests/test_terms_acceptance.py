@@ -159,13 +159,13 @@ class RecordedRowTests(unittest.TestCase):
     def test_every_method_the_app_can_send_is_accepted(self):
         import re
         with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                               os.pardir, "curbcall_netlify_v4", "app.html"),
+                               os.pardir, "curbcall_netlify_v4", "app.js"),
                   encoding="utf-8") as f:
-            html = f.read()
-        used = set(re.findall(r'captureTermsAcceptance\("([a-z_]+)"\)', html))
-        self.assertTrue(used, "app.html no longer records any signup route")
+            js = f.read()
+        used = set(re.findall(r'captureTermsAcceptance\("([a-z_]+)"\)', js))
+        self.assertTrue(used, "app.js no longer records any signup route")
         self.assertEqual(used - ls._ACCEPT_METHODS, set(),
-                         "app.html sends a method the server silently drops")
+                         "app.js sends a method the server silently drops")
 
     def test_a_user_with_no_id_is_not_written(self):
         ok, _ = self._row_for({"email": "a@b.com"}, "signup_form")
@@ -256,12 +256,12 @@ class BrowserFlushGuardTests(unittest.TestCase):
         if not node:
             raise unittest.SkipTest("node not available")
         with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                               os.pardir, "curbcall_netlify_v4", "app.html"),
+                               os.pardir, "curbcall_netlify_v4", "app.js"),
                   encoding="utf-8") as f:
-            html = f.read()
-        i = html.index("let termsFlushInFlight=false;")
-        j = html.index("\n}", html.index("finally{termsFlushInFlight=false;}")) + 2
-        fn = html[i:j]
+            js = f.read()
+        i = js.index("let termsFlushInFlight=false;")
+        j = js.index("\n}", js.index("finally{termsFlushInFlight=false;}")) + 2
+        fn = js[i:j]
         harness = """
 const TERMS_METHOD_KEY="pending_terms_method";
 const SERVER="https://server.test";
@@ -554,11 +554,9 @@ class ReacceptancePromptTests(unittest.TestCase):
 
     def setUp(self):
         with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                               os.pardir, "curbcall_netlify_v4", "app.html"),
+                               os.pardir, "curbcall_netlify_v4", "app.js"),
                   encoding="utf-8") as f:
-            html = f.read()
-        body = "\n".join(re.findall(
-            r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", html, re.S))
+            body = f.read()
         self.js = re.sub(r"^\s*//.*$", "", body, flags=re.M)
 
     def test_it_is_checked_when_a_session_appears(self):

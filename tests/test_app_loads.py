@@ -29,7 +29,7 @@ import tempfile
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-APP = os.path.join(HERE, os.pardir, "curbcall_netlify_v4", "app.html")
+APP_JS = os.path.join(HERE, os.pardir, "curbcall_netlify_v4", "app.js")
 
 SHIM = r"""
 const noop = function () {};
@@ -81,11 +81,8 @@ class AppTopLevelRunsTests(unittest.TestCase):
         cls.node = shutil.which("node")
         if not cls.node:
             raise unittest.SkipTest("node not available")
-        with open(APP, encoding="utf-8") as f:
-            html = f.read()
-        blocks = re.findall(r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>",
-                            html, re.S)
-        cls.script = "\n".join(blocks)
+        with open(APP_JS, encoding="utf-8") as f:
+            cls.script = f.read()
 
     def _load(self, script):
         """Run `script` under the shim. Returns "OK" or "THREW:<Name>: <msg>".
