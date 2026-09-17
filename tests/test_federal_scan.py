@@ -18,10 +18,21 @@ import license_server as ls
 
 class EndpointTests(unittest.TestCase):
     def test_the_default_endpoint_is_the_live_one(self):
-        """api.sam.gov/prod/... answers 404 on every path, so the old default
-        could not have worked with any key. api.data.gov/sam/... is live."""
-        self.assertIn("api.data.gov", ls.SAM_SEARCH_URL)
-        self.assertNotIn("api.sam.gov/prod", ls.SAM_SEARCH_URL)
+        """This flipped back. api.data.gov/sam/... was the confirmed-live
+        endpoint when this test was first written -- and then SAM.gov moved
+        the Get Opportunities API off the api.data.gov proxy entirely.
+        Production ran for a stretch with a real, valid api.data.gov key
+        getting a clean 403 API_KEY_INVALID from api.sam.gov, which only
+        makes sense if the credential type changed, not just the host.
+
+        tools/diagnose_sam_endpoint.py confirmed live with a real key:
+        api.sam.gov/opportunities/v2/search (and the /prod/ variant, which
+        answers identically) return real data with a SAM.gov Account
+        Details key; api.data.gov/sam/... rejects that same key outright.
+        DEMO_KEY cannot verify any of this -- it 404s every host tried,
+        proving nothing about which one is actually live."""
+        self.assertIn("api.sam.gov", ls.SAM_SEARCH_URL)
+        self.assertNotIn("api.data.gov", ls.SAM_SEARCH_URL)
 
 
 class RelevanceTests(unittest.TestCase):
@@ -432,9 +443,11 @@ class RejectedKeyIsReportedTests(unittest.TestCase):
 
     def test_the_message_names_the_actual_fix(self):
         block = self._branch(403)
+        self.assertIn("Account Details", block)
+        # The commonest cause now -- flipped from what it used to be once
+        # SAM.gov moved this API off the api.data.gov proxy. See
+        # EndpointTests.test_the_default_endpoint_is_the_live_one.
         self.assertIn("api.data.gov/signup", block)
-        # The commonest cause, and the one that cost the time here.
-        self.assertIn("sam.gov's own profile page", block)
 
     def test_it_says_this_is_not_an_outage(self):
         """The public fallback keeps federal bids flowing, so a rejected key

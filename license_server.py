@@ -1061,9 +1061,13 @@ def health_detail():
     # A configured-but-rejected key is worse than no key: /health says
     # sam_gov is True, everything returns 200, and federal bids quietly come
     # only from the fallback. Name it, and name the fix -- 403 from
-    # api.data.gov is literally API_KEY_INVALID, and the commonest cause is
-    # using a key issued by sam.gov's own profile page, which is a different
-    # credential from an api.data.gov one.
+    # api.sam.gov is literally API_KEY_INVALID, and the commonest cause is
+    # now the reverse of what it used to be: an api.data.gov/signup key,
+    # which stopped working here once SAM.gov moved the Get Opportunities
+    # API off the api.data.gov proxy. The credential that works is requested
+    # from sam.gov itself (Account Details -> Public API Key). Confirmed by
+    # tools/diagnose_sam_endpoint.py against both key types before this
+    # flipped -- do not flip it back without re-running that script.
     if _keyed_breaker_open() and not _federal_breaker_open():
         notes.append(
             "SAM's documented API is being skipped after %d failed scans "
@@ -1083,10 +1087,11 @@ def health_detail():
         problems.append(
             "SAM_API_KEY is being rejected (403 API_KEY_INVALID). Federal "
             "bids are still arriving via sam.gov's public search, so this is "
-            "not an outage, but the documented API is unavailable. Get a free "
-            "key at https://api.data.gov/signup and set SAM_API_KEY to it — "
-            "a key from sam.gov's own profile page is a different credential "
-            "and will not work here.")
+            "not an outage, but the documented API is unavailable. Sign in "
+            "to sam.gov, open Account Details, and request a Public API Key "
+            "there, then set SAM_API_KEY to it — a key from "
+            "https://api.data.gov/signup is a different credential and will "
+            "not work here.")
     elif backends["sam_gov"] and sam["last_status"] == 429:
         notes.append("SAM_API_KEY is rate-limited (429). Federal bids fall "
                      "back to sam.gov's public search meanwhile.")
@@ -5281,7 +5286,7 @@ SAM_API_KEY = os.environ.get("SAM_API_KEY", "")
 # it answers 429 OVER_RATE_LIMIT to the shared DEMO_KEY, which is a rate
 # limit on a real endpoint rather than a wrong address.
 SAM_SEARCH_URL = os.environ.get(
-    "SAM_SEARCH_URL", "https://api.data.gov/sam/opportunities/v2/search")
+    "SAM_SEARCH_URL", "https://api.sam.gov/opportunities/v2/search")
 SCAN_WINDOW_DAYS = int(os.environ.get("SCAN_WINDOW_DAYS", "60"))
 
 # Title keywords, kept as the fallback for a notice with no NAICS code on it.
