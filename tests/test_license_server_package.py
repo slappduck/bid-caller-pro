@@ -95,5 +95,47 @@ class AssemblyProducesTheExpectedNamespaceTests(unittest.TestCase):
             "whichever loads last silently wins")
 
 
+class TheRootFileIsGeneratedNotEditedTests(unittest.TestCase):
+    """The repo-root license_server.py is a build artifact, not source.
+
+    __init__.py rewrites it on every import as the concatenation of the
+    package files, so an edit made to it directly is destroyed the next time
+    anything imports license_server -- silently, with no error, and with the
+    working tree looking clean immediately afterwards because the rewrite
+    lands before anyone looks. It is 8,635 lines and reads exactly like the
+    source it used to be, so editing it is the obvious mistake to make; it
+    was very nearly made during the SAM.gov endpoint fix, where every change
+    happened to be applied to both copies by hand and so survived by luck.
+
+    Checked against git rather than the working tree, for the same reason
+    test_service_worker_freshness.py checks its cache version that way: by
+    the time a test runs it has already imported the package, so the file on
+    disk has already been repaired. Only what was COMMITTED can still be
+    wrong.
+    """
+
+    def test_the_committed_root_file_matches_the_package(self):
+        import subprocess
+        try:
+            committed = subprocess.run(
+                ["git", "show", "HEAD:license_server.py"], cwd=_ROOT,
+                capture_output=True, text=True, encoding="utf-8",
+                timeout=30)
+        except Exception as ex:                       # no git, shallow CI
+            self.skipTest(f"git unavailable: {ex}")
+        if committed.returncode != 0:
+            self.skipTest("license_server.py not in HEAD")
+
+        expected = "\n\n".join(
+            open(os.path.join(PKG_DIR, f), encoding="utf-8").read()
+            for f in _FILES)
+        self.assertEqual(
+            committed.stdout, expected,
+            "the committed license_server.py is not the concatenation of the "
+            "license_server/ files. It is GENERATED -- edit the package file "
+            "that owns the code, never the root file, then re-import to "
+            "regenerate it. A root-only edit is discarded on the next import.")
+
+
 if __name__ == "__main__":
     unittest.main()

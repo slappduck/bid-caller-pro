@@ -132,10 +132,16 @@ def backup(dest, today=None, get=_get):
         with open(out, "w", encoding="utf-8") as f:
             json.dump(rows, f, indent=2, default=str)
         with open(out, encoding="utf-8") as f:
-            if len(json.load(f)) != len(rows):
-                os.unlink(out)
-                failed.append((name, "written copy did not verify"))
-                continue
+            verified = len(json.load(f)) == len(rows)
+        # Unlink AFTER the handle closes. Deleting inside the `with` is legal
+        # on POSIX and raises WinError 32 on Windows, which turned "drop the
+        # copy that did not verify" into "crash the run and leave it behind"
+        # -- the exact opposite of the promise above, on the platform the
+        # scheduled backup actually runs from.
+        if not verified:
+            os.unlink(out)
+            failed.append((name, "written copy did not verify"))
+            continue
         saved.append((out, len(rows)))
     return saved, failed
 

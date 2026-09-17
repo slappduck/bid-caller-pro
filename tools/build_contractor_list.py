@@ -172,10 +172,11 @@ def main():
     args = ap.parse_args()
 
     seeds = []
-    for line in open(args.seeds):
-        parts = line.strip().split("|")
-        if len(parts) == 3 and parts[2].startswith("http"):
-            seeds.append(tuple(parts))
+    with open(args.seeds, encoding="utf-8") as fh:
+        for line in fh:
+            parts = line.strip().split("|")
+            if len(parts) == 3 and parts[2].startswith("http"):
+                seeds.append(tuple(parts))
     print(f"probing {len(seeds)} sites", flush=True)
 
     rows = []
@@ -185,7 +186,7 @@ def main():
 
     fields = ["company", "city", "state", "email", "phone", "website",
               "extra_emails", "status"]
-    with open(args.out, "w", newline="") as fh:
+    with open(args.out, "w", newline="", encoding="utf-8") as fh:
         w = csv.DictWriter(fh, fieldnames=fields)
         w.writeheader()
         w.writerows(rows)

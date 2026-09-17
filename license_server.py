@@ -6824,7 +6824,7 @@ def _state_sources():
         return _state_sources_cache["rows"]
     out = {}
     try:
-        with open(STATE_SOURCES_CSV, newline="") as f:
+        with open(STATE_SOURCES_CSV, newline="", encoding="utf-8") as f:
             for row in csv.DictReader(f):
                 try:
                     usable = int(row.get("usable") or 0)
