@@ -907,5 +907,46 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
   } catch (e) {}
 })();
 </script>
+
+<!-- Auto-fill the coverage check for /go/<slug> arrivals.
+     ================================================================
+     Every outreach email promises "check the count for your own area
+     before paying anything" as a one-click thing, but until now /go/
+     only tracked the click above -- the visitor still had to retype
+     their own city into the box below, even though the slug already
+     names it (redbird-ks-kc is Kansas City, KS). That gap between what
+     the email promises and what the page actually does is exactly the
+     kind of friction that loses a click that was already earned.
+
+     go_locations.json is a small, hand-maintained slug -> "City, ST"
+     map, added to alongside _redirects whenever a new outreach batch
+     goes out. A slug with no entry there just falls through to the
+     normal empty box -- this only ever adds a fill, never breaks one.
+
+     Radius is fixed at 125 to match the number every current outreach
+     email states; a mismatch between what the email says and what the
+     page shows would cost more trust than the auto-fill earns back. -->
+<script>
+(function () {
+  var m = location.pathname.match(/^\/go\/([a-z0-9][a-z0-9_-]{0,31})\/?$/i);
+  if (!m) return;
+  var slug = m[1].toLowerCase();
+  fetch("/go_locations.json").then(function (r) {
+    return r.ok ? r.json() : null;
+  }).then(function (map) {
+    var city = map && map[slug];
+    if (!city) return;
+    var zip = document.getElementById("cov-zip");
+    var radius = document.getElementById("cov-radius");
+    var btn = document.getElementById("cov-go");
+    var sec = document.getElementById("coverage");
+    if (!zip || !radius || !btn) return;
+    zip.value = city;
+    radius.value = "125";
+    btn.click();
+    if (sec) sec.scrollIntoView({ behavior: "smooth", block: "start" });
+  }).catch(function () {});
+})();
+</script>
 </body>
 </html>
