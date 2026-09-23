@@ -54,6 +54,7 @@ Columns:
 | `website` | optional. Only needed when the email is free-mail (gmail, yahoo) and the domain can't be derived from it. |
 | `status` | `ready` \| `hold` \| `sent` \| `unsubscribed` \| `bounced` \| `do-not-contact` |
 | `sent_date` | filled in by hand after sending |
+| `followup_date` | optional. Filled in by hand after sending the one follow-up (see `tools/outreach_followup_draft.py`). Blank means not yet followed up. |
 
 ## Every slug needs a redirect entry
 

@@ -84,8 +84,15 @@ const SB_STUB = `
 
 function startServer() {
   const server = http.createServer((req, res) => {
-    const rel = decodeURIComponent(req.url.split("?")[0]).replace(/^\/+/, "") || "index.html";
-    const file = path.join(ROOT, rel);
+    let rel = decodeURIComponent(req.url.split("?")[0]).replace(/^\/+/, "") || "index.html";
+    let file = path.join(ROOT, rel);
+    // Mirror _redirects' "/go/<slug> /index.html 200" rewrite: production
+    // never 404s a /go/ link, it serves the marketing page with the slug
+    // still in the address bar for the page's own JS to read.
+    if (/^go\/[a-z0-9][a-z0-9_-]{0,31}\/?$/i.test(rel)) {
+      rel = "index.html";
+      file = path.join(ROOT, rel);
+    }
     if (!file.startsWith(ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
       res.writeHead(404); return res.end("not found");
     }
@@ -899,6 +906,59 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
       check(`malformed payload does not throw: ${JSON.stringify(bad)}`,
         typeof (await label(bad)) === "string");
     }
+
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
+  // ── /go/<slug> auto-fills the coverage check ──
+  // Every outreach email promises "check the count for your own area before
+  // paying anything" as a one-click thing. Before this, /go/ only tracked
+  // the click -- the visitor still had to retype their own city into the
+  // box, even though the slug already names it. Found during a review of
+  // what actually happens after the email's link is clicked.
+  console.log("\nA /go/<slug> arrival auto-fills and runs the coverage check");
+  {
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      if (u.includes("/coverage")) {
+        return route.fulfill({
+          status: 200, contentType: "application/json",
+          body: JSON.stringify({ ok: true, agencies: 104, radius: 125,
+            location: "Kansas City, KS", nearest: [] }),
+        });
+      }
+      if (host.endsWith("fonts.googleapis.com") || host.endsWith("fonts.gstatic.com")
+          || host.endsWith("cloudflareinsights.com")) {
+        return route.abort();
+      }
+      return route.continue();
+    });
+
+    await page.goto(`${BASE}/go/redbird-ks-kc`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+
+    const zipValue = await page.locator("#cov-zip").inputValue();
+    const radiusValue = await page.locator("#cov-radius").inputValue();
+    const outText = await page.locator("#cov-out").innerText();
+
+    check("the slug's city fills the box", zipValue === "Kansas City, KS", zipValue);
+    check("the radius matches what the email states", radiusValue === "125", radiusValue);
+    check("the check actually ran, not just filled the box",
+      /104 verified agencies/.test(outText), outText);
+
+    // A slug with no entry in go_locations.json must not break the page --
+    // it just falls through to the ordinary empty box.
+    await page.goto(`${BASE}/go/some-unmapped-slug`, { waitUntil: "load" });
+    await page.waitForTimeout(400);
+    const unmappedZip = await page.locator("#cov-zip").inputValue();
+    check("an unmapped slug leaves the box empty rather than guessing",
+      unmappedZip === "", unmappedZip);
 
     check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
     await ctx.close();
