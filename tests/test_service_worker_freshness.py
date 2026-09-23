@@ -90,9 +90,15 @@ class CacheVersionMovesWithThePoliciesTests(unittest.TestCase):
         """
         def at(ref, path):
             try:
+                # encoding, explicitly. text=True decodes with the locale
+                # encoding, which is cp1252 on Windows -- every em dash in
+                # these policies came back mangled, so the comparison below
+                # saw a difference that was not there, skipped its own skip,
+                # and failed on an unchanged file.
                 return subprocess.run(
                     ["git", "show", "%s:%s" % (ref, path)], cwd=ROOT,
-                    capture_output=True, text=True, timeout=30).stdout
+                    capture_output=True, text=True, encoding="utf-8",
+                    timeout=30).stdout
             except Exception:
                 return ""
 

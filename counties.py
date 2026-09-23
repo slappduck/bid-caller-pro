@@ -47,7 +47,12 @@ def _load():
             return
         by_state, names = {}, {}
         try:
-            with open(_CSV, newline="") as f:
+            # encoding, explicitly: county names carry accents (Doña Ana,
+            # Cañon) and a bare open() decodes with the locale encoding,
+            # which is cp1252 on Windows and raises on the first byte it
+            # cannot map. Linux defaults to UTF-8, so this read worked on
+            # Render and died on the machine the tools actually run from.
+            with open(_CSV, newline="", encoding="utf-8") as f:
                 for row in csv.DictReader(f):
                     st = (row.get("state") or "").strip().upper()
                     key = _norm(row.get("county"))

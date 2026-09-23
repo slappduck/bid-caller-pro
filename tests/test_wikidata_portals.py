@@ -41,13 +41,17 @@ class WikidataSeedTests(unittest.TestCase):
         therefore not evidence of a duplicate -- sharing a domain is."""
         import csv
         crawled = set()
+        # encoding, explicitly: these directories carry accented place names,
+        # and a bare open() decodes with the locale encoding, which is cp1252
+        # on Windows and dies outright on the first byte it has no mapping
+        # for. The data is UTF-8 wherever it is read from.
         with open(os.path.join(os.path.dirname(os.path.dirname(
                 os.path.abspath(__file__))), "data",
-                "bid_portal_directory.csv")) as fh:
+                "bid_portal_directory.csv"), encoding="utf-8") as fh:
             for row in csv.DictReader(fh):
                 crawled.add(row["domain"].strip().lower())
 
-        with open(bid_portals._WIKIDATA_CSV) as fh:
+        with open(bid_portals._WIKIDATA_CSV, encoding="utf-8") as fh:
             for row in csv.DictReader(fh):
                 self.assertNotIn(
                     row["domain"].strip().lower(), crawled,

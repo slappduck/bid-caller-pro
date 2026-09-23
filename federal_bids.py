@@ -88,7 +88,7 @@ CONCRETE_NAICS = ("237310", "238910", "238190", "238110", "238140")
 # trust -- the caller runs the title past the normal relevance filter.
 CONCRETE_PSC = ("Z2PZ",)
 
-OFFICIAL_BASE = "https://api.data.gov/sam/opportunities/v2/search"
+OFFICIAL_BASE = "https://api.sam.gov/opportunities/v2/search"
 PUBLIC_SEARCH = "https://sam.gov/api/prod/sgs/v1/search/"
 PUBLIC_DETAIL = "https://sam.gov/api/prod/opps/v2/opportunities/"
 

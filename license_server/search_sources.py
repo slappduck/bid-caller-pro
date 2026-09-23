@@ -1293,7 +1293,7 @@ SAM_API_KEY = os.environ.get("SAM_API_KEY", "")
 # it answers 429 OVER_RATE_LIMIT to the shared DEMO_KEY, which is a rate
 # limit on a real endpoint rather than a wrong address.
 SAM_SEARCH_URL = os.environ.get(
-    "SAM_SEARCH_URL", "https://api.data.gov/sam/opportunities/v2/search")
+    "SAM_SEARCH_URL", "https://api.sam.gov/opportunities/v2/search")
 SCAN_WINDOW_DAYS = int(os.environ.get("SCAN_WINDOW_DAYS", "60"))
 
 # Title keywords, kept as the fallback for a notice with no NAICS code on it.
@@ -2831,7 +2831,7 @@ def _state_sources():
         return _state_sources_cache["rows"]
     out = {}
     try:
-        with open(STATE_SOURCES_CSV, newline="") as f:
+        with open(STATE_SOURCES_CSV, newline="", encoding="utf-8") as f:
             for row in csv.DictReader(f):
                 try:
                     usable = int(row.get("usable") or 0)
