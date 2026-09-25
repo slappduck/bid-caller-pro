@@ -789,8 +789,11 @@ document.getElementById("forgot-link").onclick=async()=>{
 // below must not mistake that follow-up for a failed link and sign the
 // person back out from under the very form they're about to submit.
 let _sawPasswordRecovery=false;
+// Held so Update Password can re-establish the session itself if it's gone
+// missing by the time someone clicks it -- see the click handler below.
+let _recoverySession=null;
 if(sb)sb.auth.onAuthStateChange((event,session)=>{
-  if(event==="PASSWORD_RECOVERY"){_sawPasswordRecovery=true;showPasswordReset();}
+  if(event==="PASSWORD_RECOVERY"){_sawPasswordRecovery=true;_recoverySession=session;showPasswordReset();}
 });
 function showPasswordReset(){
   document.getElementById("auth-screen").style.display="flex";
@@ -811,6 +814,21 @@ function showPasswordReset(){
     // password weaker than the app otherwise allows.
     if(!password||password.length<8){setMsg("Password must be at least 8 characters","err");return;}
     setMsg("...","");
+    // Some mail apps open links in a restricted in-app browser whose storage
+    // doesn't reliably hold onto what supabase-js just wrote -- the recovery
+    // screen above still renders fine (that came straight from the auth
+    // event, no storage read involved), but by the time this button is
+    // tapped the session supabase-js tries to read back can already be gone,
+    // failing with "Auth session missing!" on a link that actually worked.
+    // Re-hand it the exact tokens from that same recovery event before
+    // asking it to use them.
+    const{data:{session:curSession}}=await sb.auth.getSession();
+    if(!curSession&&_recoverySession){
+      await sb.auth.setSession({
+        access_token:_recoverySession.access_token,
+        refresh_token:_recoverySession.refresh_token,
+      });
+    }
     const{error}=await sb.auth.updateUser({password});
     if(error){setMsg(error.message,"err");return;}
     setMsg("Password updated! Redirecting...","ok");
