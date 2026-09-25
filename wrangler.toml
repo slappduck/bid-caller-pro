@@ -17,6 +17,11 @@
 
 name = "bid-caller-pro"
 compatibility_date = "2026-08-26"
+# Not a secret -- just the account this Worker lives in. Set explicitly so
+# wrangler never has to look it up via the Cloudflare API's /memberships
+# endpoint, which needs a User->User Details->Read permission the deploy
+# token doesn't have (and doesn't need for anything else it does).
+account_id = "cb58f659f23046b1768d10167913600e"
 
 [assets]
 # Everything the browser loads lives here. Note this is NOT the repo root --
