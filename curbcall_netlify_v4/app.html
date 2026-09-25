@@ -27,6 +27,18 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" crossorigin="anonymous"></script>
+<!-- Cloudflare Turnstile: bot protection on sign-in/sign-up/magic-link/reset.
+     Explicit render (not the auto-render data-attribute style) so app.js can
+     read the token off one callback and reset the widget after a failed
+     attempt -- Turnstile tokens are single-use. No-ops entirely until
+     TURNSTILE_SITE_KEY in app.js is set to a real site key.
+     defer ONLY, never async alongside it: with both set, async wins, and
+     Cloudflare's script can then execute (and call the ?onload= callback)
+     before app.js -- loaded at the very bottom of the page -- has defined
+     window.onloadTurnstile, so the callback silently never fires and the
+     widget never renders. defer alone guarantees this script runs after
+     every plain script the parser already encountered, app.js included. -->
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onloadTurnstile" defer></script>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -335,6 +347,7 @@
           <a href="/terms.html" target="_blank" style="color:var(--text2);">Terms</a> and
           <a href="/privacy.html" target="_blank" style="color:var(--text2);">Privacy Policy</a>.</span>
       </label>
+      <div id="turnstile-widget" style="margin:0.6rem 0;"></div>
       <button class="btn-primary" id="email-btn">Create Account</button>
       <button class="btn-ghost" id="magic-btn">Send magic link instead</button>
     </div>

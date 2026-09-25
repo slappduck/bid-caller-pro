@@ -1,0 +1,38 @@
+name: Deploy to Cloudflare Workers
+
+# Replaces Cloudflare's own "Workers Builds" git integration, whose build
+# token has gone stale ("deleted or rolled") repeatedly with no clear cause
+# -- a known, currently-open Cloudflare Community issue, not something
+# caused on our end. This uses a normal Cloudflare API Token (Account:
+# Workers Scripts:Edit) stored as a GitHub secret instead, which doesn't
+# share that failure mode.
+#
+# One-time setup (not done by this workflow):
+#   1. Cloudflare dashboard -> My Profile -> API Tokens -> Create Token.
+#      "Edit Cloudflare Workers" template is enough for this repo (assets-
+#      only Worker, see wrangler.toml).
+#   2. GitHub repo -> Settings -> Secrets and variables -> Actions ->
+#      New repository secret -> name it CLOUDFLARE_API_TOKEN.
+#   3. In Cloudflare's dashboard, disable/remove the old Workers Builds git
+#      connection for this repo so the two don't both try to deploy the
+#      same push.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "curbcall_netlify_v4/**"
+      - "wrangler.toml"
+      - ".github/workflows/deploy-worker.yml"
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          command: deploy
