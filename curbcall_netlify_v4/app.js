@@ -974,6 +974,17 @@ document.getElementById("email-btn").onclick=async()=>{
   resetTurnstile();
   if(res.error){setMsg(res.error.message,"err");return;}
   if(authMode==="signup"&&!res.data.session){
+    // Supabase never errors signUp() for an email that's already registered
+    // -- that's deliberate, to stop a stranger from using this form to find
+    // out who has an account here. It instead returns a fake user with an
+    // empty identities array and no session, indistinguishable from a real
+    // new signup unless you check for exactly that. Whoever owns this email
+    // already knows the answer, so telling them plainly is not the
+    // enumeration risk it would be for someone guessing addresses.
+    if(res.data.user&&Array.isArray(res.data.user.identities)&&res.data.user.identities.length===0){
+      setMsg("You already have an account with this email. Try signing in instead.","err");
+      return;
+    }
     showEmailSent(email);
     return;
   }
