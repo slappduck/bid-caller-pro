@@ -7,12 +7,11 @@ const SUPPORT_EMAIL = "support@curbcallpro.com";
 // not a secret, the matching secret key lives only in the Supabase dashboard's
 // Auth -> Attack Protection setting). Empty means "not configured yet": every
 // captcha call below becomes a no-op and auth works exactly as it does today.
-// Turned off (2026-09-25): every sign-in was failing with Supabase's
-// invalid-input-response, cause still unconfirmed. Put the real key back
-// once that's diagnosed -- but Supabase's Attack Protection also has to be
-// disabled (or its secret key fixed) in the dashboard, or auth still fails
-// with "no captcha_token found" even with this blank.
-const TURNSTILE_SITE_KEY = "";
+// Re-enabled 2026-09-25: root cause of the invalid-input-response failures
+// was Supabase's Bot and Abuse Protection provider being set to hCaptcha
+// while this widget issues Turnstile tokens. Fixed by switching the
+// provider to Turnstile and re-pasting the matching secret key.
+const TURNSTILE_SITE_KEY = "0x4AAAAAAFC7iEkah_AbfG1l";
 // Residential Leads is hidden until the permit feed covers somewhere a
 // customer actually works. It is wired to three cities -- Austin TX,
 // Cambridge MA and Baton Rouge LA -- so for every contractor on the list
