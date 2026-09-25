@@ -1,6 +1,22 @@
 
+_VALIDATE_RATE_KEY = "bidcaller:validate_rate"
+# The key itself is HMAC-signed (see verify_key() in core.py), so guessing a
+# valid one isn't actually feasible at any request volume a cap like this
+# would stop -- this exists for the more mundane failure mode, a script or
+# bot just hammering the endpoint. The default is generous on purpose:
+# loadAccountStatus() calls /validate on every Account tab open and after
+# every profile save, for every active subscriber, so several real users
+# behind one shared IP (office wifi, a mobile carrier's NAT) can rack up a
+# lot of ordinary calls in a day, and a low cap would lock them out instead.
+VALIDATE_MAX_PER_IP_PER_DAY = int(os.environ.get("VALIDATE_MAX_PER_IP_PER_DAY", "200"))
+
+
 @app.route("/validate", methods=["POST"])
 def validate():
+    # Same crude per-IP-per-day counter _ip_rate_ok already runs for
+    # /support and /agency/submit, just keyed separately here.
+    if not _ip_rate_ok(_VALIDATE_RATE_KEY, _client_ip(), VALIDATE_MAX_PER_IP_PER_DAY):
+        return jsonify({"valid": False, "reason": "rate_limited"}), 429
     data = request.get_json(force=True, silent=True) or {}
     # .get(x) or default, not .get(x, default) -- a JSON body of {"key": null}
     # has "key" present with value None, so the second form's default never

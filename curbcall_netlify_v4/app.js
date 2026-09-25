@@ -4091,7 +4091,7 @@ function renderAccount(){
       const r=await fetchWithTimeout(SERVER+"/validate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({key,device_id:deviceId()})},60000);
       const d=await r.json();
       if(d.valid){store.set("license_key",key);toast("Activated!");renderAccount();}
-      else{toast("That key isn't valid.");btn.disabled=false;btn.textContent="Activate Key";}
+      else{toast(d.reason==="rate_limited"?"Too many attempts from this connection today. Try again tomorrow, or contact support.":"That key isn't valid.");btn.disabled=false;btn.textContent="Activate Key";}
     }catch(e){toast("Couldn't reach the server. Try again.");btn.disabled=false;btn.textContent="Activate Key";}
   };
   document.getElementById("signout-btn").onclick=async()=>{
