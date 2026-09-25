@@ -749,6 +749,15 @@ function resetTurnstile(){
   _turnstileToken="";
   if(window.turnstile&&turnstileWidgetId!=null)window.turnstile.reset(turnstileWidgetId);
 }
+// Safari (and other browsers) can restore this whole page from the
+// back/forward cache instead of reloading it -- same DOM, same "Success!"
+// checkmark still showing on the widget, but the token that earned it is
+// however old the tab has been sitting in history. Turnstile tokens expire
+// in ~5 minutes and are single-use, so that frozen "Success" is frequently
+// stale by the time someone submits. event.persisted is how a bfcache
+// restore is detected; force a fresh token so the visible state matches
+// what's actually valid.
+window.addEventListener("pageshow",e=>{if(e.persisted)resetTurnstile();});
 
 // ── Forgot password ──
 document.getElementById("forgot-link").onclick=async()=>{
