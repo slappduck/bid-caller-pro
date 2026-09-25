@@ -3,6 +3,12 @@ const SUPABASE_ANON_KEY = "sb_publishable_sUuQHkrN_wsJqakUMfL_VA_58koZ76C";
 const SERVER = "https://bid-caller-pro.onrender.com";
 const PORTAL_URL = "https://billing.stripe.com/p/login/3cIcN4an28420Yad2fejK00";
 const SUPPORT_EMAIL = "support@curbcallpro.com";
+// Cloudflare Turnstile site key (public, safe to ship in the bundle -- it is
+// not a secret, the matching secret key lives only in the Supabase dashboard's
+// Auth -> Attack Protection setting). Empty means "not configured yet": every
+// captcha call below becomes a no-op and auth works exactly as it does today.
+// Fill this in once the Turnstile site is created in the Cloudflare dashboard.
+const TURNSTILE_SITE_KEY = "";
 // Residential Leads is hidden until the permit feed covers somewhere a
 // customer actually works. It is wired to three cities -- Austin TX,
 // Cambridge MA and Baton Rouge LA -- so for every contractor on the list
@@ -706,12 +712,44 @@ function authReturnUrl(){
   return window.location.origin+window.location.pathname;
 }
 
+// ── Turnstile (bot protection on sign-in/sign-up/magic-link/reset) ──
+// Entirely inert while TURNSTILE_SITE_KEY is empty: the widget never renders,
+// turnstileToken() always returns undefined, and Supabase's auth calls below
+// go out with no captchaToken option -- identical to today's behavior. Once a
+// real site key is set and CAPTCHA is turned on in the Supabase dashboard,
+// this becomes required automatically; Supabase rejects the request if the
+// token is missing, so there is no second flag to flip here.
+let turnstileWidgetId=null;
+let _turnstileToken="";
+function turnstileToken(){return _turnstileToken||undefined;}
+// Named so the Turnstile <script>'s ?onload= callback can find it -- it is
+// loaded async/defer and may finish after or before this file runs, so
+// rendering happens from this callback rather than a fixed line here.
+window.onloadTurnstile=function(){
+  const el=document.getElementById("turnstile-widget");
+  if(!el||!TURNSTILE_SITE_KEY||!window.turnstile)return;
+  turnstileWidgetId=window.turnstile.render(el,{
+    sitekey:TURNSTILE_SITE_KEY,
+    theme:"dark",
+    callback:t=>{_turnstileToken=t;},
+    "error-callback":()=>{_turnstileToken="";},
+    "expired-callback":()=>{_turnstileToken="";},
+  });
+};
+// Tokens are single-use and short-lived -- call after every attempt (pass or
+// fail) so the next submit always carries a fresh one instead of a spent one.
+function resetTurnstile(){
+  _turnstileToken="";
+  if(window.turnstile&&turnstileWidgetId!=null)window.turnstile.reset(turnstileWidgetId);
+}
+
 // ── Forgot password ──
 document.getElementById("forgot-link").onclick=async()=>{
   const email=document.getElementById("auth-email").value.trim();
   if(!email){setMsg("Enter your email above first, then tap this again","err");return;}
   setMsg("Sending reset link...","");
-  const{error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:authReturnUrl()});
+  const{error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:authReturnUrl(),captchaToken:turnstileToken()});
+  resetTurnstile();
   if(error){setMsg(error.message,"err");return;}
   setMsg("Check your email for a password reset link.","ok");
 };
@@ -905,14 +943,16 @@ document.getElementById("email-btn").onclick=async()=>{
   let res;
   try{
     res=authMode==="signup"
-      ? await sb.auth.signUp({email,password})
-      : await sb.auth.signInWithPassword({email,password});
+      ? await sb.auth.signUp({email,password,options:{captchaToken:turnstileToken()}})
+      : await sb.auth.signInWithPassword({email,password,options:{captchaToken:turnstileToken()}});
   }catch(e){
     setAuthBusy(false);
+    resetTurnstile();
     setMsg("Couldn't reach the server. Check your connection and try again.","err");
     return;
   }
   setAuthBusy(false);
+  resetTurnstile();
   if(res.error){setMsg(res.error.message,"err");return;}
   if(authMode==="signup"&&!res.data.session){
     showEmailSent(email);
@@ -931,7 +971,8 @@ document.getElementById("magic-btn").onclick=async()=>{
   captureTermsAcceptance("magic_link");
   capturePendingSignupName();
   setMsg("Sending...","");
-  const{error}=await sb.auth.signInWithOtp({email,options:{emailRedirectTo:authReturnUrl()}});
+  const{error}=await sb.auth.signInWithOtp({email,options:{emailRedirectTo:authReturnUrl(),captchaToken:turnstileToken()}});
+  resetTurnstile();
   if(error){setMsg(error.message,"err");return;}
   showEmailSent(email);
 };
