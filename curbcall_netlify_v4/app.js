@@ -722,9 +722,10 @@ function authReturnUrl(){
 let turnstileWidgetId=null;
 let _turnstileToken="";
 function turnstileToken(){return _turnstileToken||undefined;}
-// Named so the Turnstile <script>'s ?onload= callback can find it -- it is
-// loaded async/defer and may finish after or before this file runs, so
-// rendering happens from this callback rather than a fixed line here.
+// Named so the Turnstile <script>'s ?onload= callback can find it. That
+// script is loaded with defer (see app.html), which runs it after every
+// plain script the parser already encountered -- this file included -- so
+// window.onloadTurnstile below is guaranteed to exist first.
 window.onloadTurnstile=function(){
   const el=document.getElementById("turnstile-widget");
   if(!el||!TURNSTILE_SITE_KEY||!window.turnstile)return;
@@ -736,6 +737,12 @@ window.onloadTurnstile=function(){
     "expired-callback":()=>{_turnstileToken="";},
   });
 };
+// Belt and suspenders: if window.turnstile is somehow already sitting there
+// by the time this line runs (a cached/instant script load, a browser that
+// doesn't order defer scripts as expected), the callback above already
+// missed its moment -- Cloudflare only calls it once. Render directly here
+// instead of waiting for a callback that already happened.
+if(window.turnstile)window.onloadTurnstile();
 // Tokens are single-use and short-lived -- call after every attempt (pass or
 // fail) so the next submit always carries a fresh one instead of a spent one.
 function resetTurnstile(){
