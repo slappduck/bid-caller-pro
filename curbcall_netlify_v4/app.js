@@ -782,8 +782,15 @@ document.getElementById("forgot-link").onclick=async()=>{
 };
 // Supabase redirects back with a recovery session — catch that and let the
 // user set a new password instead of dropping them straight into the app.
+//
+// _sawPasswordRecovery latches permanently once this fires: a real recovery
+// session can still throw a second, unrelated auth event afterward (a token
+// refresh, another tab's SIGNED_IN), and the CAME_FROM_RESET_LINK handler
+// below must not mistake that follow-up for a failed link and sign the
+// person back out from under the very form they're about to submit.
+let _sawPasswordRecovery=false;
 if(sb)sb.auth.onAuthStateChange((event,session)=>{
-  if(event==="PASSWORD_RECOVERY")showPasswordReset();
+  if(event==="PASSWORD_RECOVERY"){_sawPasswordRecovery=true;showPasswordReset();}
 });
 function showPasswordReset(){
   document.getElementById("auth-screen").style.display="flex";
@@ -1053,7 +1060,7 @@ function setMsg(msg,cls){
 let _resetLinkFailureShown=false;
 if(sb)sb.auth.onAuthStateChange((event,session)=>{
   if(event==="PASSWORD_RECOVERY")return; // handled separately — don't drop into the app mid-reset
-  if(CAME_FROM_RESET_LINK&&!_resetLinkFailureShown){
+  if(CAME_FROM_RESET_LINK&&!_resetLinkFailureShown&&!_sawPasswordRecovery){
     // A reset-password link brought this browser here, but Supabase never
     // turned it into a PASSWORD_RECOVERY session -- the link was expired or
     // already used, or (if a session is present) an unrelated one already
