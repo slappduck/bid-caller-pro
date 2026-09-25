@@ -40,6 +40,14 @@ const REFERRAL_SEP = "~ref~";
 const HAS_SB = typeof supabase !== "undefined" && supabase && typeof supabase.createClient === "function";
 const HAS_MAPS = typeof L !== "undefined" && L && typeof L.map === "function";
 const sb = HAS_SB ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+// Captured before Supabase's own async init can consume and strip the hash.
+// If someone lands here from a password reset email, this is how the
+// PASSWORD_RECOVERY handling below can tell "the link worked" from "it
+// didn't" -- an expired or already-used link, or (worse) a session already
+// sitting in this browser racing ahead of it -- rather than silently
+// treating either as an ordinary sign-in.
+const CAME_FROM_RESET_LINK = /type=recovery/.test(window.location.hash)
+  || /error_description/.test(window.location.hash);
 
 // ── storage helpers ──
 // set() reports whether the write actually landed. It used to swallow every
@@ -1042,8 +1050,28 @@ function setMsg(msg,cls){
 }
 
 // ── Session management ──
+let _resetLinkFailureShown=false;
 if(sb)sb.auth.onAuthStateChange((event,session)=>{
   if(event==="PASSWORD_RECOVERY")return; // handled separately — don't drop into the app mid-reset
+  if(CAME_FROM_RESET_LINK&&!_resetLinkFailureShown){
+    // A reset-password link brought this browser here, but Supabase never
+    // turned it into a PASSWORD_RECOVERY session -- the link was expired or
+    // already used, or (if a session is present) an unrelated one already
+    // signed in on this device raced ahead of it. Either way, silently
+    // showing the app under whatever session happens to exist would be
+    // wrong: it would look like the reset worked when nothing was reset,
+    // or worse, drop someone into a different account than the one they
+    // meant to recover. Sign out and say plainly that the link didn't work.
+    // Guarded by a flag, not just re-checked each time: signOut() below
+    // fires its own SIGNED_OUT event right back into this same listener,
+    // and CAME_FROM_RESET_LINK never resets on its own since it's read
+    // once from the URL at page load.
+    _resetLinkFailureShown=true;
+    sb.auth.signOut();
+    showAuth();
+    setMsg("That password reset link didn't work — it may have expired or already been used. Request a new one below.","err");
+    return;
+  }
   if(session){
     // Before anything reads or uploads cached data: if this browser's data
     // belongs to a different account, drop it. Must come first -- showApp()
