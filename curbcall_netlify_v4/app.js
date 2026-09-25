@@ -3568,7 +3568,7 @@ async function uploadAvatar(file){
   const path=`${currentUser.id}/avatar.${ext}`;
   try{
     const{error}=await sb.storage.from("avatars").upload(path,file,{upsert:true,contentType:file.type});
-    if(error){toast("Couldn't upload photo — "+error.message);return false;}
+    if(error){toast("Couldn't upload photo. Try again.");return false;}
     const{data}=sb.storage.from("avatars").getPublicUrl(path);
     const url=data.publicUrl+"?t="+Date.now();
     // Confirm the uploaded file is actually readable back before storing it.
@@ -3783,7 +3783,7 @@ async function submitReview(){
              company:companyProfile.name||""};
   try{
     const{error}=await sb.from("reviews").upsert(row,{onConflict:"user_id"});
-    if(error){toast("Couldn't save your review — "+error.message);
+    if(error){toast("Couldn't save your review. Try again.");
       btn.disabled=false;renderReviewCard();return;}
     reviewDraft.quote=quote;reviewDraft.submitted=true;reviewDraft.approved=false;
     renderReviewCard();
@@ -3877,7 +3877,7 @@ function renderAccount(){
          were sent for. It is also simply what people open Account to look
          at. -->
 <div class="account-email hdr-ic" style="font-size:var(--fs-base);margin:0.4rem 0 0.5rem;"><svg class="icon-svg"><use href="#i-credit-card"/></svg>Billing</div>
-    <div class="plan" id="status-card"><div class="plan-name" style="display:flex;align-items:center;gap:0.5rem;"><span class="spin" style="border-top-color:var(--accent);border-color:rgba(245,158,11,0.25);"></span> Checking your plan...</div></div>
+    <div class="plan" id="status-card"><span class="skel-line sm"></span><span class="skel-line lg"></span><span class="skel-line md"></span></div>
     <!-- Deliberately worded as a question and styled quietly. It sat above the
          pricing looking like the primary action, and for someone who has
          never subscribed the Stripe portal is a dead end. Not hidden
@@ -3966,12 +3966,12 @@ function renderAccount(){
     <div class="account-card" id="referral-card">
       <div class="account-email hdr-ic" style="font-size:var(--fs-base);"><svg class="icon-svg"><use href="#i-users"/></svg>Refer a Contractor</div>
       <div class="account-status" style="margin-bottom:0.7rem;">Give a free month, get a free month — when someone you refer subscribes, you both get bonus time added automatically.</div>
-      <div id="referral-body" class="account-status">Loading your link&hellip;</div>
+      <div id="referral-body" class="account-status"><span class="skel-line md"></span></div>
     </div>
     <div class="account-card" id="review-card">
       <div class="account-email hdr-ic" style="font-size:var(--fs-base);"><svg class="icon-svg"><use href="#i-star"/></svg>Rate CurbCall Pro</div>
       <div class="account-status" style="margin-bottom:0.7rem;">How's it working for you? With your OK we may quote this on the site — nothing appears publicly until it's reviewed.</div>
-      <div id="review-body" class="account-status">Loading&hellip;</div>
+      <div id="review-body" class="account-status"><span class="skel-line md"></span></div>
     </div>
     ${isAdmin?`
     <div class="account-card" id="admin-card" style="cursor:pointer;border-color:var(--amber);">
@@ -4017,7 +4017,7 @@ function renderAccount(){
     pwBtn.disabled=true;pwBtn.textContent="Changing...";
     try{
       const{error}=await sb.auth.updateUser({password:next});
-      if(error){toast(error.message);}
+      if(error){toast("Couldn't change your password. Try a different one, or try again in a bit.");}
       else{el.value="";toast("Password changed");}
     }catch(e){toast("Couldn't reach the server. Try again.");}
     pwBtn.disabled=false;pwBtn.textContent="Change password";
@@ -4034,7 +4034,7 @@ function renderAccount(){
       const{error}=await sb.auth.updateUser({email:next});
       // Supabase does not switch the address until the link in the new
       // inbox is clicked, so say that rather than implying it is done.
-      if(error){toast(error.message);}
+      if(error){toast("Couldn't update your email. Double check the address and try again.");}
       else{toast("Check "+next+" for a confirmation link");}
     }catch(e){toast("Couldn't reach the server. Try again.");}
     emBtn.disabled=false;emBtn.textContent="Change email";
@@ -4085,12 +4085,14 @@ function renderAccount(){
   document.getElementById("activate-btn").onclick=async()=>{
     const key=document.getElementById("key-input").value.trim().toUpperCase();
     if(!key){toast("Enter your license key");return;}
+    const btn=document.getElementById("activate-btn");
+    btn.disabled=true;btn.textContent="Activating...";
     try{
       const r=await fetchWithTimeout(SERVER+"/validate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({key,device_id:deviceId()})},60000);
       const d=await r.json();
       if(d.valid){store.set("license_key",key);toast("Activated!");renderAccount();}
-      else toast("That key isn't valid.");
-    }catch(e){toast("Couldn't reach the server. Try again.");}
+      else{toast("That key isn't valid.");btn.disabled=false;btn.textContent="Activate Key";}
+    }catch(e){toast("Couldn't reach the server. Try again.");btn.disabled=false;btn.textContent="Activate Key";}
   };
   document.getElementById("signout-btn").onclick=async()=>{
     if(!sb){
@@ -4233,7 +4235,7 @@ function openAdminPanel(){
 
 async function renderAdminPanel(){
   const mc=document.getElementById("modal-content");
-  mc.innerHTML=`<h2>Admin</h2><div class="account-status">Loading&hellip;</div>`;
+  mc.innerHTML=`<h2>Admin</h2><span class="skel-line lg"></span><span class="skel-line md"></span><span class="skel-line md"></span><span class="skel-line sm"></span>`;
   const [list,agency,drafts,reviews]=await Promise.all([
     adminCall("/admin/list",{}),
     adminCall("/agency/review",{}),
@@ -4300,16 +4302,19 @@ async function renderAdminPanel(){
       <button class="ma-ghost" onclick="closeModal();">Close</button></div>`;
 
   mc.querySelectorAll("[data-notice-approve]").forEach(b=>b.onclick=async()=>{
+    b.disabled=true;b.textContent="Approving...";
     const r=await adminCall("/agency/review",{approve:b.dataset.noticeApprove});
-    if(r.ok)renderAdminPanel();else toast(r.detail||"Couldn't approve that notice");
+    if(r.ok)renderAdminPanel();else{toast(r.detail||"Couldn't approve that notice");b.disabled=false;b.textContent="Approve";}
   });
   mc.querySelectorAll("[data-notice-delete]").forEach(b=>b.onclick=async()=>{
     if(!confirm("Delete this notice permanently?"))return;
+    b.disabled=true;b.textContent="Deleting...";
     await adminCall("/agency/review",{delete:b.dataset.noticeDelete});
     renderAdminPanel();
   });
   mc.querySelectorAll("[data-draft-send]").forEach(b=>b.onclick=async()=>{
     if(!confirm("Send this campaign now? This cannot be undone."))return;
+    b.disabled=true;b.textContent="Sending...";
     const r=await adminCall("/campaign/approve",{draft_id:b.dataset.draftSend,confirm:true});
     if(r.ok)toast(`Sent to ${plural(r.sent,"recipient")}${r.failed?`, ${r.failed} failed`:""}`);
     // "Send failed" would be a guess here: the request may well have reached
@@ -4319,14 +4324,17 @@ async function renderAdminPanel(){
     renderAdminPanel();
   });
   mc.querySelectorAll("[data-draft-discard]").forEach(b=>b.onclick=async()=>{
+    b.disabled=true;b.textContent="Discarding...";
     await adminCall("/campaign/drafts",{discard:b.dataset.draftDiscard});
     renderAdminPanel();
   });
   mc.querySelectorAll("[data-review-approve]").forEach(b=>b.onclick=async()=>{
+    b.disabled=true;b.textContent="Approving...";
     await adminCall("/admin/reviews",{approve:b.dataset.reviewApprove});
     renderAdminPanel();
   });
   mc.querySelectorAll("[data-review-reject]").forEach(b=>b.onclick=async()=>{
+    b.disabled=true;b.textContent="Rejecting...";
     await adminCall("/admin/reviews",{reject:b.dataset.reviewReject});
     renderAdminPanel();
   });

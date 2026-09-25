@@ -353,6 +353,14 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .spin{display:inline-block;width:16px;height:16px;border:2px solid rgba(0,0,0,0.3);border-top-color:#000;border-radius:50%;animation:spin 0.7s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
 
+/* Skeleton placeholders: shape-matched stand-ins for a card's content while
+   it loads, instead of a spinner sitting where the content will appear. */
+.skel-line{display:block;height:0.9rem;border-radius:4px;margin:0.4rem 0;background:linear-gradient(90deg,var(--border) 25%,rgba(255,255,255,0.08) 37%,var(--border) 63%);background-size:400% 100%;animation:skel-shimmer 1.4s ease infinite;}
+.skel-line.lg{height:1.3rem;width:45%;}
+.skel-line.md{width:70%;}
+.skel-line.sm{width:55%;}
+@keyframes skel-shimmer{0%{background-position:100% 50%;}100%{background-position:0 50%;}}
+
 /* ── Feed toolbar / Map ── */
 .feed-toolbar{display:flex;gap:0.5rem;margin:0 0 0.9rem;}
 .feed-toolbar .btn-ghost{margin:0;flex:none;width:auto;}
