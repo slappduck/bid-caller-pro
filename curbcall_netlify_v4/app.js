@@ -8,7 +8,7 @@ const SUPPORT_EMAIL = "support@curbcallpro.com";
 // Auth -> Attack Protection setting). Empty means "not configured yet": every
 // captcha call below becomes a no-op and auth works exactly as it does today.
 // Fill this in once the Turnstile site is created in the Cloudflare dashboard.
-const TURNSTILE_SITE_KEY = "";
+const TURNSTILE_SITE_KEY = "0x4AAAAAAFC7iEkah_AbfG1l";
 // Residential Leads is hidden until the permit feed covers somewhere a
 // customer actually works. It is wired to three cities -- Austin TX,
 // Cambridge MA and Baton Rouge LA -- so for every contractor on the list
