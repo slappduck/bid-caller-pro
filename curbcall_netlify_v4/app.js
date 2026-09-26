@@ -52,6 +52,14 @@ const CAME_FROM_RESET_LINK = /type=recovery/.test(window.location.hash)
   || /type=recovery/.test(window.location.search)
   || /error_description/.test(window.location.hash)
   || /error_description/.test(window.location.search);
+// The stateless recovery path below (verifyOtp with a token_hash) needs
+// this read early too, for the same reason CAME_FROM_RESET_LINK is: whatever
+// consumes the URL first wins, and Supabase's own client-side init runs
+// asynchronously right after this file starts executing.
+const RESET_TOKEN_HASH = (() => {
+  const p = new URLSearchParams(window.location.search);
+  return p.get("type") === "recovery" ? p.get("token_hash") : null;
+})();
 // Auth Logs (Authentication -> Logs -> Auth Logs) showed every failed
 // reset attempt recording a "login" audit event -- the recovery grant
 // taking effect -- immediately followed by an unexplained "logout" about
@@ -59,16 +67,27 @@ const CAME_FROM_RESET_LINK = /type=recovery/.test(window.location.hash)
 // long enough to use it. Nothing in this file calls signOut() on that
 // path (checked every sb.auth.* call site), single-session-per-user is
 // off, and time-boxed/inactivity session limits are locked off on this
-// plan -- none of the usual explanations fit. What's left is the flow
-// type: Supabase's default "implicit" grant puts a bare, single-use
-// access token straight in the URL, and anything that fetches that link
-// before the person taps it -- a mail provider's own link-safety scanner
-// is the common cause -- burns the token, and Supabase's reuse-detection
-// then revokes the session it just issued as a precaution, which is
-// exactly a login immediately followed by a logout. PKCE closes that gap:
-// completing it requires a code_verifier this browser generated and kept
-// to itself, so a scanner fetching the bare link URL has nothing it can
-// use to complete the exchange.
+// plan -- none of the usual explanations fit. What's left is the flow:
+// Supabase's default email link points at Supabase's OWN /auth/v1/verify
+// endpoint, which consumes the single-use token and issues a session on
+// a bare HTTP GET -- no JS required -- so anything that fetches the link
+// before the person taps it (a mail provider's own link-safety scanner is
+// the common cause) burns it, and reuse-detection then revokes the session
+// it just issued, which is exactly a login immediately followed by a
+// logout. Switching flowType to PKCE moved the token into a code_verifier
+// this browser keeps to itself, which defeats a scanner -- but it turned
+// out to have the identical dependency on THIS BROWSER'S storage that the
+// implicit flow already had (see authMode below), and a reset link is
+// routinely opened somewhere else entirely -- Gmail's in-app browser is
+// the common case -- where that storage never existed in the first place.
+// RESET_TOKEN_HASH + verifyOtp (below, near showPasswordReset) is what
+// actually fixes both problems at once: it's a single stateless API call
+// that needs nothing but the emailed token itself, and it only runs when
+// this JS executes, not on a bare GET of the link -- so it requires
+// pointing the "Reset Password" email template at this app directly
+// (`{{ .SiteURL }}/app.html?token_hash={{ .TokenHash }}&type=recovery`)
+// instead of Supabase's default template, which still routes through
+// /auth/v1/verify first.
 const sb = HAS_SB ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth:{flowType:"pkce"},
 }) : null;
@@ -819,6 +838,25 @@ let _recoverySession=null;
 if(sb)sb.auth.onAuthStateChange((event,session)=>{
   if(event==="PASSWORD_RECOVERY"){_sawPasswordRecovery=true;_recoverySession=session;showPasswordReset();}
 });
+// Stateless recovery: token_hash + verifyOtp needs no code_verifier and no
+// prior localStorage in this browser, unlike the PKCE/implicit auto-detect
+// above -- which is the point, since a reset link is routinely opened in a
+// different browser or app webview than the one that requested it, where
+// neither exists yet. Requires the "Reset Password" email template to link
+// here with ?token_hash=...&type=recovery instead of Supabase's default
+// /auth/v1/verify redirect -- see the comment near RESET_TOKEN_HASH above.
+// Failure (expired/already-used link) is left to the CAME_FROM_RESET_LINK
+// fallback further down, which fires on this same no-session load and shows
+// the "didn't work" message once, already guarded by its own flag.
+if(sb&&RESET_TOKEN_HASH){
+  sb.auth.verifyOtp({type:"recovery",token_hash:RESET_TOKEN_HASH}).then(({data,error})=>{
+    if(!error&&data&&data.session){
+      _sawPasswordRecovery=true;
+      _recoverySession=data.session;
+      showPasswordReset();
+    }
+  });
+}
 function showPasswordReset(){
   document.getElementById("auth-screen").style.display="flex";
   document.getElementById("app").style.display="none";
