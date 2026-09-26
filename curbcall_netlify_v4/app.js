@@ -814,17 +814,23 @@ function showPasswordReset(){
     // password weaker than the app otherwise allows.
     if(!password||password.length<8){setMsg("Password must be at least 8 characters","err");return;}
     setMsg("...","");
-    // Bypasses supabase-js's own session bookkeeping entirely. Two rounds of
-    // trying to make updateUser() find (or be handed) a session first both
-    // still ended in "Auth session missing!" on the device this was actually
-    // failing on -- something about how this browser holds onto (or hands
-    // back) what the client wrote keeps coming up empty by the time this
-    // button is tapped, and chasing that further wasn't fixing it. This
-    // sends the recovery token straight to Supabase's REST endpoint instead
-    // -- the same call updateUser() makes underneath -- so the only thing
-    // that has to still be true is the token itself, not the SDK's opinion
-    // of whether a session currently exists.
-    const token=_recoverySession&&_recoverySession.access_token;
+    // Bypasses supabase-js's own session bookkeeping for the actual update
+    // call -- updateUser() kept finding no session at all on the device this
+    // was failing on. But the token has to be read fresh right here, not
+    // the one snapshotted when the recovery screen first appeared: the
+    // client auto-refreshes tokens in the background (autoRefreshToken is on
+    // by default), and a refresh invalidates the old session server-side.
+    // Someone who takes a few seconds to type a password can easily submit
+    // with a session_id that's already been rotated out from under the
+    // snapshot, which fails differently (and more confusingly) than a
+    // missing session: the JWT still looks fine, Supabase just no longer has
+    // a session row for it. getSession() returns whatever the client
+    // currently has -- including any background refresh -- so prefer that,
+    // and fall back to the original snapshot only if the client has nothing
+    // at all.
+    const{data:{session:curSession}}=await sb.auth.getSession();
+    const token=(curSession&&curSession.access_token)
+      ||(_recoverySession&&_recoverySession.access_token);
     if(!token){
       setMsg("This reset link isn't valid anymore. Request a new one below.","err");
       return;
