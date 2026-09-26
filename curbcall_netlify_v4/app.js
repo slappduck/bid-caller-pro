@@ -39,7 +39,6 @@ const REFERRAL_SEP = "~ref~";
 // them, and let the app fall back to a read-only local mode.
 const HAS_SB = typeof supabase !== "undefined" && supabase && typeof supabase.createClient === "function";
 const HAS_MAPS = typeof L !== "undefined" && L && typeof L.map === "function";
-const sb = HAS_SB ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 // Captured before Supabase's own async init can consume and strip the hash.
 // If someone lands here from a password reset email, this is how the
 // PASSWORD_RECOVERY handling below can tell "the link worked" from "it
@@ -48,6 +47,29 @@ const sb = HAS_SB ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : nul
 // treating either as an ordinary sign-in.
 const CAME_FROM_RESET_LINK = /type=recovery/.test(window.location.hash)
   || /error_description/.test(window.location.hash);
+// Auth Logs confirmed the failure mode: on this exact reset flow, the
+// server records "login" (the recovery grant taking effect) immediately
+// followed by "logout" about a second later -- with no signOut() call
+// anywhere in this file's own code running on that path. The only thing
+// left that can explain it is supabase-js's own startup: it always tries
+// to recover whatever session is already sitting in localStorage before
+// it finishes processing the URL, and after a long day of testing sign-in
+// across accounts on this same device, that stored session is stale. Its
+// refresh fails, and the client's own cleanup for a failed refresh calls
+// the server's logout endpoint using whatever session is CURRENT in the
+// client by then -- which is the brand new recovery grant, not the stale
+// one it meant to clean up. Wiping Supabase's own storage before the
+// client is even constructed means there is nothing stale left for that
+// startup path to trip over; the URL is then the only session material
+// it has to work with.
+if(CAME_FROM_RESET_LINK){
+  try{
+    const keys=[];
+    for(let i=0;i<localStorage.length;i++)keys.push(localStorage.key(i));
+    for(const k of keys)if(k&&k.startsWith("sb-"))localStorage.removeItem(k);
+  }catch(e){}
+}
+const sb = HAS_SB ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
 // ── storage helpers ──
 // set() reports whether the write actually landed. It used to swallow every
