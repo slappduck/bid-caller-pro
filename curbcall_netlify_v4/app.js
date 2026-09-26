@@ -814,23 +814,45 @@ function showPasswordReset(){
     // password weaker than the app otherwise allows.
     if(!password||password.length<8){setMsg("Password must be at least 8 characters","err");return;}
     setMsg("...","");
-    // Some mail apps open links in a restricted in-app browser whose storage
-    // doesn't reliably hold onto what supabase-js just wrote -- the recovery
-    // screen above still renders fine (that came straight from the auth
-    // event, no storage read involved), but by the time this button is
-    // tapped the session supabase-js tries to read back can already be gone,
-    // failing with "Auth session missing!" on a link that actually worked.
-    // Re-hand it the exact tokens from that same recovery event before
-    // asking it to use them.
-    const{data:{session:curSession}}=await sb.auth.getSession();
-    if(!curSession&&_recoverySession){
-      await sb.auth.setSession({
-        access_token:_recoverySession.access_token,
-        refresh_token:_recoverySession.refresh_token,
-      });
+    // Bypasses supabase-js's own session bookkeeping entirely. Two rounds of
+    // trying to make updateUser() find (or be handed) a session first both
+    // still ended in "Auth session missing!" on the device this was actually
+    // failing on -- something about how this browser holds onto (or hands
+    // back) what the client wrote keeps coming up empty by the time this
+    // button is tapped, and chasing that further wasn't fixing it. This
+    // sends the recovery token straight to Supabase's REST endpoint instead
+    // -- the same call updateUser() makes underneath -- so the only thing
+    // that has to still be true is the token itself, not the SDK's opinion
+    // of whether a session currently exists.
+    const token=_recoverySession&&_recoverySession.access_token;
+    if(!token){
+      setMsg("This reset link isn't valid anymore. Request a new one below.","err");
+      return;
     }
-    const{error}=await sb.auth.updateUser({password});
-    if(error){setMsg(error.message,"err");return;}
+    let res;
+    try{
+      res=await fetch(SUPABASE_URL+"/auth/v1/user",{
+        method:"PUT",
+        headers:{
+          "Content-Type":"application/json",
+          "apikey":SUPABASE_ANON_KEY,
+          "Authorization":"Bearer "+token,
+        },
+        body:JSON.stringify({password}),
+      });
+    }catch(e){
+      setMsg("Couldn't reach the server. Check your connection and try again.","err");
+      return;
+    }
+    if(!res.ok){
+      let msg="That didn't work. Request a new reset link and try again.";
+      try{
+        const body=await res.json();
+        if(body&&(body.msg||body.message))msg=body.msg||body.message;
+      }catch(e){}
+      setMsg(msg,"err");
+      return;
+    }
     setMsg("Password updated! Redirecting...","ok");
     setTimeout(()=>window.location.href=window.location.pathname,1200);
   };
