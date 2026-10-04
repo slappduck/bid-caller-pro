@@ -808,14 +808,22 @@ function resetTurnstile(){
 // with a raw, technical message ("captcha protection: request disallowed (no
 // captcha_token found)") that means nothing to someone trying to sign in.
 // The widget can come back empty for two different reasons: it just hasn't
-// finished its auto-check yet (transient -- the common case, clears within a
-// second or two), or the challenges.cloudflare.com script never loaded at all
-// because an ad blocker, privacy browser, or restrictive network blocked it
-// (not transient -- no amount of waiting fixes this). Can't tell those apart
-// from here, so catch it before the doomed request goes out at all, with a
-// message that covers both.
-function captchaBlocking(){
+// finished its auto-check yet (transient -- the common case, usually clears
+// within a second of page load, well before anyone finishes typing), or the
+// challenges.cloudflare.com script never loaded at all because an ad
+// blocker, privacy browser, or restrictive network blocked it (not
+// transient -- no amount of waiting fixes this). Can't tell those apart up
+// front, so wait out the transient case first -- nobody should have to tap
+// Sign In a second time for what was only ever a timing gap -- and only
+// surface the "something's actually wrong" message once that grace period
+// has passed with still nothing.
+async function captchaBlocking(){
   if(!TURNSTILE_SITE_KEY||turnstileToken())return false;
+  setMsg("Verifying...","");
+  for(let waited=0;waited<2000&&!turnstileToken();waited+=100){
+    await new Promise(r=>setTimeout(r,100));
+  }
+  if(turnstileToken())return false;
   setMsg("Still verifying you're not a robot -- give it a second and try again. If this keeps happening, an ad blocker or privacy browser may be blocking the check; allow challenges.cloudflare.com and reload.","err");
   return true;
 }
@@ -842,7 +850,7 @@ window.addEventListener("pageshow",e=>{if(e.persisted)resetTurnstile();});
 document.getElementById("forgot-link").onclick=async()=>{
   const email=document.getElementById("auth-email").value.trim();
   if(!email){setMsg("Enter your email above first, then tap this again","err");return;}
-  if(captchaBlocking())return;
+  if(await captchaBlocking())return;
   setMsg("Sending reset link...","");
   const{error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:authReturnUrl(),captchaToken:turnstileToken()});
   resetTurnstile();
@@ -1104,7 +1112,7 @@ document.getElementById("email-btn").onclick=async()=>{
   if(authMode==="signup"&&!document.getElementById("terms-check").checked){
     setMsg("Please agree to the Terms and Privacy Policy to continue","err");return;
   }
-  if(captchaBlocking())return;
+  if(await captchaBlocking())return;
   captureTermsAcceptance("signup_form");
   capturePendingSignupName();
   setMsg("","");
@@ -1148,7 +1156,7 @@ document.getElementById("magic-btn").onclick=async()=>{
   if(authMode==="signup"&&!document.getElementById("terms-check").checked){
     setMsg("Please agree to the Terms and Privacy Policy to continue","err");return;
   }
-  if(captchaBlocking())return;
+  if(await captchaBlocking())return;
   captureTermsAcceptance("magic_link");
   capturePendingSignupName();
   setMsg("Sending...","");
