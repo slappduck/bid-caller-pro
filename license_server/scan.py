@@ -679,11 +679,23 @@ def scan():
         radius = float(data.get("radius") or 25)
     except (TypeError, ValueError):
         radius = 25.0
+    force = bool(data.get("force"))
 
     if not _license_is_active(key, device, supabase_token):
         return jsonify({"ok": False, "reason": "not_licensed"}), 403
     if not location:
         return jsonify({"ok": False, "reason": "no_location"})
+    # A plain scan just reads the same-day cache (see _perform_scan) -- free
+    # by comparison. force=true re-runs the whole search pipeline against
+    # live search-API quota, which is the one thing here actually uncapped
+    # past "has a licence". Keyed by the credential being spent, not the IP
+    # making the request -- see the comment by FORCE_SCAN_MAX_PER_KEY_PER_DAY.
+    if force and not _ip_rate_ok(_FORCE_SCAN_RATE_KEY, key or device or _client_ip(),
+                                 FORCE_SCAN_MAX_PER_KEY_PER_DAY):
+        return jsonify({"ok": False, "reason": "rate_limited",
+                        "detail": "Too many forced re-scans today. The "
+                                  "already-cached result for this area is "
+                                  "still available without force."}), 429
 
     # Who scanned, for the engagement rollup. The address is resolved from
     # the verified token and immediately reduced to the same salted handle the
@@ -698,7 +710,7 @@ def scan():
     except Exception:
         pass    # A metric is never worth failing a scan over.
 
-    outcome = _perform_scan(location, radius, force=bool(data.get("force")),
+    outcome = _perform_scan(location, radius, force=force,
                             _progress_token=str(data.get("progress_token") or ""))
     if outcome is None:
         return jsonify({"ok": False, "reason": "location_not_found"})

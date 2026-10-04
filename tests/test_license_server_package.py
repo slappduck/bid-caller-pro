@@ -129,12 +129,22 @@ class TheRootFileIsGeneratedNotEditedTests(unittest.TestCase):
         expected = "\n\n".join(
             open(os.path.join(PKG_DIR, f), encoding="utf-8").read()
             for f in _FILES)
-        self.assertEqual(
-            committed.stdout, expected,
-            "the committed license_server.py is not the concatenation of the "
-            "license_server/ files. It is GENERATED -- edit the package file "
-            "that owns the code, never the root file, then re-import to "
-            "regenerate it. A root-only edit is discarded on the next import.")
+        # endswith, not equality: __init__.py prepends a short "AUTO-GENERATED
+        # -- DO NOT EDIT" banner ahead of this same concatenation (added after
+        # this test, once this exact root-vs-package drift risk was the thing
+        # that made a direct edit to the root file so easy to make by
+        # mistake). A banner is a legitimate, intentional difference from the
+        # package files themselves; anything ELSE differing is still the real
+        # bug this test exists to catch, so the code this test cares about
+        # must still match exactly, verbatim, to the end of the file.
+        self.assertTrue(
+            committed.stdout.endswith(expected),
+            "the committed license_server.py's code does not match the "
+            "concatenation of the license_server/ files (a leading banner "
+            "comment is expected and fine; anything past that is not). It is "
+            "GENERATED -- edit the package file that owns the code, never "
+            "the root file, then re-import to regenerate it. A root-only "
+            "edit is discarded on the next import.")
 
 
 if __name__ == "__main__":
