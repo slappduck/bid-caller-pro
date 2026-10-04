@@ -121,14 +121,44 @@ def stripe_webhook():
     obj = (event.get("data") or {}).get("object") or {}
     db = _db()
 
+    # Stripe's own docs guarantee "at least once" delivery -- a redelivered
+    # checkout.session.completed (a retry after a slow response, or Stripe
+    # replaying from its dashboard) would otherwise mint and email a second
+    # licence key for the same purchase. Dedupe by event id, not session id:
+    # distinct event ids for the same session (e.g. a later invoice.paid)
+    # must still each run once. Capped so this cannot grow without bound.
+    event_id = event.get("id") or ""
+    if event_id:
+        seen = db.setdefault("stripe_events_seen", [])
+        if event_id in seen:
+            return jsonify({"ok": True, "duplicate": True})
+        seen.append(event_id)
+        del seen[:-500]
+
     if etype == "checkout.session.completed":
         email = ((obj.get("customer_details") or {}).get("email")
                  or obj.get("customer_email") or "")
         raw_ref = obj.get("client_reference_id") or ""
         device, _, ref_code = raw_ref.partition(_REFERRAL_SEP)
         cust = obj.get("customer") or ""
-        amount = obj.get("amount_total") or 0
-        plan = "annual" if amount and amount >= 10000 else "monthly"
+        # Classified by what was actually bought, not what it cost. The
+        # amount-based guess below (>= $100 => annual) silently misreads any
+        # discounted annual sale as monthly -- a coupon, a promo code, or
+        # just a future price change that happens to land under $100 -- and
+        # the customer's access then quietly expires a year early with no
+        # error anywhere. `metadata.plan` is set on each of the two Stripe
+        # Payment Links themselves (Payment Links -> edit -> Advanced options
+        # -> Metadata: plan=annual / plan=monthly) and Stripe copies it onto
+        # every Checkout Session created through that link, so it reflects
+        # which link the customer actually clicked, not what they paid.
+        # Falls back to the old guess only for a session with no such
+        # metadata (an existing Payment Link that hasn't been tagged yet).
+        meta_plan = (obj.get("metadata") or {}).get("plan")
+        if meta_plan in ("annual", "monthly"):
+            plan = meta_plan
+        else:
+            amount = obj.get("amount_total") or 0
+            plan = "annual" if amount and amount >= 10000 else "monthly"
         key = _issue_for(db, email, device, plan)
         if cust:
             db.setdefault("customers", {})[cust] = {

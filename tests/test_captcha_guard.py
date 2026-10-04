@@ -30,15 +30,17 @@ def source():
     return re.sub(r"^\s*//.*$", "", body, flags=re.M)
 
 
-NEXT_TOP_LEVEL = re.compile(r'\n(?:(?:async )?function |document\.getElementById\()')
+NEXT_TOP_LEVEL = re.compile(r'\n(?:(?:async )?function |(?:document\.getElementById|byId)\()')
 
 
 def fn_body(src, signature):
     """The source of one function or click handler, to the start of the
     next top-level one. Handlers in this file are usually
-    document.getElementById("x").onclick=async()=>{...}, not named function
-    declarations, so the boundary has to recognize both shapes -- stopping
-    only at "function" swallowed every handler after the one being read."""
+    byId("x").onclick=async()=>{...} (document.getElementById, guarded
+    against a missing id -- see TopLevelHandlersCannotCrashTheWholeScriptTests
+    in test_frontend_structure.py), not named function declarations, so the
+    boundary has to recognize both shapes -- stopping only at "function"
+    swallowed every handler after the one being read."""
     start = src.index(signature)
     after = NEXT_TOP_LEVEL.search(src[start + 1:])
     end = start + 1 + after.start() if after else len(src)

@@ -1693,6 +1693,15 @@ def draft_proposal():
         return jsonify({"ok": False, "reason": "not_licensed"}), 403
     if not OPENAI_API_KEY:
         return jsonify({"ok": False, "reason": "ai_unavailable"})
+    # Every call here is a paid OpenAI request with nothing cached about it --
+    # the one AI endpoint in the app with no cap past "has a licence". See
+    # the comment by FORCE_SCAN_MAX_PER_KEY_PER_DAY for why this is keyed by
+    # the credential, not the IP.
+    if not _ip_rate_ok(_DRAFT_PROPOSAL_RATE_KEY, key or device or _client_ip(),
+                       DRAFT_PROPOSAL_MAX_PER_KEY_PER_DAY):
+        return jsonify({"ok": False, "reason": "rate_limited",
+                        "detail": "Too many proposal drafts today. Try "
+                                  "again tomorrow."}), 429
 
     bid = data.get("bid") or {}
     company = data.get("company") or {}

@@ -741,7 +741,20 @@ function setAuthBusy(on,label){
   if(m)m.disabled=on;
 }
 
-document.getElementById("toggle-link").onclick=()=>setAuthMode("signin");
+// document.getElementById(id).onclick=... throws immediately if id isn't on
+// the page -- and because every statement below is top-level code that runs
+// once, at script-parse time, that throw doesn't just skip the one handler:
+// it kills the rest of this file outright, silently taking down every
+// handler wired after it. That already happened once, to the admin console,
+// before it was removed (see ServiceWorkerTests in test_frontend_structure.py).
+// byId() is the same lookup with nowhere left for that to happen: a missing
+// id gets a shared stand-in instead of null, so wiring a handler onto it is a
+// quiet no-op -- never a crash -- and every renaming of an element id from
+// here on is at worst one dead button, not a dead app.
+const _NULL_EL={addEventListener(){}};
+function byId(id){return document.getElementById(id)||_NULL_EL;}
+
+byId("toggle-link").onclick=()=>setAuthMode("signin");
 
 // The markup is written in the signup state, so a returning visitor whose
 // authMode started as "signin" would otherwise see signup's title, button,
@@ -847,7 +860,7 @@ function friendlyAuthError(message){
 window.addEventListener("pageshow",e=>{if(e.persisted)resetTurnstile();});
 
 // ── Forgot password ──
-document.getElementById("forgot-link").onclick=async()=>{
+byId("forgot-link").onclick=async()=>{
   const email=document.getElementById("auth-email").value.trim();
   if(!email){setMsg("Enter your email above first, then tap this again","err");return;}
   if(await captchaBlocking())return;
@@ -1088,7 +1101,7 @@ function capturePendingSignupName(){
   if(name)store.set("pending_signup_name",name);
 }
 
-document.getElementById("google-btn").onclick=async()=>{
+byId("google-btn").onclick=async()=>{
   if(!signInAvailable())return;
   if(authMode==="signup"&&!document.getElementById("terms-check").checked){
     setMsg("Please agree to the Terms and Privacy Policy to continue","err");return;
@@ -1103,7 +1116,7 @@ document.getElementById("google-btn").onclick=async()=>{
   if(error)setMsg(error.message,"err");
 };
 
-document.getElementById("email-btn").onclick=async()=>{
+byId("email-btn").onclick=async()=>{
   if(!signInAvailable())return;
   const email=document.getElementById("auth-email").value.trim();
   const password=document.getElementById("auth-password").value;
@@ -1149,7 +1162,7 @@ document.getElementById("email-btn").onclick=async()=>{
   // session is live — onAuthStateChange will fire
 };
 
-document.getElementById("magic-btn").onclick=async()=>{
+byId("magic-btn").onclick=async()=>{
   if(!signInAvailable())return;
   const email=document.getElementById("auth-email").value.trim();
   if(!email){setMsg("Enter your email first","err");return;}
@@ -1473,7 +1486,7 @@ document.querySelectorAll("#leads-radius-row .radius-btn").forEach(b=>{
   };
 });
 
-document.getElementById("clear-feed").onclick=()=>{
+byId("clear-feed").onclick=()=>{
   if(confirm("Clear all bids? (Saved bids are not affected.)"))
   {bidData={};store.set("last_feed",bidData);queueFeedPush();cityFilter="All";renderFeed();}
 };
@@ -1500,7 +1513,7 @@ async function syncPullSavedSearches(){
   renderSavedSearches();
   for(const s of localOnly)await pushSavedSearch(s.location,s.radius);
 }
-document.getElementById("save-search-btn").onclick=()=>{
+byId("save-search-btn").onclick=()=>{
   const location=document.getElementById("loc-input").value.trim();
   if(!location){toast("Enter a ZIP or city first");return;}
   const exists=savedSearches.some(s=>s.location.toLowerCase()===location.toLowerCase()&&s.radius===radius);
@@ -2391,9 +2404,9 @@ scanBtn.onclick=()=>runScan(false);
 // Results are cached per area per day, so the first scan of an area decides
 // what you see until midnight. If that one ran while a search backend was
 // down, this is how you get a real answer without waiting a day.
-document.getElementById("force-scan-btn").onclick=()=>runScan(true);
-document.getElementById("detect-btn").onclick=()=>detectLocation(true);
-document.getElementById("loc-input").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();runScan();}});
+byId("force-scan-btn").onclick=()=>runScan(true);
+byId("detect-btn").onclick=()=>detectLocation(true);
+byId("loc-input").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();runScan();}});
 
 // Deadlines on real bid pages are rarely a bare date — "Due by 12/01/2026 at
 // 2:00 PM", "Bids due December 1, 2026 at 2:00 p.m.". Matching only an ISO
@@ -2961,7 +2974,7 @@ async function runScan(force){
 let upcomingData=store.get("upcoming_feed",{});
 const upcomingBtn=document.getElementById("upcoming-btn");
 upcomingBtn.onclick=runUpcoming;
-document.getElementById("up-loc-input").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();runUpcoming();}});
+byId("up-loc-input").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();runUpcoming();}});
 
 // Same hashing as bidId, and the same reason: matches app.py's upcoming_id
 // and stops two projects with long, similar titles deduping into one.
@@ -3085,10 +3098,10 @@ function renderUpcoming(){
   if(!rows.length)list.innerHTML=`<div class="empty"><h3>No matches</h3><p>Try a different search term.</p></div>`;
 }
 let lastUpcomingRows=[];
-document.getElementById("up-sort").onchange=()=>renderUpcoming();
-document.getElementById("export-upcoming-btn").onclick=()=>
+byId("up-sort").onchange=()=>renderUpcoming();
+byId("export-upcoming-btn").onclick=()=>
   exportCSV(lastUpcomingRows,"curbcall_upcoming");
-document.getElementById("up-search").oninput=()=>renderUpcoming();
+byId("up-search").oninput=()=>renderUpcoming();
 
 // ── Residential Leads (driveway/sidewalk permits -- a live lead to pitch,
 // not a formal bid to respond to: no deadline, no RFP process, often
@@ -3105,7 +3118,7 @@ function setLeadStatus(permitId,status){
 }
 const leadsBtn=document.getElementById("leads-btn");
 leadsBtn.onclick=runLeads;
-document.getElementById("leads-loc-input").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();runLeads();}});
+byId("leads-loc-input").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();runLeads();}});
 
 async function runLeads(){
   if(leadsBtn.disabled)return; // guard against double-tap / double-submit
@@ -3261,8 +3274,8 @@ function renderLeads(){
     btn.onclick=()=>setLeadStatus(btn.dataset.leadId,btn.dataset.leadStatus);
   });
 }
-document.getElementById("leads-search").oninput=()=>renderLeads();
-document.getElementById("leads-sort").onchange=()=>renderLeads();
+byId("leads-search").oninput=()=>renderLeads();
+byId("leads-sort").onchange=()=>renderLeads();
 
 let lastLeadsRows=[];
 function exportLeadsCSV(rows){
@@ -3279,7 +3292,7 @@ function exportLeadsCSV(rows){
   a.href=url;a.download=stampedName("curbcall-leads","csv");document.body.appendChild(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
-document.getElementById("export-leads-btn").onclick=()=>exportLeadsCSV(lastLeadsRows);
+byId("export-leads-btn").onclick=()=>exportLeadsCSV(lastLeadsRows);
 
 // ── Bid helpers ──
 // MD5, byte-for-byte compatible with Python's hashlib.md5, because the bid id
@@ -3414,9 +3427,9 @@ function renderFeed(){
   if(!rows.length)list.innerHTML=`<div class="empty"><h3>No matches</h3><p>Try a different search term.</p></div>`;
   attachBidEvents(list);
 }
-document.getElementById("feed-search").oninput=()=>renderFeed();
-document.getElementById("feed-sort").onchange=()=>renderFeed();
-document.getElementById("export-feed-btn").onclick=()=>exportCSV(lastFeedRows,"curbcall-bids");
+byId("feed-search").oninput=()=>renderFeed();
+byId("feed-sort").onchange=()=>renderFeed();
+byId("export-feed-btn").onclick=()=>exportCSV(lastFeedRows,"curbcall-bids");
 
 function csvEscape(v){v=String(v==null?"":v);if(/[",\n]/.test(v))return'"'+v.replace(/"/g,'""')+'"';return v;}
 function exportCSV(rows,filename){
@@ -3842,14 +3855,14 @@ async function uploadAvatar(file){
     updateUserChip();
     renderAccount();
     return true;
-  }catch(err){toast("Couldn't upload photo — check your connection.");return false;}
+  }catch(err){toast(offlineOrServer());return false;}
 }
 
 function closeModal(){
   document.getElementById("modal-back").classList.remove("open");
   document.getElementById("modal").classList.remove("open");
 }
-document.getElementById("modal-back").onclick=closeModal;
+byId("modal-back").onclick=closeModal;
 
 // ── AI-drafted bid proposals ──
 // Sends the bid + the contractor's own saved company info (set in Account)
@@ -3948,7 +3961,7 @@ function renderSaved(){
   list.innerHTML=filteredKeys.map(id=>{const b=saved[id];return bidCard(b._city||"",b);}).join("");
   attachBidEvents(list);
 }
-document.getElementById("export-saved-btn").onclick=()=>{
+byId("export-saved-btn").onclick=()=>{
   const keys=Object.keys(saved).filter(id=>pipelineFilter==="All"||(pipelineFilter==="none"?!pipeline[id]:pipeline[id]===pipelineFilter));
   exportCSV(keys.map(id=>[saved[id]._city||"",saved[id]]),"curbcall_saved");
 };

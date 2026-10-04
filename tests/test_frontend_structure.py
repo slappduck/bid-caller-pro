@@ -440,7 +440,7 @@ class DestructiveActionIsNotFirstTests(unittest.TestCase):
                         self.src.index('id="clear-feed"'))
 
     def test_clear_all_bids_still_confirms(self):
-        i = self.src.index('getElementById("clear-feed").onclick')
+        i = self.src.index('byId("clear-feed").onclick')
         self.assertIn("confirm(", self.src[i:i + 300])
 
 
@@ -582,3 +582,43 @@ class NavigationClosesAnyOpenSheetTests(unittest.TestCase):
         self.assertIn("closeModal()", head)
         self.assertLess(head.index("closeModal()"),
                         head.index('document.getElementById("screen-"+s)'))
+
+
+class TopLevelHandlersCannotCrashTheWholeScriptTests(unittest.TestCase):
+    """document.getElementById(id).onclick=... used to throw immediately if
+    id wasn't on the page -- and because every wiring statement like this
+    runs once, at script-parse time, that throw didn't just skip the one
+    handler, it killed the rest of the file outright, silently taking every
+    handler wired after it down too. That already happened once, to the
+    admin console, before it was removed (see ServiceWorkerTests above).
+    byId() is the fix: the same lookup, but a missing id gets a shared
+    stand-in instead of null, so wiring a handler onto it is a quiet no-op.
+    Renaming or removing an element id from here on is at worst one dead
+    button, never a dead app -- but only as long as nothing goes back to
+    calling document.getElementById directly at the top level, which is
+    exactly the regression this guards against.
+    """
+
+    def setUp(self):
+        self.app = _read(APP_JS)
+
+    def test_the_safe_lookup_helper_exists(self):
+        i = self.app.index("function byId(id){")
+        self.assertIn("||_NULL_EL", self.app[i:i + 120])
+
+    def test_the_stand_in_tolerates_addeventlistener_too(self):
+        """A plain {} has no addEventListener method -- the fallback must
+        be more than an empty object, or the keydown-listener call sites
+        would simply trade one crash for another."""
+        i = self.app.index("_NULL_EL=")
+        self.assertIn("addEventListener", self.app[i:i + 60])
+
+    def test_no_top_level_statement_calls_getelementbyid_directly(self):
+        """Every one of these must go through byId() instead. A bare
+        document.getElementById( at column 0, followed by a handler
+        assignment or addEventListener, is this exact bug shipping again."""
+        offenders = re.findall(
+            r'^document\.getElementById\([^\n]*?\.'
+            r'(?:onclick|onchange|oninput|onsubmit|addEventListener)',
+            self.app, re.M)
+        self.assertEqual(offenders, [])

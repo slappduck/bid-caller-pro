@@ -61,6 +61,21 @@ AGENCY_MAX_PER_IP_PER_DAY = int(os.environ.get("AGENCY_MAX_PER_IP_PER_DAY", "10"
 _SUPPORT_RATE_KEY = "bidcaller:support_rate"
 SUPPORT_MAX_PER_IP_PER_DAY = int(os.environ.get("SUPPORT_MAX_PER_IP_PER_DAY", "20"))
 SUPPORT_MAX_CHARS = int(os.environ.get("SUPPORT_MAX_CHARS", "8000"))
+# /scan (force=true only -- a normal scan just reads the same-day cache) and
+# /draft-proposal both already require an active licence, unlike the public
+# forms above -- but neither had any cap past that, unlike everything else
+# here. A forced re-scan burns real search-API quota re-running the full
+# pipeline instead of reading the cache, and every proposal draft is a paid
+# OpenAI call with nothing cached about it at all. A scripted client, a
+# buggy retry loop, or one shared/leaked key hammering either in a loop had
+# nothing to stop it. Keyed by licence key (falling back to device, then IP)
+# rather than IP alone -- these are authenticated endpoints, so the thing
+# worth capping is the credential being spent, not the network address
+# making the request.
+_FORCE_SCAN_RATE_KEY = "bidcaller:force_scan_rate"
+FORCE_SCAN_MAX_PER_KEY_PER_DAY = int(os.environ.get("FORCE_SCAN_MAX_PER_KEY_PER_DAY", "20"))
+_DRAFT_PROPOSAL_RATE_KEY = "bidcaller:draft_proposal_rate"
+DRAFT_PROPOSAL_MAX_PER_KEY_PER_DAY = int(os.environ.get("DRAFT_PROPOSAL_MAX_PER_KEY_PER_DAY", "30"))
 # Deliberately strict: this value becomes a Reply-To header.
 _PLAIN_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]{1,64}@[A-Za-z0-9.\-]{1,190}\.[A-Za-z]{2,24}")
 
