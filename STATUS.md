@@ -104,6 +104,12 @@ it.
 | **Accountant on SaaS sales tax nexus** | Missouri plus wherever subscribers are |
 | **Trademark search on "CurbCall Pro"** | Before spending anything more on the name |
 
+### Added 2026-10-04 — Stripe plan metadata
+
+| Item | What's needed |
+|---|---|
+| **Set `metadata.plan` on both Stripe Payment Links** | The webhook used to classify annual vs. monthly purely by whether the charge was >= $100 -- a coupon, promo, or future price change pushing a real annual sale under that line would silently issue a monthly key, and the customer's access would quietly expire a year early with no error anywhere. Fixed in code (PR #25) to read `metadata.plan` off the Checkout Session instead, but that field only exists if it's set on the Payment Link itself: Stripe Dashboard -> Payment Links -> edit each of the two live links -> Advanced options -> Metadata -> add `plan` = `annual` or `plan` = `monthly` (matching which link it is). Until both are tagged, new checkouts fall back to the old amount-based guess -- not broken, just not yet protected against the coupon/promo case that motivated the fix. Two-minute dashboard change, not code. |
+
 ## Built and pushed, NOT merged (`claude/weekly-upcoming`)
 
 - **Weekly Upcoming scan** — Mondays 12:00 UTC (~7am Central), emails each
