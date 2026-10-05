@@ -1443,9 +1443,35 @@ if(!LEADS_ENABLED){
   if(lb)lb.remove();
 }
 document.querySelectorAll(".nav-btn").forEach(b=>{
-  b.onclick=()=>switchScreen(b.dataset.s);
+  b.onclick=()=>{switchScreen(b.dataset.s);closeNavMenu();};
 });
 function goTo(s){switchScreen(s);}
+
+// ── Desktop nav dropdown ──
+// Mobile's bottom tab bar is always visible and never touches this. At the
+// desktop breakpoint the same #nav-menu becomes a dropdown (see styles.css);
+// .nav-trigger doesn't even render below that width, so none of this fires
+// from a tap there.
+const navTrigger=document.getElementById("nav-trigger");
+function closeNavMenu(){
+  document.body.classList.remove("nav-open");
+  if(navTrigger)navTrigger.setAttribute("aria-expanded","false");
+}
+if(navTrigger){
+  navTrigger.onclick=(e)=>{
+    e.stopPropagation();
+    const open=document.body.classList.toggle("nav-open");
+    navTrigger.setAttribute("aria-expanded",open?"true":"false");
+  };
+  document.addEventListener("click",(e)=>{
+    if(!document.body.classList.contains("nav-open"))return;
+    if(e.target.closest("#nav-menu")||e.target.closest("#nav-trigger"))return;
+    closeNavMenu();
+  });
+  document.addEventListener("keydown",(e)=>{
+    if(e.key==="Escape")closeNavMenu();
+  });
+}
 
 // ── Radius (scoped per row so Find and Upcoming don't fight over one value) ──
 // 125, not 25. Benchmarked over eight metros on the same day: at 25 miles a

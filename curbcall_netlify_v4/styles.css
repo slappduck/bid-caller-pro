@@ -130,6 +130,10 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
    It used to be a bare 27px-tall pill showing an email address, which nobody
    recognised as the way into Account. */
 .user-chip{font-family:var(--ui);font-size:var(--fs-xs);font-weight:700;color:var(--accent);background:rgba(245,166,35,0.12);border:1px solid rgba(245,166,35,0.35);padding:0.3rem 0.6rem;border-radius:var(--r-pill);min-height:44px;box-sizing:border-box;max-width:52vw;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;gap:0.35rem;}
+/* Desktop-only: the trigger for the nav dropdown (see the desktop layout
+   section below). Mobile keeps its own always-visible bottom tab bar
+   untouched, so this stays display:none until the 960px breakpoint. */
+.nav-trigger{display:none;}
 .user-chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
 .user-chip .who{overflow:hidden;text-overflow:ellipsis;min-width:0;}
 .user-chip .chev{opacity:0.75;flex-shrink:0;font-size:var(--fs-md);line-height:1;}
@@ -453,12 +457,16 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
    for a tool a contractor checks on a job site, but it meant a 1440px
    monitor got the exact same ~360px-wide card floating alone in a sea of
    background, nav included: nothing here was ever written to use the rest
-   of a desktop screen. This section only, at --bp-desktop and wider:
-   the bottom nav becomes a left sidebar (CSS placement only -- same
-   buttons, same markup, same click handlers), the content column gets
-   real width back, and bid-card lists that were one column deep flow into
-   an actual grid instead of a single full-width column stretched across a
-   1100px row. */
+   of a desktop screen. This section only, at --bp-desktop and wider: the
+   content column gets real width back, and bid-card lists that were one
+   column deep flow into an actual grid instead of a single full-width
+   column stretched across a 1100px row.
+
+   The nav itself was first tried as an always-visible left sidebar; this
+   replaces that with a dropdown opened from a trigger button in the
+   topbar (.nav-trigger), left mobile's bottom tab bar completely alone,
+   and freed the 232px column the sidebar used to reserve. Same #nav-menu
+   markup, same .nav-btn click handlers -- only how it's shown changed. */
 :root{--bp-desktop:960px;}
 @media (min-width:960px){
   /* --shell drives both .screen's max-width and .topbar's centering inset
@@ -466,26 +474,40 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
      rather than maintaining two numbers that have to be kept in sync. */
   :root{--shell:1180px;}
 
-  /* #app's four direct children (topbar, offline-bar, screens, bottom-nav)
-     stay siblings in the markup -- Grid, unlike Flex, can place each one
-     independently by row/column without needing a wrapper element around
-     the three that aren't the nav, which is what makes this a CSS-only
-     change. bottom-nav spans every row in column 1; the other three stack
-     in column 2 in their existing source order. */
-  #app{display:grid;grid-template-columns:232px 1fr;grid-template-rows:auto auto 1fr;height:100%;}
-  .topbar{grid-column:2;grid-row:1;padding-inline:2rem;}
-  #offline-bar{grid-column:2;grid-row:2;}
-  .screens{grid-column:2;grid-row:3;}
   .screen{padding-bottom:2.5rem;} /* no fixed bottom bar left to clear */
 
-  .bottom-nav{grid-column:1;grid-row:1/-1;flex-direction:column;align-items:stretch;
-    justify-content:flex-start;gap:0.2rem;padding:1.5rem 0.75rem;
-    border-top:none;border-right:1px solid var(--border);}
+  .nav-trigger{display:inline-flex;align-items:center;gap:0.4rem;
+    background:none;border:1px solid var(--border);color:var(--text2);
+    border-radius:var(--r-sm);padding:0.5rem 0.8rem;font-family:var(--ui);
+    font-size:var(--fs-sm);font-weight:700;cursor:pointer;min-height:44px;
+    box-sizing:border-box;}
+  .nav-trigger:hover{color:var(--text);border-color:var(--text3);}
+  .nav-trigger[aria-expanded="true"]{color:var(--text);background:var(--card);}
+  .nav-trigger .icon-svg{width:1.1rem;height:1.1rem;}
+  /* With the trigger between them, .topbar's own space-between no longer
+     pushes the chip to the far edge -- pin it there directly instead. */
+  .user-chip{margin-left:auto;}
+
+  /* #app (position:fixed;inset:0 -- see its base rule) is the nearest
+     positioned ancestor for #nav-menu, so this anchors the dropdown to
+     the viewport rather than needing a wrapper around the trigger.
+     --topbar-h mirrors the topbar's actual rendered height (padding plus
+     the 44px-tall chip/trigger row) so the panel lands just under it;
+     there's no sibling-relative CSS for "how tall did the topbar end up,"
+     so if that padding or button height changes this needs updating too. */
+  :root{--topbar-h:4.8rem;}
+  #nav-menu{display:none;position:absolute;top:var(--topbar-h);
+    left:max(1rem,calc((100% - var(--shell))/2 + 1rem));z-index:20;
+    flex-direction:column;align-items:stretch;justify-content:flex-start;
+    gap:0.2rem;padding:0.6rem;min-width:220px;border:1px solid var(--border);
+    border-radius:var(--r-lg);background:var(--surface);
+    box-shadow:0 12px 32px rgba(0,0,0,0.35);}
+  body.nav-open #nav-menu{display:flex;}
   .nav-btn{flex:none;flex-direction:row;justify-content:flex-start;gap:0.8rem;
     padding:0.65rem 0.8rem;border-radius:var(--r);}
   /* The active state was an underline centred under a stacked icon+label --
      meaningless once they're side by side in a row. A filled row reads the
-     same way a selected item does in any desktop sidebar. */
+     same way a selected item does in any dropdown menu. */
   .nav-btn.active::after{display:none;}
   .nav-btn.active{background:var(--card);}
   .nav-btn .icon-svg{width:1.2rem;height:1.2rem;}

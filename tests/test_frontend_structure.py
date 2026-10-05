@@ -636,7 +636,12 @@ class DesktopLayoutTests(unittest.TestCase):
     rendered pixels -- real rendering was verified separately, with
     tests/test_web_app.js re-run afterward to confirm nothing at the actual
     320px test viewport changed (it is gated behind --bp-desktop, 960px, so
-    it shouldn't)."""
+    it shouldn't).
+
+    The nav itself was first shipped as an always-visible left sidebar, then
+    changed again to a dropdown opened from a topbar trigger (mobile's
+    bottom tab bar was never touched by either version) -- see
+    NavDropdownTests below for that piece."""
 
     def setUp(self):
         self.css = _read(APP_CSS)
@@ -684,18 +689,11 @@ class DesktopLayoutTests(unittest.TestCase):
         self.assertIn(".empty", rule)
         self.assertIn("grid-column:1/-1", rule)
 
-    def test_the_bottom_nav_becomes_a_sidebar_not_a_second_bottom_bar(self):
-        """flex-direction:column is what turns a horizontal bottom bar into
-        a vertical sidebar list using the exact same buttons."""
-        rule = self._desktop_rule()
-        i = rule.index(".bottom-nav{")
-        self.assertIn("flex-direction:column", rule[i:i + 300])
-
-    def test_the_bottom_bar_underline_does_not_survive_into_the_sidebar(self):
+    def test_the_bottom_bar_underline_does_not_survive_into_the_dropdown(self):
         """.nav-btn.active::after draws a short underline centred beneath a
-        stacked icon+label -- meaningless once they sit side by side in a
-        sidebar row, and left alone it would show as a stray mark with
-        nothing for it to underline."""
+        stacked icon+label -- meaningless once they're rows in a dropdown
+        list, and left alone it would show as a stray mark with nothing for
+        it to underline."""
         rule = self._desktop_rule()
         self.assertIn(".nav-btn.active::after{display:none;}", rule)
 
@@ -706,6 +704,83 @@ class DesktopLayoutTests(unittest.TestCase):
         rule = self._desktop_rule()
         self.assertNotIn("auth-screen", rule)
         self.assertNotIn("auth-card", rule)
+
+
+class NavDropdownTests(unittest.TestCase):
+    """The desktop sidebar from the first pass at this (see DesktopLayoutTests)
+    was replaced by a dropdown: a .nav-trigger button in the topbar toggles
+    the same #nav-menu/.nav-btn markup mobile already uses, instead of
+    reserving a permanent 232px column for it. Mobile's bottom tab bar was
+    never touched -- .nav-trigger stays display:none until the desktop
+    breakpoint, so it can't be tapped (or even found) below it."""
+
+    def setUp(self):
+        self.app = _read(APP)
+        self.css = _read(APP_CSS)
+        self.js = _read(APP_JS)
+
+    def _desktop_rule(self):
+        i = self.css.index("@media (min-width:960px){")
+        depth = 0
+        for k, ch in enumerate(self.css[i:], start=i):
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return self.css[i:k + 1]
+        self.fail("unterminated @media (min-width:960px) block")
+
+    def test_the_trigger_button_exists_in_the_topbar(self):
+        i = self.app.index('<div class="topbar">')
+        j = self.app.index('id="user-chip"', i)
+        self.assertIn('id="nav-trigger"', self.app[i:j])
+
+    def test_the_trigger_is_hidden_until_the_desktop_breakpoint(self):
+        """Without this, the button would render (and be tappable) on
+        mobile too, where there is no dropdown for it to open -- the bottom
+        tab bar is the only nav mobile ever gets."""
+        i = self.css.index(".nav-trigger{")
+        self.assertIn("display:none", self.css[i:i + 50])
+
+    def test_the_dropdown_shares_markup_with_the_bottom_tab_bar(self):
+        """#nav-menu is the same element the id="nav-menu" attribute was
+        added to on the existing bottom-nav div -- not a second, parallel
+        nav that could drift out of sync with it."""
+        i = self.app.index('class="bottom-nav"')
+        self.assertIn('id="nav-menu"', self.app[i:i + 60])
+
+    def test_the_dropdown_is_closed_by_default_on_desktop(self):
+        rule = self._desktop_rule()
+        i = rule.index("#nav-menu{")
+        self.assertIn("display:none", rule[i:i + 60])
+
+    def test_opening_the_dropdown_only_needs_a_body_class(self):
+        """nav-open is toggled on <body> by app.js's trigger click handler
+        -- asserting the CSS keys off it here guards against a rename on
+        either side going unnoticed."""
+        rule = self._desktop_rule()
+        self.assertIn("body.nav-open #nav-menu{display:flex;}", rule)
+
+    def test_clicking_a_tab_closes_the_dropdown(self):
+        """Without this, picking Bids/Upcoming/etc. from the dropdown would
+        leave it sitting open over the screen it just navigated to."""
+        i = self.js.index('document.querySelectorAll(".nav-btn").forEach(b=>{')
+        body = self.js[i:i + 200]
+        self.assertIn("closeNavMenu()", body)
+
+    def test_the_trigger_toggles_an_aria_expanded_state(self):
+        """aria-expanded is how a screen reader learns the dropdown opened
+        at all -- there's no visible focus change otherwise since the panel
+        is positioned absolutely, outside the trigger's own box."""
+        self.assertIn('aria-expanded="false"', self.app)
+        i = self.js.index("navTrigger.onclick=")
+        self.assertIn('setAttribute("aria-expanded"', self.js[i:i + 200])
+
+    def test_an_outside_click_closes_the_dropdown(self):
+        i = self.js.index('document.addEventListener("click",')
+        body = self.js[i:i + 250]
+        self.assertIn("closeNavMenu()", body)
 
 
 class MapBasemapIsMutedNotSwappedTests(unittest.TestCase):
