@@ -706,3 +706,63 @@ class DesktopLayoutTests(unittest.TestCase):
         rule = self._desktop_rule()
         self.assertNotIn("auth-screen", rule)
         self.assertNotIn("auth-card", rule)
+
+
+class MapBasemapIsMutedNotSwappedTests(unittest.TestCase):
+    """The raw OSM basemap is a bright cream rectangle that reads as a
+    pasted-in widget against the app's dark shell. Switching the tile
+    *provider* to a dark basemap was tried and reverted (see the comment at
+    app.js's MAP_TILE_URL) because it washed out the pins -- the entire
+    point of the map -- and sent street labels grey-on-grey. The fix instead
+    filters only .leaflet-tile-pane, leaving markers/popups/controls, which
+    live in separate Leaflet panes, completely untouched."""
+
+    def setUp(self):
+        self.css = _read(APP_CSS)
+        self.app = _read(APP_JS)
+
+    def test_only_the_tile_pane_is_filtered(self):
+        self.assertIn(".leaflet-tile-pane{filter:", self.css)
+
+    def test_the_tile_provider_itself_was_not_swapped(self):
+        """Guards against re-introducing the already-reverted dark-tile-
+        provider approach: the light OSM URL must still be the one in use."""
+        self.assertIn("tile.openstreetmap.org", self.app)
+
+    def test_pin_markers_are_not_inside_the_filtered_pane_rule(self):
+        """A filter on a parent pane would dim anything placed inside it --
+        make sure the rule targets the tile pane alone, not a shared
+        ancestor that also holds markers or popups."""
+        i = self.css.index(".leaflet-tile-pane{filter:")
+        rule_end = self.css.index("}", i) + 1
+        rule = self.css[i:rule_end]
+        self.assertNotIn("marker", rule.lower())
+        self.assertNotIn("popup", rule.lower())
+
+    def test_the_map_background_matches_the_dark_shell_not_the_light_tiles(self):
+        """#f2efe9 (the old light-card background) would show through as a
+        mismatched seam while tiles are loading/panning now that the tile
+        imagery itself is dimmed."""
+        self.assertNotIn("#f2efe9", self.css)
+
+    def test_desktop_map_height_grows_with_the_wider_card(self):
+        """PR #26 widened the signed-in shell to ~1180px on desktop. Left at
+        the phone-tuned clamp(180px,26vh,280px), the map became a thin
+        letterbox strip instead of a map. The desktop media query must
+        override the height for both map views."""
+        i = self.css.index("@media (min-width:960px){")
+        depth = 0
+        j = i + len("@media (min-width:960px){") - 1
+        rule = None
+        for k, ch in enumerate(self.css[i:], start=i):
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    rule = self.css[i:k + 1]
+                    break
+        self.assertIsNotNone(rule, "unterminated @media (min-width:960px) block")
+        self.assertIn("#find-map-view", rule)
+        self.assertIn("#leads-map-view", rule)
+        self.assertIn("height:clamp(", rule)

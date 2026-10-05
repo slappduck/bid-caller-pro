@@ -372,7 +372,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .map-card-head .t{font-size:var(--fs-sm);font-weight:800;letter-spacing:0.03em;display:flex;align-items:center;gap:0.4rem;}
 .map-card-head .x{background:none;border:none;color:var(--text2);font-size:var(--fs-base);cursor:pointer;padding:0.2rem 0.4rem;}
 .map-legend{display:flex;gap:0.8rem;flex-wrap:wrap;font-size:var(--fs-sm);color:var(--text2);padding:0.6rem 0.9rem 0.75rem;}
-#find-map-view,#leads-map-view{height:clamp(180px,26vh,280px);background:#f2efe9;}
+#find-map-view,#leads-map-view{height:clamp(180px,26vh,280px);background:#403d36;}
 .map-legend span{display:inline-flex;align-items:center;gap:0.3rem;}
 /* Popups stay dark on purpose: against the light basemap they read as a panel
    floating above the map rather than part of it, and they match the app. */
@@ -391,7 +391,13 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .leaflet-control-attribution{background:rgba(19,22,42,0.82)!important;
   color:var(--text2)!important;font-size:0.6rem!important;padding:2px 6px!important;}
 .leaflet-control-attribution a{color:var(--text)!important;}
-.leaflet-container{background:#f2efe9;}
+.leaflet-container{background:#403d36;}
+/* Switching the basemap itself to dark tiles was tried and reverted -- it
+   washed out the pins (the entire point of this map) and street labels went
+   grey-on-grey. Filtering just the tile layer keeps every marker, popup and
+   control at full strength while knocking the raw imagery down to something
+   that sits in the dark shell instead of glowing like a popup ad. */
+.leaflet-tile-pane{filter:brightness(0.8) saturate(0.7) contrast(1.05);}
 .leaflet-popup-content-wrapper{background:var(--surface);color:var(--text);}
 .leaflet-popup-tip{background:var(--surface);}
 /* Leaflet's default link blue is close to unreadable on that dark panel. */
@@ -499,4 +505,10 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
   #feed-list .feed-label,#upcoming-list .feed-label,#leads-list .feed-label,
   #feed-list .empty,#upcoming-list .empty,#leads-list .empty,#saved-list .empty{
     grid-column:1/-1;}
+
+  /* The map's height was tuned for a phone-width card. Left alone here it
+     stretches to the new ~1180px shell width while staying under 280px tall
+     -- a letterbox strip instead of a map. Scale the height with the wider
+     card so the aspect ratio stays sane. */
+  #find-map-view,#leads-map-view{height:clamp(280px,42vh,460px);}
 }
