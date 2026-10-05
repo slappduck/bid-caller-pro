@@ -439,3 +439,64 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 #offline-reconnect{background:none;border:1px solid var(--accent);color:var(--accent);border-radius:var(--r-sm);padding:0.15rem 0.6rem;font-size:var(--fs-sm);font-weight:700;font-family:var(--ui);cursor:pointer;flex-shrink:0;}
 #offline-reconnect:disabled{opacity:0.6;cursor:default;}
 .map-card.offline{display:none !important;}
+
+/* ── Desktop layout (signed-in app shell only -- the auth screen is
+   untouched, by design: it's a short, centred form, and a form does not
+   get better by getting wider) ──
+   Everything above assumes a phone-width, bottom-nav shell -- reasonable
+   for a tool a contractor checks on a job site, but it meant a 1440px
+   monitor got the exact same ~360px-wide card floating alone in a sea of
+   background, nav included: nothing here was ever written to use the rest
+   of a desktop screen. This section only, at --bp-desktop and wider:
+   the bottom nav becomes a left sidebar (CSS placement only -- same
+   buttons, same markup, same click handlers), the content column gets
+   real width back, and bid-card lists that were one column deep flow into
+   an actual grid instead of a single full-width column stretched across a
+   1100px row. */
+:root{--bp-desktop:960px;}
+@media (min-width:960px){
+  /* --shell drives both .screen's max-width and .topbar's centering inset
+     (see their rules above) -- widening it here widens both in step,
+     rather than maintaining two numbers that have to be kept in sync. */
+  :root{--shell:1180px;}
+
+  /* #app's four direct children (topbar, offline-bar, screens, bottom-nav)
+     stay siblings in the markup -- Grid, unlike Flex, can place each one
+     independently by row/column without needing a wrapper element around
+     the three that aren't the nav, which is what makes this a CSS-only
+     change. bottom-nav spans every row in column 1; the other three stack
+     in column 2 in their existing source order. */
+  #app{display:grid;grid-template-columns:232px 1fr;grid-template-rows:auto auto 1fr;height:100%;}
+  .topbar{grid-column:2;grid-row:1;padding-inline:2rem;}
+  #offline-bar{grid-column:2;grid-row:2;}
+  .screens{grid-column:2;grid-row:3;}
+  .screen{padding-bottom:2.5rem;} /* no fixed bottom bar left to clear */
+
+  .bottom-nav{grid-column:1;grid-row:1/-1;flex-direction:column;align-items:stretch;
+    justify-content:flex-start;gap:0.2rem;padding:1.5rem 0.75rem;
+    border-top:none;border-right:1px solid var(--border);}
+  .nav-btn{flex:none;flex-direction:row;justify-content:flex-start;gap:0.8rem;
+    padding:0.65rem 0.8rem;border-radius:var(--r);}
+  /* The active state was an underline centred under a stacked icon+label --
+     meaningless once they're side by side in a row. A filled row reads the
+     same way a selected item does in any desktop sidebar. */
+  .nav-btn.active::after{display:none;}
+  .nav-btn.active{background:var(--card);}
+  .nav-btn .icon-svg{width:1.2rem;height:1.2rem;}
+  .nav-btn .lb{font-size:var(--fs-base);}
+  .nav-badge{top:0.5rem;right:0.9rem;}
+
+  /* Four screens build their list the same way: an optional full-width
+     label (.feed-label) or empty-state card, then a flat run of .bid
+     siblings -- see renderFeed()/renderUpcoming()/renderLeads()/
+     renderSaved() in app.js. Grid-ing the container is what turns that
+     single column into several; the label and empty state need to be told
+     to span all of them instead of landing in just the first one. */
+  #feed-list,#upcoming-list,#leads-list,#saved-list{
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));
+    gap:0.8rem;align-items:start;}
+  #feed-list .bid,#upcoming-list .bid,#leads-list .bid,#saved-list .bid{margin-bottom:0;}
+  #feed-list .feed-label,#upcoming-list .feed-label,#leads-list .feed-label,
+  #feed-list .empty,#upcoming-list .empty,#leads-list .empty,#saved-list .empty{
+    grid-column:1/-1;}
+}
