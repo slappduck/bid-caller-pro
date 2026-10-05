@@ -622,3 +622,87 @@ class TopLevelHandlersCannotCrashTheWholeScriptTests(unittest.TestCase):
             r'(?:onclick|onchange|oninput|onsubmit|addEventListener)',
             self.app, re.M)
         self.assertEqual(offenders, [])
+
+
+class DesktopLayoutTests(unittest.TestCase):
+    """The signed-in app shell was phone-width and centred at every viewport
+    -- deliberately, per --shell's own comment -- which meant a 1440px
+    monitor got the same ~360px card floating alone in a sea of background
+    that a phone gets, nav included. Confirmed by rendering the real page at
+    1440x900 (see the session's screenshots): every list screen was one
+    column deep no matter how wide the window was.
+
+    These check the structural pieces of the fix hold together, not the
+    rendered pixels -- real rendering was verified separately, with
+    tests/test_web_app.js re-run afterward to confirm nothing at the actual
+    320px test viewport changed (it is gated behind --bp-desktop, 960px, so
+    it shouldn't)."""
+
+    def setUp(self):
+        self.css = _read(APP_CSS)
+
+    def _desktop_rule(self):
+        i = self.css.index("@media (min-width:960px){")
+        depth = 0
+        j = i + len("@media (min-width:960px){") - 1
+        for k, ch in enumerate(self.css[i:], start=i):
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return self.css[i:k + 1]
+        self.fail("unterminated @media (min-width:960px) block")
+
+    def test_the_breakpoint_variable_and_the_media_query_agree(self):
+        """--bp-desktop documents the number; nothing actually reads the
+        custom property as a breakpoint (CSS can't use a var() inside an
+        @media condition), so the literal in the query is what truly governs
+        this and the two must be kept equal by hand elsewhere."""
+        self.assertIn("--bp-desktop:960px", self.css)
+        self.assertIn("@media (min-width:960px)", self.css)
+
+    def test_shell_widens_for_both_things_that_use_it(self):
+        """--shell drives .screen's max-width and .topbar's centering inset
+        (see the rules above this section) -- redefining it once here is
+        what keeps both in step, rather than maintaining two numbers."""
+        rule = self._desktop_rule()
+        self.assertIn(":root{--shell:", rule)
+
+    def test_the_four_list_screens_become_a_grid(self):
+        rule = self._desktop_rule()
+        for list_id in ("feed-list", "upcoming-list", "leads-list", "saved-list"):
+            self.assertIn(f"#{list_id}", rule, list_id)
+        self.assertIn("display:grid", rule)
+
+    def test_the_section_header_and_empty_state_span_every_column(self):
+        """Without this, .feed-label (and the "no matches" empty state)
+        becomes a grid item too and lands squeezed into the first column
+        instead of reading as a header above the cards."""
+        rule = self._desktop_rule()
+        self.assertIn(".feed-label", rule)
+        self.assertIn(".empty", rule)
+        self.assertIn("grid-column:1/-1", rule)
+
+    def test_the_bottom_nav_becomes_a_sidebar_not_a_second_bottom_bar(self):
+        """flex-direction:column is what turns a horizontal bottom bar into
+        a vertical sidebar list using the exact same buttons."""
+        rule = self._desktop_rule()
+        i = rule.index(".bottom-nav{")
+        self.assertIn("flex-direction:column", rule[i:i + 300])
+
+    def test_the_bottom_bar_underline_does_not_survive_into_the_sidebar(self):
+        """.nav-btn.active::after draws a short underline centred beneath a
+        stacked icon+label -- meaningless once they sit side by side in a
+        sidebar row, and left alone it would show as a stray mark with
+        nothing for it to underline."""
+        rule = self._desktop_rule()
+        self.assertIn(".nav-btn.active::after{display:none;}", rule)
+
+    def test_auth_screen_is_not_touched_by_any_of_this(self):
+        """The auth screen is a short form, not a list -- it was explicitly
+        left out of this pass. #auth-screen must not appear inside the
+        desktop rule at all."""
+        rule = self._desktop_rule()
+        self.assertNotIn("auth-screen", rule)
+        self.assertNotIn("auth-card", rule)
