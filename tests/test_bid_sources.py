@@ -280,6 +280,49 @@ class ContactExtractionTests(unittest.TestCase):
                 bs.parse_contact(bad)
 
 
+# A real posting page where the prose mentions a vendor's own contact details
+# well above the buyer's actual labelled "Contact Person:" field -- confirmed
+# live on a real CivicPlus/Euna OpenBids posting. Cloudflare's email-protection
+# plugin is also in play: the visible text is literally the string
+# "[email protected]", decodable only via the data-cfemail attribute.
+LIVE_DETAIL_HTML = """
+<table summary="Bid Details">
+<tr><td style="background-color:#fafafa"><span class="BidListHeader">Description:</span></td></tr>
+<tr><td><span class="BidDetail">VENDOR NOTE: If you have issues registering or
+uploading a proposal, please contact Euna OpenBids toll-free at
+(866) 273-1863. You can also contact the Division of Purchases at
+(417) 864-1620 or the Buyer stated below.</span></td></tr>
+<tr><td style="background-color:#fafafa"><span class="BidListHeader">Contact Person:</span></td></tr>
+<tr><td><span class="BidDetail">Jordan Reyes <BR><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="4220373b273002273a232f322e276f212b363b6c252d34">[email&#160;protected]</a> Phone: (417) 864-1955</span></td></tr>
+</table>
+"""
+
+
+class RealDetailPageTests(unittest.TestCase):
+    """Structural quirks a live CivicPlus detail page actually has, confirmed
+    live on a real Euna OpenBids posting, none of which the hand-written
+    DETAIL_PAGE fixture above exhibits."""
+
+    def test_decodes_a_cloudflare_obfuscated_email(self):
+        # The visible text is literally the string "[email protected]" -- a
+        # plain-text scan of it can never find a real address.
+        self.assertNotIn("@", "[email protected]")
+        self.assertEqual(
+            bs.parse_contact(LIVE_DETAIL_HTML)["email"], "buyer@example-city.gov")
+
+    def test_the_labelled_contact_wins_over_a_vendor_mention_in_prose(self):
+        # "please contact Euna OpenBids ..." appears earlier in the document
+        # than the real "Contact Person:" field and is shaped just like a
+        # valid two-word name -- it must not win.
+        self.assertEqual(bs.parse_contact(LIVE_DETAIL_HTML)["contact"], "Jordan Reyes")
+
+    def test_the_phone_near_the_contact_wins_over_ones_in_the_prose(self):
+        # Two other phone numbers (Euna OpenBids, the Division of Purchases)
+        # sit earlier in the description than the one printed right next to
+        # the named contact.
+        self.assertEqual(bs.parse_contact(LIVE_DETAIL_HTML)["phone"], "(417) 864-1955")
+
+
 class DetailScopeTests(unittest.TestCase):
     def test_pulls_the_labelled_description(self):
         scope = bs.detail_scope(DETAIL_PAGE)
@@ -298,6 +341,18 @@ class DetailScopeTests(unittest.TestCase):
         for bad in ("", None, 12345):
             with self.subTest(bad=bad):
                 self.assertEqual(bs.detail_scope(bad), "")
+
+    def test_a_description_longer_than_600_characters_is_still_captured(self):
+        # A real "Description:" field routinely runs several thousand
+        # characters of legal boilerplate -- the old 600-char cap meant the
+        # capture group could never reach a stop word, so the whole match
+        # failed and returned "".
+        long_body = "SIDEWALK AND ADA RAMP REPLACEMENT. " + ("Boilerplate text. " * 150)
+        html = f"<p>Description: {long_body}Contact: Jane Doe</p>"
+        scope = bs.detail_scope(html)
+        self.assertGreater(len(scope), 600)
+        self.assertIn("SIDEWALK AND ADA RAMP REPLACEMENT", scope)
+        self.assertNotIn("Jane Doe", scope)
 
 
 class FeedDiscoveryTests(unittest.TestCase):
