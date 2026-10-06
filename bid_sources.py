@@ -1128,13 +1128,51 @@ def parse_civicplus_html(html, base_url=""):
 _EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
 _PHONE_RE = re.compile(
     r"(?<![\d\-])(?:\+?1[\s.\-]*)?\(?([2-9]\d{2})\)?[\s.\-]*(\d{3})[\s.\-]*(\d{4})(?![\d\-])")
+
+# Cloudflare's email-obfuscation plugin -- common on .gov sites that sit
+# behind Cloudflare -- replaces a mailto entirely with this attribute and a
+# literal "[email protected]" placeholder as the visible text. _EMAIL_RE finds
+# nothing on a page like that even though the buyer's real address is sitting
+# right there, XOR'd against its own first byte.
+_CF_EMAIL_RE = re.compile(r'data-cfemail="([0-9a-fA-F]+)"')
+
+
+def _decode_cfemail(hexstr):
+    try:
+        data = bytes.fromhex(hexstr)
+    except ValueError:
+        return ""
+    if len(data) < 2:
+        return ""
+    key = data[0]
+    decoded = bytes(b ^ key for b in data[1:])
+    try:
+        out = decoded.decode("utf-8")
+    except UnicodeDecodeError:
+        return ""
+    return out if "@" in out else ""
+
+
 # "Contact: Jane Doe", "Contact Person - Jane Doe", "Questions to Jane Doe"
 # The label is matched case-insensitively; the name deliberately is NOT, so the
 # capital letters still have to be there. Without that, "contact us for details"
 # reads as a person called "Us For".
+#
+# Split into a strict tier and a loose fallback: "Contact Person:", "Contact
+# Name:", "Attention:" and "Attn:" are only ever used as an actual field
+# label, but a bid's own prose routinely reads "please contact Euna OpenBids
+# toll-free at..." or "direct questions to the Division of Purchases" well
+# above the real labelled contact further down the page. Searching the loose
+# pattern first, in document order, grabbed that vendor/department mention
+# instead of the buyer's own name. The strict tier is tried first so a real
+# label always wins; the loose one is kept for pages that never use a formal
+# label at all.
+_CONTACT_NAME_STRICT_RE = re.compile(
+    r"(?i:contact\s+person|contact\s+name|attention|attn)\s*[:\-]?\s*"
+    r"((?:[A-Z][A-Za-z.'\-]+\s+){1,2}[A-Z][A-Za-z.'\-]+)(?![A-Za-z.'\-])(?!\s*:)")
 _CONTACT_NAME_RE = re.compile(
-    r"(?i:contact(?:\s+person|\s+name)?|direct\s+questions\s+to|questions\s+to|"
-    r"submit(?:ted)?\s+to|attention|attn)\s*[:\-]?\s*"
+    r"(?i:contact|direct\s+questions\s+to|questions\s+to|"
+    r"submit(?:ted)?\s+to)\s*[:\-]?\s*"
     # The trailing lookahead stops the name from swallowing the next field's
     # label: "Contact: Marla Whitfield Email: ..." is a person and a label, not
     # a three-word name.
@@ -1143,6 +1181,21 @@ _CONTACT_NAME_RE = re.compile(
     # second stops the name swallowing the next field's label: "Contact: Marla
     # Whitfield Email: ..." is a person and a label, not a three-word name.
     r"((?:[A-Z][A-Za-z.'\-]+\s+){1,2}[A-Z][A-Za-z.'\-]+)(?![A-Za-z.'\-])(?!\s*:)")
+
+
+def _valid_contact_name(name):
+    # "Contact The City Of" and friends are labels, not people.
+    return not re.search(r"\b(the|city|county|department|office|clerk's|purchasing)\b",
+                          name, re.I)
+
+
+# How far past a found contact-name match to look for a phone number before
+# falling back to the first one anywhere on the page. A bid's prose routinely
+# states a vendor's or department's phone well before the real contact's own
+# number further down -- without this, "please contact Euna OpenBids
+# toll-free at (866) 273-1863 ... Contact Person: Jordan Reyes ... Phone:
+# (417) 864-1955" returned the vendor's number instead.
+_PHONE_NEAR_LABEL = 400
 
 # Addresses that belong to the website, not to a person who answers questions.
 _JUNK_EMAIL_PARTS = ("webmaster", "postmaster", "no-reply", "noreply", "donotreply",
@@ -1771,40 +1824,57 @@ def parse_contact(text):
     10-digit US number or nothing, because a half-number on a bid card is worse
     than a blank — the contractor dials it and loses the job to the wait.
     """
-    blob = _clean(_unescape(text))
+    raw = str(text or "")
+    blob = _clean(_unescape(raw))
     if not blob:
         return {"contact": "", "email": "", "phone": ""}
 
     email = ""
-    for candidate in _EMAIL_RE.findall(blob):
+    for hexstr in _CF_EMAIL_RE.findall(raw):
+        candidate = _decode_cfemail(hexstr)
         low = candidate.lower()
-        if any(junk in low for junk in _JUNK_EMAIL_PARTS):
-            continue
-        if low.endswith((".png", ".jpg", ".gif", ".css", ".js")):
-            continue
-        email = candidate
-        break
-
-    phone = ""
-    pm = _PHONE_RE.search(blob)
-    if pm:
-        phone = f"({pm.group(1)}) {pm.group(2)}-{pm.group(3)}"
+        if candidate and not any(junk in low for junk in _JUNK_EMAIL_PARTS):
+            email = candidate
+            break
+    if not email:
+        for candidate in _EMAIL_RE.findall(blob):
+            low = candidate.lower()
+            if any(junk in low for junk in _JUNK_EMAIL_PARTS):
+                continue
+            if low.endswith((".png", ".jpg", ".gif", ".css", ".js")):
+                continue
+            email = candidate
+            break
 
     contact = ""
-    nm = _CONTACT_NAME_RE.search(blob)
+    label_end = None
+    nm = _CONTACT_NAME_STRICT_RE.search(blob) or _CONTACT_NAME_RE.search(blob)
     if nm:
         name = nm.group(1).strip()
-        # "Contact The City Of" and friends are labels, not people.
-        if not re.search(r"\b(the|city|county|department|office|clerk's|purchasing)\b",
-                         name, re.I):
+        if _valid_contact_name(name):
             contact = name
+            label_end = nm.end()
+
+    phone = ""
+    if label_end is not None:
+        pm = _PHONE_RE.search(blob, label_end, label_end + _PHONE_NEAR_LABEL)
+        if pm:
+            phone = f"({pm.group(1)}) {pm.group(2)}-{pm.group(3)}"
+    if not phone:
+        pm = _PHONE_RE.search(blob)
+        if pm:
+            phone = f"({pm.group(1)}) {pm.group(2)}-{pm.group(3)}"
 
     return {"contact": contact, "email": email, "phone": phone}
 
 
+# A real posting's "Description:" field routinely runs several thousand
+# characters of legal boilerplate before the next labelled field appears -- a
+# 600-char cap meant the capture group could never reach a stop word and the
+# whole match failed, returning "" on real descriptions that length.
 _SCOPE_LABEL_RE = re.compile(
     r"(?:description|scope(?:\s+of\s+work)?|summary|project\s+description)\s*[:\-]\s*"
-    r"(.{40,600}?)(?:\s*(?:contact|closing|publication|bid\s+opening|attachment)\b|$)",
+    r"(.{40,4000}?)(?:\s*(?:contact|closing|publication|bid\s+opening|attachment)\b|$)",
     re.I | re.S)
 
 
