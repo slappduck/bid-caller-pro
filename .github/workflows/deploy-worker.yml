@@ -30,9 +30,20 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Deploy
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           command: deploy
+          # Without this pin, wrangler-action falls back to its own baked-in
+          # default (3.90.0) whenever no wrangler is already installed in the
+          # repo -- which is every run here, since this is a plain static
+          # site with no package.json. That version prints its own
+          # deprecation warning ("critical errors" may occur) and, in
+          # production, _redirects silently never took effect: "/", "/app",
+          # "/privacy", "/terms" and every single /go/<slug> outreach
+          # tracking link 404'd, while only literal .html paths worked.
+          # Pinning the major version Cloudflare's own Workers Assets docs
+          # are written against is what actually gets _redirects honored.
+          wranglerVersion: "4"
