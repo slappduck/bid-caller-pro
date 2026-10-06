@@ -243,6 +243,7 @@ let bidData=store.get("last_feed",{});
 let saved=store.get("saved",{});
 let pipeline=store.get("pipeline",{}); // bid id -> "submitted"|"won"|"lost"|"passed"
 let notes=store.get("notes",{}); // bid id -> freeform text, private/local only
+let dismissed=store.get("dismissed",{}); // bid id -> true, hidden from the feed even if a rescan brings it back
 let companyProfile=store.get("company_profile",{}); // used to personalize AI proposal drafts
 
 // Re-keys locally stored bids from the old truncated-text id to the hashed one
@@ -3402,14 +3403,21 @@ function formatMoney(n){
 }
 
 let lastFeedRows=[];
+// Open bids in a city, minus anything the user dismissed from the card
+// itself -- a rescan replaces the whole city's list (see mergeOpenBids), so
+// without this a dismissed bid the server still reports as open would just
+// silently come back on the next scan instead of staying gone.
+function visibleBidsIn(city){
+  return (bidData[city]||[]).filter(b=>isOpen(b)&&!dismissed[bidId(city,b)]);
+}
 function renderFeed(){
   const tiles=document.getElementById("tiles-wrap");
   const list=document.getElementById("feed-list");
   const clearBtn=document.getElementById("clear-feed");
   const filterRow=document.getElementById("filter-row");
   const exportBtn=document.getElementById("export-feed-btn");
-  const cities=Object.keys(bidData).filter(c=>(bidData[c]||[]).some(isOpen));
-  const total=cities.reduce((n,c)=>n+bidData[c].filter(isOpen).length,0);
+  const cities=Object.keys(bidData).filter(c=>visibleBidsIn(c).length);
+  const total=cities.reduce((n,c)=>n+visibleBidsIn(c).length,0);
   document.getElementById("feed-sub").textContent=total
     ?`${plural(total,"open bid")} across ${plural(cities.length,"town")}. New scans add more.`
     :"Bids you've found. New scans add to this list.";
@@ -3424,12 +3432,12 @@ function renderFeed(){
   }
   if(cities.length>1){
     let html=`<div class="tiles"><div class="tile ${cityFilter==="All"?"active":""}" data-c="All"><div class="n">${total}</div><div class="l">All</div></div>`;
-    cities.sort().forEach(c=>{const n=bidData[c].filter(isOpen).length;html+=`<div class="tile ${cityFilter===c?"active":""}" data-c="${esc(c)}"><div class="n">${n}</div><div class="l">${esc(c)}</div></div>`;});
+    cities.sort().forEach(c=>{const n=visibleBidsIn(c).length;html+=`<div class="tile ${cityFilter===c?"active":""}" data-c="${esc(c)}"><div class="n">${n}</div><div class="l">${esc(c)}</div></div>`;});
     html+=`</div>`;tiles.innerHTML=html;
     tiles.querySelectorAll(".tile").forEach(t=>t.onclick=()=>{cityFilter=t.dataset.c;renderFeed();});
   } else tiles.innerHTML="";
   let rows=[];
-  cities.forEach(c=>{if(cityFilter==="All"||cityFilter===c)bidData[c].filter(isOpen).forEach(b=>rows.push([c,b]));});
+  cities.forEach(c=>{if(cityFilter==="All"||cityFilter===c)visibleBidsIn(c).forEach(b=>rows.push([c,b]));});
   const term=(document.getElementById("feed-search").value||"").trim().toLowerCase();
   if(term)rows=rows.filter(([c,b])=>(b.title||"").toLowerCase().includes(term)||(b.scope||"").toLowerCase().includes(term)||c.toLowerCase().includes(term));
   const sortMode=document.getElementById("feed-sort").value;
@@ -3505,7 +3513,10 @@ function bidCard(city,b){
     <div class="bid-body">
       <div class="bid-top">
         <span class="bid-title">${esc(b.title||"Untitled Project")}</span>
-        <span class="star ${isSaved?"on":""}" data-star="${esc(id)}" data-city="${esc(city)}">${isSaved?"\u2605":"\u2606"}</span>
+        <div class="bid-actions">
+          <span class="star ${isSaved?"on":""}" data-star="${esc(id)}" data-city="${esc(city)}">${isSaved?"\u2605":"\u2606"}</span>
+          <button type="button" class="bid-remove" data-remove="${esc(id)}" data-city="${esc(city)}" aria-label="Remove this bid" title="Remove">&times;</button>
+        </div>
       </div>
       ${b.scope?`<div class="bid-scope">${esc(b.scope)}</div>`:""}
       <div class="bid-meta">
@@ -3521,10 +3532,13 @@ function bidCard(city,b){
 
 function attachBidEvents(container){
   container.querySelectorAll(".bid").forEach(card=>{
-    card.onclick=(e)=>{if(e.target.dataset.star)return;const b=findBid(card.dataset.id);if(b)openDetail(card.dataset.city,b);};
+    card.onclick=(e)=>{if(e.target.closest(".star,.bid-remove"))return;const b=findBid(card.dataset.id);if(b)openDetail(card.dataset.city,b);};
   });
   container.querySelectorAll(".star").forEach(s=>{
     s.onclick=(e)=>{e.stopPropagation();toggleSave(s.dataset.city,s.dataset.star);};
+  });
+  container.querySelectorAll(".bid-remove").forEach(btn=>{
+    btn.onclick=(e)=>{e.stopPropagation();removeBid(btn.dataset.city,btn.dataset.remove);};
   });
 }
 function findBid(id){
@@ -3537,6 +3551,17 @@ function toggleSave(city,id){
   store.set("saved",saved);
   renderFeed();
   if(document.getElementById("screen-saved").classList.contains("active"))renderSaved();
+}
+// Hides one bid from the feed for good -- not just today's render. A
+// rescan of that city replaces its whole list from the server (see
+// mergeOpenBids), so without persisting this a bid the server still calls
+// open would just quietly reappear next time that city gets rescanned.
+function removeBid(city,id){
+  const b=findBid(id);
+  dismissed[id]=true;
+  store.set("dismissed",dismissed);
+  renderFeed();
+  toast(b&&b.title?`Removed: ${b.title}`:"Removed");
 }
 // Who is bidding this job as prime -- i.e. who needs a concrete sub. Only
 // state lettings carry this; a city posting names the buyer, not the bidders.

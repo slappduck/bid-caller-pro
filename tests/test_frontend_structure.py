@@ -843,6 +843,78 @@ class MapBasemapIsMutedNotSwappedTests(unittest.TestCase):
         self.assertIn("height:clamp(", rule)
 
 
+class RemoveBidButtonTests(unittest.TestCase):
+    """Dismissing a bid from the feed has to survive the next rescan of that
+    city, since mergeOpenBids() replaces a rescanned city's whole list from
+    the server -- a bid the server still calls open would otherwise just
+    quietly come back. So "remove" is a persisted exclusion set (dismissed),
+    checked at render time, not a splice out of bidData itself."""
+
+    def setUp(self):
+        self.js = _read(APP_JS)
+        self.css = _read(APP_CSS)
+
+    def test_dismissed_state_is_persisted_like_saved_and_notes(self):
+        self.assertIn('store.get("dismissed"', self.js)
+
+    def test_the_feed_filters_through_a_single_visibility_helper(self):
+        """Three different places in renderFeed count/list a city's bids
+        (the tile count, the running total, the row list) -- if even one of
+        them still read raw bidData directly, a removed bid would vanish
+        from the list but linger in the header count or a city tile."""
+        i = self.js.index("function visibleBidsIn(")
+        helper = self.js[i:i + 300]
+        self.assertIn("isOpen(b)", helper)
+        self.assertIn("!dismissed[", helper)
+        body = self.js[self.js.index("function renderFeed("):self.js.index("function bidCard(")]
+        self.assertNotIn(".filter(isOpen)", body,
+            "renderFeed must route through visibleBidsIn(), not isOpen() directly, or a dismissed bid would still be counted/listed somewhere")
+        self.assertEqual(body.count("visibleBidsIn("), 4, body.count("visibleBidsIn("))
+
+    def test_the_remove_button_exists_on_every_card(self):
+        i = self.js.index("function bidCard(")
+        body = self.js[i:self.js.index("function attachBidEvents(")]
+        self.assertIn('class="bid-remove"', body)
+        self.assertIn("data-remove=", body)
+
+    def test_clicking_remove_does_not_also_open_the_bid_detail(self):
+        """The whole card is clickable to open detail -- without an explicit
+        guard, a click that lands on the remove button would bubble up to
+        the card's own handler and open the very bid just dismissed."""
+        i = self.js.index("function attachBidEvents(")
+        body = self.js[i:i + 400]
+        self.assertIn('e.target.closest(".star,.bid-remove")', body)
+
+    def test_remove_persists_so_a_rescan_cannot_bring_it_back(self):
+        i = self.js.index("function removeBid(")
+        body = self.js[i:i + 300]
+        self.assertIn("dismissed[id]=true", body)
+        self.assertIn('store.set("dismissed"', body)
+
+    def test_the_button_defaults_to_visible_for_touch(self):
+        """A touchscreen has no hover state, so a button that only appears
+        on hover would never be reachable there at all -- it must default
+        to visible and only be hidden-until-hover behind a media query that
+        confirms the device genuinely has one."""
+        i = self.css.index(".bid-remove{")
+        base_rule = self.css[i:self.css.index("}", i) + 1]
+        self.assertNotIn("opacity:0", base_rule)
+
+    def test_hover_to_reveal_only_applies_on_real_pointing_devices(self):
+        i = self.css.index("(hover:hover) and (pointer:fine)")
+        block = self.css[i:i + 400]
+        self.assertIn(".bid-remove{opacity:0", block)
+        self.assertIn(".bid:hover .bid-remove", block)
+
+    def test_keyboard_focus_still_reveals_it(self):
+        """Hiding it until :hover would also hide it from a keyboard user
+        tabbing through the list -- :focus-visible has to be in the same
+        reveal rule as :hover, not left out."""
+        i = self.css.index("(hover:hover) and (pointer:fine)")
+        block = self.css[i:i + 400]
+        self.assertIn(":focus-visible", block)
+
+
 class DesktopScrollZoomTests(unittest.TestCase):
     """scrollWheelZoom is off by default -- deliberately, per MAP_OPTS's own
     comment, because on a phone the map sits mid-page in a single scrolling
