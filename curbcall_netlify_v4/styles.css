@@ -476,9 +476,23 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 
   .screen{padding-bottom:2.5rem;} /* no fixed bottom bar left to clear */
 
+  /* Base .topbar is justify-content:space-between with just two children
+     (brand, chip) -- fine at that count, since "space between" IS the gap.
+     A third child (the trigger) landed flush against the brand instead:
+     .user-chip's margin-left:auto eats the free space space-between would
+     have handed out, so nothing was left to separate the first two. An
+     explicit gap covers every adjacent pair regardless of what the auto
+     margin does with the rest. */
+  .topbar{gap:0.75rem;}
+
+  /* Pill-shaped to match .user-chip sitting right next to it -- a sharp-
+     cornered box read as a mismatched, unrelated control next to that
+     rounded one. Left in a neutral outline rather than the chip's amber so
+     the two don't compete for attention: amber still reads as "the one
+     branded action," this as a secondary utility toggle. */
   .nav-trigger{display:inline-flex;align-items:center;gap:0.4rem;
     background:none;border:1px solid var(--border);color:var(--text2);
-    border-radius:var(--r-sm);padding:0.5rem 0.8rem;font-family:var(--ui);
+    border-radius:var(--r-pill);padding:0.5rem 0.8rem;font-family:var(--ui);
     font-size:var(--fs-sm);font-weight:700;cursor:pointer;min-height:44px;
     box-sizing:border-box;}
   .nav-trigger:hover{color:var(--text);border-color:var(--text3);}
