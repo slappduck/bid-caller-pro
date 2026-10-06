@@ -82,6 +82,9 @@
 <div id="app" style="display:none;">
   <div class="topbar">
     <div class="brand"><span class="brand-name">Curb<span>Call</span></span></div>
+    <button type="button" class="nav-trigger" id="nav-trigger" aria-haspopup="true" aria-expanded="false" aria-controls="nav-menu">
+      <svg class="icon-svg"><use href="#i-list"/></svg><span>Menu</span>
+    </button>
     <button type="button" class="user-chip" id="user-chip" aria-label="Account settings" onclick="goTo('account')">...</button>
   </div>
   <div id="offline-bar"></div>
@@ -231,7 +234,7 @@
 
   </div>
 
-  <div class="bottom-nav">
+  <div class="bottom-nav" id="nav-menu">
     <button class="nav-btn active" data-s="scan"><svg class="icon-svg"><use href="#i-search"/></svg><span class="lb">Find</span></button>
     <button class="nav-btn" data-s="feed"><svg class="icon-svg"><use href="#i-list"/></svg><span class="nav-badge" id="feed-badge" style="display:none;"></span><span class="lb">Bids</span></button>
     <button class="nav-btn" data-s="upcoming"><svg class="icon-svg"><use href="#i-radar"/></svg><span class="lb">Upcoming</span></button>

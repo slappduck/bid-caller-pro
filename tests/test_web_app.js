@@ -37,6 +37,17 @@ const ROOT = path.join(__dirname, "..", "curbcall_netlify_v4");
 const PORT = Number(process.env.PORT || 8177);
 const BASE = `http://127.0.0.1:${PORT}`;
 
+// Playwright's own default viewport (1280x720) happens to sit past this
+// app's 960px desktop breakpoint. That was harmless while the desktop nav
+// was just a repositioned sidebar -- always visible either way -- but the
+// nav dropdown it became only renders its .nav-btn's once opened, so a
+// context left at that default now hides them from every check here that
+// clicks one directly. Phone is what nearly all of these are actually
+// about anyway (offline boot, bid ids, feed merge, hostile URLs...), so
+// contexts that don't care about a specific width get a real phone size
+// instead of an unexamined desktop-shaped accident.
+const MOBILE_VIEWPORT = { viewport: { width: 390, height: 844 } };
+
 const CDN_HOSTS = ["unpkg.com", "cdn.jsdelivr.net", "fonts.googleapis.com", "fonts.gstatic.com"];
 const MIME = { ".html": "text/html", ".js": "application/javascript", ".css": "text/css",
                ".png": "image/png", ".webmanifest": "application/manifest+json" };
@@ -122,7 +133,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
   // ── 1. The truck-with-no-bars case ──
   console.log("\nOffline boot with Leaflet + supabase-js unreachable");
   {
-    const ctx = await browser.newContext();
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
     const page = await ctx.newPage();
     const pageErrors = [];
     page.on("pageerror", (e) => pageErrors.push(e.message));
@@ -157,7 +168,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
   // ── 2. Apostrophes in bid ids ──
   console.log("\nBid actions on an id containing an apostrophe");
   {
-    const ctx = await browser.newContext();
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
     const page = await ctx.newPage();
     const pageErrors = [];
     page.on("pageerror", (e) => pageErrors.push(e.message));
@@ -226,7 +237,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
   // ── 3. Bid ids: collision-free and identical to the desktop app ──
   console.log("\nBid ids match the desktop scheme and survive migration");
   {
-    const ctx = await browser.newContext();
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
     const page = await ctx.newPage();
     const pageErrors = [];
     page.on("pageerror", (e) => pageErrors.push(e.message));
@@ -303,7 +314,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
   // break out of the attribute.
   console.log("\nHostile bid URLs cannot inject into the detail view");
   {
-    const ctx = await browser.newContext();
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
     const page = await ctx.newPage();
     const pageErrors = [];
     page.on("pageerror", (e) => pageErrors.push(e.message));
@@ -371,7 +382,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
   // ── 5. Feed merge: de-duplication and a real "Newest" order ──
   console.log("\nFeed merge de-duplicates and tracks when a bid first appeared");
   {
-    const ctx = await browser.newContext();
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
     const page = await ctx.newPage();
     const pageErrors = [];
     page.on("pageerror", (e) => pageErrors.push(e.message));
@@ -425,7 +436,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
   // "trial expired, subscribe" screen.
   console.log("\nLanding-page checkout links are tagged with the device id");
   {
-    const ctx = await browser.newContext();
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
     const page = await ctx.newPage();
     const pageErrors = [];
     page.on("pageerror", (e) => pageErrors.push(e.message));
@@ -468,7 +479,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
   // from the outside. This is what tells them apart during a live test.
   console.log("\nDiagnostics card reports the scan funnel and server health");
   {
-    const ctx = await browser.newContext();
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
     const page = await ctx.newPage();
     const pageErrors = [];
     page.on("pageerror", (e) => pageErrors.push(e.message));
@@ -577,7 +588,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
   // "Checking server..." forever with no way to tell it had already failed.
   console.log("\nA /health body that parses to null doesn't wedge the Diagnostics card");
   {
-    const ctx = await browser.newContext();
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
     const page = await ctx.newPage();
     const pageErrors = [];
     page.on("pageerror", (e) => pageErrors.push(e.message));
@@ -619,7 +630,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
   console.log("\nSaved searches are not re-scanned on every app open");
   {
     async function openWith(checkedAt) {
-      const ctx = await browser.newContext();
+      const ctx = await browser.newContext(MOBILE_VIEWPORT);
       const page = await ctx.newPage();
       const scanCalls = [];
       await page.route("**/*", (route) => {
@@ -660,7 +671,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
   // server counted them the feed would still have hidden them.
   console.log("\nBids whose status is phrased differently still show up");
   {
-    const ctx = await browser.newContext();
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
     const page = await ctx.newPage();
     const pageErrors = [];
     page.on("pageerror", (e) => pageErrors.push(e.message));
@@ -781,7 +792,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
   // ── Use My Location must name a town, not a coordinate ──
   console.log("\nAuto-locate shows the nearest town and state");
   {
-    const ctx = await browser.newContext();
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
     const page = await ctx.newPage();
     const pageErrors = [];
     page.on("pageerror", (e) => pageErrors.push(e.message));
@@ -919,7 +930,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
   // what actually happens after the email's link is clicked.
   console.log("\nA /go/<slug> arrival auto-fills and runs the coverage check");
   {
-    const ctx = await browser.newContext();
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
     const page = await ctx.newPage();
     const pageErrors = [];
     page.on("pageerror", (e) => pageErrors.push(e.message));
