@@ -913,3 +913,35 @@ class RemoveBidButtonTests(unittest.TestCase):
         i = self.css.index("(hover:hover) and (pointer:fine)")
         block = self.css[i:i + 400]
         self.assertIn(":focus-visible", block)
+
+
+class DesktopScrollZoomTests(unittest.TestCase):
+    """scrollWheelZoom is off by default -- deliberately, per MAP_OPTS's own
+    comment, because on a phone the map sits mid-page in a single scrolling
+    column and a wheel/trackpad scroll over it hijacked the page scroll
+    instead. Desktop doesn't have that collision (real width to spare, a
+    mouse can move off the map in any direction), and scroll-to-zoom is the
+    expected way to zoom a map with a mouse there -- so mapOpts() turns it
+    on above the desktop breakpoint instead of leaving one shared constant
+    that can only pick one behavior for every viewport."""
+
+    def setUp(self):
+        self.app = _read(APP_JS)
+
+    def test_the_shared_base_still_defaults_off(self):
+        """MAP_OPTS itself must stay a safe phone-first default -- anything
+        that reads it directly, now or later, should not get scroll-zoom by
+        accident."""
+        i = self.app.index("const MAP_OPTS=")
+        self.assertIn("scrollWheelZoom:false", self.app[i:i + 200])
+
+    def test_map_opts_helper_keys_scroll_zoom_to_the_desktop_breakpoint(self):
+        i = self.app.index("function mapOpts(")
+        body = self.app[i:i + 200]
+        self.assertIn("scrollWheelZoom:window.innerWidth>=960", body)
+
+    def test_both_maps_are_created_through_the_helper_not_the_raw_constant(self):
+        """A map created with the bare MAP_OPTS constant would silently keep
+        the phone-only default on every viewport."""
+        self.assertEqual(self.app.count("L.map(mv,MAP_OPTS)"), 0)
+        self.assertEqual(self.app.count("L.map(mv,mapOpts())"), 2)
