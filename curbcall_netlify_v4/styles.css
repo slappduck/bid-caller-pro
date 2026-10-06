@@ -194,8 +194,22 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .bid-meta{display:flex;gap:0.4rem;flex-wrap:wrap;}
 .chip{font-size:var(--fs-xs);padding:0.2rem 0.5rem;border-radius:var(--r-sm);background:var(--surface);color:var(--text2);}
 .chip.value{color:var(--green);}
+.bid-actions{display:flex;align-items:center;gap:0.1rem;flex-shrink:0;}
 .star{font-size:var(--fs-xl);color:var(--text3);flex-shrink:0;padding-left:0.4rem;}
 .star.on{color:var(--accent);}
+/* Default to always-visible: on a touchscreen there's no hover state to
+   reveal it with, so the button would simply never be reachable. Only
+   devices that genuinely support hovering with a precise pointer (a real
+   mouse) get the reveal-on-hover treatment -- keyboard focus still shows
+   it there too, since tabbing to a hidden button is as unreachable as a
+   touch tap on one. */
+.bid-remove{background:none;border:none;color:var(--text3);font-size:1.3rem;
+  line-height:1;cursor:pointer;padding:0.1rem 0.4rem;border-radius:var(--r-sm);}
+.bid-remove:hover{color:var(--red);background:var(--surface);}
+@media (hover:hover) and (pointer:fine){
+  .bid-remove{opacity:0;transition:opacity .12s;}
+  .bid:hover .bid-remove,.bid-remove:focus-visible{opacity:1;}
+}
 
 .tiles{display:flex;gap:0.5rem;overflow-x:auto;padding-bottom:0.5rem;margin-bottom:0.3rem;-webkit-overflow-scrolling:touch;}
 .tile{flex-shrink:0;background:var(--card);border-radius:var(--r);padding:0.6rem 0.9rem;text-align:center;cursor:pointer;min-width:64px;}
