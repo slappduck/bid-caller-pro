@@ -1690,12 +1690,20 @@ const MAP_ATTRIB='&copy; <a href="https://www.openstreetmap.org/copyright" targe
 // The map is a location picker, not somewhere to explore, and it had none of
 // the limits that implies.
 //
-// scrollWheelZoom off is the important one: the map sat mid-page, so a wheel
-// scroll with the cursor over it zoomed the map instead of scrolling the
-// page -- you could not get past the map without the page fighting you. Zoom
-// is the +/- buttons, double-click, or pinch, all of which are deliberate.
-// Pinch stays on because on a phone the wheel does not exist and two fingers
-// are never accidental.
+// scrollWheelZoom off is the important one on a PHONE: the map sits mid-page
+// in a single scrolling column there, so a wheel/trackpad scroll with the
+// cursor over it zoomed the map instead of scrolling the page -- you could
+// not get past the map without the page fighting you. Zoom is the +/-
+// buttons, double-click, or pinch, all of which are deliberate. Pinch stays
+// on because on a phone the wheel does not exist and two fingers are never
+// accidental.
+//
+// Desktop (--bp-desktop and up) doesn't have that collision the same way --
+// the map sits in a fixed-height card on a page with real width to spare, a
+// mouse user can move off it in any direction to keep scrolling, and
+// scroll-to-zoom is the expected way to zoom a map with a mouse. mapOpts()
+// below is evaluated at each map's creation time rather than baked into one
+// shared constant, so the same map code serves both.
 //
 // The rest stops the map wandering: no infinite horizontal world repeat, no
 // zooming out to the whole planet, and a hard boundary around the area this
@@ -1704,6 +1712,7 @@ const MAP_ATTRIB='&copy; <a href="https://www.openstreetmap.org/copyright" targe
 const MAP_BOUNDS=[[15.0,-172.0],[72.0,-52.0]];   // US incl. Alaska and Hawaii
 const MAP_OPTS={attributionControl:true,tap:false,scrollWheelZoom:false,
   minZoom:3,maxBounds:MAP_BOUNDS,maxBoundsViscosity:1.0,worldCopyJump:false};
+function mapOpts(){return{...MAP_OPTS,scrollWheelZoom:window.innerWidth>=960};}
 const TILE_OPTS={maxZoom:19,minZoom:3,noWrap:true,bounds:MAP_BOUNDS,
   attribution:MAP_ATTRIB};
 
@@ -1739,7 +1748,7 @@ function updateFindMap(lat,lon,label){
     // relying on that is the standard fix for "tapping the map does nothing"
     // reports. (Not independently reproduced on a physical device here --
     // please confirm this actually fixes it on your phone.)
-    findMap=L.map(mv,MAP_OPTS).setView([lat,lon],11);
+    findMap=L.map(mv,mapOpts()).setView([lat,lon],11);
     const findTiles=L.tileLayer(MAP_TILE_URL,TILE_OPTS).addTo(findMap);
     addTileRetry(findTiles);
     findMap.on("click",e=>pickFindLocation(e.latlng.lat,e.latlng.lng,null));
@@ -2019,7 +2028,7 @@ function createLocationPicker(containerId,inputId){
     const mv=document.getElementById(containerId);
     if(!mv||!HAS_MAPS)return;
     if(!st.map){
-      st.map=L.map(mv,MAP_OPTS).setView([lat,lon],11);
+      st.map=L.map(mv,mapOpts()).setView([lat,lon],11);
       const tiles=L.tileLayer(MAP_TILE_URL,TILE_OPTS).addTo(st.map);
       addTileRetry(tiles);
       st.map.on("click",e=>pick(e.latlng.lat,e.latlng.lng));
