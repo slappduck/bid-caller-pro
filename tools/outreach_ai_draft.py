@@ -44,7 +44,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(_HERE)
 DRAFTS_DIR = os.path.join(_ROOT, "data", "outreach_drafts")
 VOICE_FILE = os.path.join(_HERE, "outreach_voice.md")
-MODEL = "claude-opus-5"
+MODEL = "claude-opus-5-5"
 
 # The draft filename is built from the CSV's slug column. Slugs are typed by
 # hand (see OUTREACH.md: "add the slug to the CSV, add the redirect line"),
@@ -100,6 +100,10 @@ def draft_email(client, row, agencies, nearest_mi, researched):
         "the email body only. No signature, no sign-off name.")
     response = client.messages.create(
         model=MODEL, max_tokens=1024, system=voice(),
+        # claude-opus-5-5 defaults to medium effort (claude-opus-5 defaulted
+        # to high) -- pinned explicitly so this didn't quietly get a lower
+        # effort pass on prose where voice/quality is the whole point.
+        output_config={"effort": "high"},
         messages=[{"role": "user", "content": prompt}])
     text = next(b.text for b in response.content if b.type == "text")
     return parse_response(text)
