@@ -646,6 +646,11 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
   .search-layout .search-controls{grid-area:controls;}
   .search-layout .search-followup{grid-area:followup;}
   .search-layout .map-card{grid-area:map;}
+  /* Find alone has a real-data summary that goes under the map rather than
+     beside it (Leads has no equivalent, so its map keeps spanning both rows
+     above -- the general rule just above this one). */
+  #screen-scan .search-layout{grid-template-areas:"controls map" "followup summary";}
+  #screen-scan .search-layout #scan-summary{grid-area:summary;}
   /* Upcoming has no map to pair with its form -- capping it alone, with
      nothing invented to fill a second column, is the honest version of the
      same fix. */

@@ -114,6 +114,11 @@
           <div id="find-map-view"></div>
           <div class="map-legend"><span>Click the map — or a nearby city — to set your search location</span></div>
         </div>
+        <!-- Real state, not filler: a running total of what scans have
+             already found, pulled from the same bidData every scan already
+             writes to. On desktop this is also what fills the space below
+             the map instead of leaving it dead air. -->
+        <div id="scan-summary"></div>
         <div class="search-followup">
           <div class="scan-status" id="scan-status"></div>
           <!-- What the scan did. Sits under the result rather than inside it,

@@ -536,6 +536,11 @@ async function syncPullFeeds(){
   maybeFirstScan();
   const active=(id)=>document.getElementById(id).classList.contains("active");
   if(active("screen-feed"))renderFeed();
+  // Unconditional, unlike the renderFeed() above: a pull can land while
+  // Find is the visible screen (this runs at sign-in, before any tab has
+  // necessarily been touched), and the summary there would otherwise show
+  // whatever this device had before the sync.
+  else renderScanSummary();
   if(active("screen-upcoming"))renderUpcoming();
   if(active("screen-leads"))renderLeads();
   showFeedBadge(Object.keys(bidData).length>0);
@@ -1442,6 +1447,10 @@ function switchScreen(s){
   if(s==="account")renderAccount();
   if(s==="upcoming")renderUpcoming();
   if(s==="leads"&&LEADS_ENABLED)renderLeads();
+  // Every other screen refreshes its own content on switching to it; Find
+  // only ever got this from showApp()'s initial renderFeed() call, so it
+  // relied on load order instead of being self-contained like the rest.
+  if(s==="scan")renderScanSummary();
   // The map's own invalidateSize() call (in show()) only ever runs once,
   // at creation time -- for any tab that isn't the default visible one,
   // that happens while the tab is still hidden (display:none), so
@@ -1673,6 +1682,10 @@ async function checkSavedSearches(){
     showFeedBadge(true);
     fireNotification("CurbCall Pro — New Bids",`${plural(newTotal,"new bid")} from your saved searches.`);
     if(document.getElementById("screen-feed").classList.contains("active"))renderFeed();
+    // Unconditional, unlike the renderFeed() above: this is a background scan
+    // that can land while Find is the visible screen, and the summary there
+    // would otherwise sit stale until something else happens to touch Bids.
+    renderScanSummary();
   }
 }
 
@@ -2967,6 +2980,10 @@ async function runScan(force){
     }
     const total=d.total_bids||0;
     const added=mergeOpenBids(d.bids||{},Object.keys(d.city_coords||{}));
+    // Unconditional: the empty-result branch below stays on this screen
+    // (no goTo("feed")), so without this the Find-screen summary would
+    // keep showing last scan's count after one that found nothing new.
+    renderScanSummary();
     // Only a real scan calibrates the estimate. A cached result returns in
     // milliseconds and would drag the median down to nothing, so the next
     // real scan would show a bar that finishes instantly and then sits.
@@ -3427,7 +3444,39 @@ let lastFeedRows=[];
 function visibleBidsIn(city){
   return (bidData[city]||[]).filter(b=>isOpen(b)&&!dismissed[bidId(city,b)]);
 }
+// A running total of what scans have already found, shown on the Find
+// screen itself -- real state already computed for the Bids tab's own
+// header, not invented content. On desktop this also fills the space below
+// the map instead of leaving it empty. Called from renderFeed() so it
+// never drifts out of sync with the one place bidData is already the
+// source of truth for a count.
+function renderScanSummary(){
+  const el=document.getElementById("scan-summary");
+  if(!el)return;
+  const cities=Object.keys(bidData).filter(c=>visibleBidsIn(c).length);
+  const total=cities.reduce((n,c)=>n+visibleBidsIn(c).length,0);
+  if(!total){el.style.display="none";el.innerHTML="";return;}
+  el.style.display="";
+  const syncText=lastSyncAt
+    ?`Last synced ${lastSyncAt.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}`
+    :"";
+  el.innerHTML=`
+    <div class="account-card">
+      <div class="account-email hdr-ic" style="font-size:var(--fs-base);margin-bottom:0.6rem;"><svg class="icon-svg"><use href="#i-list"/></svg>Your Bids So Far</div>
+      <div class="stats-grid">
+        <div class="stat-box"><div class="n">${total}</div><div class="l">Open Bids</div></div>
+        <div class="stat-box"><div class="n">${cities.length}</div><div class="l">${cities.length===1?"Town":"Towns"}</div></div>
+      </div>
+      ${syncText?`<div class="account-status" style="margin-top:0.6rem;">${esc(syncText)}</div>`:""}
+      <button class="btn-ghost" id="scan-summary-view-btn" style="margin-top:0.8rem;">View All Bids</button>
+    </div>`;
+  document.getElementById("scan-summary-view-btn").onclick=()=>goTo("feed");
+}
 function renderFeed(){
+  // Called unconditionally, before either of this function's own exit
+  // points, so the Find screen's summary never drifts from what Bids
+  // itself is about to show.
+  renderScanSummary();
   const tiles=document.getElementById("tiles-wrap");
   const list=document.getElementById("feed-list");
   const clearBtn=document.getElementById("clear-feed");

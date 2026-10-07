@@ -1249,3 +1249,66 @@ class DismissedBidsCrossDeviceSyncTests(unittest.TestCase):
             "alter table user_feeds add column if not exists dismissed jsonb",
             self.sql,
         )
+
+
+class ScanSummaryPanelTests(unittest.TestCase):
+    """The Find screen's desktop layout left a dead block of space below the
+    map once the form was capped to a sane width (see
+    SearchScreenDesktopLayoutTests above). renderScanSummary() fills it with
+    real state -- a running total already computed from bidData, the same
+    source renderFeed() uses -- rather than inventing filler content, and
+    hides itself entirely before a first scan."""
+
+    def setUp(self):
+        self.js = _read(APP_JS)
+        self.html = _read(APP)
+        self.css = _read(APP_CSS)
+
+    def test_summary_element_exists_between_map_and_followup_in_dom_order(self):
+        """Mobile has no grid -- DOM order IS visual order there, and this
+        reads naturally right after the map, before the utility buttons."""
+        screen = self.html[self.html.index('id="screen-scan"'):self.html.index('<!-- BIDS', self.html.index('id="screen-scan"'))]
+        i_map = screen.index('id="find-map-card"')
+        i_summary = screen.index('id="scan-summary"')
+        i_followup = screen.index('class="search-followup"')
+        self.assertTrue(i_map < i_summary < i_followup)
+
+    def test_summary_hides_itself_when_there_is_nothing_to_show(self):
+        i = self.js.index("function renderScanSummary(")
+        body = self.js[i:self.js.index("\n}", i)]
+        self.assertIn('el.style.display="none"', body)
+        self.assertIn('el.innerHTML=""', body)
+
+    def test_summary_uses_the_same_visibility_filter_as_the_bids_tab(self):
+        """Must route through visibleBidsIn(), not raw bidData -- otherwise
+        a dismissed or closed bid would still count toward the total shown
+        here even though it does not appear on Bids itself."""
+        i = self.js.index("function renderScanSummary(")
+        body = self.js[i:self.js.index("\n}", i)]
+        self.assertIn("visibleBidsIn(c)", body)
+
+    def test_view_all_bids_button_navigates_to_the_bids_tab(self):
+        i = self.js.index("function renderScanSummary(")
+        body = self.js[i:self.js.index("\n}", i)]
+        self.assertIn('goTo("feed")', body)
+
+    def test_render_feed_refreshes_the_summary_unconditionally(self):
+        """renderFeed() has two exit points (the empty-feed early return and
+        the normal fall-through) -- the call must happen before either, or
+        one of those paths would leave the Find-screen summary stale."""
+        i = self.js.index("function renderFeed(){")
+        first_lines = self.js[i:i + 300]
+        self.assertIn("renderScanSummary();", first_lines)
+
+    def test_switching_to_scan_refreshes_the_summary(self):
+        """Every other screen refreshes its own content in switchScreen() on
+        becoming active; Find must too, so it doesn't depend on showApp()'s
+        initial renderFeed() call having already run."""
+        i = self.js.index('document.getElementById("screen-"+s).classList.add("active")')
+        body = self.js[i:i + 700]
+        self.assertIn('if(s==="scan")renderScanSummary();', body)
+
+    def test_grid_area_reserves_a_spot_for_the_summary_on_find_only(self):
+        rule = self.css[self.css.index("#screen-scan .search-layout{"):]
+        rule = rule[:rule.index("}") + 1]
+        self.assertIn('"followup summary"', rule)
