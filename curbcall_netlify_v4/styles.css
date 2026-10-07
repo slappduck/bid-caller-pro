@@ -21,14 +21,21 @@
   --r-pill:999px; /* anything genuinely pill-shaped */
   /* One elevation scale. Every card (.bid, .account-card, .plan, .map-card)
      sat on the page with only a 1px border and no shadow, or a shadow too
-     faint to read against a near-black background -- nothing was wrong, but
+     faint to read against a near-background -- nothing was wrong, but
      nothing ever lifted off the page either, which is most of what reads as
      "flat" or "bleak" in a dark UI. Two layers per level (a tight dark one
      for definition, a soft wide one for actual lift) rather than one blurry
-     shadow, which on a background this dark just looks like a grey smear. */
-  --shadow-sm:0 1px 2px rgba(0,0,0,0.5),0 3px 10px rgba(0,0,0,0.28);
-  --shadow-md:0 2px 4px rgba(0,0,0,0.55),0 10px 24px rgba(0,0,0,0.35);
-  --shadow-lg:0 4px 8px rgba(0,0,0,0.6),0 18px 40px rgba(0,0,0,0.4);
+     shadow, which on a background this dark just looks like a grey smear.
+
+     --shadow-rgb is --bg's own r,g,b (13,15,24 -- a navy, not a neutral
+     grey) rather than plain black. Every background in this theme (--bg,
+     --surface, --card) leans the same blue-violet; a hueless rgba(0,0,0,…)
+     shadow doesn't match that undertone and reads as a grey smudge pasted
+     on top instead of the page's own colour receding into shadow. */
+  --shadow-rgb:13,15,24;
+  --shadow-sm:0 1px 2px rgba(var(--shadow-rgb),0.5),0 3px 10px rgba(var(--shadow-rgb),0.28);
+  --shadow-md:0 2px 4px rgba(var(--shadow-rgb),0.55),0 10px 24px rgba(var(--shadow-rgb),0.35);
+  --shadow-lg:0 4px 8px rgba(var(--shadow-rgb),0.6),0 18px 40px rgba(var(--shadow-rgb),0.4);
   /* The one spot a shadow alone isn't enough: the featured pricing plan is
      the single thing Account most wants you to look at, so it gets a soft
      colour glow in the existing accent rather than a new hue -- reinforcing
@@ -134,8 +141,8 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
    shadow, like a groove cut into the page); .btn-ghost below now looks
    raised (a card-tone fill plus a real shadow), the opposite direction, so
    the two read as different kinds of control instead of the same box. */
-.input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:0.85rem 1rem;color:var(--text);font-size:var(--fs-lg);font-family:var(--ui);box-shadow:inset 0 1px 3px rgba(0,0,0,0.4);}
-.input:focus{outline:none;border-color:var(--accent);box-shadow:inset 0 1px 3px rgba(0,0,0,0.4),0 0 0 3px rgba(245,158,11,0.18);}
+.input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:0.85rem 1rem;color:var(--text);font-size:var(--fs-lg);font-family:var(--ui);box-shadow:inset 0 1px 3px rgba(var(--shadow-rgb),0.4);}
+.input:focus{outline:none;border-color:var(--accent);box-shadow:inset 0 1px 3px rgba(var(--shadow-rgb),0.4),0 0 0 3px rgba(245,158,11,0.18);}
 /* Every clickable control on every screen -- the primary/ghost buttons,
    the radius pills, the filter tiles, the bottom nav -- had no hover or
    press feedback at all. .bid already did (see its :hover/:active below);
@@ -336,7 +343,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
    needs to read as floating above it, the same reasoning as .topbar's
    shadow above. It already paints after .screens in DOM order so, unlike
    .topbar, it needs no z-index to actually show. */
-.bottom-nav{display:flex;background:var(--surface);border-top:1px solid var(--border);box-shadow:0 -1px 2px rgba(0,0,0,0.5),0 -3px 10px rgba(0,0,0,0.28);padding-bottom:env(safe-area-inset-bottom);flex-shrink:0;}
+.bottom-nav{display:flex;background:var(--surface);border-top:1px solid var(--border);box-shadow:0 -1px 2px rgba(var(--shadow-rgb),0.5),0 -3px 10px rgba(var(--shadow-rgb),0.28);padding-bottom:env(safe-area-inset-bottom);flex-shrink:0;}
 /* min-width:0 lets six items share a 320px screen without the labels
    overflowing; nowrap stops "Upcoming" and "Account" breaking onto two lines. */
 .nav-btn{flex:1;min-width:0;background:none;border:none;padding:0.6rem 0.15rem 0.7rem;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:0.25rem;color:var(--text2);font-family:var(--ui);transition:color .12s,transform .1s;}
@@ -351,13 +358,13 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 /* Active state must not rest on colour alone. */
 .nav-btn.active::after{content:"";position:absolute;left:50%;transform:translateX(-50%);bottom:0.2rem;width:1.1rem;height:2px;border-radius:var(--r-hair);background:var(--accent);}
 
-.modal-back{position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:50;display:none;animation:fade 0.2s;}
+.modal-back{position:fixed;inset:0;background:rgba(var(--shadow-rgb),0.6);z-index:50;display:none;animation:fade 0.2s;}
 .modal-back.open{display:block;}
 /* Rises straight off the dimmed backdrop with nothing marking where the
    sheet ends and the backdrop begins beyond the corner radius -- a shadow
    facing up (the backdrop is already behind it, not above) is what a
    sheet lifting off the page actually looks like. */
-.modal{position:fixed;left:0;right:0;bottom:0;z-index:51;background:var(--surface);border-radius:var(--r-lg) var(--r-lg) 0 0;max-height:85dvh;overflow-y:auto;transform:translateY(100%);transition:transform 0.3s;padding-bottom:env(safe-area-inset-bottom);box-shadow:0 -4px 8px rgba(0,0,0,0.5),0 -18px 40px rgba(0,0,0,0.4);}
+.modal{position:fixed;left:0;right:0;bottom:0;z-index:51;background:var(--surface);border-radius:var(--r-lg) var(--r-lg) 0 0;max-height:85dvh;overflow-y:auto;transform:translateY(100%);transition:transform 0.3s;padding-bottom:env(safe-area-inset-bottom);box-shadow:0 -4px 8px rgba(var(--shadow-rgb),0.5),0 -18px 40px rgba(var(--shadow-rgb),0.4);}
 .modal.open{transform:translateY(0);}
 .modal-grip{width:40px;height:4px;background:var(--border);border-radius:var(--r-hair);margin:0.7rem auto;}
 .modal-content{padding:0 1.2rem 1.5rem;}
@@ -380,7 +387,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .detail-row{margin-top:1rem;}
 .sheet-head{position:sticky;top:0;z-index:2;background:var(--surface);
   padding:0.2rem 0 0.7rem;margin-bottom:0.2rem;
-  box-shadow:0 8px 12px -10px rgba(0,0,0,0.9);}
+  box-shadow:0 8px 12px -10px rgba(var(--shadow-rgb),0.9);}
 .sheet-head h2{margin:0 0 0.35rem;font-size:var(--fs-xl);line-height:1.3;}
 .sheet-sub{display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;}
 /* Three tiles, because these are the three facts that decide a bid. */
@@ -536,7 +543,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
    recessed rather than just bordered -- these are text inputs too (search,
    sort) and had been left out, so they still read as flat-bordered boxes
    next to every other field in the app. */
-.filter-row input,.filter-row select{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:0.6rem 0.8rem;color:var(--text);font-size:1rem;font-family:var(--ui);box-shadow:inset 0 1px 3px rgba(0,0,0,0.4);}
+.filter-row input,.filter-row select{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:0.6rem 0.8rem;color:var(--text);font-size:1rem;font-family:var(--ui);box-shadow:inset 0 1px 3px rgba(var(--shadow-rgb),0.4);}
 .filter-row input{flex:1;min-width:0;}
 .filter-row select{flex-shrink:0;max-width:130px;}
 
@@ -624,7 +631,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
     flex-direction:column;align-items:stretch;justify-content:flex-start;
     gap:0.2rem;padding:0.6rem;min-width:220px;border:1px solid var(--border);
     border-radius:var(--r-lg);background:var(--surface);
-    box-shadow:0 12px 32px rgba(0,0,0,0.35);}
+    box-shadow:0 12px 32px rgba(var(--shadow-rgb),0.35);}
   body.nav-open #nav-menu{display:flex;}
   .nav-btn{flex:none;flex-direction:row;justify-content:flex-start;gap:0.8rem;
     padding:0.65rem 0.8rem;border-radius:var(--r);}

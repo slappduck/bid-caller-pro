@@ -1405,3 +1405,43 @@ class MoreMissedButtonAndShadowGapsTests(unittest.TestCase):
     def test_avatar_photo_and_placeholder_both_have_a_shadow(self):
         self.assertIn("box-shadow:var(--shadow", self._rule(".avatar-lg{"))
         self.assertIn("box-shadow:var(--shadow", self._rule(".avatar-placeholder{"))
+
+
+class ShadowHueMatchesTheThemeTests(unittest.TestCase):
+    """Every background in this theme (--bg, --surface, --card) leans the
+    same blue-violet navy, not neutral grey. Shadows built from plain
+    rgba(0,0,0,…) have no hue at all, so instead of receding into the page
+    they sat on top of it looking like a mismatched grey smudge -- "badly
+    blended," as reported. --shadow-rgb ties every shadow's colour to
+    --bg's own r,g,b so a shadow reads as the page's own colour darkening,
+    not a foreign overlay."""
+
+    def setUp(self):
+        self.css = _read(APP_CSS)
+
+    def test_shadow_rgb_is_defined_from_bgs_actual_hue(self):
+        i = self.css.index(":root{")
+        root = self.css[i:self.css.index("}", i) + 1]
+        self.assertIn("--bg:#0d0f18", root)
+        # #0d0f18 == rgb(13,15,24) -- this must track --bg if it ever changes.
+        self.assertIn("--shadow-rgb:13,15,24", root)
+
+    def test_no_shadow_or_scrim_still_uses_a_hueless_black(self):
+        """.spin is a loading-ring colour, not part of the elevation system,
+        and is deliberately excluded -- everything else that casts a shadow
+        or dims the screen (card shadows, modal scrim, inset inputs, the
+        nav dropdown) must route through the tinted token."""
+        before_spin = self.css[:self.css.index(".spin{")]
+        # A literal numeric alpha (e.g. "rgba(0,0,0,0.5") only ever appears in
+        # real CSS here -- the one explanatory comment that mentions
+        # rgba(0,0,0,…) uses an ellipsis, not a digit, and must not trip this.
+        self.assertIsNone(re.search(r"rgba\(0,0,0,\d", before_spin))
+
+    def test_every_shadow_token_uses_the_tinted_variable(self):
+        i = self.css.index(":root{")
+        root = self.css[i:self.css.index("}", i) + 1]
+        for token in ("--shadow-sm:", "--shadow-md:", "--shadow-lg:"):
+            j = root.index(token)
+            rule = root[j:root.index(";", j) + 1]
+            self.assertIn("var(--shadow-rgb)", rule, token)
+            self.assertNotIn("0,0,0", rule, token)
