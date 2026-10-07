@@ -142,7 +142,11 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .auth-trial-note{text-align:center;color:var(--text3);font-size:var(--fs-sm);margin-top:1.2rem;}
 
 /* ── Main app ── */
-.topbar{background:var(--surface);padding:calc(env(safe-area-inset-top) + 0.8rem) 1rem 0.8rem;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);flex-shrink:0;}
+/* The one piece of chrome on screen every single moment got left out of
+   the elevation pass -- every card floats now, but the bar sitting on top
+   of all of them was still just a flat fill with a hairline border, so it
+   read as part of the same plane as the content instead of above it. */
+.topbar{background:var(--surface);padding:calc(env(safe-area-inset-top) + 0.8rem) 1rem 0.8rem;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);box-shadow:var(--shadow-sm);flex-shrink:0;position:relative;z-index:10;}
 .brand{display:flex;align-items:center;gap:0.5rem;}
 .brand-name{font-family:'Bebas Neue',sans-serif;font-size:var(--fs-2xl);letter-spacing:0.06em;}
 .brand-name span{color:var(--accent);}
@@ -302,7 +306,11 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .stars button .icon-svg{width:1.6rem;height:1.6rem;}
 .stars button.on .icon-svg{fill:currentColor;}
 
-.bottom-nav{display:flex;background:var(--surface);border-top:1px solid var(--border);padding-bottom:env(safe-area-inset-bottom);flex-shrink:0;}
+/* Shadow points up, not down -- this sits below the scrolling content and
+   needs to read as floating above it, the same reasoning as .topbar's
+   shadow above. It already paints after .screens in DOM order so, unlike
+   .topbar, it needs no z-index to actually show. */
+.bottom-nav{display:flex;background:var(--surface);border-top:1px solid var(--border);box-shadow:0 -1px 2px rgba(0,0,0,0.5),0 -3px 10px rgba(0,0,0,0.28);padding-bottom:env(safe-area-inset-bottom);flex-shrink:0;}
 /* min-width:0 lets six items share a 320px screen without the labels
    overflowing; nowrap stops "Upcoming" and "Account" breaking onto two lines. */
 .nav-btn{flex:1;min-width:0;background:none;border:none;padding:0.6rem 0.15rem 0.7rem;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:0.25rem;color:var(--text2);font-family:var(--ui);}
@@ -596,4 +604,48 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
      -- a letterbox strip instead of a map. Scale the height with the wider
      card so the aspect ratio stays sane. */
   #find-map-view,#leads-map-view{height:clamp(280px,42vh,460px);}
+
+  /* Find and Leads pair a location form with a map that doubles as an
+     alternate way to set it (the legend says "click the map"). Stacked
+     full-width that's a fine top-to-bottom flow for a phone; left alone at
+     1180px each control just stretched to fill the width with nothing
+     beside it -- a ZIP code box the better part of a foot wide. Capping the
+     form and setting the map beside it spends the extra width on an actual
+     second thing instead of air. Leaflet's own invalidateSize() (see
+     switchScreen() in app.js) already re-measures the container on tab
+     show, so the narrower column it ends up in here just works.
+
+     .search-controls and .search-followup are split in the markup (rather
+     than one block) because the map sits between them in reading order on
+     mobile -- "set your search" controls, then the map you can also click
+     to do the same thing, then the scan's status/effort/history below it.
+     Grid areas put them back together as one visual column here without
+     reordering that mobile flow. */
+  .search-layout{display:grid;grid-template-columns:minmax(280px,420px) 1fr;
+    grid-template-areas:"controls map" "followup map";gap:1.2rem 1.5rem;align-items:start;}
+  .search-layout .search-controls{grid-area:controls;}
+  .search-layout .search-followup{grid-area:followup;}
+  .search-layout .map-card{grid-area:map;}
+  /* Upcoming has no map to pair with its form -- capping it alone, with
+     nothing invented to fill a second column, is the honest version of the
+     same fix. */
+  .search-controls{max-width:420px;}
+  .search-controls.alone{max-width:480px;}
+
+  /* Account is a single read-top-to-bottom column -- profile, billing
+     status, the two subscription plans, stats -- stretched to the full
+     1180px shell every short line just trailed off into empty space.
+     Capping it to a reading width and pairing the two plan cards side by
+     side within that cap (the usual two-tier pricing layout) spends the
+     width on the one card this app most wants to look considered instead
+     of air. */
+  #account-body{max-width:680px;}
+  #upgrade-section{display:grid;grid-template-columns:1fr 1fr;gap:1rem;align-items:stretch;}
+  /* Monthly lists 5 features, Annual lists 3 -- side by side that left
+     Annual's button sitting noticeably higher than Monthly's. Stretching
+     the list to fill the card's now-equal height pins both buttons to the
+     same line regardless of how many features either plan lists. */
+  #upgrade-section .plan{display:flex;flex-direction:column;}
+  #upgrade-section .plan ul{flex:1;}
+  #upgrade-section .license-key-section{grid-column:1/-1;}
 }

@@ -4229,15 +4229,17 @@ function renderAccount(){
         <a class="btn-ghost" style="text-decoration:none;display:block;text-align:center;" href="${aLink}" target="_blank">Subscribe Annual</a>
         <p class="renew-note">Renews automatically at $399/year until you cancel. Cancel anytime under Billing above.</p>
       </div>
-      <div class="field-label" style="margin-top:1.2rem;">Have a license key?</div>
-      <!-- Named for the case that actually strands people. Unlocking is
-           automatic when the checkout address matches the account; when it
-           does not, this box is the way through, and someone who has just
-           paid needs to be told that here rather than left to guess. -->
-      <p class="renew-note" style="margin-top:0;">Already paid and still locked? If you used a different email address at
-        checkout, paste the key from your receipt email here.</p>
-      <input class="input" id="key-input" placeholder="BCP-..." />
-      <button class="btn-ghost" id="activate-btn">Activate Key</button>
+      <div class="license-key-section">
+        <div class="field-label" style="margin-top:1.2rem;">Have a license key?</div>
+        <!-- Named for the case that actually strands people. Unlocking is
+             automatic when the checkout address matches the account; when it
+             does not, this box is the way through, and someone who has just
+             paid needs to be told that here rather than left to guess. -->
+        <p class="renew-note" style="margin-top:0;">Already paid and still locked? If you used a different email address at
+          checkout, paste the key from your receipt email here.</p>
+        <input class="input" id="key-input" placeholder="BCP-..." />
+        <button class="btn-ghost" id="activate-btn">Activate Key</button>
+      </div>
     </div>
     <div class="account-card">
       <div class="account-email hdr-ic" style="font-size:var(--fs-base);margin-bottom:0.6rem;"><svg class="icon-svg"><use href="#i-bar-chart"/></svg>Your Stats</div>

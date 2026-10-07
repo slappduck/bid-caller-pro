@@ -1032,3 +1032,129 @@ class EmptyStateAndPlanIconTests(unittest.TestCase):
         i = self.js.index("function planLi(")
         body = self.js[i:self.js.index("\n", i)]
         self.assertIn("i-check", body)
+
+
+class SearchScreenDesktopLayoutTests(unittest.TestCase):
+    """Find, Upcoming and Leads each put a location form (and for Find/Leads,
+    a map) at the very top of a 1180px-wide screen with nothing else beside
+    it -- a "ZIP code or City, State" box the better part of a foot wide.
+    .search-layout pairs the form with its map in a two-column grid at
+    desktop width instead.
+
+    The map sits in the *middle* of each form's fields on mobile (right
+    after the primary button, before status/effort/save-search), so the
+    markup splits the form into .search-controls (before the map) and
+    .search-followup (after it) with the map card in between -- preserving
+    that exact mobile reading order -- and grid-template-areas reassembles
+    them into one column at desktop width instead of reordering the DOM."""
+
+    def setUp(self):
+        self.css = _read(APP_CSS)
+        self.html = _read(APP)
+
+    def _desktop_rule(self):
+        i = self.css.index("@media (min-width:960px){")
+        depth = 0
+        for k, ch in enumerate(self.css[i:], start=i):
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return self.css[i:k + 1]
+        self.fail("unterminated @media (min-width:960px) block")
+
+    def test_search_layout_places_controls_and_followup_in_one_column(self):
+        rule = self._desktop_rule()
+        i = rule.index(".search-layout{")
+        grid = rule[i:rule.index("}", i) + 1]
+        self.assertIn('"controls map"', grid)
+        self.assertIn('"followup map"', grid)
+
+    def test_find_screen_keeps_the_map_between_controls_and_followup_in_dom_order(self):
+        # This is the exact regression almost shipped: wrapping "everything
+        # except the map" in one .search-controls div moved the map to the
+        # bottom of the mobile flow, after the save-search button, instead
+        # of right after "Scan for Bids" where it was.
+        screen = self.html[self.html.index('id="screen-scan"'):self.html.index('<!-- BIDS', self.html.index('id="screen-scan"'))]
+        i_controls = screen.index('class="search-controls"')
+        i_map = screen.index('id="find-map-card"')
+        i_followup = screen.index('class="search-followup"')
+        i_scan_btn = screen.index('id="scan-btn"')
+        i_save_btn = screen.index('id="save-search-btn"')
+        self.assertTrue(i_controls < i_scan_btn < i_map < i_followup < i_save_btn)
+
+    def test_leads_screen_keeps_the_map_between_controls_and_followup_in_dom_order(self):
+        screen = self.html[self.html.index('id="screen-leads"'):self.html.index('<!-- SAVED', self.html.index('id="screen-leads"'))]
+        i_controls = screen.index('class="search-controls"')
+        i_map = screen.index('id="leads-map-card"')
+        i_followup = screen.index('class="search-followup"')
+        i_leads_btn = screen.index('id="leads-btn"')
+        i_status = screen.index('id="leads-status"')
+        self.assertTrue(i_controls < i_leads_btn < i_map < i_followup < i_status)
+
+    def test_upcoming_has_no_map_so_its_form_just_gets_capped_alone(self):
+        # Upcoming has no map to pair with -- it should use the "alone"
+        # variant directly, not get wrapped in a now-single-column grid.
+        screen = self.html[self.html.index('id="screen-upcoming"'):self.html.index('<!-- RESIDENTIAL LEADS')]
+        self.assertIn('class="search-controls alone"', screen)
+        self.assertNotIn("search-layout", screen)
+
+
+class ChromeShadowAndPricingGridTests(unittest.TestCase):
+    """Every card got a shadow in the elevation pass, but the two bars that
+    are on screen every single moment -- .topbar and .bottom-nav -- were
+    left as a flat fill with a hairline border, so app chrome never looked
+    like it sat above the content it frames. And the Account screen's two
+    subscription plans were a single column stretched to the 1180px shell,
+    rather than the usual side-by-side pricing-tier layout."""
+
+    def setUp(self):
+        self.css = _read(APP_CSS)
+        self.js = _read(APP_JS)
+
+    def test_topbar_has_a_downward_shadow_and_the_stacking_context_to_show_it(self):
+        i = self.css.index(".topbar{")
+        rule = self.css[i:self.css.index("}", i) + 1]
+        self.assertIn("box-shadow:", rule)
+        # .screens paints after .topbar in DOM order and would otherwise
+        # hide the shadow bleeding into the area just below it -- this is
+        # the fix, not incidental styling.
+        self.assertIn("z-index:", rule)
+
+    def test_bottom_nav_shadow_points_up_not_down(self):
+        i = self.css.index(".bottom-nav{")
+        rule = self.css[i:self.css.index("}", i) + 1]
+        self.assertIn("box-shadow:0 -", rule)
+
+    def _desktop_rule(self):
+        i = self.css.index("@media (min-width:960px){")
+        depth = 0
+        for k, ch in enumerate(self.css[i:], start=i):
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return self.css[i:k + 1]
+        self.fail("unterminated @media (min-width:960px) block")
+
+    def test_upgrade_section_is_a_two_column_grid_at_desktop(self):
+        rule = self._desktop_rule()
+        i = rule.index("#upgrade-section{")
+        grid = rule[i:rule.index("}", i) + 1]
+        self.assertIn("display:grid", grid)
+        self.assertIn("1fr 1fr", grid)
+
+    def test_license_key_section_spans_both_columns(self):
+        i = self.js.index('<div class="license-key-section">')
+        self.assertLess(i, self.js.index("Have a license key?"))
+        rule = self._desktop_rule()
+        self.assertIn(".license-key-section{grid-column:1/-1;}", rule)
+
+    def test_plan_cards_stretch_to_equal_height_with_bottom_aligned_buttons(self):
+        rule = self._desktop_rule()
+        i = rule.index("#upgrade-section .plan{")
+        self.assertIn("flex-direction:column", rule[i:rule.index("}", i) + 1])
+        i2 = rule.index("#upgrade-section .plan ul{")
+        self.assertIn("flex:1", rule[i2:rule.index("}", i2) + 1])
