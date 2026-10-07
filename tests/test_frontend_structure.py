@@ -1519,3 +1519,42 @@ class LicenseKeyBlockSpacingTests(unittest.TestCase):
 
     def test_key_input_is_spaced_from_the_hint_above_it(self):
         self.assertIn(".license-key-section .input{margin-top:", self.css)
+
+
+class HomeScreenTests(unittest.TestCase):
+    """Home is the opening screen. Exactly one screen and one nav button can
+    start out active -- two of either shows two screens stacked, or a nav
+    highlight on a tab you aren't on."""
+
+    def setUp(self):
+        self.html = _read(APP)
+        self.app = _read(APP_JS)
+
+    def test_home_is_the_only_screen_active_at_load(self):
+        active = re.findall(r'class="screen active" id="([^"]+)"', self.html)
+        self.assertEqual(active, ["screen-home"])
+
+    def test_home_is_the_only_nav_button_active_at_load(self):
+        active = re.findall(r'class="nav-btn active" data-s="([^"]+)"', self.html)
+        self.assertEqual(active, ["home"])
+
+    def test_home_and_leads_dont_share_an_icon(self):
+        # Leads (residential permits) already uses the house.
+        home = re.search(r'data-s="home"><svg class="icon-svg"><use href="#([^"]+)"', self.html).group(1)
+        leads = re.search(r'data-s="leads"><svg class="icon-svg"><use href="#([^"]+)"', self.html).group(1)
+        self.assertNotEqual(home, leads)
+        self.assertIn(f'<symbol id="{home}"', self.html)
+
+    def test_referral_copy_button_is_scoped_to_its_card(self):
+        # Home and Account both render a referral card; a fixed id makes two
+        # elements share it and getElementById binds only the first.
+        i = self.app.index("async function loadReferralCard(")
+        body = self.app[i:self.app.index("\n}\n", i)]
+        self.assertNotIn('id="referral-copy-btn"', body)
+        self.assertIn('el.querySelector(".referral-copy-btn")', body)
+
+    def test_last_visit_is_read_once_per_session(self):
+        # showApp re-runs on every token refresh; moving "since" to now on
+        # each one would zero the "New bids" count an hour into a session.
+        i = self.app.index("prevVisitAt=store.get(LAST_VISIT_KEY")
+        self.assertIn("firstShow", self.app[i - 200:i])

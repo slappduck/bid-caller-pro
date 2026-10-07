@@ -1015,6 +1015,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
       // A geocoder that only answers when the test says so.
       window.__geo = [];
       resolvePlaceLabel = () => new Promise((r) => window.__geo.push(r));
+      switchScreen("scan"); // Home is the opening screen; the map lives on Find
     });
     await page.waitForTimeout(600);
 
@@ -1074,6 +1075,161 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     }
     check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
     await ctx.close();
+  }
+
+  // ── Home ──
+  // The opening screen. Every number on it comes from state the app already
+  // holds, so each check here pins a figure to the seed that produced it.
+  console.log("\nHome shows what changed since the last visit");
+  {
+    const REVIEWS = [
+      { rating: 5, quote: "Found two city jobs <img src=x onerror=window.__xss=1>", display_name: "Mike R.", company: "R&R Concrete" },
+      { rating: 4, quote: "The deadline alerts paid for it.", display_name: "Dana K.", company: "" },
+    ];
+    // Same shape as SB_STUB, but query builders chain and resolve, so the
+    // reviews query has something real to return.
+    const SB_REVIEWS_STUB = `
+      window.supabase = { createClient: function () {
+        return {
+          auth: {
+            onAuthStateChange: function () { return { data: { subscription: { unsubscribe: function () {} } } }; },
+            getSession: async function () { return { data: { session: null } }; },
+            signOut: async function () { return {}; }
+          },
+          from: function (table) {
+            var res = table === "reviews" ? { data: ${JSON.stringify(REVIEWS)}, error: null } : { data: null, error: {} };
+            var c = {
+              select: function () { return c; }, eq: function () { return c; },
+              order: function () { return c; }, limit: function () { return c; },
+              delete: function () { return c; },
+              upsert: async function () { return {}; }, insert: async function () { return {}; },
+              maybeSingle: async function () { return { data: null, error: {} }; },
+              then: function (ok, bad) { return Promise.resolve(res).then(ok, bad); }
+            };
+            return c;
+          },
+          storage: { from: function () { return {}; } }
+        };
+      } };`;
+
+    const openHome = async (viewport, lastVisitDaysAgo) => {
+      const ctx = await browser.newContext(viewport);
+      const page = await ctx.newPage();
+      const pageErrors = [];
+      page.on("pageerror", (e) => pageErrors.push(e.message));
+      await page.route("**/*", (route) => {
+        const host = new URL(route.request().url()).hostname;
+        if (host === "127.0.0.1") return route.continue();
+        if (host === "cdn.jsdelivr.net") {
+          return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_REVIEWS_STUB });
+        }
+        return route.abort();
+      });
+      await page.addInitScript((daysAgo) => {
+        const day = 86400000, now = Date.now();
+        const iso = (d) => { const t = new Date(now + d * day); return t.getFullYear() + "-" +
+          String(t.getMonth() + 1).padStart(2, "0") + "-" + String(t.getDate()).padStart(2, "0"); };
+        const lastVisit = daysAgo == null ? null : now - daysAgo * day;
+        // Two arrived after the last visit, one before it; one has closed.
+        const bids = [
+          { title: "Late Ramp Job", deadline: iso(5), status: "open", url: "https://example.gov/b/5", _first_seen: now - 3600000 },
+          { title: "Soonest Ramp Job", deadline: iso(2), status: "open", url: "https://example.gov/b/2", _first_seen: now - 7200000 },
+          { title: "Far Off Sidewalk", deadline: iso(20), status: "open", url: "https://example.gov/b/20", _first_seen: now - 10 * day },
+          { title: "Already Closed", deadline: iso(-3), status: "open", url: "https://example.gov/b/x", _first_seen: now - 10 * day },
+        ];
+        localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+        localStorage.setItem("last_feed", JSON.stringify({ "Aurora, MO": bids }));
+        localStorage.setItem("referral_code", JSON.stringify("tester-a7k2"));
+        if (lastVisit != null) localStorage.setItem("last_visit_at", JSON.stringify(lastVisit));
+      }, lastVisitDaysAgo);
+      await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+      await page.waitForTimeout(600);
+      await page.evaluate(() => showApp());
+      await page.waitForTimeout(600);
+      return { ctx, page, pageErrors };
+    };
+    const stats = (page) => page.$$eval("#home-main .stat-box", (els) =>
+      els.map((e) => [e.querySelector(".l").textContent.trim(), e.querySelector(".n").textContent.trim()]));
+
+    // First visit: no "since", so the headline count is everything open.
+    {
+      const { ctx, page, pageErrors } = await openHome(MOBILE_VIEWPORT, null);
+      const active = await page.evaluate(() => ({
+        screen: document.querySelector(".screen.active")?.id,
+        nav: document.querySelector(".nav-btn.active")?.dataset.s,
+      }));
+      check("Home is the screen a signed-in user lands on", active.screen === "screen-home" && active.nav === "home",
+            JSON.stringify(active));
+      const s = Object.fromEntries(await stats(page));
+      check("first visit counts every open bid, not a closed one", s["Open bids"] === "3", JSON.stringify(s));
+      check("closing-in-7d counts the 2- and 5-day bids only", s["Closing in 7d"] === "2", JSON.stringify(s));
+      const soon = await page.$$eval("#home-soon .bid-title", (els) => els.map((e) => e.textContent.trim()));
+      check("closing soon lists the nearest deadline first, closed ones left out",
+            soon[0] === "Soonest Ramp Job" && soon[1] === "Late Ramp Job" && !soon.includes("Already Closed"),
+            JSON.stringify(soon));
+      check("see-all counts the open bids", (await page.textContent("#home-all-btn")).includes("3 open bids"));
+
+      const rev = await page.evaluate(() => {
+        const card = document.getElementById("home-reviews");
+        return { shown: getComputedStyle(card).display !== "none", n: card.querySelectorAll(".home-review").length,
+                 img: !!card.querySelector("img"), xss: !!window.__xss, text: card.textContent };
+      });
+      check("approved reviews show on Home", rev.shown && rev.n === 2, JSON.stringify(rev));
+      check("review text is escaped, not rendered as markup", !rev.img && !rev.xss && rev.text.includes("<img"));
+
+      check("the invite card carries the referral link",
+            (await page.textContent("#home-referral-body")).includes("ref=tester-a7k2"));
+      await page.evaluate(() => switchScreen("account"));
+      await page.waitForTimeout(300);
+      const copies = await page.evaluate(() => ({
+        home: document.querySelectorAll("#home-referral-body .referral-copy-btn").length,
+        acct: document.querySelectorAll("#referral-body .referral-copy-btn").length,
+        ids: document.querySelectorAll("#referral-copy-btn").length,
+      }));
+      check("Home and Account each get their own copy button, no shared id",
+            copies.home === 1 && copies.acct === 1 && copies.ids === 0, JSON.stringify(copies));
+
+      await page.evaluate(() => switchScreen("home"));
+      await page.click("#home-all-btn");
+      check("see-all opens Bids",
+            await page.evaluate(() => document.querySelector(".screen.active").id === "screen-feed"));
+      check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+      await ctx.close();
+    }
+
+    // Back a day later: only the two that arrived since count as new.
+    {
+      const { ctx, page, pageErrors } = await openHome(MOBILE_VIEWPORT, 1);
+      const s = Object.fromEntries(await stats(page));
+      check("a return visit counts only bids first seen since", s["New bids"] === "2", JSON.stringify(s));
+      check("the subtitle says since when", (await page.textContent("#home-sub")).includes("since yesterday"));
+      // A token refresh re-runs showApp; it must not move "since" up to now.
+      await page.evaluate(() => showApp());
+      await page.waitForTimeout(300);
+      const again = Object.fromEntries(await stats(page));
+      check("a session refresh doesn't reset what counts as new", again["New bids"] === "2", JSON.stringify(again));
+      check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+      await ctx.close();
+    }
+
+    // Layout: nothing spills sideways on a small phone; side-by-side on desktop.
+    {
+      const { ctx, page } = await openHome({ viewport: { width: 320, height: 640 } }, null);
+      const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      check("Home doesn't scroll sideways at 320px", over <= 0, `overflow ${over}px`);
+      await ctx.close();
+    }
+    {
+      const { ctx, page } = await openHome({ viewport: { width: 1440, height: 900 } }, null);
+      const r = await page.evaluate(() => {
+        const m = document.getElementById("home-main").getBoundingClientRect();
+        const s = document.querySelector(".home-side").getBoundingClientRect();
+        return { mainRight: m.right, sideLeft: s.left, dTop: Math.abs(m.top - s.top) };
+      });
+      check("on desktop the reviews/invite column sits beside the bids", r.sideLeft >= r.mainRight && r.dTop < 2,
+            JSON.stringify(r));
+      await ctx.close();
+    }
   }
 
   await browser.close();

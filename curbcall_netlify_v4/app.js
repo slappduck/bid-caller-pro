@@ -115,6 +115,8 @@ let storageWarned=false;
 const TERMS_METHOD_KEY="pending_terms_method";
 const ONBOARD_KEY="onboarded";
 const HOME_LOC_KEY="home_location";
+const LAST_VISIT_KEY="last_visit_at";
+let prevVisitAt=0;  // previous launch's time (ms), for Home's "new since"
 const HOME_RADIUS_KEY="home_radius";
 let onbRadius=50;
 
@@ -1344,6 +1346,12 @@ let _appShownOnce=false,_autoLocated=false;
 function showApp(){
   const firstShow=!_appShownOnce;
   _appShownOnce=true;
+  // Home's "new since you were last here": read the previous launch's time
+  // before stamping this one, so the count covers the gap between visits.
+  if(firstShow){
+    prevVisitAt=store.get(LAST_VISIT_KEY,0);
+    store.set(LAST_VISIT_KEY,Date.now());
+  }
   document.getElementById("auth-screen").style.display="none";
   document.getElementById("app").style.display="flex";
   updateUserChip();
@@ -1459,6 +1467,7 @@ function switchScreen(s){
   if(s==="account")renderAccount();
   if(s==="upcoming")renderUpcoming();
   if(s==="leads"&&LEADS_ENABLED)renderLeads();
+  if(s==="home")renderHome();
   // Every other screen refreshes its own content on switching to it; Find
   // only ever got this from showApp()'s initial renderFeed() call, so it
   // relied on load order instead of being self-contained like the rest.
@@ -3516,11 +3525,103 @@ function renderScanSummary(){
     </div>`;
   document.getElementById("scan-summary-view-btn").onclick=()=>goTo("feed");
 }
+
+// ── Home ──
+// Every number here is something the app already has: the feed, the
+// pipeline, approved reviews (public by RLS), the referral link. Nothing is
+// invented to make the screen look busy -- a section with nothing real to
+// show is hidden instead.
+function homeGreeting(){
+  const h=new Date().getHours();
+  const part=h<12?"Morning":h<17?"Afternoon":"Evening";
+  const name=String((companyProfile&&companyProfile.contact)||"").trim().split(/\s+/)[0];
+  return name?`${part}, ${name}`:`Good ${part.toLowerCase()}`;
+}
+function homeSinceLabel(t){
+  const d=new Date(t),now=new Date();
+  const days=Math.floor((new Date(now.toDateString())-new Date(d.toDateString()))/86400000);
+  if(days<=0)return "earlier today";
+  if(days===1)return "yesterday";
+  if(days<7)return d.toLocaleDateString([],{weekday:"long"});
+  return d.toLocaleDateString([],{month:"short",day:"numeric"});
+}
+function renderHome(){
+  const main=document.getElementById("home-main");
+  if(!main)return;
+  const rows=[];
+  Object.keys(bidData).forEach(c=>visibleBidsIn(c).forEach(b=>rows.push([c,b])));
+  const total=rows.length;
+  const fresh=prevVisitAt?rows.filter(([c,b])=>(b._first_seen||0)>prevVisitAt).length:total;
+  const closing=rows.filter(([c,b])=>{const d=daysUntil(b);return d!=null&&d>=0&&d<=7;}).length;
+  const stats=pipelineStatsSummary();
+  const where=String(store.get(HOME_LOC_KEY,"")||"").trim();
+
+  document.getElementById("home-title").textContent=homeGreeting();
+  document.getElementById("home-sub").textContent=prevVisitAt
+    ?`Here's what changed${where?` near ${where}`:""} since ${homeSinceLabel(prevVisitAt)}.`
+    :`Here's what's open${where?` near ${where}`:" near you"}.`;
+
+  const soonest=rows
+    .filter(([c,b])=>{const d=daysUntil(b);return d!=null&&d>=0;})
+    .sort((a,b)=>daysUntil(a[1])-daysUntil(b[1]))
+    .slice(0,3);
+
+  main.innerHTML=`
+    <div class="account-card">
+      <div class="account-email hdr-ic" style="font-size:var(--fs-base);margin-bottom:0.6rem;"><svg class="icon-svg"><use href="#i-activity"/></svg>Your week</div>
+      <div class="stats-grid">
+        <div class="stat-box"><div class="n">${fresh}</div><div class="l">${prevVisitAt?"New bids":"Open bids"}</div></div>
+        <div class="stat-box"><div class="n"${closing?' style="color:var(--red);"':""}>${closing}</div><div class="l">Closing in 7d</div></div>
+        <div class="stat-box"><div class="n">${esc(stats.winRate)}</div><div class="l">Win rate</div></div>
+        <div class="stat-box"><div class="n">${formatMoney(stats.trackedValue)}</div><div class="l">Tracked</div></div>
+      </div>
+      <button class="btn-primary" id="home-scan-btn" style="margin-top:0.2rem;">${total?"Scan for new bids":"Run your first scan"}</button>
+    </div>
+    ${soonest.length?`<div class="feed-label">CLOSING SOON</div><div id="home-soon">${soonest.map(([c,b])=>bidCard(c,b)).join("")}</div>`:""}
+    ${total?`<button class="btn-ghost" id="home-all-btn">See all ${plural(total,"open bid")}</button>`
+      :emptyHTML("i-list","No bids yet","Run a scan and the work near you shows up here.")}`;
+
+  document.getElementById("home-scan-btn").onclick=()=>goTo("scan");
+  const all=document.getElementById("home-all-btn");
+  if(all)all.onclick=()=>goTo("feed");
+  const soon=document.getElementById("home-soon");
+  if(soon)attachBidEvents(soon);
+  loadHomeReviews();
+  loadReferralCard("home-referral-body");
+}
+// Approved reviews only -- RLS exposes nothing else to this query, and the
+// card stays hidden when there are none rather than showing an empty box.
+// Fetched once per session; reviews don't change minute to minute.
+let homeReviews=null;
+async function loadHomeReviews(){
+  const card=document.getElementById("home-reviews");
+  if(!card)return;
+  if(homeReviews===null&&sb&&!isOffline()){
+    homeReviews=[];
+    try{
+      const{data,error}=await sb.from("reviews").select("rating,quote,display_name,company")
+        .eq("approved",true).order("created_at",{ascending:false}).limit(2);
+      if(!error&&Array.isArray(data))homeReviews=data.filter(r=>r&&String(r.quote||"").trim());
+    }catch(e){/* no reviews card -- the rest of Home is unaffected */}
+  }
+  if(!homeReviews||!homeReviews.length){card.style.display="none";return;}
+  const stars=n=>{const k=Math.max(0,Math.min(5,Math.round(+n||0)));return "★".repeat(k)+"☆".repeat(5-k);};
+  card.innerHTML=`<div class="account-email hdr-ic" style="font-size:var(--fs-base);margin-bottom:0.4rem;"><svg class="icon-svg"><use href="#i-users"/></svg>From other contractors</div>
+    ${homeReviews.map(r=>`<div class="home-review">
+      <div class="home-stars" aria-label="${esc(String(r.rating))} out of 5">${stars(r.rating)}</div>
+      <div class="home-quote">“${esc(r.quote)}”</div>
+      <div class="home-by">${esc([r.display_name,r.company].filter(Boolean).join(" · "))}</div>
+    </div>`).join("")}`;
+  card.style.display="";
+}
+
 function renderFeed(){
   // Called unconditionally, before either of this function's own exit
   // points, so the Find screen's summary never drifts from what Bids
   // itself is about to show.
   renderScanSummary();
+  // Home shows the same bids; keep it current when it's the screen on show.
+  if(document.getElementById("screen-home")?.classList.contains("active"))renderHome();
   const tiles=document.getElementById("tiles-wrap");
   const list=document.getElementById("feed-list");
   const clearBtn=document.getElementById("clear-feed");
@@ -4230,8 +4331,8 @@ async function submitReview(){
   }catch(e){toast("Couldn't reach the server.");btn.disabled=false;renderReviewCard();}
 }
 
-async function loadReferralCard(){
-  const el=document.getElementById("referral-body");
+async function loadReferralCard(elId="referral-body"){
+  const el=document.getElementById(elId);
   if(!el) return;
   try{
     let code=store.get("referral_code","");
@@ -4245,9 +4346,10 @@ async function loadReferralCard(){
     const link=`${location.origin}/?ref=${encodeURIComponent(code)}`;
     el.innerHTML=`<div class="input" style="display:flex;align-items:center;gap:0.5rem;overflow:hidden;padding:0.6rem 0.8rem;">
       <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--fs-sm);color:var(--text2);">${esc(link)}</span>
-      <button class="btn-ghost" id="referral-copy-btn" style="flex-shrink:0;width:auto;margin:0;padding:0.35rem 0.7rem;font-size:var(--fs-sm);">Copy</button>
+      <button class="btn-ghost referral-copy-btn" style="flex-shrink:0;width:auto;margin:0;padding:0.35rem 0.7rem;font-size:var(--fs-sm);">Copy</button>
     </div>`;
-    document.getElementById("referral-copy-btn").onclick=async()=>{
+    // Scoped to this card: Home and Account both carry one.
+    el.querySelector(".referral-copy-btn").onclick=async()=>{
       try{await navigator.clipboard.writeText(link);toast("Referral link copied");}
       catch(e){toast("Couldn't copy — long-press the link to copy manually");}
     };

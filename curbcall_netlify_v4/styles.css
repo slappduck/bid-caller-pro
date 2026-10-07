@@ -293,6 +293,18 @@ body{font-family:var(--ui);background:radial-gradient(ellipse 120% 60% at 50% -1
 .stat-box .n{font-size:var(--fs-2xl);font-weight:800;color:var(--accent);}
 .stat-box .l{font-size:var(--fs-xs);color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-top:0.15rem;}
 
+/* ── Home ── */
+.home-review{padding:0.6rem 0;border-bottom:1px solid var(--border);}
+.home-review:last-of-type{border-bottom:none;}
+.home-stars{color:var(--accent);font-size:var(--fs-sm);letter-spacing:0.1em;}
+.home-quote{color:var(--text);font-size:var(--fs-base);line-height:1.45;margin:0.25rem 0;}
+.home-by{color:var(--text3);font-size:var(--fs-sm);}
+.home-side{margin-top:1.2rem;}
+/* Four stat boxes in one row leave "$208k" no room on a small phone; two
+   by two keeps every number at full size. */
+#home-main .stats-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));}
+@media (min-width:480px){#home-main .stats-grid{grid-template-columns:repeat(4,minmax(0,1fr));}}
+
 .scan-effort{margin-top:0.6rem;padding:0.7rem 0.85rem;background:var(--card);
   border:1px solid var(--border);border-radius:var(--r-sm);
   color:var(--text2);font-size:var(--fs-sm);line-height:1.55;}
@@ -735,4 +747,9 @@ body{font-family:var(--ui);background:radial-gradient(ellipse 120% 60% at 50% -1
   #upgrade-section .plan{display:flex;flex-direction:column;}
   #upgrade-section .plan ul{flex:1;}
   #upgrade-section .license-key-section{grid-column:1/-1;}
+
+  /* Home: what's happening in your area on the left, the people side
+     (reviews, invites) beside it rather than trailing underneath. */
+  .home-grid{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:1.5rem;align-items:start;}
+  .home-side{margin-top:0;}
 }
