@@ -716,14 +716,21 @@ body{font-family:var(--ui);background:radial-gradient(ellipse 120% 60% at 50% -1
      Grid areas put them back together as one visual column here without
      reordering that mobile flow. */
   .search-layout{display:grid;grid-template-columns:minmax(280px,420px) 1fr;
-    grid-template-areas:"controls map" "followup map";gap:1.2rem 1.5rem;align-items:start;}
+    grid-template-areas:"controls map" "followup map";gap:1.2rem 1.5rem;align-items:start;
+    /* The map is taller than the form. With two auto rows its extra height
+       was shared between them, so the first row grew past the Scan button
+       and the status line started far down the page under a blank gap.
+       A flexible second row takes all of it instead: row one is exactly
+       the form, and what follows sits right under the button. */
+    grid-template-rows:auto 1fr;}
   .search-layout .search-controls{grid-area:controls;}
   .search-layout .search-followup{grid-area:followup;}
   .search-layout .map-card{grid-area:map;}
   /* Find alone has a real-data summary that goes under the map rather than
      beside it (Leads has no equivalent, so its map keeps spanning both rows
      above -- the general rule just above this one). */
-  #screen-scan .search-layout{grid-template-areas:"controls map" "followup summary";}
+  #screen-scan .search-layout{grid-template-areas:"controls map" "followup map" "followup summary";
+    grid-template-rows:auto 1fr auto;}
   #screen-scan .search-layout #scan-summary{grid-area:summary;}
   /* Upcoming has no map to pair with its form -- capping it alone, with
      nothing invented to fill a second column, is the honest version of the

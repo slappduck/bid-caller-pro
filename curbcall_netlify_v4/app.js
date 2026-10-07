@@ -2946,6 +2946,11 @@ function watchScanProgress(token,statusEl){
           body:JSON.stringify({token})},8000);
         if(!r.ok)continue;
         const d=await r.json();
+        // The scan can finish while this request is in flight. Writing after
+        // that replaced the result -- "Nothing open near you" and its buttons,
+        // or an error -- with a stale "Reading town bid pages... 10 so far",
+        // leaving a finished scan looking stuck with nothing to show.
+        if(stop)break;
         if(!d||!d.known||d.done)continue;
         const words=SCAN_PHASES[d.phase];
         if(!words)continue;

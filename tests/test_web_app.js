@@ -1077,6 +1077,66 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── A progress poll that lands after the scan has finished ──
+  // The poll was stopped between requests but not mid-request, so one in
+  // flight when the scan returned wrote "Reading town bid pages... 10 so
+  // far" over the result. A live Columbia, MO scan ended exactly like that:
+  // no result, no buttons, a status that looked stuck.
+  console.log("\nA late progress update can't overwrite the scan's result");
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", async (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      if (u.endsWith("/scan/progress")) {
+        // Asked at ~2.5s, answers at ~4.5s -- after the scan's ~3s.
+        await new Promise((r) => setTimeout(r, 2000));
+        return route.fulfill({ status: 200, contentType: "application/json",
+          body: JSON.stringify({ ok: true, known: true, phase: "reading_towns", found: 10, done: false }) });
+      }
+      if (u.endsWith("/scan")) {
+        await new Promise((r) => setTimeout(r, 3000));
+        return route.fulfill({ status: 200, contentType: "application/json",
+          body: JSON.stringify({ ok: true, location: "Columbia, MO", bids: {}, total_bids: 0, city_coords: {} }) });
+      }
+      if (host === "cdn.jsdelivr.net") {
+        return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      }
+      if (host === "127.0.0.1") return route.continue();
+      return route.abort();
+    });
+    await page.addInitScript(seedSignedIn, {});
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => { showApp(); switchScreen("scan"); });
+    await page.fill("#loc-input", "Columbia, MO");
+    // Not awaited: the first read has to land between the scan's answer
+    // and the late poll's.
+    await page.evaluate(() => { radius = 75; runScan(false); });
+    await page.waitForTimeout(3600);
+    const atResult = await page.textContent("#scan-status");
+    await page.waitForTimeout(2500); // the late poll has landed by now
+    const after = await page.textContent("#scan-status");
+    check("the empty result is shown when the scan returns", /Nothing open near Columbia/.test(atResult), atResult);
+    check("a poll answered after that doesn't replace it", /Nothing open near Columbia/.test(after), after);
+    check("its search-wider button survives too", (await page.locator("#empty-wider").count()) === 1);
+
+    // Desktop: the status sits right under the Scan button, not below the
+    // bottom of the much taller map beside it.
+    const gap = await page.evaluate(() => {
+      const btn = document.getElementById("scan-btn").getBoundingClientRect();
+      const st = document.getElementById("scan-status").getBoundingClientRect();
+      const map = document.querySelector("#screen-scan .map-card").getBoundingClientRect();
+      return { gap: Math.round(st.top - btn.bottom), mapBottom: Math.round(map.bottom), statusTop: Math.round(st.top) };
+    });
+    check("on desktop the scan status follows the Scan button without a blank gap", gap.gap < 60, JSON.stringify(gap));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   // ── Home ──
   // The opening screen. Every number on it comes from state the app already
   // holds, so each check here pins a figure to the seed that produced it.
