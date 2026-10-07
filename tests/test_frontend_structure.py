@@ -1497,6 +1497,25 @@ class PlanCardsDontTouchTheLinkAboveThemTests(unittest.TestCase):
         self.css = _read(APP_CSS)
 
     def test_upgrade_section_has_margin_above_it(self):
-        i = self.css.index("#upgrade-section{margin-top:")
+        # Shorthand "margin:TOP RIGHT BOTTOM" -- the first value is the top.
+        i = self.css.index("#upgrade-section{margin:")
         rule = self.css[i:self.css.index("}", i) + 1]
-        self.assertIn("margin-top:0.9rem", rule)
+        self.assertIn("margin:0.9rem ", rule)
+
+
+class LicenseKeyBlockSpacingTests(unittest.TestCase):
+    """#upgrade-section ends on the Activate Key button (margin above only)
+    and the next .account-card ("Your Stats") has margin below only, so the
+    two sat flush. The "Already paid?" hint also sat flush on the key
+    input. Same seam shape as PlanCardsDontTouchTheLinkAboveThemTests."""
+
+    def setUp(self):
+        self.css = _read(APP_CSS)
+
+    def test_upgrade_section_has_margin_on_both_ends(self):
+        i = self.css.index("#upgrade-section{margin:")
+        rule = self.css[i:self.css.index("}", i) + 1]
+        self.assertIn("margin:0.9rem 0 1rem", rule)
+
+    def test_key_input_is_spaced_from_the_hint_above_it(self):
+        self.assertIn(".license-key-section .input{margin-top:", self.css)

@@ -316,7 +316,12 @@ body{font-family:var(--ui);background:radial-gradient(ellipse 120% 60% at 50% -1
    above (the "Manage billing" link). Stacked in a single column that
    read as a tight but plausible gap; side by side in the desktop grid,
    both cards' top edges touch that link directly. */
-#upgrade-section{margin-top:0.9rem;}
+#upgrade-section{margin:0.9rem 0 1rem;}
+/* Same seam at the other end: the section ends on the Activate Key button,
+   which only has margin above it, and .account-card ("Your Stats", next)
+   only has margin below it -- so the two touched. Likewise the "Already
+   paid?" hint sat flush on the key input under it. */
+.license-key-section .input{margin-top:0.5rem;}
 .plan{background:var(--card);border:1.5px solid var(--border);border-radius:var(--r-lg);padding:1.2rem;margin-bottom:0.9rem;box-shadow:var(--shadow-sm);}
 /* The featured plan is the one thing this screen most wants a glance to
    land on -- a stronger shadow plus a soft glow in the same accent colour
