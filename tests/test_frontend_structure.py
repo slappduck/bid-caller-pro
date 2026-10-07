@@ -1482,3 +1482,21 @@ class DepthCuesBeyondAFlatShadowTests(unittest.TestCase):
         rule = self.css[i:self.css.index("}", i) + 1]
         self.assertIn("radial-gradient(", rule)
         self.assertIn("var(--bg)", rule)
+
+
+class PlanCardsDontTouchTheLinkAboveThemTests(unittest.TestCase):
+    """.plan's own margin-bottom only ever spaced it from what comes AFTER
+    it -- nothing put space before the first one, so the "Already
+    subscribed? Manage billing" link and the plan cards sat flush against
+    each other with zero gap (reported as "price cards touching the thing
+    above it"). Pre-existing on mobile's single stacked column too; the
+    desktop two-column grid just made it obvious, since both cards' top
+    edges now touch that link in a single flat row."""
+
+    def setUp(self):
+        self.css = _read(APP_CSS)
+
+    def test_upgrade_section_has_margin_above_it(self):
+        i = self.css.index("#upgrade-section{margin-top:")
+        rule = self.css[i:self.css.index("}", i) + 1]
+        self.assertIn("margin-top:0.9rem", rule)

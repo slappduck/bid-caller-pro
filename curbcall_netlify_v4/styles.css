@@ -310,6 +310,13 @@ body{font-family:var(--ui);background:radial-gradient(ellipse 120% 60% at 50% -1
 .empty h3{font-size:var(--fs-xl);color:var(--text2);margin:0.7rem 0 0.3rem;}
 .empty p{color:var(--text3);font-size:var(--fs-base);}
 
+/* .plan's own margin-bottom only ever spaced it from what comes AFTER it
+   (the next plan, or "Have a license key?" below both) -- nothing put
+   space before the first one, so it sat flush against whatever came
+   above (the "Manage billing" link). Stacked in a single column that
+   read as a tight but plausible gap; side by side in the desktop grid,
+   both cards' top edges touch that link directly. */
+#upgrade-section{margin-top:0.9rem;}
 .plan{background:var(--card);border:1.5px solid var(--border);border-radius:var(--r-lg);padding:1.2rem;margin-bottom:0.9rem;box-shadow:var(--shadow-sm);}
 /* The featured plan is the one thing this screen most wants a glance to
    land on -- a stronger shadow plus a soft glow in the same accent colour
