@@ -1198,3 +1198,54 @@ class InteractiveFeedbackTests(unittest.TestCase):
 
     def test_radius_btn_selection_state_still_wins_over_hover(self):
         self.assertLess(self.css.index(".radius-btn:hover{"), self.css.index(".radius-btn.active{"))
+
+
+class DismissedBidsCrossDeviceSyncTests(unittest.TestCase):
+    """bids/upcoming/leads/lead_status all sync across a signed-in user's
+    devices via the user_feeds table (pushFeeds()/syncPullFeeds()) -- but
+    removeBid()'s "dismissed" exclusion set never joined that sync, and
+    never even called queueFeedPush() to schedule one. A bid removed with
+    the card's "x" on one device kept reappearing on every other device
+    signed into the same account, because the feed itself resynced but
+    which bids had been dismissed from it never did."""
+
+    def setUp(self):
+        self.js = _read(APP_JS)
+        self.sql = _read(os.path.join(ROOT, "supabase_sync_schema.sql"))
+
+    def test_remove_bid_schedules_a_sync_push(self):
+        i = self.js.index("function removeBid(")
+        body = self.js[i:self.js.index("\n}", i)]
+        self.assertIn("queueFeedPush()", body)
+
+    def test_push_feeds_uploads_dismissed(self):
+        i = self.js.index("async function pushFeeds(")
+        body = self.js[i:self.js.index("\n}", i)]
+        self.assertIn("dismissed:dismissed", body)
+
+    def test_sync_pull_adopts_dismissed_and_persists_it(self):
+        i = self.js.index("async function syncPullFeeds(")
+        body = self.js[i:self.js.index("\nfunction ", i)]
+        self.assertIn("dismissed=data.dismissed", body)
+        self.assertIn('store.set("dismissed",dismissed)', body)
+        # Falsy-but-defined would be wrong here too, but the real failure
+        # mode is a row written before this column existed: data.dismissed
+        # is undefined there, not an empty dismissal, and must not wipe
+        # whatever this device already had dismissed.
+        self.assertIn("data.dismissed||dismissed", body)
+
+    def test_bid_id_migration_rekeys_dismissed_too(self):
+        """saved/pipeline/notes were already rekeyed when the id scheme
+        changed from legacy truncated-text ids to the md5 hash; dismissed
+        was added later and was missing from that rekey, so a bid dismissed
+        under the old scheme could silently stop matching after migration."""
+        i = self.js.index("function migrateBidIds(")
+        body = self.js[i:self.js.index("\n}", i)]
+        self.assertIn("dismissed=rekey(dismissed)", body)
+        self.assertIn('store.set("dismissed",dismissed)', body)
+
+    def test_schema_has_a_migration_for_the_dismissed_column(self):
+        self.assertIn(
+            "alter table user_feeds add column if not exists dismissed jsonb",
+            self.sql,
+        )

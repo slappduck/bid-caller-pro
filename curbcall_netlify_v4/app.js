@@ -267,8 +267,9 @@ function migrateBidIds(){
     for(const k in obj)out[alreadyHashed(k)?k:(remap[k]||k)]=obj[k];
     return out;
   };
-  saved=rekey(saved);pipeline=rekey(pipeline);notes=rekey(notes);
+  saved=rekey(saved);pipeline=rekey(pipeline);notes=rekey(notes);dismissed=rekey(dismissed);
   store.set("saved",saved);store.set("pipeline",pipeline);store.set("notes",notes);
+  store.set("dismissed",dismissed);
   store.set("bid_id_scheme","md5");
 }
 migrateBidIds();
@@ -470,7 +471,8 @@ async function pushFeeds(){
   try{
     await sb.from(FEED_TABLE).upsert({
       bids:bidData,upcoming:upcomingData,leads:leadsData,
-      lead_status:leadStatus,updated_at:feedsUpdatedAt||new Date().toISOString(),
+      lead_status:leadStatus,dismissed:dismissed,
+      updated_at:feedsUpdatedAt||new Date().toISOString(),
     },{onConflict:"user_id"});
   }catch(e){/* a failed feed upload costs nothing local — try again next scan */}
 }
@@ -514,10 +516,18 @@ async function syncPullFeeds(){
   upcomingData=data.upcoming||{};
   leadsData=data.leads||{};
   leadStatus=data.lead_status||{};
+  // Added after bids/upcoming/leads/lead_status already synced -- a bid
+  // removed on one device kept reappearing on every other signed-in device,
+  // since the underlying feed synced but which bids had been dismissed from
+  // it never did. data.dismissed is undefined against a row written before
+  // this column existed, not an empty dismissal -- falling back to {} there
+  // would un-hide every bid this device had already removed.
+  dismissed=data.dismissed||dismissed;
   store.set("last_feed",bidData);
   store.set("upcoming_feed",upcomingData);
   store.set("leads_feed",leadsData);
   store.set("lead_status",leadStatus);
+  store.set("dismissed",dismissed);
   feedsUpdatedAt=data.updated_at||new Date().toISOString();
   store.set("feeds_updated_at",feedsUpdatedAt);
   // The sync has now answered, so the first-scan decision can be made on
@@ -3563,10 +3573,16 @@ function toggleSave(city,id){
 // rescan of that city replaces its whole list from the server (see
 // mergeOpenBids), so without persisting this a bid the server still calls
 // open would just quietly reappear next time that city gets rescanned.
+// queueFeedPush() is what makes "for good" true on every device the account
+// is signed into, not just this one -- every other write to bidData/
+// upcomingData/leadsData/leadStatus already calls it after store.set(),
+// this was the one omitted, so a bid removed on one device kept showing up
+// on the others.
 function removeBid(city,id){
   const b=findBid(id);
   dismissed[id]=true;
   store.set("dismissed",dismissed);
+  queueFeedPush();
   renderFeed();
   toast(b&&b.title?`Removed: ${b.title}`:"Removed");
 }
