@@ -267,8 +267,9 @@ function migrateBidIds(){
     for(const k in obj)out[alreadyHashed(k)?k:(remap[k]||k)]=obj[k];
     return out;
   };
-  saved=rekey(saved);pipeline=rekey(pipeline);notes=rekey(notes);
+  saved=rekey(saved);pipeline=rekey(pipeline);notes=rekey(notes);dismissed=rekey(dismissed);
   store.set("saved",saved);store.set("pipeline",pipeline);store.set("notes",notes);
+  store.set("dismissed",dismissed);
   store.set("bid_id_scheme","md5");
 }
 migrateBidIds();
@@ -470,7 +471,8 @@ async function pushFeeds(){
   try{
     await sb.from(FEED_TABLE).upsert({
       bids:bidData,upcoming:upcomingData,leads:leadsData,
-      lead_status:leadStatus,updated_at:feedsUpdatedAt||new Date().toISOString(),
+      lead_status:leadStatus,dismissed:dismissed,
+      updated_at:feedsUpdatedAt||new Date().toISOString(),
     },{onConflict:"user_id"});
   }catch(e){/* a failed feed upload costs nothing local — try again next scan */}
 }
@@ -514,10 +516,18 @@ async function syncPullFeeds(){
   upcomingData=data.upcoming||{};
   leadsData=data.leads||{};
   leadStatus=data.lead_status||{};
+  // Added after bids/upcoming/leads/lead_status already synced -- a bid
+  // removed on one device kept reappearing on every other signed-in device,
+  // since the underlying feed synced but which bids had been dismissed from
+  // it never did. data.dismissed is undefined against a row written before
+  // this column existed, not an empty dismissal -- falling back to {} there
+  // would un-hide every bid this device had already removed.
+  dismissed=data.dismissed||dismissed;
   store.set("last_feed",bidData);
   store.set("upcoming_feed",upcomingData);
   store.set("leads_feed",leadsData);
   store.set("lead_status",leadStatus);
+  store.set("dismissed",dismissed);
   feedsUpdatedAt=data.updated_at||new Date().toISOString();
   store.set("feeds_updated_at",feedsUpdatedAt);
   // The sync has now answered, so the first-scan decision can be made on
@@ -526,6 +536,11 @@ async function syncPullFeeds(){
   maybeFirstScan();
   const active=(id)=>document.getElementById(id).classList.contains("active");
   if(active("screen-feed"))renderFeed();
+  // Unconditional, unlike the renderFeed() above: a pull can land while
+  // Find is the visible screen (this runs at sign-in, before any tab has
+  // necessarily been touched), and the summary there would otherwise show
+  // whatever this device had before the sync.
+  else renderScanSummary();
   if(active("screen-upcoming"))renderUpcoming();
   if(active("screen-leads"))renderLeads();
   showFeedBadge(Object.keys(bidData).length>0);
@@ -555,6 +570,13 @@ function toast(msg){
   clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),2600);
 }
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+// Every empty-state card (.empty) still had CSS for an .icon div sized for
+// an emoji, but nothing ever filled it after emoji icons were replaced
+// with this SVG sprite -- they'd silently rendered as bare text ever since.
+function emptyHTML(icon,title,body){return `<div class="empty"><div class="icon"><svg class="icon-svg"><use href="#${icon}"/></svg></div><h3>${title}</h3><p>${body}</p></div>`;}
+// Plan feature lists used a CSS ::before Unicode checkmark, a different
+// visual language from the SVG icon set used everywhere else on this screen.
+function planLi(text){return `<li><svg class="icon-svg"><use href="#i-check"/></svg>${text}</li>`;}
 // County names arrive normalised for matching ("st clair", "de kalb"), which
 // is right for a lookup key and wrong on a card.
 function titleCase(s){return String(s==null?"":s).replace(/\b[a-z]/g,c=>c.toUpperCase());}
@@ -1425,6 +1447,10 @@ function switchScreen(s){
   if(s==="account")renderAccount();
   if(s==="upcoming")renderUpcoming();
   if(s==="leads"&&LEADS_ENABLED)renderLeads();
+  // Every other screen refreshes its own content on switching to it; Find
+  // only ever got this from showApp()'s initial renderFeed() call, so it
+  // relied on load order instead of being self-contained like the rest.
+  if(s==="scan")renderScanSummary();
   // The map's own invalidateSize() call (in show()) only ever runs once,
   // at creation time -- for any tab that isn't the default visible one,
   // that happens while the tab is still hidden (display:none), so
@@ -1656,6 +1682,10 @@ async function checkSavedSearches(){
     showFeedBadge(true);
     fireNotification("CurbCall Pro — New Bids",`${plural(newTotal,"new bid")} from your saved searches.`);
     if(document.getElementById("screen-feed").classList.contains("active"))renderFeed();
+    // Unconditional, unlike the renderFeed() above: this is a background scan
+    // that can land while Find is the visible screen, and the summary there
+    // would otherwise sit stale until something else happens to touch Bids.
+    renderScanSummary();
   }
 }
 
@@ -2950,6 +2980,10 @@ async function runScan(force){
     }
     const total=d.total_bids||0;
     const added=mergeOpenBids(d.bids||{},Object.keys(d.city_coords||{}));
+    // Unconditional: the empty-result branch below stays on this screen
+    // (no goTo("feed")), so without this the Find-screen summary would
+    // keep showing last scan's count after one that found nothing new.
+    renderScanSummary();
     // Only a real scan calibrates the estimate. A cached result returns in
     // milliseconds and would drag the median down to nothing, so the next
     // real scan would show a bar that finishes instantly and then sits.
@@ -3114,7 +3148,7 @@ function renderUpcoming(){
   if(!cities.length){
     filterRow.style.display="none";
     document.getElementById("up-toolbar").style.display="none";
-    list.innerHTML=`<div class="empty"><h3>Nothing yet</h3><p>Search your area to spot planned work before it's a bid.</p></div>`;
+    list.innerHTML=emptyHTML("i-radar","Nothing yet","Search your area to spot planned work before it's a bid.");
     return;
   }
   filterRow.style.display="flex";
@@ -3131,7 +3165,7 @@ function renderUpcoming(){
   else if(mode==="title")rows.sort((a,b)=>String(a[1].title||"").localeCompare(String(b[1].title||"")));
   lastUpcomingRows=rows;
   list.innerHTML=`<div class="feed-label">PLANNED PROJECTS</div>`+rows.map(([c,b])=>upcomingCard(c,b)).join("");
-  if(!rows.length)list.innerHTML=`<div class="empty"><h3>No matches</h3><p>Try a different search term.</p></div>`;
+  if(!rows.length)list.innerHTML=emptyHTML("i-search","No matches","Try a different search term.");
 }
 let lastUpcomingRows=[];
 byId("up-sort").onchange=()=>renderUpcoming();
@@ -3272,7 +3306,7 @@ function renderLeads(){
     filterRow.style.display="none";
     toolbar.style.display="none";
     tilesWrap.innerHTML="";
-    list.innerHTML=`<div class="empty"><h3>Nothing yet</h3><p>Search your area for fresh driveway &amp; sidewalk permits. Coverage is growing city by city — currently: Austin, TX; Cambridge, MA & Baton Rouge, LA.</p></div>`;
+    list.innerHTML=emptyHTML("i-home","Nothing yet","Search your area for fresh driveway &amp; sidewalk permits. Coverage is growing city by city — currently: Austin, TX; Cambridge, MA &amp; Baton Rouge, LA.");
     return;
   }
   filterRow.style.display="flex";
@@ -3303,7 +3337,7 @@ function renderLeads(){
   // returned them -- already sorted open-lead-first, freshest within type.
   lastLeadsRows=rows;
   list.innerHTML=`<div class="feed-label">RESIDENTIAL LEADS</div>`+rows.map(([c,l])=>leadCard(c,l)).join("");
-  if(!rows.length)list.innerHTML=`<div class="empty"><h3>No matches</h3><p>Try a different search term.</p></div>`;
+  if(!rows.length)list.innerHTML=emptyHTML("i-search","No matches","Try a different search term.");
   // Real listeners, not interpolated onclick — a permit id containing a quote
   // would otherwise break the status buttons on that lead.
   list.querySelectorAll("[data-lead-id]").forEach(btn=>{
@@ -3410,7 +3444,39 @@ let lastFeedRows=[];
 function visibleBidsIn(city){
   return (bidData[city]||[]).filter(b=>isOpen(b)&&!dismissed[bidId(city,b)]);
 }
+// A running total of what scans have already found, shown on the Find
+// screen itself -- real state already computed for the Bids tab's own
+// header, not invented content. On desktop this also fills the space below
+// the map instead of leaving it empty. Called from renderFeed() so it
+// never drifts out of sync with the one place bidData is already the
+// source of truth for a count.
+function renderScanSummary(){
+  const el=document.getElementById("scan-summary");
+  if(!el)return;
+  const cities=Object.keys(bidData).filter(c=>visibleBidsIn(c).length);
+  const total=cities.reduce((n,c)=>n+visibleBidsIn(c).length,0);
+  if(!total){el.style.display="none";el.innerHTML="";return;}
+  el.style.display="";
+  const syncText=lastSyncAt
+    ?`Last synced ${lastSyncAt.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}`
+    :"";
+  el.innerHTML=`
+    <div class="account-card">
+      <div class="account-email hdr-ic" style="font-size:var(--fs-base);margin-bottom:0.6rem;"><svg class="icon-svg"><use href="#i-list"/></svg>Your Bids So Far</div>
+      <div class="stats-grid">
+        <div class="stat-box"><div class="n">${total}</div><div class="l">Open Bids</div></div>
+        <div class="stat-box"><div class="n">${cities.length}</div><div class="l">${cities.length===1?"Town":"Towns"}</div></div>
+      </div>
+      ${syncText?`<div class="account-status" style="margin-top:0.6rem;">${esc(syncText)}</div>`:""}
+      <button class="btn-ghost" id="scan-summary-view-btn" style="margin-top:0.8rem;">View All Bids</button>
+    </div>`;
+  document.getElementById("scan-summary-view-btn").onclick=()=>goTo("feed");
+}
 function renderFeed(){
+  // Called unconditionally, before either of this function's own exit
+  // points, so the Find screen's summary never drifts from what Bids
+  // itself is about to show.
+  renderScanSummary();
   const tiles=document.getElementById("tiles-wrap");
   const list=document.getElementById("feed-list");
   const clearBtn=document.getElementById("clear-feed");
@@ -3426,7 +3492,7 @@ function renderFeed(){
   exportBtn.style.display=total?"inline-flex":"none";
   if(!total){
     tiles.innerHTML="";
-    list.innerHTML=`<div class="empty"><h3>No bids yet</h3><p>Tap Find to scan your area.</p></div>`;
+    list.innerHTML=emptyHTML("i-list","No bids yet","Tap Find to scan your area.");
     lastFeedRows=[];
     return;
   }
@@ -3467,7 +3533,7 @@ function renderFeed(){
   }
   lastFeedRows=rows;
   list.innerHTML=`<div class="feed-label">OPEN BIDS</div>`+rows.map(([c,b])=>bidCard(c,b)).join("");
-  if(!rows.length)list.innerHTML=`<div class="empty"><h3>No matches</h3><p>Try a different search term.</p></div>`;
+  if(!rows.length)list.innerHTML=emptyHTML("i-search","No matches","Try a different search term.");
   attachBidEvents(list);
 }
 byId("feed-search").oninput=()=>renderFeed();
@@ -3556,10 +3622,16 @@ function toggleSave(city,id){
 // rescan of that city replaces its whole list from the server (see
 // mergeOpenBids), so without persisting this a bid the server still calls
 // open would just quietly reappear next time that city gets rescanned.
+// queueFeedPush() is what makes "for good" true on every device the account
+// is signed into, not just this one -- every other write to bidData/
+// upcomingData/leadsData/leadStatus already calls it after store.set(),
+// this was the one omitted, so a bid removed on one device kept showing up
+// on the others.
 function removeBid(city,id){
   const b=findBid(id);
   dismissed[id]=true;
   store.set("dismissed",dismissed);
+  queueFeedPush();
   renderFeed();
   toast(b&&b.title?`Removed: ${b.title}`:"Removed");
 }
@@ -4002,7 +4074,7 @@ function renderSaved(){
   if(!keys.length){
     ptiles.innerHTML="";exportBtn.style.display="none";
     document.getElementById("pipeline-stats").innerHTML="";
-    list.innerHTML=`<div class="empty"><h3>No active bids</h3><p>Tap the &#x2606; on any bid to start tracking it here.</p></div>`;
+    list.innerHTML=emptyHTML("i-star","No active bids","Tap the &#x2606; on any bid to start tracking it here.");
     return;
   }
   exportBtn.style.display="inline-flex";
@@ -4015,7 +4087,7 @@ function renderSaved(){
   ptiles.querySelectorAll(".tile").forEach(t=>t.onclick=()=>{pipelineFilter=t.dataset.k;renderSaved();});
   const filteredKeys=keys.filter(id=>pipelineFilter==="All"||(pipelineFilter==="none"?!pipeline[id]:pipeline[id]===pipelineFilter));
   if(!filteredKeys.length){
-    list.innerHTML=`<div class="empty"><h3>Nothing here</h3><p>No active bids with this status.</p></div>`;
+    list.innerHTML=emptyHTML("i-search","Nothing here","No active bids with this status.");
     return;
   }
   list.innerHTML=filteredKeys.map(id=>{const b=saved[id];return bidCard(b._city||"",b);}).join("");
@@ -4211,26 +4283,28 @@ function renderAccount(){
       <div class="plan featured">
         <div class="plan-name">Pro Monthly</div>
         <div class="plan-price">$49<span> / month</span></div>
-        <ul><li>Unlimited nationwide bid scans</li><li>AI bid extraction</li><li>Federal + local bids</li><li>Save &amp; track leads</li><li>Cancel anytime</li></ul>
+        <ul>${["Unlimited nationwide bid scans","AI bid extraction","Federal + local bids","Save &amp; track leads","Cancel anytime"].map(planLi).join("")}</ul>
         <a class="btn-primary" style="text-decoration:none;" href="${mLink}" target="_blank">Subscribe Monthly</a>
         <p class="renew-note">Renews automatically at $49/month until you cancel. Cancel anytime under Billing above.</p>
       </div>
       <div class="plan">
         <div class="plan-name">Pro Annual &mdash; best value, save $189</div>
         <div class="plan-price">$399<span> / year</span></div>
-        <ul><li>Everything in Monthly</li><li>About 4 months free</li><li>Priority support</li></ul>
+        <ul>${["Everything in Monthly","About 4 months free","Priority support"].map(planLi).join("")}</ul>
         <a class="btn-ghost" style="text-decoration:none;display:block;text-align:center;" href="${aLink}" target="_blank">Subscribe Annual</a>
         <p class="renew-note">Renews automatically at $399/year until you cancel. Cancel anytime under Billing above.</p>
       </div>
-      <div class="field-label" style="margin-top:1.2rem;">Have a license key?</div>
-      <!-- Named for the case that actually strands people. Unlocking is
-           automatic when the checkout address matches the account; when it
-           does not, this box is the way through, and someone who has just
-           paid needs to be told that here rather than left to guess. -->
-      <p class="renew-note" style="margin-top:0;">Already paid and still locked? If you used a different email address at
-        checkout, paste the key from your receipt email here.</p>
-      <input class="input" id="key-input" placeholder="BCP-..." />
-      <button class="btn-ghost" id="activate-btn">Activate Key</button>
+      <div class="license-key-section">
+        <div class="field-label" style="margin-top:1.2rem;">Have a license key?</div>
+        <!-- Named for the case that actually strands people. Unlocking is
+             automatic when the checkout address matches the account; when it
+             does not, this box is the way through, and someone who has just
+             paid needs to be told that here rather than left to guess. -->
+        <p class="renew-note" style="margin-top:0;">Already paid and still locked? If you used a different email address at
+          checkout, paste the key from your receipt email here.</p>
+        <input class="input" id="key-input" placeholder="BCP-..." />
+        <button class="btn-ghost" id="activate-btn">Activate Key</button>
+      </div>
     </div>
     <div class="account-card">
       <div class="account-email hdr-ic" style="font-size:var(--fs-base);margin-bottom:0.6rem;"><svg class="icon-svg"><use href="#i-bar-chart"/></svg>Your Stats</div>

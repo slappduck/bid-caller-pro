@@ -945,3 +945,558 @@ class DesktopScrollZoomTests(unittest.TestCase):
         the phone-only default on every viewport."""
         self.assertEqual(self.app.count("L.map(mv,MAP_OPTS)"), 0)
         self.assertEqual(self.app.count("L.map(mv,mapOpts())"), 2)
+
+
+class ElevationAndContrastTests(unittest.TestCase):
+    """Every card sat on the page with only a 1px border -- nothing lifted
+    off it, which is most of what read as flat/bleak in a dark UI. These
+    check the shadow scale exists and actually reached each card-like
+    component, and that .input and .btn-ghost -- previously the same thin
+    bordered box, with no way to tell "type here" from "tap here" at a
+    glance -- now read as opposite directions (recessed vs raised)."""
+
+    def setUp(self):
+        self.css = _read(APP_CSS)
+
+    def test_the_shadow_scale_is_defined(self):
+        i = self.css.index(":root{")
+        root = self.css[i:self.css.index("}", i) + 1]
+        for token in ("--shadow-sm:", "--shadow-md:", "--shadow-lg:", "--glow-accent:"):
+            self.assertIn(token, root, token)
+
+    def test_every_card_like_component_uses_the_shadow_scale(self):
+        for selector in (".bid{", ".map-card{", ".account-card{", ".plan{"):
+            with self.subTest(selector=selector):
+                i = self.css.index(selector)
+                rule = self.css[i:self.css.index("}", i) + 1]
+                self.assertIn("box-shadow:var(--shadow", rule, selector)
+
+    def test_the_featured_plan_gets_the_accent_glow_on_top_of_its_shadow(self):
+        i = self.css.index(".plan.featured{")
+        rule = self.css[i:self.css.index("}", i) + 1]
+        self.assertIn("var(--glow-accent)", rule)
+
+    def test_input_is_recessed_not_just_bordered(self):
+        i = self.css.index(".input{width:100%")
+        rule = self.css[i:self.css.index("}", i) + 1]
+        self.assertIn("box-shadow:inset", rule)
+
+    def test_ghost_button_is_raised_not_flat_like_an_input(self):
+        """Before this, .btn-ghost's background was transparent -- on the
+        page's own dark background that is visually identical to .input,
+        which also sits on a dark background with just a border."""
+        i = self.css.index(".btn-ghost{")
+        rule = self.css[i:self.css.index("}", i) + 1]
+        self.assertNotIn("background:transparent", rule)
+        self.assertIn("box-shadow:var(--shadow", rule)
+
+    def test_disabled_buttons_do_not_keep_a_raised_shadow(self):
+        i = self.css.index(".btn-primary:disabled,.btn-ghost:disabled{")
+        rule = self.css[i:self.css.index("}", i) + 1]
+        self.assertIn("box-shadow:none", rule)
+
+
+class EmptyStateAndPlanIconTests(unittest.TestCase):
+    """.empty had CSS for an .icon div (sized for an emoji) that nothing in
+    app.js ever filled in after emoji icons were replaced with the SVG
+    sprite -- every empty state silently rendered as bare text. And the
+    plan feature lists used a CSS ::before Unicode checkmark, a different
+    visual language from the SVG icon set used on the same screen."""
+
+    def setUp(self):
+        self.css = _read(APP_CSS)
+        self.js = _read(APP_JS)
+
+    def test_empty_icon_css_targets_an_svg_not_a_bare_emoji_font_size(self):
+        i = self.css.index(".empty .icon{")
+        rule = self.css[i:self.css.index("}", i) + 1]
+        self.assertNotIn("font-size", rule)
+        i2 = self.css.index(".empty .icon .icon-svg{")
+        self.assertIn("width:", self.css[i2:self.css.index("}", i2) + 1])
+
+    def test_empty_html_helper_renders_an_icon(self):
+        i = self.js.index("function emptyHTML(")
+        body = self.js[i:self.js.index("\n", i)]
+        self.assertIn('class="icon"', body)
+        self.assertIn("icon-svg", body)
+        self.assertIn("<use href=", body)
+
+    def test_every_empty_state_call_site_uses_the_icon_helper(self):
+        # The old hand-written pattern put <h3> right after the wrapper with
+        # no icon div between them. Any surviving match means a call site
+        # wasn't converted to emptyHTML() and still renders without an icon.
+        self.assertNotIn('<div class="empty"><h3>', self.js)
+
+    def test_plan_feature_lists_use_the_check_icon_not_a_unicode_glyph(self):
+        self.assertNotIn("2713", self.css)
+        i = self.js.index("function planLi(")
+        body = self.js[i:self.js.index("\n", i)]
+        self.assertIn("i-check", body)
+
+
+class SearchScreenDesktopLayoutTests(unittest.TestCase):
+    """Find, Upcoming and Leads each put a location form (and for Find/Leads,
+    a map) at the very top of a 1180px-wide screen with nothing else beside
+    it -- a "ZIP code or City, State" box the better part of a foot wide.
+    .search-layout pairs the form with its map in a two-column grid at
+    desktop width instead.
+
+    The map sits in the *middle* of each form's fields on mobile (right
+    after the primary button, before status/effort/save-search), so the
+    markup splits the form into .search-controls (before the map) and
+    .search-followup (after it) with the map card in between -- preserving
+    that exact mobile reading order -- and grid-template-areas reassembles
+    them into one column at desktop width instead of reordering the DOM."""
+
+    def setUp(self):
+        self.css = _read(APP_CSS)
+        self.html = _read(APP)
+
+    def _desktop_rule(self):
+        i = self.css.index("@media (min-width:960px){")
+        depth = 0
+        for k, ch in enumerate(self.css[i:], start=i):
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return self.css[i:k + 1]
+        self.fail("unterminated @media (min-width:960px) block")
+
+    def test_search_layout_places_controls_and_followup_in_one_column(self):
+        rule = self._desktop_rule()
+        i = rule.index(".search-layout{")
+        grid = rule[i:rule.index("}", i) + 1]
+        self.assertIn('"controls map"', grid)
+        self.assertIn('"followup map"', grid)
+
+    def test_find_screen_keeps_the_map_between_controls_and_followup_in_dom_order(self):
+        # This is the exact regression almost shipped: wrapping "everything
+        # except the map" in one .search-controls div moved the map to the
+        # bottom of the mobile flow, after the save-search button, instead
+        # of right after "Scan for Bids" where it was.
+        screen = self.html[self.html.index('id="screen-scan"'):self.html.index('<!-- BIDS', self.html.index('id="screen-scan"'))]
+        i_controls = screen.index('class="search-controls"')
+        i_map = screen.index('id="find-map-card"')
+        i_followup = screen.index('class="search-followup"')
+        i_scan_btn = screen.index('id="scan-btn"')
+        i_save_btn = screen.index('id="save-search-btn"')
+        self.assertTrue(i_controls < i_scan_btn < i_map < i_followup < i_save_btn)
+
+    def test_leads_screen_keeps_the_map_between_controls_and_followup_in_dom_order(self):
+        screen = self.html[self.html.index('id="screen-leads"'):self.html.index('<!-- SAVED', self.html.index('id="screen-leads"'))]
+        i_controls = screen.index('class="search-controls"')
+        i_map = screen.index('id="leads-map-card"')
+        i_followup = screen.index('class="search-followup"')
+        i_leads_btn = screen.index('id="leads-btn"')
+        i_status = screen.index('id="leads-status"')
+        self.assertTrue(i_controls < i_leads_btn < i_map < i_followup < i_status)
+
+    def test_upcoming_has_no_map_so_its_form_just_gets_capped_alone(self):
+        # Upcoming has no map to pair with -- it should use the "alone"
+        # variant directly, not get wrapped in a now-single-column grid.
+        screen = self.html[self.html.index('id="screen-upcoming"'):self.html.index('<!-- RESIDENTIAL LEADS')]
+        self.assertIn('class="search-controls alone"', screen)
+        self.assertNotIn("search-layout", screen)
+
+
+class ChromeShadowAndPricingGridTests(unittest.TestCase):
+    """Every card got a shadow in the elevation pass, but the two bars that
+    are on screen every single moment -- .topbar and .bottom-nav -- were
+    left as a flat fill with a hairline border, so app chrome never looked
+    like it sat above the content it frames. And the Account screen's two
+    subscription plans were a single column stretched to the 1180px shell,
+    rather than the usual side-by-side pricing-tier layout."""
+
+    def setUp(self):
+        self.css = _read(APP_CSS)
+        self.js = _read(APP_JS)
+
+    def test_topbar_has_a_downward_shadow_and_the_stacking_context_to_show_it(self):
+        i = self.css.index(".topbar{")
+        rule = self.css[i:self.css.index("}", i) + 1]
+        self.assertIn("box-shadow:", rule)
+        # .screens paints after .topbar in DOM order and would otherwise
+        # hide the shadow bleeding into the area just below it -- this is
+        # the fix, not incidental styling.
+        self.assertIn("z-index:", rule)
+
+    def test_bottom_nav_shadow_points_up_not_down(self):
+        i = self.css.index(".bottom-nav{")
+        rule = self.css[i:self.css.index("}", i) + 1]
+        self.assertIn("box-shadow:0 -", rule)
+
+    def _desktop_rule(self):
+        i = self.css.index("@media (min-width:960px){")
+        depth = 0
+        for k, ch in enumerate(self.css[i:], start=i):
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return self.css[i:k + 1]
+        self.fail("unterminated @media (min-width:960px) block")
+
+    def test_upgrade_section_is_a_two_column_grid_at_desktop(self):
+        rule = self._desktop_rule()
+        i = rule.index("#upgrade-section{")
+        grid = rule[i:rule.index("}", i) + 1]
+        self.assertIn("display:grid", grid)
+        self.assertIn("1fr 1fr", grid)
+
+    def test_license_key_section_spans_both_columns(self):
+        i = self.js.index('<div class="license-key-section">')
+        self.assertLess(i, self.js.index("Have a license key?"))
+        rule = self._desktop_rule()
+        self.assertIn(".license-key-section{grid-column:1/-1;}", rule)
+
+    def test_plan_cards_stretch_to_equal_height_with_bottom_aligned_buttons(self):
+        rule = self._desktop_rule()
+        i = rule.index("#upgrade-section .plan{")
+        self.assertIn("flex-direction:column", rule[i:rule.index("}", i) + 1])
+        i2 = rule.index("#upgrade-section .plan ul{")
+        self.assertIn("flex:1", rule[i2:rule.index("}", i2) + 1])
+
+
+class InteractiveFeedbackTests(unittest.TestCase):
+    """.bid already had hover/press feedback (box-shadow bump, scale-down on
+    :active) -- every OTHER clickable control (.btn-primary, .btn-ghost,
+    .radius-btn, .tile, .nav-btn, .user-chip, .star) had none at all, so
+    only the bid list felt responsive and everything else on every screen
+    felt inert. These check each control picked up both a :hover and an
+    :active rule, matching that existing pattern."""
+
+    def setUp(self):
+        self.css = _read(APP_CSS)
+
+    def _rule(self, selector):
+        i = self.css.index(selector)
+        return self.css[i:self.css.index("}", i) + 1]
+
+    def test_every_control_has_hover_and_active_feedback(self):
+        for selector in (
+            ".btn-primary{", ".btn-ghost{", ".radius-btn{", ".tile{",
+            ".nav-btn{", ".user-chip{", ".star{",
+        ):
+            with self.subTest(selector=selector):
+                base = self._rule(selector)
+                self.assertIn("transition:", base, selector)
+                cls = selector[:-1]  # drop the trailing "{"
+                self.assertIn(f"{cls}:hover{{", self.css, f"{cls} has no :hover rule")
+                self.assertIn(f"{cls}:active{{", self.css, f"{cls} has no :active rule")
+
+    def test_tile_active_selection_state_still_wins_over_hover(self):
+        # .tile:hover and .tile.active have equal specificity -- .active
+        # (the selected filter) must come after :hover in source order or
+        # hovering a selected tile would wipe its amber "selected" colour.
+        self.assertLess(self.css.index(".tile:hover{"), self.css.index(".tile.active{"))
+
+    def test_nav_btn_active_tab_still_wins_over_hover(self):
+        self.assertLess(self.css.index(".nav-btn:hover{"), self.css.index(".nav-btn.active{"))
+
+    def test_radius_btn_selection_state_still_wins_over_hover(self):
+        self.assertLess(self.css.index(".radius-btn:hover{"), self.css.index(".radius-btn.active{"))
+
+
+class DismissedBidsCrossDeviceSyncTests(unittest.TestCase):
+    """bids/upcoming/leads/lead_status all sync across a signed-in user's
+    devices via the user_feeds table (pushFeeds()/syncPullFeeds()) -- but
+    removeBid()'s "dismissed" exclusion set never joined that sync, and
+    never even called queueFeedPush() to schedule one. A bid removed with
+    the card's "x" on one device kept reappearing on every other device
+    signed into the same account, because the feed itself resynced but
+    which bids had been dismissed from it never did."""
+
+    def setUp(self):
+        self.js = _read(APP_JS)
+        self.sql = _read(os.path.join(ROOT, "supabase_sync_schema.sql"))
+
+    def test_remove_bid_schedules_a_sync_push(self):
+        i = self.js.index("function removeBid(")
+        body = self.js[i:self.js.index("\n}", i)]
+        self.assertIn("queueFeedPush()", body)
+
+    def test_push_feeds_uploads_dismissed(self):
+        i = self.js.index("async function pushFeeds(")
+        body = self.js[i:self.js.index("\n}", i)]
+        self.assertIn("dismissed:dismissed", body)
+
+    def test_sync_pull_adopts_dismissed_and_persists_it(self):
+        i = self.js.index("async function syncPullFeeds(")
+        body = self.js[i:self.js.index("\nfunction ", i)]
+        self.assertIn("dismissed=data.dismissed", body)
+        self.assertIn('store.set("dismissed",dismissed)', body)
+        # Falsy-but-defined would be wrong here too, but the real failure
+        # mode is a row written before this column existed: data.dismissed
+        # is undefined there, not an empty dismissal, and must not wipe
+        # whatever this device already had dismissed.
+        self.assertIn("data.dismissed||dismissed", body)
+
+    def test_bid_id_migration_rekeys_dismissed_too(self):
+        """saved/pipeline/notes were already rekeyed when the id scheme
+        changed from legacy truncated-text ids to the md5 hash; dismissed
+        was added later and was missing from that rekey, so a bid dismissed
+        under the old scheme could silently stop matching after migration."""
+        i = self.js.index("function migrateBidIds(")
+        body = self.js[i:self.js.index("\n}", i)]
+        self.assertIn("dismissed=rekey(dismissed)", body)
+        self.assertIn('store.set("dismissed",dismissed)', body)
+
+    def test_schema_has_a_migration_for_the_dismissed_column(self):
+        self.assertIn(
+            "alter table user_feeds add column if not exists dismissed jsonb",
+            self.sql,
+        )
+
+
+class ScanSummaryPanelTests(unittest.TestCase):
+    """The Find screen's desktop layout left a dead block of space below the
+    map once the form was capped to a sane width (see
+    SearchScreenDesktopLayoutTests above). renderScanSummary() fills it with
+    real state -- a running total already computed from bidData, the same
+    source renderFeed() uses -- rather than inventing filler content, and
+    hides itself entirely before a first scan."""
+
+    def setUp(self):
+        self.js = _read(APP_JS)
+        self.html = _read(APP)
+        self.css = _read(APP_CSS)
+
+    def test_summary_element_exists_between_map_and_followup_in_dom_order(self):
+        """Mobile has no grid -- DOM order IS visual order there, and this
+        reads naturally right after the map, before the utility buttons."""
+        screen = self.html[self.html.index('id="screen-scan"'):self.html.index('<!-- BIDS', self.html.index('id="screen-scan"'))]
+        i_map = screen.index('id="find-map-card"')
+        i_summary = screen.index('id="scan-summary"')
+        i_followup = screen.index('class="search-followup"')
+        self.assertTrue(i_map < i_summary < i_followup)
+
+    def test_summary_hides_itself_when_there_is_nothing_to_show(self):
+        i = self.js.index("function renderScanSummary(")
+        body = self.js[i:self.js.index("\n}", i)]
+        self.assertIn('el.style.display="none"', body)
+        self.assertIn('el.innerHTML=""', body)
+
+    def test_summary_uses_the_same_visibility_filter_as_the_bids_tab(self):
+        """Must route through visibleBidsIn(), not raw bidData -- otherwise
+        a dismissed or closed bid would still count toward the total shown
+        here even though it does not appear on Bids itself."""
+        i = self.js.index("function renderScanSummary(")
+        body = self.js[i:self.js.index("\n}", i)]
+        self.assertIn("visibleBidsIn(c)", body)
+
+    def test_view_all_bids_button_navigates_to_the_bids_tab(self):
+        i = self.js.index("function renderScanSummary(")
+        body = self.js[i:self.js.index("\n}", i)]
+        self.assertIn('goTo("feed")', body)
+
+    def test_render_feed_refreshes_the_summary_unconditionally(self):
+        """renderFeed() has two exit points (the empty-feed early return and
+        the normal fall-through) -- the call must happen before either, or
+        one of those paths would leave the Find-screen summary stale."""
+        i = self.js.index("function renderFeed(){")
+        first_lines = self.js[i:i + 300]
+        self.assertIn("renderScanSummary();", first_lines)
+
+    def test_switching_to_scan_refreshes_the_summary(self):
+        """Every other screen refreshes its own content in switchScreen() on
+        becoming active; Find must too, so it doesn't depend on showApp()'s
+        initial renderFeed() call having already run."""
+        i = self.js.index('document.getElementById("screen-"+s).classList.add("active")')
+        body = self.js[i:i + 700]
+        self.assertIn('if(s==="scan")renderScanSummary();', body)
+
+    def test_grid_area_reserves_a_spot_for_the_summary_on_find_only(self):
+        rule = self.css[self.css.index("#screen-scan .search-layout{"):]
+        rule = rule[:rule.index("}") + 1]
+        self.assertIn('"followup summary"', rule)
+
+
+class RemainingFlatSurfacesTests(unittest.TestCase):
+    """.auth-card, .modal, .toast, .filter-row input/select and .social-btn
+    were the last surfaces in the app still completely flat after the
+    elevation pass -- a sign-in card with no shadow at all (the first thing
+    anyone ever sees), a bottom sheet and a toast that are supposed to float
+    above other content but had nothing distinguishing them from it, and
+    text inputs that didn't match the recessed look every other .input
+    already had."""
+
+    def setUp(self):
+        self.css = _read(APP_CSS)
+
+    def _rule(self, selector):
+        i = self.css.index(selector)
+        return self.css[i:self.css.index("}", i) + 1]
+
+    def test_auth_card_has_a_shadow(self):
+        self.assertIn("box-shadow:var(--shadow", self._rule(".auth-card{"))
+
+    def test_modal_sheet_shadow_points_up_not_down(self):
+        """The backdrop is behind the sheet, not above it -- a downward
+        shadow would be invisible against the dimmed backdrop it's already
+        sitting on, same reasoning as .bottom-nav's upward shadow."""
+        self.assertIn("box-shadow:0 -", self._rule(".modal{"))
+
+    def test_toast_has_a_shadow(self):
+        """Toasts often float over another dark card, not the page
+        background, so a shadow is the only thing marking them as above it
+        at all."""
+        self.assertIn("box-shadow:var(--shadow", self._rule(".toast{"))
+
+    def test_filter_row_inputs_match_the_recessed_look_of_every_other_input(self):
+        rule = self._rule(".filter-row input,.filter-row select{")
+        self.assertIn("box-shadow:inset", rule)
+
+    def test_social_btn_is_raised_like_every_other_button_and_responds_to_press(self):
+        rule = self._rule(".social-btn{")
+        self.assertIn("box-shadow:var(--shadow", rule)
+        self.assertIn(".social-btn:hover{", self.css)
+        self.assertIn(".social-btn:active{", self.css)
+
+
+class MoreMissedButtonAndShadowGapsTests(unittest.TestCase):
+    """.pchip (the bid-detail Submitted/Won/Lost/Passed toggle) and the
+    .act-primary/.act-more/.modal-actions button rows (Save/Share/Calendar/
+    Proposal, and every modal's Close/Unlock/Retry footer) were missed in
+    the passes that gave every other button and toggle-pill in the app
+    hover/press feedback and a shadow. Also covers the profile avatar
+    (photo and initials fallback), the one remaining shadowless avatar."""
+
+    def setUp(self):
+        self.css = _read(APP_CSS)
+
+    def _rule(self, selector):
+        i = self.css.index(selector)
+        return self.css[i:self.css.index("}", i) + 1]
+
+    def test_pchip_has_hover_and_press_feedback(self):
+        base = self._rule(".pchip{")
+        self.assertIn("transition:", base)
+        self.assertIn(".pchip:hover{", self.css)
+        self.assertIn(".pchip:active{", self.css)
+
+    def test_pchip_active_status_colour_still_wins_over_hover(self):
+        self.assertLess(self.css.index(".pchip:hover{"), self.css.index(".pchip.active-submitted{"))
+
+    def test_act_primary_and_act_more_buttons_have_shadow_and_feedback(self):
+        rule = self._rule(".act-primary a,.act-primary button,.act-more button,.act-more a{")
+        self.assertIn("box-shadow:var(--shadow", rule)
+        self.assertIn("transition:", rule)
+        self.assertIn(".act-primary a:hover,", self.css)
+        self.assertIn(".act-primary a:active,", self.css)
+
+    def test_act_primary_buttons_dont_override_ma_gold_background(self):
+        """Regression: an earlier draft of this fix added background:var(
+        --card) to the shared .act-primary/.act-more rule -- a class+element
+        selector, which beats .ma-gold's single-class background and would
+        have wiped out the gold "Call" button's accent colour everywhere
+        it's used inside .act-primary."""
+        rule = self._rule(".act-primary a,.act-primary button,.act-more button,.act-more a{")
+        self.assertNotIn("background:", rule)
+
+    def test_modal_actions_buttons_have_shadow_and_feedback(self):
+        rule = self._rule(".modal-actions button,.modal-actions a{")
+        self.assertIn("box-shadow:var(--shadow", rule)
+        self.assertIn(".modal-actions button:hover,", self.css)
+        self.assertIn(".modal-actions button:active,", self.css)
+
+    def test_avatar_photo_and_placeholder_both_have_a_shadow(self):
+        self.assertIn("box-shadow:var(--shadow", self._rule(".avatar-lg{"))
+        self.assertIn("box-shadow:var(--shadow", self._rule(".avatar-placeholder{"))
+
+
+class ShadowHueMatchesTheThemeTests(unittest.TestCase):
+    """Every background in this theme (--bg, --surface, --card) leans the
+    same blue-violet navy, not neutral grey. Shadows built from plain
+    rgba(0,0,0,…) have no hue at all, so instead of receding into the page
+    they sat on top of it looking like a mismatched grey smudge -- "badly
+    blended," as reported. --shadow-rgb ties every shadow's colour to
+    --bg's own r,g,b so a shadow reads as the page's own colour darkening,
+    not a foreign overlay."""
+
+    def setUp(self):
+        self.css = _read(APP_CSS)
+
+    def test_shadow_rgb_is_defined_from_bgs_actual_hue(self):
+        i = self.css.index(":root{")
+        root = self.css[i:self.css.index("}", i) + 1]
+        self.assertIn("--bg:#0d0f18", root)
+        # #0d0f18 == rgb(13,15,24) -- this must track --bg if it ever changes.
+        self.assertIn("--shadow-rgb:13,15,24", root)
+
+    def test_no_shadow_or_scrim_still_uses_a_hueless_black(self):
+        """.spin is a loading-ring colour, not part of the elevation system,
+        and is deliberately excluded -- everything else that casts a shadow
+        or dims the screen (card shadows, modal scrim, inset inputs, the
+        nav dropdown) must route through the tinted token."""
+        before_spin = self.css[:self.css.index(".spin{")]
+        # A literal numeric alpha (e.g. "rgba(0,0,0,0.5") only ever appears in
+        # real CSS here -- the one explanatory comment that mentions
+        # rgba(0,0,0,…) uses an ellipsis, not a digit, and must not trip this.
+        self.assertIsNone(re.search(r"rgba\(0,0,0,\d", before_spin))
+
+    def test_every_shadow_token_uses_the_tinted_variable(self):
+        i = self.css.index(":root{")
+        root = self.css[i:self.css.index("}", i) + 1]
+        for token in ("--shadow-sm:", "--shadow-md:", "--shadow-lg:"):
+            j = root.index(token)
+            rule = root[j:root.index(";", j) + 1]
+            self.assertIn("var(--shadow-rgb)", rule, token)
+            self.assertNotIn("0,0,0", rule, token)
+
+
+class DepthCuesBeyondAFlatShadowTests(unittest.TestCase):
+    """A drop shadow alone reads as "this has a shadow," not "this is a
+    raised surface" -- what sells actual depth is a highlight catching the
+    top edge (as a physically raised object would show) plus a page
+    background that isn't a flat, infinite-looking void behind every card."""
+
+    def setUp(self):
+        self.css = _read(APP_CSS)
+
+    def test_every_shadow_level_has_a_top_inset_highlight(self):
+        i = self.css.index(":root{")
+        root = self.css[i:self.css.index("}", i) + 1]
+        for token in ("--shadow-sm:", "--shadow-md:", "--shadow-lg:"):
+            j = root.index(token)
+            rule = root[j:root.index(";", j) + 1]
+            self.assertIn("inset 0 1px 0 rgba(255,255,255,", rule, token)
+
+    def test_highlight_is_on_top_not_bottom(self):
+        """A highlight on the bottom edge would read as a groove (light
+        catching a lip underneath), the opposite of a raised surface."""
+        i = self.css.index(":root{")
+        root = self.css[i:self.css.index("}", i) + 1]
+        j = root.index("--shadow-md:")
+        rule = root[j:root.index(";", j) + 1]
+        # "inset 0 1px 0" -- zero horizontal offset, positive vertical
+        # offset -- is the only direction that paints along the top inside
+        # edge; a bottom highlight would need a negative vertical offset.
+        self.assertIn("inset 0 1px 0 rgba(255,255,255,", rule)
+        self.assertNotIn("inset 0 -1px 0", rule)
+
+    def test_body_background_is_a_gradient_not_a_flat_fill(self):
+        i = self.css.index("body{font-family:var(--ui);")
+        rule = self.css[i:self.css.index("}", i) + 1]
+        self.assertIn("radial-gradient(", rule)
+        self.assertIn("var(--bg)", rule)
+
+
+class PlanCardsDontTouchTheLinkAboveThemTests(unittest.TestCase):
+    """.plan's own margin-bottom only ever spaced it from what comes AFTER
+    it -- nothing put space before the first one, so the "Already
+    subscribed? Manage billing" link and the plan cards sat flush against
+    each other with zero gap (reported as "price cards touching the thing
+    above it"). Pre-existing on mobile's single stacked column too; the
+    desktop two-column grid just made it obvious, since both cards' top
+    edges now touch that link in a single flat row."""
+
+    def setUp(self):
+        self.css = _read(APP_CSS)
+
+    def test_upgrade_section_has_margin_above_it(self):
+        i = self.css.index("#upgrade-section{margin-top:")
+        rule = self.css[i:self.css.index("}", i) + 1]
+        self.assertIn("margin-top:0.9rem", rule)

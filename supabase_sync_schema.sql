@@ -113,6 +113,13 @@ create policy "Users manage their own feeds" on user_feeds
 -- Same repair as above, but it has to come after the table is created.
 alter table user_feeds alter column user_id set default auth.uid();
 
+-- A bid removed with the card's "x" is a dismissal, not a delete -- bids
+-- and dismissals are different sets (see removeBid() in app.js) and only
+-- the first one synced. A bid removed on one device kept reappearing on
+-- every other device signed into the same account, because the feed
+-- itself synced but which bids had been dismissed from it never did.
+alter table user_feeds add column if not exists dismissed jsonb default '{}'::jsonb;
+
 -- Customer reviews, shown as testimonials on the marketing page.
 --
 -- Nothing appears publicly until approved is flipped to true by hand
