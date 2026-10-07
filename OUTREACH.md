@@ -197,6 +197,23 @@ nothing and updates no CSV row**. Read every draft before sending, same as a
 hand-written one — a batch of AI drafts that all sound like the same voice
 reproduces the exact failure the section above describes, just faster.
 
+## Before you press Send
+
+Two checks, each learned from the first 24 emails, all of which failed the
+first one:
+
+1. **Click the tracking link in the compose window.** It must open
+   `curbcallpro.com/go/<slug>`. If the address bar shows
+   `google.com/url?q=...`, the link was copied out of an email Gmail had
+   already displayed. Gmail rewrites links in mail it shows you, and pasting
+   carries the rewrite along: recipients land on Google's "Redirect Notice"
+   warning, and cold mail carrying google.com redirect links is a known spam
+   signal. Copy from the draft *file*, never from an email you sent yourself.
+2. **Read the subject against the body.** The count is *agencies*, never open
+   bids. Ten emails went out as "78 open bids near Davie" over bodies that
+   said 78 agencies. `outreach_ai_draft.py` now holds any draft that does
+   this, but a hand-edited subject goes around it.
+
 ## After sending
 
 1. Set `status` to `sent` and fill `sent_date` in the CSV.

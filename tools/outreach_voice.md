@@ -29,3 +29,8 @@ Hard rules, learned from a version of this that got rejected:
   by you, because it has to be exact every time.
 - Do not invent a subject line trick, urgency, or false familiarity. State
   plainly what this is.
+- The number you are given counts AGENCIES that post this kind of work. It is
+  not a count of open bids, jobs or projects, and must never be described as
+  one -- not in the subject, not in the body. "78 agencies near Davie" is
+  true; "78 open bids near Davie" is a false claim in a commercial email's
+  subject line. Drafts that do this are rejected automatically.
