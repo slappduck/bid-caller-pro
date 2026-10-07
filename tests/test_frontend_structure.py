@@ -1354,3 +1354,54 @@ class RemainingFlatSurfacesTests(unittest.TestCase):
         self.assertIn("box-shadow:var(--shadow", rule)
         self.assertIn(".social-btn:hover{", self.css)
         self.assertIn(".social-btn:active{", self.css)
+
+
+class MoreMissedButtonAndShadowGapsTests(unittest.TestCase):
+    """.pchip (the bid-detail Submitted/Won/Lost/Passed toggle) and the
+    .act-primary/.act-more/.modal-actions button rows (Save/Share/Calendar/
+    Proposal, and every modal's Close/Unlock/Retry footer) were missed in
+    the passes that gave every other button and toggle-pill in the app
+    hover/press feedback and a shadow. Also covers the profile avatar
+    (photo and initials fallback), the one remaining shadowless avatar."""
+
+    def setUp(self):
+        self.css = _read(APP_CSS)
+
+    def _rule(self, selector):
+        i = self.css.index(selector)
+        return self.css[i:self.css.index("}", i) + 1]
+
+    def test_pchip_has_hover_and_press_feedback(self):
+        base = self._rule(".pchip{")
+        self.assertIn("transition:", base)
+        self.assertIn(".pchip:hover{", self.css)
+        self.assertIn(".pchip:active{", self.css)
+
+    def test_pchip_active_status_colour_still_wins_over_hover(self):
+        self.assertLess(self.css.index(".pchip:hover{"), self.css.index(".pchip.active-submitted{"))
+
+    def test_act_primary_and_act_more_buttons_have_shadow_and_feedback(self):
+        rule = self._rule(".act-primary a,.act-primary button,.act-more button,.act-more a{")
+        self.assertIn("box-shadow:var(--shadow", rule)
+        self.assertIn("transition:", rule)
+        self.assertIn(".act-primary a:hover,", self.css)
+        self.assertIn(".act-primary a:active,", self.css)
+
+    def test_act_primary_buttons_dont_override_ma_gold_background(self):
+        """Regression: an earlier draft of this fix added background:var(
+        --card) to the shared .act-primary/.act-more rule -- a class+element
+        selector, which beats .ma-gold's single-class background and would
+        have wiped out the gold "Call" button's accent colour everywhere
+        it's used inside .act-primary."""
+        rule = self._rule(".act-primary a,.act-primary button,.act-more button,.act-more a{")
+        self.assertNotIn("background:", rule)
+
+    def test_modal_actions_buttons_have_shadow_and_feedback(self):
+        rule = self._rule(".modal-actions button,.modal-actions a{")
+        self.assertIn("box-shadow:var(--shadow", rule)
+        self.assertIn(".modal-actions button:hover,", self.css)
+        self.assertIn(".modal-actions button:active,", self.css)
+
+    def test_avatar_photo_and_placeholder_both_have_a_shadow(self):
+        self.assertIn("box-shadow:var(--shadow", self._rule(".avatar-lg{"))
+        self.assertIn("box-shadow:var(--shadow", self._rule(".avatar-placeholder{"))
