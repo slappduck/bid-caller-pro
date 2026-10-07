@@ -147,7 +147,10 @@ class AdminReviewsTests(unittest.TestCase):
         self.assertIn("id=eq.42", patch_call[0])
         self.assertEqual(patch_call[2], {"approved": True})
 
-    def test_reject_sets_approved_false(self):
+    def test_reject_deletes_the_review(self):
+        """Reject used to PATCH approved=false -- a no-op on a pending
+        review, which is already approved=false, so it stayed in the
+        pending queue no matter how many times it was rejected."""
         calls = []
 
         def fake(path, method="GET", data=None):
@@ -157,8 +160,19 @@ class AdminReviewsTests(unittest.TestCase):
         with patch.object(ls, "_supabase_admin_request", side_effect=fake):
             self.client.post("/admin/reviews",
                              json={"admin_token": TOKEN, "reject": "42"})
-        patch_call = [c for c in calls if c[1] == "PATCH"][0]
-        self.assertEqual(patch_call[2], {"approved": False})
+        self.assertFalse([c for c in calls if c[1] == "PATCH"])
+        delete_call = [c for c in calls if c[1] == "DELETE"][0]
+        self.assertIn("id=eq.42", delete_call[0])
+
+    def test_a_failed_write_is_reported_not_swallowed(self):
+        def fake(path, method="GET", data=None):
+            return [] if method == "GET" else None
+
+        with patch.object(ls, "_supabase_admin_request", side_effect=fake):
+            resp = self.client.post("/admin/reviews",
+                                    json={"admin_token": TOKEN, "reject": "42"})
+        self.assertEqual(resp.status_code, 502)
+        self.assertFalse(resp.get_json()["ok"])
 
     def test_a_non_numeric_id_is_rejected_not_injected_into_the_query(self):
         with patch.object(ls, "_supabase_admin_request") as mock:

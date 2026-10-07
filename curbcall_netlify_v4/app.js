@@ -4727,12 +4727,17 @@ async function renderAdminPanel(){
   });
   mc.querySelectorAll("[data-review-approve]").forEach(b=>b.onclick=async()=>{
     b.disabled=true;b.textContent="Approving...";
-    await adminCall("/admin/reviews",{approve:b.dataset.reviewApprove});
+    const r=await adminCall("/admin/reviews",{approve:b.dataset.reviewApprove});
+    if(!r.ok)toast("Couldn't approve that review");
     renderAdminPanel();
   });
+  // Reject deletes the review server-side (see /admin/reviews), so it gets
+  // the same confirm as deleting an agency notice.
   mc.querySelectorAll("[data-review-reject]").forEach(b=>b.onclick=async()=>{
+    if(!confirm("Reject and delete this review permanently?"))return;
     b.disabled=true;b.textContent="Rejecting...";
-    await adminCall("/admin/reviews",{reject:b.dataset.reviewReject});
+    const r=await adminCall("/admin/reviews",{reject:b.dataset.reviewReject});
+    if(!r.ok)toast("Couldn't reject that review");
     renderAdminPanel();
   });
   document.getElementById("admin-export-btn").onclick=async()=>{

@@ -140,9 +140,13 @@ def admin_reviews():
 
     Moderation used to mean opening Supabase's table editor by hand -- fine
     when it was the only queue, awkward now that agency notices and campaign
-    drafts already have a page. approve/reject take the review's numeric id;
-    both are handled the same way (a boolean flip of `approved`), listed
-    separately only so the caller's intent reads clearly in the request.
+    drafts already have a page. approve/reject take the review's numeric id.
+
+    Reject deletes the row. It used to PATCH approved=false, but a pending
+    review is already approved=false, so that changed nothing and the review
+    sat in the pending queue forever no matter how many times it was
+    rejected. Deleting also frees the author to submit a new one (reviews
+    are one-per-user).
     """
     data = request.get_json(force=True, silent=True) or {}
     if not _admin_configured():
@@ -158,9 +162,15 @@ def admin_reviews():
             review_id = int(raw_id)
         except (TypeError, ValueError):
             return jsonify({"ok": False, "reason": "invalid_review_id"}), 400
-        _supabase_admin_request(
-            f"/rest/v1/reviews?id=eq.{review_id}", method="PATCH",
-            data={"approved": bool(data.get("approve"))})
+        if data.get("approve"):
+            result = _supabase_admin_request(
+                f"/rest/v1/reviews?id=eq.{review_id}", method="PATCH",
+                data={"approved": True})
+        else:
+            result = _supabase_admin_request(
+                f"/rest/v1/reviews?id=eq.{review_id}", method="DELETE")
+        if result is None:
+            return jsonify({"ok": False, "reason": "supabase_error"}), 502
 
     rows = _supabase_admin_request(
         "/rest/v1/reviews?select=id,rating,quote,display_name,company,"
