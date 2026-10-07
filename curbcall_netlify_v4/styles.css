@@ -19,6 +19,21 @@
   --r:10px;       /* buttons, inputs, tiles */
   --r-lg:14px;    /* cards and panels */
   --r-pill:999px; /* anything genuinely pill-shaped */
+  /* One elevation scale. Every card (.bid, .account-card, .plan, .map-card)
+     sat on the page with only a 1px border and no shadow, or a shadow too
+     faint to read against a near-black background -- nothing was wrong, but
+     nothing ever lifted off the page either, which is most of what reads as
+     "flat" or "bleak" in a dark UI. Two layers per level (a tight dark one
+     for definition, a soft wide one for actual lift) rather than one blurry
+     shadow, which on a background this dark just looks like a grey smear. */
+  --shadow-sm:0 1px 2px rgba(0,0,0,0.5),0 3px 10px rgba(0,0,0,0.28);
+  --shadow-md:0 2px 4px rgba(0,0,0,0.55),0 10px 24px rgba(0,0,0,0.35);
+  --shadow-lg:0 4px 8px rgba(0,0,0,0.6),0 18px 40px rgba(0,0,0,0.4);
+  /* The one spot a shadow alone isn't enough: the featured pricing plan is
+     the single thing Account most wants you to look at, so it gets a soft
+     colour glow in the existing accent rather than a new hue -- reinforcing
+     hierarchy with the palette already in use, not adding to it. */
+  --glow-accent:0 0 0 1px rgba(245,158,11,0.4),0 8px 28px rgba(245,158,11,0.18);
   /* One type scale. There were twenty-five different font sizes in this
      file, six of them between 0.60 and 0.68rem -- close enough to be
      indistinguishable, far enough apart to never line up. That is the same
@@ -74,7 +89,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .auth-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:1.5rem;width:100%;max-width:360px;}
 .auth-title{font-size:var(--fs-xl);font-weight:800;margin-bottom:0.3rem;}
 .auth-sub{color:var(--text2);font-size:var(--fs-base);margin-bottom:1.4rem;}
-.btn-primary:disabled,.btn-ghost:disabled{opacity:0.55;cursor:not-allowed;}
+.btn-primary:disabled,.btn-ghost:disabled{opacity:0.55;cursor:not-allowed;box-shadow:none;}
 .onb-steps{display:flex;gap:0.4rem;justify-content:center;margin-bottom:1.1rem;}
 .onb-dot{width:2rem;height:3px;border-radius:2px;background:var(--line);}
 .onb-dot.on{background:var(--amber);}
@@ -108,11 +123,17 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .divider::before,.divider::after{content:"";flex:1;height:1px;background:var(--border);}
 .divider span{color:var(--text3);font-size:var(--fs-sm);}
 .field-label{color:var(--accent);font-size:var(--fs-sm);font-weight:700;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 0.4rem;}
-.input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:0.85rem 1rem;color:var(--text);font-size:var(--fs-lg);font-family:var(--ui);}
-.input:focus{outline:none;border-color:var(--accent);}
-.btn-primary{width:100%;background:var(--accent);color:#000;border:none;border-radius:var(--r);padding:0.95rem;font-size:var(--fs-lg);font-weight:800;cursor:pointer;margin-top:0.8rem;font-family:var(--ui);display:flex;align-items:center;justify-content:center;gap:0.5rem;}
-.btn-primary:disabled{opacity:0.55;}
-.btn-ghost{width:100%;background:transparent;color:var(--text2);border:1px solid var(--border);border-radius:var(--r);padding:0.8rem;font-size:var(--fs-md);font-weight:600;cursor:pointer;margin-top:0.6rem;font-family:var(--ui);}
+/* A text input and a ghost button were both just a thin border around
+   transparent-ish darkness -- at a glance there was nothing to say "type
+   here" versus "tap here". The input now actually looks recessed (an inset
+   shadow, like a groove cut into the page); .btn-ghost below now looks
+   raised (a card-tone fill plus a real shadow), the opposite direction, so
+   the two read as different kinds of control instead of the same box. */
+.input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:0.85rem 1rem;color:var(--text);font-size:var(--fs-lg);font-family:var(--ui);box-shadow:inset 0 1px 3px rgba(0,0,0,0.4);}
+.input:focus{outline:none;border-color:var(--accent);box-shadow:inset 0 1px 3px rgba(0,0,0,0.4),0 0 0 3px rgba(245,158,11,0.18);}
+.btn-primary{width:100%;background:var(--accent);color:#000;border:none;border-radius:var(--r);padding:0.95rem;font-size:var(--fs-lg);font-weight:800;cursor:pointer;margin-top:0.8rem;font-family:var(--ui);display:flex;align-items:center;justify-content:center;gap:0.5rem;box-shadow:var(--shadow-sm);}
+.btn-primary:disabled{opacity:0.55;box-shadow:none;}
+.btn-ghost{width:100%;background:var(--card);color:var(--text2);border:1px solid var(--border);border-radius:var(--r);padding:0.8rem;font-size:var(--fs-md);font-weight:600;cursor:pointer;margin-top:0.6rem;font-family:var(--ui);box-shadow:var(--shadow-sm);}
 .auth-toggle{text-align:center;margin-top:1rem;font-size:var(--fs-base);color:var(--text2);}
 .auth-toggle a{color:var(--accent);cursor:pointer;font-weight:600;}
 .auth-msg{font-size:var(--fs-base);margin-top:0.7rem;min-height:1rem;text-align:center;}
@@ -182,7 +203,8 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 
 .feed-label{color:var(--green);font-size:var(--fs-xs);font-weight:700;letter-spacing:0.06em;margin:1.2rem 0 0.6rem;display:flex;align-items:center;gap:0.4rem;}
 .feed-label::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--border),transparent);}
-.bid{background:var(--card);border-radius:var(--r-lg);padding:0;margin-bottom:0.7rem;overflow:hidden;display:flex;cursor:pointer;animation:fade 0.3s;box-shadow:0 2px 10px rgba(0,0,0,0.18);border:1px solid var(--border);transition:transform .12s,border-color .12s;}
+.bid{background:var(--card);border-radius:var(--r-lg);padding:0;margin-bottom:0.7rem;overflow:hidden;display:flex;cursor:pointer;animation:fade 0.3s;box-shadow:var(--shadow-sm);border:1px solid var(--border);transition:transform .12s,border-color .12s,box-shadow .12s;}
+.bid:hover{box-shadow:var(--shadow-md);}
 .bid:active{transform:scale(0.98);border-color:var(--accent);}
 .bid-bar{width:4px;flex-shrink:0;}
 .bid-bar.urgent{background:var(--red) !important;}
@@ -236,17 +258,26 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .empty h3{font-size:var(--fs-xl);color:var(--text2);margin:0.7rem 0 0.3rem;}
 .empty p{color:var(--text3);font-size:var(--fs-base);}
 
-.plan{background:var(--card);border:1.5px solid var(--border);border-radius:var(--r-lg);padding:1.2rem;margin-bottom:0.9rem;}
-.plan.featured{border-color:var(--accent);}
+.plan{background:var(--card);border:1.5px solid var(--border);border-radius:var(--r-lg);padding:1.2rem;margin-bottom:0.9rem;box-shadow:var(--shadow-sm);}
+/* The featured plan is the one thing this screen most wants a glance to
+   land on -- a stronger shadow plus a soft glow in the same accent colour
+   used everywhere else gives it real weight instead of just a different
+   border colour. */
+.plan.featured{border-color:var(--accent);box-shadow:var(--glow-accent),var(--shadow-md);}
 .plan-name{font-size:var(--fs-sm);color:var(--text2);text-transform:uppercase;letter-spacing:0.08em;}
-.plan-price{font-family:'Bebas Neue',sans-serif;font-size:var(--fs-4xl);line-height:1;margin:0.3rem 0;}
+/* A gradient text fill on the number people are actually deciding whether
+   to pay -- the same accent family, not a new colour, but it reads as a
+   deliberate "this is the important number" treatment rather than plain
+   white-on-dark like every other heading. */
+.plan-price{font-family:'Bebas Neue',sans-serif;font-size:var(--fs-4xl);line-height:1;margin:0.3rem 0;
+  background:linear-gradient(135deg,var(--accent),#fde68a);-webkit-background-clip:text;background-clip:text;color:transparent;}
 .renew-note{font-size:var(--fs-sm);line-height:1.45;color:var(--text3);margin-top:0.6rem;}
 .plan-price span{font-family:var(--ui);font-size:var(--fs-base);color:var(--text2);}
 .plan ul{list-style:none;margin:0.7rem 0 1rem;}
 .plan li{font-size:var(--fs-base);color:var(--text2);padding:0.25rem 0;}
 .plan li::before{content:"\2713 ";color:var(--accent);font-weight:700;}
 
-.account-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:1.2rem;margin-bottom:1rem;}
+.account-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:1.2rem;margin-bottom:1rem;box-shadow:var(--shadow-sm);}
 .account-email{font-weight:700;margin-bottom:0.3rem;word-break:break-all;}
 .account-status{font-size:var(--fs-base);color:var(--text2);}
 
@@ -384,7 +415,7 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .feed-toolbar .btn-ghost{margin:0;flex:none;width:auto;}
 .btn-quiet{color:var(--text3);border-color:transparent;}
 .btn-quiet:hover{color:var(--text2);border-color:var(--border);}
-.map-card{display:none;border-radius:var(--r-lg);overflow:hidden;margin-bottom:1.1rem;border:1px solid var(--border);background:var(--surface);}
+.map-card{display:none;border-radius:var(--r-lg);overflow:hidden;margin-bottom:1.1rem;border:1px solid var(--border);background:var(--surface);box-shadow:var(--shadow-sm);}
 .map-card.show{display:block;animation:fade 0.3s;}
 .map-card-head{display:flex;align-items:center;justify-content:space-between;padding:0.7rem 0.9rem;background:linear-gradient(90deg,rgba(245,158,11,0.14),transparent);border-bottom:1px solid var(--border);}
 .map-card-head .t{font-size:var(--fs-sm);font-weight:800;letter-spacing:0.03em;display:flex;align-items:center;gap:0.4rem;}

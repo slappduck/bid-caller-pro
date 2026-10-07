@@ -945,3 +945,52 @@ class DesktopScrollZoomTests(unittest.TestCase):
         the phone-only default on every viewport."""
         self.assertEqual(self.app.count("L.map(mv,MAP_OPTS)"), 0)
         self.assertEqual(self.app.count("L.map(mv,mapOpts())"), 2)
+
+
+class ElevationAndContrastTests(unittest.TestCase):
+    """Every card sat on the page with only a 1px border -- nothing lifted
+    off it, which is most of what read as flat/bleak in a dark UI. These
+    check the shadow scale exists and actually reached each card-like
+    component, and that .input and .btn-ghost -- previously the same thin
+    bordered box, with no way to tell "type here" from "tap here" at a
+    glance -- now read as opposite directions (recessed vs raised)."""
+
+    def setUp(self):
+        self.css = _read(APP_CSS)
+
+    def test_the_shadow_scale_is_defined(self):
+        i = self.css.index(":root{")
+        root = self.css[i:self.css.index("}", i) + 1]
+        for token in ("--shadow-sm:", "--shadow-md:", "--shadow-lg:", "--glow-accent:"):
+            self.assertIn(token, root, token)
+
+    def test_every_card_like_component_uses_the_shadow_scale(self):
+        for selector in (".bid{", ".map-card{", ".account-card{", ".plan{"):
+            with self.subTest(selector=selector):
+                i = self.css.index(selector)
+                rule = self.css[i:self.css.index("}", i) + 1]
+                self.assertIn("box-shadow:var(--shadow", rule, selector)
+
+    def test_the_featured_plan_gets_the_accent_glow_on_top_of_its_shadow(self):
+        i = self.css.index(".plan.featured{")
+        rule = self.css[i:self.css.index("}", i) + 1]
+        self.assertIn("var(--glow-accent)", rule)
+
+    def test_input_is_recessed_not_just_bordered(self):
+        i = self.css.index(".input{width:100%")
+        rule = self.css[i:self.css.index("}", i) + 1]
+        self.assertIn("box-shadow:inset", rule)
+
+    def test_ghost_button_is_raised_not_flat_like_an_input(self):
+        """Before this, .btn-ghost's background was transparent -- on the
+        page's own dark background that is visually identical to .input,
+        which also sits on a dark background with just a border."""
+        i = self.css.index(".btn-ghost{")
+        rule = self.css[i:self.css.index("}", i) + 1]
+        self.assertNotIn("background:transparent", rule)
+        self.assertIn("box-shadow:var(--shadow", rule)
+
+    def test_disabled_buttons_do_not_keep_a_raised_shadow(self):
+        i = self.css.index(".btn-primary:disabled,.btn-ghost:disabled{")
+        rule = self.css[i:self.css.index("}", i) + 1]
+        self.assertIn("box-shadow:none", rule)
