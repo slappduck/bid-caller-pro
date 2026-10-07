@@ -3605,10 +3605,11 @@ def _run_federal_sources(center, radius, grouped, cdb, city_coords=None,
     cached = _federal_cached(states, stats)
     if cached is not None:
         bids = cached
-        deadline = time.time() + FEDERAL_BUDGET_SEC   # unused; kept for shape
+        transport = "cache"
     else:
         deadline = time.time() + FEDERAL_BUDGET_SEC
         use_keyed = bool(SAM_API_KEY) and not _keyed_breaker_open()
+        transport = "keyed" if use_keyed else "public"
         if SAM_API_KEY and not use_keyed:
             # The documented API is resting; the public one reads the same
             # public-domain data and is currently the only one that answers.
@@ -3642,9 +3643,11 @@ def _run_federal_sources(center, radius, grouped, cdb, city_coords=None,
         if sum(len(v) for v in grouped.values()) > before:
             placed += 1
             _bump(stats, "federal_kept")
+    # `transport`, not use_keyed: use_keyed only exists on the live path, so
+    # naming it here crashed every scan the cache answered -- which, once the
+    # scheduled refresh had filled it, was every scan.
     print("[scan] %d federal bids from %d candidate(s) in %s (%s transport)"
-          % (placed, len(bids), ",".join(states),
-             "keyed" if use_keyed else "public"), flush=True)
+          % (placed, len(bids), ",".join(states), transport), flush=True)
     return placed
 
 

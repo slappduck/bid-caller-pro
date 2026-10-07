@@ -75,6 +75,19 @@ def _stage(stats, name, deadline, fn, *args, **kw):
     t0 = time.time()
     try:
         return fn(*args, **kw)
+    except Exception:
+        # Optional means optional. A bug in one source (federal once named a
+        # variable that only existed on its live path) used to propagate up
+        # and fail the whole scan -- every town and search result already
+        # gathered thrown away, and the user told "Scan hit a snag". Skip
+        # the stage, keep the rest, and still email the traceback.
+        import traceback
+        tb = traceback.format_exc()
+        print(f"[scan] stage {name} failed, skipped:\n{tb}", flush=True)
+        if stats is not None:
+            stats["failed_" + name] = 1
+        _alert_admin(f"Scan stage '{name}' failed (scan continued)", tb)
+        return None
     finally:
         if stats is not None:
             stats["ms_" + name] = int((time.time() - t0) * 1000)

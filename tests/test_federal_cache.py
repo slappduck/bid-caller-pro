@@ -90,6 +90,72 @@ class CacheReadTests(unittest.TestCase):
         self.assertIsNone(ls._federal_cached(["MO"], {}))
 
 
+
+class ScanReadsTheCacheTests(unittest.TestCase):
+    """The cache read worked; the scan around it did not. With the cache
+    filled, _run_federal_sources hit a log line naming use_keyed -- a
+    variable only the live path sets -- and raised UnboundLocalError. Every
+    scan after the scheduled refresh first succeeded failed with "Scan hit
+    a snag". The tests above only ever called _federal_cached directly."""
+
+    CENTER = {"city": "Columbia", "state": "MO", "lat": 38.9517, "lon": -92.3341}
+
+    def setUp(self):
+        self.store = {ls.FEDERAL_CACHE_KEY: {"at": hours_ago(1), "rows": [
+            {"title": "Concrete sidewalk repair", "state": "MO", "city": "Columbia",
+             "deadline": "2099-01-01", "status": "Open", "url": "https://sam.gov/x"}]}}
+        self._g, self._s = ls.kv_backend.get, ls.kv_backend.set
+        ls.kv_backend.get = lambda k, d=None: self.store.get(k, d)
+        ls.kv_backend.set = lambda k, v: self.store.__setitem__(k, v)
+        self._keyed, self._public = ls._federal_keyed, ls._federal_public
+        ls._federal_keyed = ls._federal_public = lambda *a, **k: self.fail(
+            "a fresh cache must answer without calling SAM")
+
+    def tearDown(self):
+        ls.kv_backend.get, ls.kv_backend.set = self._g, self._s
+        ls._federal_keyed, ls._federal_public = self._keyed, self._public
+
+    def test_a_scan_answered_from_the_cache_does_not_raise(self):
+        stats = {}
+        ls._run_federal_sources(self.CENTER, 50, {}, {}, {}, stats, None)
+        self.assertEqual(stats.get("federal_from_cache"), 1)
+
+    def test_with_or_without_a_key(self):
+        original = ls.SAM_API_KEY
+        try:
+            for key in ("", "test-key"):
+                ls.SAM_API_KEY = key
+                ls._run_federal_sources(self.CENTER, 50, {}, {}, {}, {}, None)
+        finally:
+            ls.SAM_API_KEY = original
+
+
+class OptionalStageFailureTests(unittest.TestCase):
+    """One optional source with a bug must cost that source, not the scan."""
+
+    def setUp(self):
+        self.alerts = []
+        self._alert = ls._alert_admin
+        ls._alert_admin = lambda subject, detail: self.alerts.append(subject)
+
+    def tearDown(self):
+        ls._alert_admin = self._alert
+
+    def test_a_raising_stage_is_skipped_and_reported(self):
+        def broken():
+            raise UnboundLocalError("use_keyed")
+        stats = {}
+        self.assertIsNone(ls._stage(stats, "federal", None, broken))
+        self.assertEqual(stats.get("failed_federal"), 1)
+        self.assertIn("ms_federal", stats)
+        self.assertEqual(len(self.alerts), 1, "a skipped stage must still email")
+
+    def test_a_working_stage_returns_its_value(self):
+        stats = {}
+        self.assertEqual(ls._stage(stats, "x", None, lambda: 3), 3)
+        self.assertNotIn("failed_x", stats)
+        self.assertEqual(self.alerts, [])
+
 class RefreshTests(unittest.TestCase):
     def setUp(self):
         self.store = {}
