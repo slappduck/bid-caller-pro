@@ -1333,7 +1333,17 @@ function updateUserChip(){
     +`<span class="who">${esc(displayName||email||"Account")}</span>`
     +`<span class="chev" aria-hidden="true">›</span>`;
 }
+// showApp() is not a once-per-launch call: onAuthStateChange fires again on
+// every token refresh (hourly, and on returning to a backgrounded tab), and
+// each one comes back through routeAfterAuth() to here. The setup that
+// decides where the user STARTS -- the map's default view, the saved home
+// radius, the GPS auto-locate -- must only happen the first time, or an
+// hourly refresh yanks the map back to the middle of the country, jumps it
+// to their GPS position, and resets the radius pill they just picked.
+let _appShownOnce=false,_autoLocated=false;
 function showApp(){
+  const firstShow=!_appShownOnce;
+  _appShownOnce=true;
   document.getElementById("auth-screen").style.display="none";
   document.getElementById("app").style.display="flex";
   updateUserChip();
@@ -1352,7 +1362,7 @@ function showApp(){
   const locBox=document.getElementById("loc-input");
   if(locBox&&!locBox.value&&homeLoc)locBox.value=homeLoc;
   const homeR=store.get(HOME_RADIUS_KEY,0);
-  if(homeR){
+  if(homeR&&firstShow){
     radius=homeR;
     // Repaint the pills to match, or the highlighted one and the radius the
     // scan actually uses disagree.
@@ -1360,13 +1370,15 @@ function showApp(){
       x.classList.toggle("active",+x.dataset.r===homeR);
     });
   }
-  updateFindMap(39.5,-98.35,"Click the map to set your location");
-  if(leadsPicker)leadsPicker.show(39.5,-98.35,"Click the map to set your location");
+  if(!findMap)updateFindMap(39.5,-98.35,"Click the map to set your location");
+  if(leadsPicker&&!leadsPicker.hasMap())leadsPicker.show(39.5,-98.35,"Click the map to set your location");
   // Everything below needs the network. Offline, the app still opens to a
   // fully readable feed — it just doesn't waste a launch firing requests that
   // are all going to time out.
   if(isOffline())return;
-  autoFillZip();
+  // Its own flag rather than firstShow: a launch that started offline returns
+  // above, and this should still run once on the first ONLINE pass.
+  if(!_autoLocated){_autoLocated=true;autoFillZip();}
   autoUnlock();
   checkSavedSearches();
   lastSyncAt=new Date();
@@ -1767,6 +1779,21 @@ function addTileRetry(layer){
 }
 
 let findMap=null,findMarker=null,findRadiusCircle=null,findCenter=null,findTownMarkers=[];
+// Set the first time the user touches the map themselves (drag, pinch,
+// wheel, a tap, the zoom buttons). Background work that only ever wanted
+// to give a sensible starting view -- the startup GPS fix -- checks this
+// and stays out of the way once someone is driving.
+let findUserMoved=false;
+// The place name comes back seconds after the tap that asked for it (up to
+// three geocoders in turn). Relabel the pin when it arrives, but never move
+// the map again: by then the user is often already panning around, and a
+// second setView/fitBounds was what snapped them back. Returns false when a
+// newer pick has superseded this one, so the caller drops the stale result.
+function labelFindPin(lat,lon,label){
+  if(!findMarker||!findCenter||findCenter.lat!==lat||findCenter.lon!==lon)return false;
+  findMarker.setPopupContent(esc(label));
+  return true;
+}
 function updateFindMap(lat,lon,label){
   const mv=document.getElementById("find-map-view");
   if(!mv||!HAS_MAPS)return; // Leaflet never loaded — the rest of the app still works
@@ -1783,6 +1810,12 @@ function updateFindMap(lat,lon,label){
     const findTiles=L.tileLayer(MAP_TILE_URL,TILE_OPTS).addTo(findMap);
     addTileRetry(findTiles);
     findMap.on("click",e=>pickFindLocation(e.latlng.lat,e.latlng.lng,null));
+    // DOM input events rather than Leaflet's movestart/zoomstart: those also
+    // fire for our own setView/fitBounds, some of them a frame later, so they
+    // can't tell a user's pan from the app's.
+    const touched=()=>{findUserMoved=true;};
+    ["pointerdown","touchstart","wheel","keydown"].forEach(t=>
+      mv.addEventListener(t,touched,{passive:true}));
   } else {
     findMap.setView([lat,lon],11);
   }
@@ -2043,8 +2076,10 @@ async function pickFindLocation(lat,lon,label){
   // so a scan from a coordinate pair usually ends up with no city and no
   // portals to read — it looks like it worked and quietly finds nothing.
   const val=(await resolvePlaceLabel(lat,lon))||`${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+  // Tapped somewhere else while this name was resolving: that pick owns the
+  // box and the pin now, and this answer is about a place they left.
+  if(!labelFindPin(lat,lon,val))return;
   if(input)input.value=val;
-  updateFindMap(lat,lon,val);
   await towns;
 }
 
@@ -2054,10 +2089,11 @@ async function pickFindLocation(lat,lon,label){
 // input. Keeps the map standard across every search tab instead of only
 // the Find tab having one. ──
 function createLocationPicker(containerId,inputId){
-  const st={map:null,marker:null};
+  const st={map:null,marker:null,center:null};
   function show(lat,lon,label){
     const mv=document.getElementById(containerId);
     if(!mv||!HAS_MAPS)return;
+    st.center={lat,lon};
     if(!st.map){
       st.map=L.map(mv,mapOpts()).setView([lat,lon],11);
       const tiles=L.tileLayer(MAP_TILE_URL,TILE_OPTS).addTo(st.map);
@@ -2075,10 +2111,13 @@ function createLocationPicker(containerId,inputId){
     const input=document.getElementById(inputId);
     show(lat,lon,"Locating...");
     const val=(await resolvePlaceLabel(lat,lon))||`${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+    // Same as labelFindPin: relabel, don't re-center -- and drop the answer
+    // if a later tap has moved the pin since.
+    if(!st.marker||!st.center||st.center.lat!==lat||st.center.lon!==lon)return;
+    st.marker.setPopupContent(esc(val));
     if(input)input.value=val;
-    show(lat,lon,val);
   }
-  return {show, invalidateSize:()=>{if(st.map)st.map.invalidateSize();}};
+  return {show, invalidateSize:()=>{if(st.map)st.map.invalidateSize();}, hasMap:()=>!!st.map};
 }
 // Upcoming has no picker: it duplicated the text field on a screen that is
 // the same broad municipal search as Bids. Leads keeps one, where choosing
@@ -2094,10 +2133,15 @@ async function detectLocation(fillInput){
   navigator.geolocation.getCurrentPosition(async(pos)=>{
     try{
       const{latitude,longitude}=pos.coords;
+      // The startup fix can land seconds into the session. If they're already
+      // moving the map, jumping it to their GPS position is the snap they
+      // reported -- leave the map and the box to them. "Use My Location"
+      // (fillInput) is an explicit ask and always moves it.
+      if(!fillInput&&findUserMoved)return;
       updateFindMap(latitude,longitude,"You are here");
       const val=await resolvePlaceLabel(latitude,longitude);
       if(val){
-        updateFindMap(latitude,longitude,val);
+        if(!labelFindPin(latitude,longitude,val))return;
         refreshFindTownMarkers(latitude,longitude);
         const input=document.getElementById("loc-input");
         if(input&&(fillInput||!input.value.trim()))input.value=val;

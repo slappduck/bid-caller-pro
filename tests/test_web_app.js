@@ -975,6 +975,107 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── The Find map must not snap back while the user is looking around ──
+  // Reported as "it snaps me back to an area I clicked when I'm just looking
+  // around". A tap moved the map, then the place-name lookup (up to three
+  // geocoders, seconds) finished and moved it AGAIN -- by which time the user
+  // was often panning elsewhere. Separately, every token refresh re-ran
+  // showApp(), which reset the map to its default view. The geocoder is
+  // replaced with one the test resolves by hand, so "the name arrives after
+  // the user has panned away" is deterministic rather than a timing race.
+  console.log("\nThe Find map doesn't snap back while you're looking around");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    // Leaflet from a local install when there is one, so the check doesn't
+    // hinge on reaching unpkg; otherwise the real CDN.
+    let leafletDir = null;
+    try { leafletDir = path.dirname(require.resolve("leaflet/dist/leaflet.js")); } catch (e) {}
+    await page.route("**/*", (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      if (host === "unpkg.com" && leafletDir && /\/leaflet\.(js|css)$/.test(u)) {
+        const f = path.join(leafletDir, path.basename(u));
+        return route.fulfill({ status: 200, body: fs.readFileSync(f),
+          contentType: f.endsWith(".css") ? "text/css" : "application/javascript" });
+      }
+      if (host === "127.0.0.1" || host === "unpkg.com") return route.continue();
+      if (host === "cdn.jsdelivr.net") {
+        return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      }
+      return route.abort(); // tiles, Overpass, geocoders, backend
+    });
+    await page.addInitScript(seedSignedIn, {});
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => {
+      showApp();
+      // A geocoder that only answers when the test says so.
+      window.__geo = [];
+      resolvePlaceLabel = () => new Promise((r) => window.__geo.push(r));
+    });
+    await page.waitForTimeout(600);
+
+    if (!(await page.evaluate(() => typeof findMap !== "undefined" && !!findMap))) {
+      console.log("  SKIP  Leaflet unavailable (unpkg unreachable) -- map checks not run");
+    } else {
+      const center = () => page.evaluate(() => {
+        const c = findMap.getCenter(); return { lat: c.lat, lng: c.lng };
+      });
+      const meters = (a, b) => page.evaluate(([a, b]) => findMap.distance(a, b), [a, b]);
+
+      // Tap the middle of the map, let the fit animation settle.
+      const box = await page.locator("#find-map-view").boundingBox();
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+      await page.waitForTimeout(700);
+      const picked = await center();
+
+      // Pan away by dragging, while the name is still "resolving".
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(box.x + 40, box.y + 40, { steps: 8 });
+      await page.mouse.up();
+      await page.waitForTimeout(400);
+      const panned = await center();
+      check("the drag actually moved the map", (await meters(picked, panned)) > 5000);
+
+      // Now the name arrives.
+      await page.evaluate(() => window.__geo.shift()("Testville, MO"));
+      await page.waitForTimeout(700);
+      const after = await center();
+      check("the late place name does not snap the map back",
+        (await meters(after, panned)) < 1000,
+        `moved ${Math.round(await meters(after, panned))}m from where the user panned`);
+      check("the place name still lands in the box",
+        (await page.locator("#loc-input").inputValue()) === "Testville, MO");
+
+      // A token refresh re-enters showApp(); the map must stay put.
+      await page.evaluate(() => showApp());
+      await page.waitForTimeout(700);
+      check("a session refresh does not reset the map view",
+        (await meters(await center(), panned)) < 1000);
+
+      // Tap A, then B before A's name returns: A's late answer is stale.
+      await page.evaluate(() => {
+        window.__geo = [];
+        pickFindLocation(38.0, -94.0, null);
+        pickFindLocation(39.0, -95.0, null);
+      });
+      await page.evaluate(() => window.__geo.shift()("Aville, MO"));
+      await page.waitForTimeout(200);
+      check("a superseded tap's name does not overwrite the newer one",
+        (await page.locator("#loc-input").inputValue()) !== "Aville, MO");
+      await page.evaluate(() => window.__geo.shift()("Bville, MO"));
+      await page.waitForTimeout(200);
+      check("the newest tap's name is what ends up in the box",
+        (await page.locator("#loc-input").inputValue()) === "Bville, MO");
+    }
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   await browser.close();
   server.close();
   console.log(failures ? `\n${failures} check(s) FAILED` : "\nAll checks passed");
