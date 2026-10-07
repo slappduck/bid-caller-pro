@@ -131,9 +131,19 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
    the two read as different kinds of control instead of the same box. */
 .input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:0.85rem 1rem;color:var(--text);font-size:var(--fs-lg);font-family:var(--ui);box-shadow:inset 0 1px 3px rgba(0,0,0,0.4);}
 .input:focus{outline:none;border-color:var(--accent);box-shadow:inset 0 1px 3px rgba(0,0,0,0.4),0 0 0 3px rgba(245,158,11,0.18);}
-.btn-primary{width:100%;background:var(--accent);color:#000;border:none;border-radius:var(--r);padding:0.95rem;font-size:var(--fs-lg);font-weight:800;cursor:pointer;margin-top:0.8rem;font-family:var(--ui);display:flex;align-items:center;justify-content:center;gap:0.5rem;box-shadow:var(--shadow-sm);}
+/* Every clickable control on every screen -- the primary/ghost buttons,
+   the radius pills, the filter tiles, the bottom nav -- had no hover or
+   press feedback at all. .bid already did (see its :hover/:active below);
+   this is that same lift-on-hover, press-to-settle language applied
+   everywhere else a tap or click lands, so the whole app responds instead
+   of just the bid list. */
+.btn-primary{width:100%;background:var(--accent);color:#000;border:none;border-radius:var(--r);padding:0.95rem;font-size:var(--fs-lg);font-weight:800;cursor:pointer;margin-top:0.8rem;font-family:var(--ui);display:flex;align-items:center;justify-content:center;gap:0.5rem;box-shadow:var(--shadow-sm);transition:transform .12s,box-shadow .12s;}
+.btn-primary:hover{box-shadow:var(--shadow-md);}
+.btn-primary:active{transform:scale(0.97);box-shadow:var(--shadow-sm);}
 .btn-primary:disabled{opacity:0.55;box-shadow:none;}
-.btn-ghost{width:100%;background:var(--card);color:var(--text2);border:1px solid var(--border);border-radius:var(--r);padding:0.8rem;font-size:var(--fs-md);font-weight:600;cursor:pointer;margin-top:0.6rem;font-family:var(--ui);box-shadow:var(--shadow-sm);}
+.btn-ghost{width:100%;background:var(--card);color:var(--text2);border:1px solid var(--border);border-radius:var(--r);padding:0.8rem;font-size:var(--fs-md);font-weight:600;cursor:pointer;margin-top:0.6rem;font-family:var(--ui);box-shadow:var(--shadow-sm);transition:transform .12s,box-shadow .12s,border-color .12s,color .12s;}
+.btn-ghost:hover{border-color:var(--text3);color:var(--text);box-shadow:var(--shadow-md);}
+.btn-ghost:active{transform:scale(0.97);box-shadow:var(--shadow-sm);}
 .auth-toggle{text-align:center;margin-top:1rem;font-size:var(--fs-base);color:var(--text2);}
 .auth-toggle a{color:var(--accent);cursor:pointer;font-weight:600;}
 .auth-msg{font-size:var(--fs-base);margin-top:0.7rem;min-height:1rem;text-align:center;}
@@ -154,7 +164,9 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
    affordance, and min-height meets the 44px touch target a gloved hand needs.
    It used to be a bare 27px-tall pill showing an email address, which nobody
    recognised as the way into Account. */
-.user-chip{font-family:var(--ui);font-size:var(--fs-xs);font-weight:700;color:var(--accent);background:rgba(245,166,35,0.12);border:1px solid rgba(245,166,35,0.35);padding:0.3rem 0.6rem;border-radius:var(--r-pill);min-height:44px;box-sizing:border-box;max-width:52vw;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;gap:0.35rem;}
+.user-chip{font-family:var(--ui);font-size:var(--fs-xs);font-weight:700;color:var(--accent);background:rgba(245,166,35,0.12);border:1px solid rgba(245,166,35,0.35);padding:0.3rem 0.6rem;border-radius:var(--r-pill);min-height:44px;box-sizing:border-box;max-width:52vw;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center;gap:0.35rem;transition:transform .1s,background .12s;}
+.user-chip:hover{background:rgba(245,166,35,0.2);}
+.user-chip:active{transform:scale(0.95);}
 /* Desktop-only: the trigger for the nav dropdown (see the desktop layout
    section below). Mobile keeps its own always-visible bottom tab bar
    untouched, so this stays display:none until the 960px breakpoint. */
@@ -181,7 +193,9 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .screen-title{font-family:'Bebas Neue',sans-serif;font-size:var(--fs-3xl);letter-spacing:0.03em;margin-bottom:0.2rem;}
 .screen-sub{color:var(--text2);font-size:var(--fs-base);margin-bottom:1.2rem;}
 .radius-row{display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.2rem;}
-.radius-btn{flex:1;min-width:56px;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:0.7rem 0.3rem;color:var(--text2);font-size:var(--fs-base);font-weight:600;cursor:pointer;text-align:center;}
+.radius-btn{flex:1;min-width:56px;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:0.7rem 0.3rem;color:var(--text2);font-size:var(--fs-base);font-weight:600;cursor:pointer;text-align:center;transition:transform .1s,border-color .12s;}
+.radius-btn:hover{border-color:var(--text3);}
+.radius-btn:active{transform:scale(0.95);}
 .radius-btn.active{background:var(--accent);color:#000;border-color:var(--accent);}
 
 .scan-status{color:var(--text2);font-size:var(--fs-base);text-align:center;margin-top:1.2rem;min-height:20px;}
@@ -221,7 +235,9 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .chip{font-size:var(--fs-xs);padding:0.2rem 0.5rem;border-radius:var(--r-sm);background:var(--surface);color:var(--text2);}
 .chip.value{color:var(--green);}
 .bid-actions{display:flex;align-items:center;gap:0.1rem;flex-shrink:0;}
-.star{font-size:var(--fs-xl);color:var(--text3);flex-shrink:0;padding-left:0.4rem;}
+.star{font-size:var(--fs-xl);color:var(--text3);flex-shrink:0;padding-left:0.4rem;transition:transform .1s,color .12s;}
+.star:hover{color:var(--accent);}
+.star:active{transform:scale(0.85);}
 .star.on{color:var(--accent);}
 /* Default to always-visible: on a touchscreen there's no hover state to
    reveal it with, so the button would simply never be reachable. Only
@@ -238,7 +254,9 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 }
 
 .tiles{display:flex;gap:0.5rem;overflow-x:auto;padding-bottom:0.5rem;margin-bottom:0.3rem;-webkit-overflow-scrolling:touch;}
-.tile{flex-shrink:0;background:var(--card);border-radius:var(--r);padding:0.6rem 0.9rem;text-align:center;cursor:pointer;min-width:64px;}
+.tile{flex-shrink:0;background:var(--card);border-radius:var(--r);padding:0.6rem 0.9rem;text-align:center;cursor:pointer;min-width:64px;transition:transform .1s,background .12s;}
+.tile:hover{background:var(--border);}
+.tile:active{transform:scale(0.95);}
 .tile.active{background:var(--accent);}
 .tile .n{font-size:var(--fs-xl);font-weight:800;}
 .tile.active .n,.tile.active .l{color:#000;}
@@ -313,7 +331,9 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .bottom-nav{display:flex;background:var(--surface);border-top:1px solid var(--border);box-shadow:0 -1px 2px rgba(0,0,0,0.5),0 -3px 10px rgba(0,0,0,0.28);padding-bottom:env(safe-area-inset-bottom);flex-shrink:0;}
 /* min-width:0 lets six items share a 320px screen without the labels
    overflowing; nowrap stops "Upcoming" and "Account" breaking onto two lines. */
-.nav-btn{flex:1;min-width:0;background:none;border:none;padding:0.6rem 0.15rem 0.7rem;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:0.25rem;color:var(--text2);font-family:var(--ui);}
+.nav-btn{flex:1;min-width:0;background:none;border:none;padding:0.6rem 0.15rem 0.7rem;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:0.25rem;color:var(--text2);font-family:var(--ui);transition:color .12s,transform .1s;}
+.nav-btn:hover{color:var(--text);}
+.nav-btn:active{transform:scale(0.95);}
 .nav-btn .icon-svg{width:1.3rem;height:1.3rem;stroke-width:1.8;vertical-align:0;}
 .nav-btn .lb{font-size:var(--fs-xs);font-weight:600;white-space:nowrap;letter-spacing:0.01em;}
 /* Inactive labels were --text3 (#475569), which is 2.4:1 against the nav bar —

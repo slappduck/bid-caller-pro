@@ -1158,3 +1158,43 @@ class ChromeShadowAndPricingGridTests(unittest.TestCase):
         self.assertIn("flex-direction:column", rule[i:rule.index("}", i) + 1])
         i2 = rule.index("#upgrade-section .plan ul{")
         self.assertIn("flex:1", rule[i2:rule.index("}", i2) + 1])
+
+
+class InteractiveFeedbackTests(unittest.TestCase):
+    """.bid already had hover/press feedback (box-shadow bump, scale-down on
+    :active) -- every OTHER clickable control (.btn-primary, .btn-ghost,
+    .radius-btn, .tile, .nav-btn, .user-chip, .star) had none at all, so
+    only the bid list felt responsive and everything else on every screen
+    felt inert. These check each control picked up both a :hover and an
+    :active rule, matching that existing pattern."""
+
+    def setUp(self):
+        self.css = _read(APP_CSS)
+
+    def _rule(self, selector):
+        i = self.css.index(selector)
+        return self.css[i:self.css.index("}", i) + 1]
+
+    def test_every_control_has_hover_and_active_feedback(self):
+        for selector in (
+            ".btn-primary{", ".btn-ghost{", ".radius-btn{", ".tile{",
+            ".nav-btn{", ".user-chip{", ".star{",
+        ):
+            with self.subTest(selector=selector):
+                base = self._rule(selector)
+                self.assertIn("transition:", base, selector)
+                cls = selector[:-1]  # drop the trailing "{"
+                self.assertIn(f"{cls}:hover{{", self.css, f"{cls} has no :hover rule")
+                self.assertIn(f"{cls}:active{{", self.css, f"{cls} has no :active rule")
+
+    def test_tile_active_selection_state_still_wins_over_hover(self):
+        # .tile:hover and .tile.active have equal specificity -- .active
+        # (the selected filter) must come after :hover in source order or
+        # hovering a selected tile would wipe its amber "selected" colour.
+        self.assertLess(self.css.index(".tile:hover{"), self.css.index(".tile.active{"))
+
+    def test_nav_btn_active_tab_still_wins_over_hover(self):
+        self.assertLess(self.css.index(".nav-btn:hover{"), self.css.index(".nav-btn.active{"))
+
+    def test_radius_btn_selection_state_still_wins_over_hover(self):
+        self.assertLess(self.css.index(".radius-btn:hover{"), self.css.index(".radius-btn.active{"))
