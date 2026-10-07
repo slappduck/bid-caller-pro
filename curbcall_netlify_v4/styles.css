@@ -293,6 +293,18 @@ body{font-family:var(--ui);background:radial-gradient(ellipse 120% 60% at 50% -1
 .stat-box .n{font-size:var(--fs-2xl);font-weight:800;color:var(--accent);}
 .stat-box .l{font-size:var(--fs-xs);color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-top:0.15rem;}
 
+/* ── Home ── */
+.home-review{padding:0.6rem 0;border-bottom:1px solid var(--border);}
+.home-review:last-of-type{border-bottom:none;}
+.home-stars{color:var(--accent);font-size:var(--fs-sm);letter-spacing:0.1em;}
+.home-quote{color:var(--text);font-size:var(--fs-base);line-height:1.45;margin:0.25rem 0;}
+.home-by{color:var(--text3);font-size:var(--fs-sm);}
+.home-side{margin-top:1.2rem;}
+/* Four stat boxes in one row leave "$208k" no room on a small phone; two
+   by two keeps every number at full size. */
+#home-main .stats-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));}
+@media (min-width:480px){#home-main .stats-grid{grid-template-columns:repeat(4,minmax(0,1fr));}}
+
 .scan-effort{margin-top:0.6rem;padding:0.7rem 0.85rem;background:var(--card);
   border:1px solid var(--border);border-radius:var(--r-sm);
   color:var(--text2);font-size:var(--fs-sm);line-height:1.55;}
@@ -316,7 +328,12 @@ body{font-family:var(--ui);background:radial-gradient(ellipse 120% 60% at 50% -1
    above (the "Manage billing" link). Stacked in a single column that
    read as a tight but plausible gap; side by side in the desktop grid,
    both cards' top edges touch that link directly. */
-#upgrade-section{margin-top:0.9rem;}
+#upgrade-section{margin:0.9rem 0 1rem;}
+/* Same seam at the other end: the section ends on the Activate Key button,
+   which only has margin above it, and .account-card ("Your Stats", next)
+   only has margin below it -- so the two touched. Likewise the "Already
+   paid?" hint sat flush on the key input under it. */
+.license-key-section .input{margin-top:0.5rem;}
 .plan{background:var(--card);border:1.5px solid var(--border);border-radius:var(--r-lg);padding:1.2rem;margin-bottom:0.9rem;box-shadow:var(--shadow-sm);}
 /* The featured plan is the one thing this screen most wants a glance to
    land on -- a stronger shadow plus a soft glow in the same accent colour
@@ -699,14 +716,21 @@ body{font-family:var(--ui);background:radial-gradient(ellipse 120% 60% at 50% -1
      Grid areas put them back together as one visual column here without
      reordering that mobile flow. */
   .search-layout{display:grid;grid-template-columns:minmax(280px,420px) 1fr;
-    grid-template-areas:"controls map" "followup map";gap:1.2rem 1.5rem;align-items:start;}
+    grid-template-areas:"controls map" "followup map";gap:1.2rem 1.5rem;align-items:start;
+    /* The map is taller than the form. With two auto rows its extra height
+       was shared between them, so the first row grew past the Scan button
+       and the status line started far down the page under a blank gap.
+       A flexible second row takes all of it instead: row one is exactly
+       the form, and what follows sits right under the button. */
+    grid-template-rows:auto 1fr;}
   .search-layout .search-controls{grid-area:controls;}
   .search-layout .search-followup{grid-area:followup;}
   .search-layout .map-card{grid-area:map;}
   /* Find alone has a real-data summary that goes under the map rather than
      beside it (Leads has no equivalent, so its map keeps spanning both rows
      above -- the general rule just above this one). */
-  #screen-scan .search-layout{grid-template-areas:"controls map" "followup summary";}
+  #screen-scan .search-layout{grid-template-areas:"controls map" "followup map" "followup summary";
+    grid-template-rows:auto 1fr auto;}
   #screen-scan .search-layout #scan-summary{grid-area:summary;}
   /* Upcoming has no map to pair with its form -- capping it alone, with
      nothing invented to fill a second column, is the honest version of the
@@ -730,4 +754,9 @@ body{font-family:var(--ui);background:radial-gradient(ellipse 120% 60% at 50% -1
   #upgrade-section .plan{display:flex;flex-direction:column;}
   #upgrade-section .plan ul{flex:1;}
   #upgrade-section .license-key-section{grid-column:1/-1;}
+
+  /* Home: what's happening in your area on the left, the people side
+     (reviews, invites) beside it rather than trailing underneath. */
+  .home-grid{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:1.5rem;align-items:start;}
+  .home-side{margin-top:0;}
 }

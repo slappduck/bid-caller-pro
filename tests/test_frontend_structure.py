@@ -1497,6 +1497,64 @@ class PlanCardsDontTouchTheLinkAboveThemTests(unittest.TestCase):
         self.css = _read(APP_CSS)
 
     def test_upgrade_section_has_margin_above_it(self):
-        i = self.css.index("#upgrade-section{margin-top:")
+        # Shorthand "margin:TOP RIGHT BOTTOM" -- the first value is the top.
+        i = self.css.index("#upgrade-section{margin:")
         rule = self.css[i:self.css.index("}", i) + 1]
-        self.assertIn("margin-top:0.9rem", rule)
+        self.assertIn("margin:0.9rem ", rule)
+
+
+class LicenseKeyBlockSpacingTests(unittest.TestCase):
+    """#upgrade-section ends on the Activate Key button (margin above only)
+    and the next .account-card ("Your Stats") has margin below only, so the
+    two sat flush. The "Already paid?" hint also sat flush on the key
+    input. Same seam shape as PlanCardsDontTouchTheLinkAboveThemTests."""
+
+    def setUp(self):
+        self.css = _read(APP_CSS)
+
+    def test_upgrade_section_has_margin_on_both_ends(self):
+        i = self.css.index("#upgrade-section{margin:")
+        rule = self.css[i:self.css.index("}", i) + 1]
+        self.assertIn("margin:0.9rem 0 1rem", rule)
+
+    def test_key_input_is_spaced_from_the_hint_above_it(self):
+        self.assertIn(".license-key-section .input{margin-top:", self.css)
+
+
+class HomeScreenTests(unittest.TestCase):
+    """Home is the opening screen. Exactly one screen and one nav button can
+    start out active -- two of either shows two screens stacked, or a nav
+    highlight on a tab you aren't on."""
+
+    def setUp(self):
+        self.html = _read(APP)
+        self.app = _read(APP_JS)
+
+    def test_home_is_the_only_screen_active_at_load(self):
+        active = re.findall(r'class="screen active" id="([^"]+)"', self.html)
+        self.assertEqual(active, ["screen-home"])
+
+    def test_home_is_the_only_nav_button_active_at_load(self):
+        active = re.findall(r'class="nav-btn active" data-s="([^"]+)"', self.html)
+        self.assertEqual(active, ["home"])
+
+    def test_home_and_leads_dont_share_an_icon(self):
+        # Leads (residential permits) already uses the house.
+        home = re.search(r'data-s="home"><svg class="icon-svg"><use href="#([^"]+)"', self.html).group(1)
+        leads = re.search(r'data-s="leads"><svg class="icon-svg"><use href="#([^"]+)"', self.html).group(1)
+        self.assertNotEqual(home, leads)
+        self.assertIn(f'<symbol id="{home}"', self.html)
+
+    def test_referral_copy_button_is_scoped_to_its_card(self):
+        # Home and Account both render a referral card; a fixed id makes two
+        # elements share it and getElementById binds only the first.
+        i = self.app.index("async function loadReferralCard(")
+        body = self.app[i:self.app.index("\n}\n", i)]
+        self.assertNotIn('id="referral-copy-btn"', body)
+        self.assertIn('el.querySelector(".referral-copy-btn")', body)
+
+    def test_last_visit_is_read_once_per_session(self):
+        # showApp re-runs on every token refresh; moving "since" to now on
+        # each one would zero the "New bids" count an hour into a session.
+        i = self.app.index("prevVisitAt=store.get(LAST_VISIT_KEY")
+        self.assertIn("firstShow", self.app[i - 200:i])

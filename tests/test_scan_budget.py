@@ -36,12 +36,20 @@ class StageGuardTests(unittest.TestCase):
 
     def test_a_raising_stage_is_still_timed(self):
         """The timing lives in a finally, so a stage that blows up still
-        reports what it cost before it did."""
+        reports what it cost before it did. It no longer raises: a failing
+        optional stage is skipped (see test_federal_cache's
+        OptionalStageFailureTests) rather than failing the whole scan."""
         stats = {}
-        with self.assertRaises(ValueError):
-            ls._stage(stats, "demo", time.time() + 60,
-                      lambda: (_ for _ in ()).throw(ValueError("x")))
+        alert = ls._alert_admin
+        ls._alert_admin = lambda *a: None
+        try:
+            got = ls._stage(stats, "demo", time.time() + 60,
+                            lambda: (_ for _ in ()).throw(ValueError("x")))
+        finally:
+            ls._alert_admin = alert
+        self.assertIsNone(got)
         self.assertIn("ms_demo", stats)
+        self.assertEqual(stats.get("failed_demo"), 1)
 
     def test_no_deadline_means_never_skip(self):
         stats = {}

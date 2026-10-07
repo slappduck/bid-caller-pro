@@ -51,6 +51,7 @@
     <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></symbol>
     <symbol id="i-list" viewBox="0 0 24 24"><line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></symbol>
     <symbol id="i-radar" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" style="fill:currentColor;stroke:none"/><line x1="12" y1="12" x2="18" y2="6"/></symbol>
+    <symbol id="i-dash" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></symbol>
     <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11 12 3l9 8"/><path d="M5 10v11h14V10"/><path d="M10 21v-6h4v6"/></symbol>
     <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3l2.6 5.6 6.1.6-4.6 4.1 1.3 6-5.4-3.1-5.4 3.1 1.3-6L3.3 9.2l6.1-.6z"/></symbol>
     <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></symbol>
@@ -90,8 +91,26 @@
   <div id="offline-bar"></div>
   <div class="screens">
 
+    <!-- HOME -- built entirely by renderHome() from data the app already has:
+         the feed, the pipeline, approved reviews and the referral link. -->
+    <div class="screen active" id="screen-home">
+      <div class="screen-title" id="home-title">Welcome back</div>
+      <div class="screen-sub" id="home-sub">Here's what's open near you.</div>
+      <div class="home-grid">
+        <div class="home-main" id="home-main"></div>
+        <div class="home-side">
+          <div class="account-card" id="home-reviews" style="display:none;"></div>
+          <div class="account-card" id="home-invite">
+            <div class="account-email hdr-ic" style="font-size:var(--fs-base);margin-bottom:0.4rem;"><svg class="icon-svg"><use href="#i-share"/></svg>Invite a contractor</div>
+            <div class="account-status" style="margin-bottom:0.7rem;">Give a free month, get a free month — when someone you refer subscribes, you both get bonus time added automatically.</div>
+            <div id="home-referral-body"><span class="skel-line lg"></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- FIND -->
-    <div class="screen active" id="screen-scan">
+    <div class="screen" id="screen-scan">
       <div class="screen-title">Find Concrete Bids Near You</div>
       <div class="screen-sub">Enter your area — we'll find sidewalk, ADA &amp; curb bids.</div>
       <div class="search-layout">
@@ -254,7 +273,8 @@
   </div>
 
   <div class="bottom-nav" id="nav-menu">
-    <button class="nav-btn active" data-s="scan"><svg class="icon-svg"><use href="#i-search"/></svg><span class="lb">Find</span></button>
+    <button class="nav-btn active" data-s="home"><svg class="icon-svg"><use href="#i-dash"/></svg><span class="lb">Home</span></button>
+    <button class="nav-btn" data-s="scan"><svg class="icon-svg"><use href="#i-search"/></svg><span class="lb">Find</span></button>
     <button class="nav-btn" data-s="feed"><svg class="icon-svg"><use href="#i-list"/></svg><span class="nav-badge" id="feed-badge" style="display:none;"></span><span class="lb">Bids</span></button>
     <button class="nav-btn" data-s="upcoming"><svg class="icon-svg"><use href="#i-radar"/></svg><span class="lb">Upcoming</span></button>
     <button class="nav-btn" data-s="leads"><svg class="icon-svg"><use href="#i-home"/></svg><span class="lb">Leads</span></button>

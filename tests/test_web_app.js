@@ -975,6 +975,323 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── The Find map must not snap back while the user is looking around ──
+  // Reported as "it snaps me back to an area I clicked when I'm just looking
+  // around". A tap moved the map, then the place-name lookup (up to three
+  // geocoders, seconds) finished and moved it AGAIN -- by which time the user
+  // was often panning elsewhere. Separately, every token refresh re-ran
+  // showApp(), which reset the map to its default view. The geocoder is
+  // replaced with one the test resolves by hand, so "the name arrives after
+  // the user has panned away" is deterministic rather than a timing race.
+  console.log("\nThe Find map doesn't snap back while you're looking around");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    // Leaflet from a local install when there is one, so the check doesn't
+    // hinge on reaching unpkg; otherwise the real CDN.
+    let leafletDir = null;
+    try { leafletDir = path.dirname(require.resolve("leaflet/dist/leaflet.js")); } catch (e) {}
+    await page.route("**/*", (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      if (host === "unpkg.com" && leafletDir && /\/leaflet\.(js|css)$/.test(u)) {
+        const f = path.join(leafletDir, path.basename(u));
+        return route.fulfill({ status: 200, body: fs.readFileSync(f),
+          contentType: f.endsWith(".css") ? "text/css" : "application/javascript" });
+      }
+      if (host === "127.0.0.1" || host === "unpkg.com") return route.continue();
+      if (host === "cdn.jsdelivr.net") {
+        return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      }
+      return route.abort(); // tiles, Overpass, geocoders, backend
+    });
+    await page.addInitScript(seedSignedIn, {});
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => {
+      showApp();
+      // A geocoder that only answers when the test says so.
+      window.__geo = [];
+      resolvePlaceLabel = () => new Promise((r) => window.__geo.push(r));
+      switchScreen("scan"); // Home is the opening screen; the map lives on Find
+    });
+    await page.waitForTimeout(600);
+
+    if (!(await page.evaluate(() => typeof findMap !== "undefined" && !!findMap))) {
+      console.log("  SKIP  Leaflet unavailable (unpkg unreachable) -- map checks not run");
+    } else {
+      const center = () => page.evaluate(() => {
+        const c = findMap.getCenter(); return { lat: c.lat, lng: c.lng };
+      });
+      const meters = (a, b) => page.evaluate(([a, b]) => findMap.distance(a, b), [a, b]);
+
+      // Tap the middle of the map, let the fit animation settle.
+      const box = await page.locator("#find-map-view").boundingBox();
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+      await page.waitForTimeout(700);
+      const picked = await center();
+
+      // Pan away by dragging, while the name is still "resolving".
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(box.x + 40, box.y + 40, { steps: 8 });
+      await page.mouse.up();
+      await page.waitForTimeout(400);
+      const panned = await center();
+      check("the drag actually moved the map", (await meters(picked, panned)) > 5000);
+
+      // Now the name arrives.
+      await page.evaluate(() => window.__geo.shift()("Testville, MO"));
+      await page.waitForTimeout(700);
+      const after = await center();
+      check("the late place name does not snap the map back",
+        (await meters(after, panned)) < 1000,
+        `moved ${Math.round(await meters(after, panned))}m from where the user panned`);
+      check("the place name still lands in the box",
+        (await page.locator("#loc-input").inputValue()) === "Testville, MO");
+
+      // A token refresh re-enters showApp(); the map must stay put.
+      await page.evaluate(() => showApp());
+      await page.waitForTimeout(700);
+      check("a session refresh does not reset the map view",
+        (await meters(await center(), panned)) < 1000);
+
+      // Tap A, then B before A's name returns: A's late answer is stale.
+      await page.evaluate(() => {
+        window.__geo = [];
+        pickFindLocation(38.0, -94.0, null);
+        pickFindLocation(39.0, -95.0, null);
+      });
+      await page.evaluate(() => window.__geo.shift()("Aville, MO"));
+      await page.waitForTimeout(200);
+      check("a superseded tap's name does not overwrite the newer one",
+        (await page.locator("#loc-input").inputValue()) !== "Aville, MO");
+      await page.evaluate(() => window.__geo.shift()("Bville, MO"));
+      await page.waitForTimeout(200);
+      check("the newest tap's name is what ends up in the box",
+        (await page.locator("#loc-input").inputValue()) === "Bville, MO");
+    }
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
+  // ── A progress poll that lands after the scan has finished ──
+  // The poll was stopped between requests but not mid-request, so one in
+  // flight when the scan returned wrote "Reading town bid pages... 10 so
+  // far" over the result. A live Columbia, MO scan ended exactly like that:
+  // no result, no buttons, a status that looked stuck.
+  console.log("\nA late progress update can't overwrite the scan's result");
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", async (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      if (u.endsWith("/scan/progress")) {
+        // Asked at ~2.5s, answers at ~4.5s -- after the scan's ~3s.
+        await new Promise((r) => setTimeout(r, 2000));
+        return route.fulfill({ status: 200, contentType: "application/json",
+          body: JSON.stringify({ ok: true, known: true, phase: "reading_towns", found: 10, done: false }) });
+      }
+      if (u.endsWith("/scan")) {
+        await new Promise((r) => setTimeout(r, 3000));
+        return route.fulfill({ status: 200, contentType: "application/json",
+          body: JSON.stringify({ ok: true, location: "Columbia, MO", bids: {}, total_bids: 0, city_coords: {} }) });
+      }
+      if (host === "cdn.jsdelivr.net") {
+        return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      }
+      if (host === "127.0.0.1") return route.continue();
+      return route.abort();
+    });
+    await page.addInitScript(seedSignedIn, {});
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => { showApp(); switchScreen("scan"); });
+    await page.fill("#loc-input", "Columbia, MO");
+    // Not awaited: the first read has to land between the scan's answer
+    // and the late poll's.
+    await page.evaluate(() => { radius = 75; runScan(false); });
+    await page.waitForTimeout(3600);
+    const atResult = await page.textContent("#scan-status");
+    await page.waitForTimeout(2500); // the late poll has landed by now
+    const after = await page.textContent("#scan-status");
+    check("the empty result is shown when the scan returns", /Nothing open near Columbia/.test(atResult), atResult);
+    check("a poll answered after that doesn't replace it", /Nothing open near Columbia/.test(after), after);
+    check("its search-wider button survives too", (await page.locator("#empty-wider").count()) === 1);
+
+    // Desktop: the status sits right under the Scan button, not below the
+    // bottom of the much taller map beside it.
+    const gap = await page.evaluate(() => {
+      const btn = document.getElementById("scan-btn").getBoundingClientRect();
+      const st = document.getElementById("scan-status").getBoundingClientRect();
+      const map = document.querySelector("#screen-scan .map-card").getBoundingClientRect();
+      return { gap: Math.round(st.top - btn.bottom), mapBottom: Math.round(map.bottom), statusTop: Math.round(st.top) };
+    });
+    check("on desktop the scan status follows the Scan button without a blank gap", gap.gap < 60, JSON.stringify(gap));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
+  // ── Home ──
+  // The opening screen. Every number on it comes from state the app already
+  // holds, so each check here pins a figure to the seed that produced it.
+  console.log("\nHome shows what changed since the last visit");
+  {
+    const REVIEWS = [
+      { rating: 5, quote: "Found two city jobs <img src=x onerror=window.__xss=1>", display_name: "Mike R.", company: "R&R Concrete" },
+      { rating: 4, quote: "The deadline alerts paid for it.", display_name: "Dana K.", company: "" },
+    ];
+    // Same shape as SB_STUB, but query builders chain and resolve, so the
+    // reviews query has something real to return.
+    const SB_REVIEWS_STUB = `
+      window.supabase = { createClient: function () {
+        return {
+          auth: {
+            onAuthStateChange: function () { return { data: { subscription: { unsubscribe: function () {} } } }; },
+            getSession: async function () { return { data: { session: null } }; },
+            signOut: async function () { return {}; }
+          },
+          from: function (table) {
+            var res = table === "reviews" ? { data: ${JSON.stringify(REVIEWS)}, error: null } : { data: null, error: {} };
+            var c = {
+              select: function () { return c; }, eq: function () { return c; },
+              order: function () { return c; }, limit: function () { return c; },
+              delete: function () { return c; },
+              upsert: async function () { return {}; }, insert: async function () { return {}; },
+              maybeSingle: async function () { return { data: null, error: {} }; },
+              then: function (ok, bad) { return Promise.resolve(res).then(ok, bad); }
+            };
+            return c;
+          },
+          storage: { from: function () { return {}; } }
+        };
+      } };`;
+
+    const openHome = async (viewport, lastVisitDaysAgo) => {
+      const ctx = await browser.newContext(viewport);
+      const page = await ctx.newPage();
+      const pageErrors = [];
+      page.on("pageerror", (e) => pageErrors.push(e.message));
+      await page.route("**/*", (route) => {
+        const host = new URL(route.request().url()).hostname;
+        if (host === "127.0.0.1") return route.continue();
+        if (host === "cdn.jsdelivr.net") {
+          return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_REVIEWS_STUB });
+        }
+        return route.abort();
+      });
+      await page.addInitScript((daysAgo) => {
+        const day = 86400000, now = Date.now();
+        const iso = (d) => { const t = new Date(now + d * day); return t.getFullYear() + "-" +
+          String(t.getMonth() + 1).padStart(2, "0") + "-" + String(t.getDate()).padStart(2, "0"); };
+        const lastVisit = daysAgo == null ? null : now - daysAgo * day;
+        // Two arrived after the last visit, one before it; one has closed.
+        const bids = [
+          { title: "Late Ramp Job", deadline: iso(5), status: "open", url: "https://example.gov/b/5", _first_seen: now - 3600000 },
+          { title: "Soonest Ramp Job", deadline: iso(2), status: "open", url: "https://example.gov/b/2", _first_seen: now - 7200000 },
+          { title: "Far Off Sidewalk", deadline: iso(20), status: "open", url: "https://example.gov/b/20", _first_seen: now - 10 * day },
+          { title: "Already Closed", deadline: iso(-3), status: "open", url: "https://example.gov/b/x", _first_seen: now - 10 * day },
+        ];
+        localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+        localStorage.setItem("last_feed", JSON.stringify({ "Aurora, MO": bids }));
+        localStorage.setItem("referral_code", JSON.stringify("tester-a7k2"));
+        if (lastVisit != null) localStorage.setItem("last_visit_at", JSON.stringify(lastVisit));
+      }, lastVisitDaysAgo);
+      await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+      await page.waitForTimeout(600);
+      await page.evaluate(() => showApp());
+      await page.waitForTimeout(600);
+      return { ctx, page, pageErrors };
+    };
+    const stats = (page) => page.$$eval("#home-main .stat-box", (els) =>
+      els.map((e) => [e.querySelector(".l").textContent.trim(), e.querySelector(".n").textContent.trim()]));
+
+    // First visit: no "since", so the headline count is everything open.
+    {
+      const { ctx, page, pageErrors } = await openHome(MOBILE_VIEWPORT, null);
+      const active = await page.evaluate(() => ({
+        screen: document.querySelector(".screen.active")?.id,
+        nav: document.querySelector(".nav-btn.active")?.dataset.s,
+      }));
+      check("Home is the screen a signed-in user lands on", active.screen === "screen-home" && active.nav === "home",
+            JSON.stringify(active));
+      const s = Object.fromEntries(await stats(page));
+      check("first visit counts every open bid, not a closed one", s["Open bids"] === "3", JSON.stringify(s));
+      check("closing-in-7d counts the 2- and 5-day bids only", s["Closing in 7d"] === "2", JSON.stringify(s));
+      const soon = await page.$$eval("#home-soon .bid-title", (els) => els.map((e) => e.textContent.trim()));
+      check("closing soon lists the nearest deadline first, closed ones left out",
+            soon[0] === "Soonest Ramp Job" && soon[1] === "Late Ramp Job" && !soon.includes("Already Closed"),
+            JSON.stringify(soon));
+      check("see-all counts the open bids", (await page.textContent("#home-all-btn")).includes("3 open bids"));
+
+      const rev = await page.evaluate(() => {
+        const card = document.getElementById("home-reviews");
+        return { shown: getComputedStyle(card).display !== "none", n: card.querySelectorAll(".home-review").length,
+                 img: !!card.querySelector("img"), xss: !!window.__xss, text: card.textContent };
+      });
+      check("approved reviews show on Home", rev.shown && rev.n === 2, JSON.stringify(rev));
+      check("review text is escaped, not rendered as markup", !rev.img && !rev.xss && rev.text.includes("<img"));
+
+      check("the invite card carries the referral link",
+            (await page.textContent("#home-referral-body")).includes("ref=tester-a7k2"));
+      await page.evaluate(() => switchScreen("account"));
+      await page.waitForTimeout(300);
+      const copies = await page.evaluate(() => ({
+        home: document.querySelectorAll("#home-referral-body .referral-copy-btn").length,
+        acct: document.querySelectorAll("#referral-body .referral-copy-btn").length,
+        ids: document.querySelectorAll("#referral-copy-btn").length,
+      }));
+      check("Home and Account each get their own copy button, no shared id",
+            copies.home === 1 && copies.acct === 1 && copies.ids === 0, JSON.stringify(copies));
+
+      await page.evaluate(() => switchScreen("home"));
+      await page.click("#home-all-btn");
+      check("see-all opens Bids",
+            await page.evaluate(() => document.querySelector(".screen.active").id === "screen-feed"));
+      check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+      await ctx.close();
+    }
+
+    // Back a day later: only the two that arrived since count as new.
+    {
+      const { ctx, page, pageErrors } = await openHome(MOBILE_VIEWPORT, 1);
+      const s = Object.fromEntries(await stats(page));
+      check("a return visit counts only bids first seen since", s["New bids"] === "2", JSON.stringify(s));
+      check("the subtitle says since when", (await page.textContent("#home-sub")).includes("since yesterday"));
+      // A token refresh re-runs showApp; it must not move "since" up to now.
+      await page.evaluate(() => showApp());
+      await page.waitForTimeout(300);
+      const again = Object.fromEntries(await stats(page));
+      check("a session refresh doesn't reset what counts as new", again["New bids"] === "2", JSON.stringify(again));
+      check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+      await ctx.close();
+    }
+
+    // Layout: nothing spills sideways on a small phone; side-by-side on desktop.
+    {
+      const { ctx, page } = await openHome({ viewport: { width: 320, height: 640 } }, null);
+      const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      check("Home doesn't scroll sideways at 320px", over <= 0, `overflow ${over}px`);
+      await ctx.close();
+    }
+    {
+      const { ctx, page } = await openHome({ viewport: { width: 1440, height: 900 } }, null);
+      const r = await page.evaluate(() => {
+        const m = document.getElementById("home-main").getBoundingClientRect();
+        const s = document.querySelector(".home-side").getBoundingClientRect();
+        return { mainRight: m.right, sideLeft: s.left, dTop: Math.abs(m.top - s.top) };
+      });
+      check("on desktop the reviews/invite column sits beside the bids", r.sideLeft >= r.mainRight && r.dTop < 2,
+            JSON.stringify(r));
+      await ctx.close();
+    }
+  }
+
   await browser.close();
   server.close();
   console.log(failures ? `\n${failures} check(s) FAILED` : "\nAll checks passed");

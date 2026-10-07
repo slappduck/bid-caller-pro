@@ -2764,9 +2764,13 @@ def admin_reviews():
 
     Moderation used to mean opening Supabase's table editor by hand -- fine
     when it was the only queue, awkward now that agency notices and campaign
-    drafts already have a page. approve/reject take the review's numeric id;
-    both are handled the same way (a boolean flip of `approved`), listed
-    separately only so the caller's intent reads clearly in the request.
+    drafts already have a page. approve/reject take the review's numeric id.
+
+    Reject deletes the row. It used to PATCH approved=false, but a pending
+    review is already approved=false, so that changed nothing and the review
+    sat in the pending queue forever no matter how many times it was
+    rejected. Deleting also frees the author to submit a new one (reviews
+    are one-per-user).
     """
     data = request.get_json(force=True, silent=True) or {}
     if not _admin_configured():
@@ -2782,9 +2786,15 @@ def admin_reviews():
             review_id = int(raw_id)
         except (TypeError, ValueError):
             return jsonify({"ok": False, "reason": "invalid_review_id"}), 400
-        _supabase_admin_request(
-            f"/rest/v1/reviews?id=eq.{review_id}", method="PATCH",
-            data={"approved": bool(data.get("approve"))})
+        if data.get("approve"):
+            result = _supabase_admin_request(
+                f"/rest/v1/reviews?id=eq.{review_id}", method="PATCH",
+                data={"approved": True})
+        else:
+            result = _supabase_admin_request(
+                f"/rest/v1/reviews?id=eq.{review_id}", method="DELETE")
+        if result is None:
+            return jsonify({"ok": False, "reason": "supabase_error"}), 502
 
     rows = _supabase_admin_request(
         "/rest/v1/reviews?select=id,rating,quote,display_name,company,"
@@ -7671,10 +7681,11 @@ def _run_federal_sources(center, radius, grouped, cdb, city_coords=None,
     cached = _federal_cached(states, stats)
     if cached is not None:
         bids = cached
-        deadline = time.time() + FEDERAL_BUDGET_SEC   # unused; kept for shape
+        transport = "cache"
     else:
         deadline = time.time() + FEDERAL_BUDGET_SEC
         use_keyed = bool(SAM_API_KEY) and not _keyed_breaker_open()
+        transport = "keyed" if use_keyed else "public"
         if SAM_API_KEY and not use_keyed:
             # The documented API is resting; the public one reads the same
             # public-domain data and is currently the only one that answers.
@@ -7708,9 +7719,11 @@ def _run_federal_sources(center, radius, grouped, cdb, city_coords=None,
         if sum(len(v) for v in grouped.values()) > before:
             placed += 1
             _bump(stats, "federal_kept")
+    # `transport`, not use_keyed: use_keyed only exists on the live path, so
+    # naming it here crashed every scan the cache answered -- which, once the
+    # scheduled refresh had filled it, was every scan.
     print("[scan] %d federal bids from %d candidate(s) in %s (%s transport)"
-          % (placed, len(bids), ",".join(states),
-             "keyed" if use_keyed else "public"), flush=True)
+          % (placed, len(bids), ",".join(states), transport), flush=True)
     return placed
 
 
@@ -7821,6 +7834,19 @@ def _stage(stats, name, deadline, fn, *args, **kw):
     t0 = time.time()
     try:
         return fn(*args, **kw)
+    except Exception:
+        # Optional means optional. A bug in one source (federal once named a
+        # variable that only existed on its live path) used to propagate up
+        # and fail the whole scan -- every town and search result already
+        # gathered thrown away, and the user told "Scan hit a snag". Skip
+        # the stage, keep the rest, and still email the traceback.
+        import traceback
+        tb = traceback.format_exc()
+        print(f"[scan] stage {name} failed, skipped:\n{tb}", flush=True)
+        if stats is not None:
+            stats["failed_" + name] = 1
+        _alert_admin(f"Scan stage '{name}' failed (scan continued)", tb)
+        return None
     finally:
         if stats is not None:
             stats["ms_" + name] = int((time.time() - t0) * 1000)
