@@ -555,6 +555,13 @@ function toast(msg){
   clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),2600);
 }
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+// Every empty-state card (.empty) still had CSS for an .icon div sized for
+// an emoji, but nothing ever filled it after emoji icons were replaced
+// with this SVG sprite -- they'd silently rendered as bare text ever since.
+function emptyHTML(icon,title,body){return `<div class="empty"><div class="icon"><svg class="icon-svg"><use href="#${icon}"/></svg></div><h3>${title}</h3><p>${body}</p></div>`;}
+// Plan feature lists used a CSS ::before Unicode checkmark, a different
+// visual language from the SVG icon set used everywhere else on this screen.
+function planLi(text){return `<li><svg class="icon-svg"><use href="#i-check"/></svg>${text}</li>`;}
 // County names arrive normalised for matching ("st clair", "de kalb"), which
 // is right for a lookup key and wrong on a card.
 function titleCase(s){return String(s==null?"":s).replace(/\b[a-z]/g,c=>c.toUpperCase());}
@@ -3114,7 +3121,7 @@ function renderUpcoming(){
   if(!cities.length){
     filterRow.style.display="none";
     document.getElementById("up-toolbar").style.display="none";
-    list.innerHTML=`<div class="empty"><h3>Nothing yet</h3><p>Search your area to spot planned work before it's a bid.</p></div>`;
+    list.innerHTML=emptyHTML("i-radar","Nothing yet","Search your area to spot planned work before it's a bid.");
     return;
   }
   filterRow.style.display="flex";
@@ -3131,7 +3138,7 @@ function renderUpcoming(){
   else if(mode==="title")rows.sort((a,b)=>String(a[1].title||"").localeCompare(String(b[1].title||"")));
   lastUpcomingRows=rows;
   list.innerHTML=`<div class="feed-label">PLANNED PROJECTS</div>`+rows.map(([c,b])=>upcomingCard(c,b)).join("");
-  if(!rows.length)list.innerHTML=`<div class="empty"><h3>No matches</h3><p>Try a different search term.</p></div>`;
+  if(!rows.length)list.innerHTML=emptyHTML("i-search","No matches","Try a different search term.");
 }
 let lastUpcomingRows=[];
 byId("up-sort").onchange=()=>renderUpcoming();
@@ -3272,7 +3279,7 @@ function renderLeads(){
     filterRow.style.display="none";
     toolbar.style.display="none";
     tilesWrap.innerHTML="";
-    list.innerHTML=`<div class="empty"><h3>Nothing yet</h3><p>Search your area for fresh driveway &amp; sidewalk permits. Coverage is growing city by city — currently: Austin, TX; Cambridge, MA & Baton Rouge, LA.</p></div>`;
+    list.innerHTML=emptyHTML("i-home","Nothing yet","Search your area for fresh driveway &amp; sidewalk permits. Coverage is growing city by city — currently: Austin, TX; Cambridge, MA &amp; Baton Rouge, LA.");
     return;
   }
   filterRow.style.display="flex";
@@ -3303,7 +3310,7 @@ function renderLeads(){
   // returned them -- already sorted open-lead-first, freshest within type.
   lastLeadsRows=rows;
   list.innerHTML=`<div class="feed-label">RESIDENTIAL LEADS</div>`+rows.map(([c,l])=>leadCard(c,l)).join("");
-  if(!rows.length)list.innerHTML=`<div class="empty"><h3>No matches</h3><p>Try a different search term.</p></div>`;
+  if(!rows.length)list.innerHTML=emptyHTML("i-search","No matches","Try a different search term.");
   // Real listeners, not interpolated onclick — a permit id containing a quote
   // would otherwise break the status buttons on that lead.
   list.querySelectorAll("[data-lead-id]").forEach(btn=>{
@@ -3426,7 +3433,7 @@ function renderFeed(){
   exportBtn.style.display=total?"inline-flex":"none";
   if(!total){
     tiles.innerHTML="";
-    list.innerHTML=`<div class="empty"><h3>No bids yet</h3><p>Tap Find to scan your area.</p></div>`;
+    list.innerHTML=emptyHTML("i-list","No bids yet","Tap Find to scan your area.");
     lastFeedRows=[];
     return;
   }
@@ -3467,7 +3474,7 @@ function renderFeed(){
   }
   lastFeedRows=rows;
   list.innerHTML=`<div class="feed-label">OPEN BIDS</div>`+rows.map(([c,b])=>bidCard(c,b)).join("");
-  if(!rows.length)list.innerHTML=`<div class="empty"><h3>No matches</h3><p>Try a different search term.</p></div>`;
+  if(!rows.length)list.innerHTML=emptyHTML("i-search","No matches","Try a different search term.");
   attachBidEvents(list);
 }
 byId("feed-search").oninput=()=>renderFeed();
@@ -4002,7 +4009,7 @@ function renderSaved(){
   if(!keys.length){
     ptiles.innerHTML="";exportBtn.style.display="none";
     document.getElementById("pipeline-stats").innerHTML="";
-    list.innerHTML=`<div class="empty"><h3>No active bids</h3><p>Tap the &#x2606; on any bid to start tracking it here.</p></div>`;
+    list.innerHTML=emptyHTML("i-star","No active bids","Tap the &#x2606; on any bid to start tracking it here.");
     return;
   }
   exportBtn.style.display="inline-flex";
@@ -4015,7 +4022,7 @@ function renderSaved(){
   ptiles.querySelectorAll(".tile").forEach(t=>t.onclick=()=>{pipelineFilter=t.dataset.k;renderSaved();});
   const filteredKeys=keys.filter(id=>pipelineFilter==="All"||(pipelineFilter==="none"?!pipeline[id]:pipeline[id]===pipelineFilter));
   if(!filteredKeys.length){
-    list.innerHTML=`<div class="empty"><h3>Nothing here</h3><p>No active bids with this status.</p></div>`;
+    list.innerHTML=emptyHTML("i-search","Nothing here","No active bids with this status.");
     return;
   }
   list.innerHTML=filteredKeys.map(id=>{const b=saved[id];return bidCard(b._city||"",b);}).join("");
@@ -4211,14 +4218,14 @@ function renderAccount(){
       <div class="plan featured">
         <div class="plan-name">Pro Monthly</div>
         <div class="plan-price">$49<span> / month</span></div>
-        <ul><li>Unlimited nationwide bid scans</li><li>AI bid extraction</li><li>Federal + local bids</li><li>Save &amp; track leads</li><li>Cancel anytime</li></ul>
+        <ul>${["Unlimited nationwide bid scans","AI bid extraction","Federal + local bids","Save &amp; track leads","Cancel anytime"].map(planLi).join("")}</ul>
         <a class="btn-primary" style="text-decoration:none;" href="${mLink}" target="_blank">Subscribe Monthly</a>
         <p class="renew-note">Renews automatically at $49/month until you cancel. Cancel anytime under Billing above.</p>
       </div>
       <div class="plan">
         <div class="plan-name">Pro Annual &mdash; best value, save $189</div>
         <div class="plan-price">$399<span> / year</span></div>
-        <ul><li>Everything in Monthly</li><li>About 4 months free</li><li>Priority support</li></ul>
+        <ul>${["Everything in Monthly","About 4 months free","Priority support"].map(planLi).join("")}</ul>
         <a class="btn-ghost" style="text-decoration:none;display:block;text-align:center;" href="${aLink}" target="_blank">Subscribe Annual</a>
         <p class="renew-note">Renews automatically at $399/year until you cancel. Cancel anytime under Billing above.</p>
       </div>

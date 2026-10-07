@@ -254,7 +254,11 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .empty-actions{display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.8rem;}
 .empty-actions .btn-ghost{margin:0;flex:1 1 auto;width:auto;min-height:44px;}
 .empty{text-align:center;padding:3.5rem 1rem;}
-.empty .icon{font-size:var(--fs-4xl);opacity:0.4;}
+/* .icon used to hold an emoji sized by font-size; now that the app uses a
+   real SVG icon set everywhere else, every empty state had silently lost
+   its icon rather than gaining one -- this is what reconnects it. */
+.empty .icon{opacity:0.35;color:var(--text3);margin-bottom:0.3rem;}
+.empty .icon .icon-svg{width:2.75rem;height:2.75rem;stroke-width:1.5;}
 .empty h3{font-size:var(--fs-xl);color:var(--text2);margin:0.7rem 0 0.3rem;}
 .empty p{color:var(--text3);font-size:var(--fs-base);}
 
@@ -274,8 +278,8 @@ body{font-family:var(--ui);background:var(--bg);color:var(--text);overflow:hidde
 .renew-note{font-size:var(--fs-sm);line-height:1.45;color:var(--text3);margin-top:0.6rem;}
 .plan-price span{font-family:var(--ui);font-size:var(--fs-base);color:var(--text2);}
 .plan ul{list-style:none;margin:0.7rem 0 1rem;}
-.plan li{font-size:var(--fs-base);color:var(--text2);padding:0.25rem 0;}
-.plan li::before{content:"\2713 ";color:var(--accent);font-weight:700;}
+.plan li{font-size:var(--fs-base);color:var(--text2);padding:0.25rem 0;display:flex;align-items:center;gap:0.5rem;}
+.plan li .icon-svg{color:var(--accent);flex-shrink:0;}
 
 .account-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:1.2rem;margin-bottom:1rem;box-shadow:var(--shadow-sm);}
 .account-email{font-weight:700;margin-bottom:0.3rem;word-break:break-all;}

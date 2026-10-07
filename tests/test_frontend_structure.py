@@ -994,3 +994,41 @@ class ElevationAndContrastTests(unittest.TestCase):
         i = self.css.index(".btn-primary:disabled,.btn-ghost:disabled{")
         rule = self.css[i:self.css.index("}", i) + 1]
         self.assertIn("box-shadow:none", rule)
+
+
+class EmptyStateAndPlanIconTests(unittest.TestCase):
+    """.empty had CSS for an .icon div (sized for an emoji) that nothing in
+    app.js ever filled in after emoji icons were replaced with the SVG
+    sprite -- every empty state silently rendered as bare text. And the
+    plan feature lists used a CSS ::before Unicode checkmark, a different
+    visual language from the SVG icon set used on the same screen."""
+
+    def setUp(self):
+        self.css = _read(APP_CSS)
+        self.js = _read(APP_JS)
+
+    def test_empty_icon_css_targets_an_svg_not_a_bare_emoji_font_size(self):
+        i = self.css.index(".empty .icon{")
+        rule = self.css[i:self.css.index("}", i) + 1]
+        self.assertNotIn("font-size", rule)
+        i2 = self.css.index(".empty .icon .icon-svg{")
+        self.assertIn("width:", self.css[i2:self.css.index("}", i2) + 1])
+
+    def test_empty_html_helper_renders_an_icon(self):
+        i = self.js.index("function emptyHTML(")
+        body = self.js[i:self.js.index("\n", i)]
+        self.assertIn('class="icon"', body)
+        self.assertIn("icon-svg", body)
+        self.assertIn("<use href=", body)
+
+    def test_every_empty_state_call_site_uses_the_icon_helper(self):
+        # The old hand-written pattern put <h3> right after the wrapper with
+        # no icon div between them. Any surviving match means a call site
+        # wasn't converted to emptyHTML() and still renders without an icon.
+        self.assertNotIn('<div class="empty"><h3>', self.js)
+
+    def test_plan_feature_lists_use_the_check_icon_not_a_unicode_glyph(self):
+        self.assertNotIn("2713", self.css)
+        i = self.js.index("function planLi(")
+        body = self.js[i:self.js.index("\n", i)]
+        self.assertIn("i-check", body)
