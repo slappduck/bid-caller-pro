@@ -1312,3 +1312,45 @@ class ScanSummaryPanelTests(unittest.TestCase):
         rule = self.css[self.css.index("#screen-scan .search-layout{"):]
         rule = rule[:rule.index("}") + 1]
         self.assertIn('"followup summary"', rule)
+
+
+class RemainingFlatSurfacesTests(unittest.TestCase):
+    """.auth-card, .modal, .toast, .filter-row input/select and .social-btn
+    were the last surfaces in the app still completely flat after the
+    elevation pass -- a sign-in card with no shadow at all (the first thing
+    anyone ever sees), a bottom sheet and a toast that are supposed to float
+    above other content but had nothing distinguishing them from it, and
+    text inputs that didn't match the recessed look every other .input
+    already had."""
+
+    def setUp(self):
+        self.css = _read(APP_CSS)
+
+    def _rule(self, selector):
+        i = self.css.index(selector)
+        return self.css[i:self.css.index("}", i) + 1]
+
+    def test_auth_card_has_a_shadow(self):
+        self.assertIn("box-shadow:var(--shadow", self._rule(".auth-card{"))
+
+    def test_modal_sheet_shadow_points_up_not_down(self):
+        """The backdrop is behind the sheet, not above it -- a downward
+        shadow would be invisible against the dimmed backdrop it's already
+        sitting on, same reasoning as .bottom-nav's upward shadow."""
+        self.assertIn("box-shadow:0 -", self._rule(".modal{"))
+
+    def test_toast_has_a_shadow(self):
+        """Toasts often float over another dark card, not the page
+        background, so a shadow is the only thing marking them as above it
+        at all."""
+        self.assertIn("box-shadow:var(--shadow", self._rule(".toast{"))
+
+    def test_filter_row_inputs_match_the_recessed_look_of_every_other_input(self):
+        rule = self._rule(".filter-row input,.filter-row select{")
+        self.assertIn("box-shadow:inset", rule)
+
+    def test_social_btn_is_raised_like_every_other_button_and_responds_to_press(self):
+        rule = self._rule(".social-btn{")
+        self.assertIn("box-shadow:var(--shadow", rule)
+        self.assertIn(".social-btn:hover{", self.css)
+        self.assertIn(".social-btn:active{", self.css)
