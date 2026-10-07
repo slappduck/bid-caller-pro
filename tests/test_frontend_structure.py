@@ -1445,3 +1445,40 @@ class ShadowHueMatchesTheThemeTests(unittest.TestCase):
             rule = root[j:root.index(";", j) + 1]
             self.assertIn("var(--shadow-rgb)", rule, token)
             self.assertNotIn("0,0,0", rule, token)
+
+
+class DepthCuesBeyondAFlatShadowTests(unittest.TestCase):
+    """A drop shadow alone reads as "this has a shadow," not "this is a
+    raised surface" -- what sells actual depth is a highlight catching the
+    top edge (as a physically raised object would show) plus a page
+    background that isn't a flat, infinite-looking void behind every card."""
+
+    def setUp(self):
+        self.css = _read(APP_CSS)
+
+    def test_every_shadow_level_has_a_top_inset_highlight(self):
+        i = self.css.index(":root{")
+        root = self.css[i:self.css.index("}", i) + 1]
+        for token in ("--shadow-sm:", "--shadow-md:", "--shadow-lg:"):
+            j = root.index(token)
+            rule = root[j:root.index(";", j) + 1]
+            self.assertIn("inset 0 1px 0 rgba(255,255,255,", rule, token)
+
+    def test_highlight_is_on_top_not_bottom(self):
+        """A highlight on the bottom edge would read as a groove (light
+        catching a lip underneath), the opposite of a raised surface."""
+        i = self.css.index(":root{")
+        root = self.css[i:self.css.index("}", i) + 1]
+        j = root.index("--shadow-md:")
+        rule = root[j:root.index(";", j) + 1]
+        # "inset 0 1px 0" -- zero horizontal offset, positive vertical
+        # offset -- is the only direction that paints along the top inside
+        # edge; a bottom highlight would need a negative vertical offset.
+        self.assertIn("inset 0 1px 0 rgba(255,255,255,", rule)
+        self.assertNotIn("inset 0 -1px 0", rule)
+
+    def test_body_background_is_a_gradient_not_a_flat_fill(self):
+        i = self.css.index("body{font-family:var(--ui);")
+        rule = self.css[i:self.css.index("}", i) + 1]
+        self.assertIn("radial-gradient(", rule)
+        self.assertIn("var(--bg)", rule)
