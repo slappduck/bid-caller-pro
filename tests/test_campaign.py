@@ -212,6 +212,25 @@ class CampaignTests(unittest.TestCase):
                                           json={"admin_token": "no"}).status_code, 403)
 
 
+class ReviewAndReplyTests(CampaignTests):
+    def test_the_drafts_list_shows_the_exact_email_before_send(self):
+        self._draft(subject="Hello", body="Line one.", recipients=["a@x.com", "b@x.com"])
+        d = self.client.post("/campaign/drafts", json={"admin_token": TOKEN}).get_json()["drafts"][0]
+        self.assertEqual(d["to"], ["a@x.com", "b@x.com"])
+        self.assertIn("Line one.", d["preview"])
+        self.assertIn(ADDRESS, d["preview"])
+        self.assertIn("Unsubscribe", d["preview"])
+
+    def test_replies_go_to_a_person_not_the_sending_address(self):
+        with patch.object(ls, "CAMPAIGN_REPLY_TO", "josh@example.com"):
+            self._send()
+        self.assertEqual(self.sent[0]["reply_to"], "josh@example.com")
+
+    def test_without_a_reply_to_set_replies_fall_back_to_support(self):
+        with patch.object(ls, "CAMPAIGN_REPLY_TO", ""):
+            self._send()
+        self.assertEqual(self.sent[0]["reply_to"], ls.SUPPORT_EMAIL)
+
 class MergeFieldTests(CampaignTests):
     """Per-recipient personalisation.
 

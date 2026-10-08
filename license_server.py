@@ -3384,6 +3384,10 @@ _DRAFTS_KEY = "bidcaller:campaign_drafts"
 # A draft that's been sitting for a day is probably forgotten, and approving
 # a forgotten campaign is how the wrong thing goes out. They expire.
 DRAFT_TTL_HOURS = int(os.environ.get("CAMPAIGN_DRAFT_TTL_HOURS", "24"))
+# Where a recipient's reply lands. Without it a reply goes to FROM_EMAIL,
+# which is a sending address nobody reads (its default is Resend's own
+# onboarding@resend.dev) -- the one prospect who writes back would vanish.
+CAMPAIGN_REPLY_TO = os.environ.get("CAMPAIGN_REPLY_TO", "").strip()
 
 
 # Merge fields, written {{like_this}}. A campaign that cannot say "3 open
@@ -3671,6 +3675,7 @@ def campaign_approve():
         unsub = _unsub_url(addr)
         ok = _send_email(addr, draft["subject"],
                          _render_campaign(draft["body"], addr, variables),
+                         reply_to=CAMPAIGN_REPLY_TO or SUPPORT_EMAIL or None,
                          headers={"List-Unsubscribe": f"<{unsub}>",
                                   "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"})
         sent += 1 if ok else 0
@@ -3701,10 +3706,23 @@ def campaign_drafts():
     if discard:
         drafts.pop(discard, None)
         _save_drafts(drafts)
+    def _summary(k, v):
+        stored = v.get("recipients") or []
+        pairs = [(r[0], r[1]) if isinstance(r, (list, tuple)) else (r, {})
+                 for r in stored]
+        first = pairs[0] if pairs else None
+        return {"draft_id": k, "subject": v.get("subject", ""),
+                "recipients": len(pairs),
+                "to": [a for a, _ in pairs[:10]],
+                # The exact text the first recipient gets, footer and all. The
+                # admin panel's Send button used to show only the subject and a
+                # count -- approving a cold email nobody could read.
+                "preview": (_render_campaign(v.get("body", ""), first[0], first[1])
+                            if first else ""),
+                "created_at": v.get("created_at", "")}
+
     return jsonify({"ok": True, "drafts": [
-        {"draft_id": k, "subject": v.get("subject", ""),
-         "recipients": len(v.get("recipients") or []),
-         "created_at": v.get("created_at", "")}
+        _summary(k, v)
         for k, v in sorted(drafts.items(), key=lambda kv: kv[1].get("created_at", ""))
     ]})
 
