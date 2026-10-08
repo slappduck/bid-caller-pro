@@ -1357,6 +1357,9 @@ function showApp(){
   updateUserChip();
   updateOfflineBar();
   renderFeed();
+  // Bid cards show a ballpark once the going rates are in; they arrive a
+  // moment after the first render, so draw the cards once more then.
+  if(firstShow&&!unitPrices)loadUnitPrices().then(d=>{if(d)renderFeed();});
   // The map only ever got created inside detectLocation()'s geolocation
   // success callback — if a user denies the location prompt (extremely
   // common), findMap never gets initialized and there's nothing to click,
@@ -3664,6 +3667,145 @@ function ratesForBid(b){
   }
   return out.slice(0,4);
 }
+// ── Ballpark estimate ──
+// Quantity the bid states x MoDOT's going rate for that item. Only what can
+// be priced honestly is priced:
+//   - quantities are read from the bid's own words, never guessed;
+//   - sidewalk given only in feet needs a width, which is assumed (5 ft by
+//     default), labelled, and changeable in the detail view;
+//   - ramps given only as a count are listed as not counted: MoDOT prices
+//     ramps by area and a ramp's area varies too much to assume;
+//   - a quantity repeated in title and scope is counted once.
+const SIDEWALK_WIDTH_KEY="sidewalk_width_ft";
+const DEFAULT_SIDEWALK_WIDTH=5;
+const QTY_ITEMS=[
+  [/truncated\s*domes?|detectable\s*warnings?/i,"6081012"],
+  [/curb\s*ramps?|ramps?|curb\s*cuts?/i,"6081010"],
+  [/side\s*walks?|walkways?|pathways?/i,"6086004"],
+  [/curb\s*(?:and|&|\/)\s*gutters?/i,"6091052"],
+  [/\bcurbs?\b|\bcurbing\b/i,"6091010"],
+  [/driveways?|drive\s*approach(?:es)?|paved\s*approach(?:es)?/i,"6085008"],
+  [/gutters?/i,"6091042"],
+  [/medians?/i,"6083006"],
+];
+// Most specific unit first: "sq ft" contains "ft".
+const QTY_RE=new RegExp(
+  String.raw`(\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?)\s*(?:`+
+  String.raw`(s\.?\s?y\.?(?![a-z])|sq(?:uare|\.)?\s*(?:yds?|yards?)\.?(?![a-z]))|`+
+  String.raw`(s\.?\s?f\.?(?![a-z])|sq(?:uare|\.)?\s*(?:ft|feet|foot)\.?(?![a-z]))|`+
+  String.raw`(l\.?\s?f\.?(?![a-z])|lin(?:ear|\.)?\s*(?:ft|feet|foot)\.?(?![a-z])|feet(?![a-z])|foot(?![a-z])|ft\.?(?![a-z])))`,"gi");
+const RAMP_COUNT_RE=/(\d{1,3}(?:,\d{3})*)\s+(?:new\s+|concrete\s+|ada\s+|curb\s+)*(?:ramps?|curb\s*cuts?)\b/gi;
+// The item word nearest the quantity: the first one after it, or failing that
+// the last one before it. "1,200 LF of sidewalk plus 8 ADA ramps" is
+// sidewalk, though ramps rank first in QTY_ITEMS. At the same position the
+// longer phrase wins, so "curb and gutter" beats "curb".
+function nearestItem(s,fromEnd){
+  let best=null;
+  for(const [re,item] of QTY_ITEMS){
+    const g=new RegExp(re.source,"gi");
+    let m;
+    while((m=g.exec(s))){
+      const pos=fromEnd?s.length-(m.index+m[0].length):m.index;
+      if(!best||pos<best.pos||(pos===best.pos&&m[0].length>best.len))
+        best={pos,len:m[0].length,item};
+    }
+  }
+  return best&&best.item;
+}
+// {quantities:[{item, qty, unit:"SY"|"SF"|"LF", raw}], rampCounts:[n]}
+function extractQuantities(text){
+  const out=[],counts=[],seen=new Set();
+  // Clauses: a comma followed by three digits is a thousands separator. Not
+  // split at periods: "10,400 S.F. of sidewalk" and "approx. 2500 sq ft"
+  // put one inside the very phrase being read.
+  const clauses=String(text||"").split(/[;\n]|,(?!\d{3})/);
+  for(const clause of clauses){
+    QTY_RE.lastIndex=0;
+    let m;
+    while((m=QTY_RE.exec(clause))){
+      // Groups 2-4 are square yards, square feet, linear feet, in that order.
+      const unit=m[2]?"SY":m[3]?"SF":"LF";
+      const qty=parseFloat(m[1].replace(/,/g,""));
+      const after=clause.slice(m.index+m[0].length,m.index+m[0].length+60);
+      const before=clause.slice(Math.max(0,m.index-60),m.index);
+      const item=nearestItem(after,false)||nearestItem(before,true);
+      if(!item||!(qty>0))continue;
+      const key=`${item}|${qty}|${unit}`;
+      if(seen.has(key))continue;
+      seen.add(key);
+      out.push({item,qty,unit,raw:m[0].trim()});
+    }
+    RAMP_COUNT_RE.lastIndex=0;
+    while((m=RAMP_COUNT_RE.exec(clause))){
+      const n=parseInt(m[1].replace(/,/g,""),10);
+      if(n>0&&!counts.includes(n))counts.push(n);
+    }
+  }
+  // A ramp count only matters if no ramp area was given.
+  const rampArea=out.some(q=>q.item==="6081010");
+  return{quantities:out,rampCounts:rampArea?[]:counts};
+}
+function sidewalkWidth(){
+  const w=Number(store.get(SIDEWALK_WIDTH_KEY,DEFAULT_SIDEWALK_WIDTH));
+  return w>0&&w<=30?w:DEFAULT_SIDEWALK_WIDTH;
+}
+// A stated quantity in the unit MoDOT prices the item in, or null.
+function toItemUnit(q,itemUnit,width){
+  if(itemUnit==="sq yd"){
+    if(q.unit==="SY")return{n:q.qty};
+    if(q.unit==="SF")return{n:q.qty/9};
+    if(q.unit==="LF"&&q.item==="6086004")return{n:q.qty*width/9,assumedWidth:width};
+  }else if(itemUnit==="sq ft"){
+    if(q.unit==="SF")return{n:q.qty};
+    if(q.unit==="SY")return{n:q.qty*9};
+  }else if(itemUnit==="ft"){
+    if(q.unit==="LF")return{n:q.qty};
+  }
+  return null;
+}
+function ballpark(b,d,district,width){
+  const {quantities,rampCounts}=extractQuantities(`${(b&&b.title)||""}\n${(b&&b.scope)||""}`);
+  const lines=[],skipped=[];
+  for(const q of quantities){
+    const meta=d.items[q.item];
+    const r=meta&&latestRate(d,q.item,district);
+    if(!r){skipped.push(`${q.raw} ${meta?meta.name.toLowerCase():""}: no price for ${d.districts[district]}`);continue;}
+    const conv=toItemUnit(q,meta.unit,width);
+    if(!conv){skipped.push(`${q.raw} ${meta.name.toLowerCase()}: can't convert to ${meta.unit}`);continue;}
+    lines.push({item:q.item,name:meta.name,unit:meta.unit,stated:q,qty:conv.n,
+      assumedWidth:conv.assumedWidth,rate:r,subtotal:conv.n*r.avg,small:conv.n<r.qty*0.25});
+  }
+  rampCounts.forEach(n=>skipped.push(`${plural(n,"ramp")} (count only; MoDOT prices ramps by area)`));
+  const total=lines.reduce((t,l)=>t+l.subtotal,0);
+  return{lines,skipped,total,year:lines.length?lines[0].rate.year:null};
+}
+function ballparkChip(city,b){
+  if(!unitPrices||!bidIsMissouri(city,b))return"";
+  const est=ballpark(b,unitPrices,priceDistrict(unitPrices),sidewalkWidth());
+  return est.total>0
+    ?`<span class="chip est" title="Quantities in this posting at MoDOT's going rates">≈ ${esc(formatMoney(est.total))} ballpark</span>`
+    :"";
+}
+function ballparkHTML(b,d,district){
+  const width=sidewalkWidth();
+  const est=ballpark(b,d,district,width);
+  if(!est.lines.length&&!est.skipped.length)return"";
+  const n=(x)=>Math.round(x).toLocaleString();
+  const usesWidth=est.lines.some(l=>l.assumedWidth);
+  return`<div class="workspace-title" style="margin-top:1rem;">Ballpark — ${esc(d.districts[district])}, ${esc(String(est.year||Math.max(...d.years)))} averages</div>
+    ${est.lines.map(l=>`<div class="rate-row">
+      <div class="rate-main"><div class="rate-name">${esc(l.name)}</div>
+        <div class="rate-sub">${esc(l.stated.raw)}${l.assumedWidth?` × ${l.assumedWidth} ft wide (assumed)`:""}${
+          l.stated.unit==="LF"&&l.unit==="ft"?"":` ≈ ${n(l.qty)} ${esc(l.unit)}`} × ${fmtRate(l.rate.avg)}/${esc(l.unit)}${
+          l.small?` <span class="rate-thin">smaller than MoDOT's typical job, so expect a higher unit price</span>`:""}</div></div>
+      <div class="rate-val">$${n(l.subtotal)}</div></div>`).join("")}
+    ${est.total>0?`<div class="rate-row est-total"><div class="rate-name">Ballpark for these items</div><div class="rate-val">≈ $${n(est.total)}</div></div>`:""}
+    ${b.value?`<div class="rate-note">Posted value: <b>${esc(b.value)}</b></div>`:""}
+    ${est.skipped.length?`<div class="rate-note">Not counted: ${est.skipped.map(esc).join("; ")}.</div>`:""}
+    ${usesWidth?`<div class="rate-note est-width">Sidewalk width <input id="est-width" type="number" min="1" max="30" step="0.5" value="${esc(String(width))}" aria-label="Sidewalk width in feet"> ft</div>`:""}
+    <div class="rate-note">Only the quantities shown, at MoDOT's average bid. Removal, mobilization, traffic control and anything else the job needs aren't included.</div>`;
+}
+
 async function fillDetailRates(city,b){
   const box=document.getElementById("detail-rates");
   if(!box||!bidIsMissouri(city,b))return;
@@ -3675,10 +3817,16 @@ async function fillDetailRates(city,b){
   const district=priceDistrict(d);
   const rows=items.map(i=>rateRow(d,i,district,false)).join("");
   if(!rows)return;
-  box.innerHTML=`<div class="workspace-title" style="margin-top:1rem;">Going rates — ${esc(d.districts[district])}</div>
+  box.innerHTML=`${ballparkHTML(b,d,district)}
+    <div class="workspace-title" style="margin-top:1rem;">Going rates — ${esc(d.districts[district])}</div>
     ${rows}
     <div class="rate-note">MoDOT state highway averages. <a href="#" id="detail-rates-all">Change district or see all items</a></div>`;
   document.getElementById("detail-rates-all").onclick=(e)=>{e.preventDefault();openRates();};
+  const w=document.getElementById("est-width");
+  if(w)w.onchange=()=>{
+    const v=Number(w.value);
+    if(v>0&&v<=30){store.set(SIDEWALK_WIDTH_KEY,v);fillDetailRates(city,b);renderFeed();}
+  };
 }
 
 // ── Home ──
@@ -3889,6 +4037,7 @@ function bidCard(city,b){
       <div class="bid-meta">
         <span class="chip">${esc(city)}${Number.isFinite(b.miles)?` \u00b7 ${b.miles} mi`:""}</span>
         ${b.value?`<span class="chip value">${esc(b.value)}</span>`:""}
+        ${ballparkChip(city,b)}
         ${deadlineChip}
         ${pipeline[id]?`<span class="chip status-${esc(pipeline[id])}">${esc(String(pipeline[id]).toUpperCase())}</span>`:""}
         ${notes[id]?`<span class="chip">Note</span>`:""}

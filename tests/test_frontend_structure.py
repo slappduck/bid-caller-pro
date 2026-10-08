@@ -1558,3 +1558,16 @@ class HomeScreenTests(unittest.TestCase):
         # each one would zero the "New bids" count an hour into a session.
         i = self.app.index("prevVisitAt=store.get(LAST_VISIT_KEY")
         self.assertIn("firstShow", self.app[i - 200:i])
+
+
+class NoRegexOlderSafariCannotParseTests(unittest.TestCase):
+    """A regex literal is compiled when app.js is parsed, so one construct an
+    older iOS Safari doesn't support takes the whole app down there, not just
+    the feature using it. Lookbehind arrived in Safari 16.4. Named groups are
+    older, but banned with it because "(?<" is the shared prefix and the
+    app's own comments already promise none of either."""
+
+    def test_no_lookbehind_or_named_groups_in_app_js(self):
+        app = _read(APP_JS)
+        for bad in ("(?<=", "(?<!", "(?<"):
+            self.assertNotIn(bad, app, f"{bad} found in app.js")

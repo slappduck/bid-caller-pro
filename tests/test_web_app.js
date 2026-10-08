@@ -1319,6 +1319,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
       const bids = [
         { title: "City Hall ADA Ramp", scope: "4 ADA ramps near the city hall entrance", deadline: "2099-01-01", status: "open", url: "https://e.gov/1" },
         { title: "Main St Curb and Gutter", scope: "800 LF curb and gutter", deadline: "2099-01-01", status: "open", url: "https://e.gov/2" },
+        { title: "Elm St Sidewalk", scope: "1,200 LF sidewalk, 4 ADA ramps", value: "$120k", deadline: "2099-01-01", status: "open", url: "https://e.gov/3" },
       ];
       localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
       localStorage.setItem("last_feed", JSON.stringify({ "Aurora, MO": bids, "Topeka, KS": [bids[0]] }));
@@ -1367,6 +1368,36 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     const curbDetail = await detailFor("Aurora, MO", 1);
     check("a curb-and-gutter bid shows curb and gutter, not bare curb",
           curbDetail.includes("Curb and gutter") && !curbDetail.includes("Concrete curb, 6"), curbDetail.slice(0, 160));
+    // ── Ballpark: stated quantity x the district's average, nothing guessed ──
+    const cg = latest("6091052", "SW")[0], sw = latest("6086004", "SW")[0];
+    const whole = (x) => Math.round(x).toLocaleString("en-US");
+    const k = (n) => n >= 1000000 ? "$" + (n / 1e6).toFixed(n % 1e6 ? 1 : 0) + "M"
+      : n >= 1000 ? "$" + (n / 1000).toFixed(n % 1000 ? 1 : 0) + "k" : "$" + Math.round(n);
+    check("curb-and-gutter detail prices 800 ft at the SW average",
+          curbDetail.includes(`$${whole(800 * cg)}`), curbDetail.slice(0, 300));
+    await page.evaluate(() => { closeModal(); switchScreen("feed"); });
+    await page.waitForTimeout(400);
+    const cards = await page.$$eval("#feed-list .bid", (els) => els.map((e) => e.textContent));
+    const cgCard = cards.find((t) => t.includes("Main St Curb and Gutter")) || "";
+    check("the bid card carries the ballpark", cgCard.includes(`\u2248 ${k(800 * cg)} ballpark`), cgCard.slice(0, 200));
+    const rampCard = cards.find((t) => t.includes("City Hall ADA Ramp") && !t.includes("Topeka")) || "";
+    check("a bid with no quantities gets no ballpark", !/ballpark/.test(rampCard));
+
+    const swDetail = await detailFor("Aurora, MO", 2);
+    check("sidewalk in feet uses the stated width assumption",
+          swDetail.includes("5\u00a0ft wide (assumed)") && swDetail.includes(`$${whole(1200 * 5 / 9 * sw)}`), swDetail.slice(0, 300));
+    check("a ramp count is listed as not counted, not guessed",
+          /Not counted: 4 ramps/.test(swDetail));
+    check("the posted value is shown beside the ballpark", swDetail.includes("Posted value") && swDetail.includes("$120k"));
+    await page.fill("#est-width", "4");
+    await page.dispatchEvent("#est-width", "change");
+    await page.waitForTimeout(400);
+    const sw4 = await page.textContent("#detail-rates");
+    check("changing the width recalculates", sw4.includes(`$${whole(1200 * 4 / 9 * sw)}`), sw4.slice(0, 300));
+    await page.fill("#est-width", "5");
+    await page.dispatchEvent("#est-width", "change");
+    await page.waitForTimeout(200);
+
     const ksDetail = await detailFor("Topeka, KS", 0);
     check("a bid outside Missouri shows no Missouri prices", ksDetail.trim() === "");
     check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));

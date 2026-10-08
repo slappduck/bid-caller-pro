@@ -308,6 +308,11 @@ body{font-family:var(--ui);background:radial-gradient(ellipse 120% 60% at 50% -1
 .rate-note{color:var(--text3);font-size:var(--fs-xs);line-height:1.5;margin-top:0.6rem;}
 .rate-note a{color:var(--text2);}
 
+.chip.est{color:var(--accent);border:1px solid rgba(245,158,11,0.35);background:rgba(245,158,11,0.08);font-weight:700;}
+.est-total{border-top:1px solid var(--border-strong,var(--border));}
+.est-total .rate-name{font-weight:800;}
+.est-width input{width:4.2rem;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);padding:0.2rem 0.4rem;font-family:var(--ui);font-size:var(--fs-sm);}
+
 /* ── Home ── */
 .home-review{padding:0.6rem 0;border-bottom:1px solid var(--border);}
 .home-review:last-of-type{border-bottom:none;}
