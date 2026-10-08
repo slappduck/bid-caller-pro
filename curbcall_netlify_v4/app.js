@@ -3531,6 +3531,156 @@ function renderScanSummary(){
   document.getElementById("scan-summary-view-btn").onclick=()=>goTo("feed");
 }
 
+// ── Going rates (MoDOT unit bid prices) ──
+// Every number here is one MoDOT printed in its yearly Unit Bid Price Book
+// (built by tools/build_unit_prices.py): the average, low and high of every
+// bid it received for that item on state highway jobs in a district. An
+// average alone misleads -- one 2025 sidewalk line ran $7 to $1,269 -- so it
+// is never shown without the range and the number of bids behind it.
+const PRICE_DISTRICT_KEY="price_district";
+const RATE_THIN_BIDS=5;
+const HEADLINE_RATES=["6081010","6081012","6086004","6091052"];
+let unitPrices=null,unitPricesLoading=null;
+function loadUnitPrices(){
+  if(unitPrices)return Promise.resolve(unitPrices);
+  if(!unitPricesLoading){
+    unitPricesLoading=fetch("/mo_unit_prices.json")
+      .then(r=>r.ok?r.json():null)
+      .then(d=>{unitPrices=d&&d.prices?d:null;if(!unitPrices)unitPricesLoading=null;return unitPrices;})
+      .catch(()=>{unitPricesLoading=null;return null;});
+  }
+  return unitPricesLoading;
+}
+function priceDistrict(d){
+  const k=store.get(PRICE_DISTRICT_KEY,"STATEWIDE");
+  return d&&d.districts&&d.districts[k]?k:"STATEWIDE";
+}
+// The newest year this item has a price for in this district.
+function latestRate(d,item,district){
+  const byYear=d.prices[item]&&d.prices[item][district];
+  if(!byYear)return null;
+  const year=Object.keys(byYear).sort().pop();
+  const [avg,low,high,bids,qty]=byYear[year];
+  return{year,avg,low,high,bids,qty};
+}
+function fmtRate(n){
+  return "$"+(n>=1000?Math.round(n).toLocaleString():n.toFixed(2));
+}
+function rateRow(d,item,district,withTrend){
+  const r=latestRate(d,item,district);
+  if(!r)return"";
+  const meta=d.items[item];
+  // Non-breaking, so "sq yd" never splits across two lines.
+  const unit=meta.unit.replace(/ /g,"\u00a0");
+  const thin=r.bids<RATE_THIN_BIDS;
+  const years=withTrend?Object.keys(d.prices[item][district]).sort():[];
+  return`<div class="rate-row">
+    <div class="rate-main">
+      <div class="rate-name">${esc(meta.name)}</div>
+      <div class="rate-sub">${fmtRate(r.low)}–${fmtRate(r.high)} · ${plural(r.bids,"bid")}
+        · typical job ~${Math.round(r.qty).toLocaleString()}\u00a0${esc(unit)}${thin?` <span class="rate-thin">few bids — rough guide</span>`:""}</div>
+      ${years.length>1?`<div class="rate-trend">${years.map(y=>`<span>${esc(y)} <b>${fmtRate(d.prices[item][district][y][0])}</b></span>`).join("")}</div>`:""}
+    </div>
+    <div class="rate-val">${fmtRate(r.avg)}<span>/${esc(unit)}</span></div>
+  </div>`;
+}
+function districtSelect(d,id){
+  const cur=priceDistrict(d);
+  return`<select class="rate-district" id="${id}" aria-label="MoDOT district">${
+    Object.keys(d.districts).map(k=>`<option value="${esc(k)}"${k===cur?" selected":""}>${esc(d.districts[k])}</option>`).join("")}</select>`;
+}
+function wireDistrictSelect(id,rerender){
+  const sel=document.getElementById(id);
+  if(sel)sel.onchange=()=>{store.set(PRICE_DISTRICT_KEY,sel.value);rerender();};
+}
+function rateFootnote(d,district){
+  const y=Math.max(...d.years);
+  return`<div class="rate-note">Averages of every bid MoDOT received in ${y} on state highway jobs${
+    district==="STATEWIDE"?" across Missouri":" in this district"}. City jobs can run different. Use it as a benchmark, not a quote.
+    <a href="${esc(safeUrl(d.source_url)||"")}" target="_blank" rel="noopener noreferrer">Source: ${esc(d.source)}</a></div>`;
+}
+async function renderHomeRates(){
+  const card=document.getElementById("home-rates");
+  if(!card)return;
+  const d=await loadUnitPrices();
+  if(!d){card.style.display="none";return;}
+  const district=priceDistrict(d);
+  card.innerHTML=`<div class="account-email hdr-ic" style="font-size:var(--fs-base);margin-bottom:0.5rem;"><svg class="icon-svg"><use href="#i-activity"/></svg>Going rates in Missouri</div>
+    ${districtSelect(d,"home-rate-district")}
+    ${HEADLINE_RATES.map(i=>rateRow(d,i,district,false)).join("")}
+    <button class="btn-ghost" id="home-rates-all" style="margin-top:0.6rem;">All ${Object.keys(d.items).length} items + 5-year trend</button>
+    ${rateFootnote(d,district)}`;
+  card.style.display="";
+  wireDistrictSelect("home-rate-district",renderHomeRates);
+  document.getElementById("home-rates-all").onclick=()=>openRates();
+}
+async function openRates(){
+  const mc=document.getElementById("modal-content");
+  const d=await loadUnitPrices();
+  if(!d){toast("Couldn't load prices right now");return;}
+  const district=priceDistrict(d);
+  // Most-bid items first: the ones with the most behind their number.
+  const items=Object.keys(d.items)
+    .map(i=>[i,latestRate(d,i,district)]).filter(([,r])=>r)
+    .sort((a,b)=>b[1].bids-a[1].bids).map(([i])=>i);
+  mc.innerHTML=`<div class="sheet-head"><h2>Going rates</h2>
+      <div class="sheet-sub"><span class="chip">MoDOT bid prices, ${Math.min(...d.years)}–${Math.max(...d.years)}</span></div></div>
+    ${districtSelect(d,"rates-district")}
+    ${items.length?items.map(i=>rateRow(d,i,district,true)).join("")
+      :`<div class="account-status">No prices for this district.</div>`}
+    ${rateFootnote(d,district)}
+    <div class="modal-actions"><button class="ma-ghost" onclick="closeModal();">Close</button></div>`;
+  wireDistrictSelect("rates-district",()=>{openRates();renderHomeRates();});
+  document.getElementById("modal-back").classList.add("open");
+  document.getElementById("modal").classList.add("open");
+}
+// Which items a bid is about, from its own words. Each rule's words are used
+// up once matched, so "curb and gutter" doesn't also count as a bare curb
+// job and a gutter job, and "curb ramp" isn't a curb job. (Done by removing
+// the matched text rather than with lookbehind, which older iOS Safari
+// can't parse -- one such regex would take the whole app down there.)
+const RATE_MATCH=[
+  [/curb\s*ramps?|ramps?|\bada\b|curb\s*cuts?|truncated\s*domes?|detectable\s*warnings?/gi,["6081010","6081012"]],
+  [/sidewalks?|walkways?|pathways?/gi,["6086004"]],
+  [/curb\s*(?:and|&|\/)\s*gutters?/gi,["6091052"]],
+  [/\bcurbs?\b|\bcurbing\b/gi,["6091010"]],
+  // Not "entrance": "4 ADA ramps near the city hall entrance" is a ramp job.
+  [/driveways?|drive\s*approach(?:es)?|paved\s*approach(?:es)?/gi,["6085008"]],
+  [/gutters?/gi,["6091042"]],
+  [/medians?/gi,["6083006"]],
+];
+function bidIsMissouri(city,b){
+  return /,\s*MO\b/i.test(String(city||""))||String((b&&b.state)||"").toUpperCase()==="MO";
+}
+function ratesForBid(b){
+  let text=` ${(b&&b.title)||""} ${(b&&b.scope)||""} `;
+  const out=[];
+  for(const [re,items] of RATE_MATCH){
+    re.lastIndex=0;
+    if(!re.test(text))continue;
+    items.forEach(i=>{if(!out.includes(i))out.push(i);});
+    re.lastIndex=0;
+    text=text.replace(re," ");
+  }
+  return out.slice(0,4);
+}
+async function fillDetailRates(city,b){
+  const box=document.getElementById("detail-rates");
+  if(!box||!bidIsMissouri(city,b))return;
+  const items=ratesForBid(b);
+  if(!items.length)return;
+  const d=await loadUnitPrices();
+  // The sheet may have been closed or replaced while this loaded.
+  if(!d||!document.getElementById("detail-rates"))return;
+  const district=priceDistrict(d);
+  const rows=items.map(i=>rateRow(d,i,district,false)).join("");
+  if(!rows)return;
+  box.innerHTML=`<div class="workspace-title" style="margin-top:1rem;">Going rates — ${esc(d.districts[district])}</div>
+    ${rows}
+    <div class="rate-note">MoDOT state highway averages. <a href="#" id="detail-rates-all">Change district or see all items</a></div>`;
+  document.getElementById("detail-rates-all").onclick=(e)=>{e.preventDefault();openRates();};
+}
+
 // ── Home ──
 // Every number here is something the app already has: the feed, the
 // pipeline, approved reviews (public by RLS), the referral link. Nothing is
@@ -3592,6 +3742,7 @@ function renderHome(){
   const soon=document.getElementById("home-soon");
   if(soon)attachBidEvents(soon);
   loadHomeReviews();
+  renderHomeRates();
   loadReferralCard("home-referral-body");
 }
 // Approved reviews only -- RLS exposes nothing else to this query, and the
@@ -3926,6 +4077,7 @@ function openDetail(city,b){
         :""}</span></div>`:""}
     ${holderBlock(b)}
     ${row("Scope of Work",b.scope)}
+    <div id="detail-rates"></div>
     <div class="detail-grid">
       ${row("Posted",b.published)}
       ${row("Bid Number",b.bid_number)}
@@ -3984,6 +4136,7 @@ function openDetail(city,b){
     };
   });
 
+  fillDetailRates(city,b);
   document.getElementById("modal-back").classList.add("open");
   document.getElementById("modal").classList.add("open");
   document.getElementById("bid-value").addEventListener("blur",()=>{

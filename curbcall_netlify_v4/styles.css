@@ -293,6 +293,21 @@ body{font-family:var(--ui);background:radial-gradient(ellipse 120% 60% at 50% -1
 .stat-box .n{font-size:var(--fs-2xl);font-weight:800;color:var(--accent);}
 .stat-box .l{font-size:var(--fs-xs);color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-top:0.15rem;}
 
+/* ── Going rates ── */
+.rate-district{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:0.55rem 0.7rem;color:var(--text);font-size:var(--fs-base);font-family:var(--ui);margin-bottom:0.3rem;}
+.rate-row{display:flex;justify-content:space-between;align-items:flex-start;gap:0.8rem;padding:0.6rem 0;border-bottom:1px solid var(--border);}
+.rate-row:last-of-type{border-bottom:none;}
+.rate-main{min-width:0;}
+.rate-name{color:var(--text);font-size:var(--fs-base);font-weight:600;}
+.rate-sub{color:var(--text3);font-size:var(--fs-sm);margin-top:0.15rem;}
+.rate-val{color:var(--accent);font-weight:800;font-size:var(--fs-lg);white-space:nowrap;text-align:right;}
+.rate-val span{color:var(--text3);font-weight:500;font-size:var(--fs-sm);}
+.rate-thin{color:var(--accent);font-weight:700;}
+.rate-trend{display:flex;flex-wrap:wrap;gap:0.3rem 0.8rem;margin-top:0.3rem;color:var(--text3);font-size:var(--fs-xs);}
+.rate-trend b{color:var(--text2);font-weight:700;}
+.rate-note{color:var(--text3);font-size:var(--fs-xs);line-height:1.5;margin-top:0.6rem;}
+.rate-note a{color:var(--text2);}
+
 /* ── Home ── */
 .home-review{padding:0.6rem 0;border-bottom:1px solid var(--border);}
 .home-review:last-of-type{border-bottom:none;}

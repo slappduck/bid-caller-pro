@@ -1292,6 +1292,87 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     }
   }
 
+  // ── Going rates ──
+  // Every figure shown must be one MoDOT printed, read from the committed
+  // data file -- so the checks compare against that file, not hard-coded
+  // numbers that would go stale when next year's book is added.
+  console.log("\nGoing rates show MoDOT's real prices, with their range");
+  {
+    const rates = JSON.parse(fs.readFileSync(path.join(ROOT, "mo_unit_prices.json"), "utf8"));
+    const latest = (item, d) => {
+      const by = rates.prices[item][d]; const y = Object.keys(by).sort().pop(); return by[y];
+    };
+    const money = (n) => "$" + (n >= 1000 ? Math.round(n).toLocaleString("en-US") : n.toFixed(2));
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const host = new URL(route.request().url()).hostname;
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") {
+        return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      }
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      const bids = [
+        { title: "City Hall ADA Ramp", scope: "4 ADA ramps near the city hall entrance", deadline: "2099-01-01", status: "open", url: "https://e.gov/1" },
+        { title: "Main St Curb and Gutter", scope: "800 LF curb and gutter", deadline: "2099-01-01", status: "open", url: "https://e.gov/2" },
+      ];
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      localStorage.setItem("last_feed", JSON.stringify({ "Aurora, MO": bids, "Topeka, KS": [bids[0]] }));
+      localStorage.setItem("price_district", JSON.stringify("SW"));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(900);
+
+    const card = await page.textContent("#home-rates");
+    const ramp = latest("6081010", "SW");
+    check("Home shows the SW curb-ramp average MoDOT printed", card.includes(money(ramp[0])), card.slice(0, 200));
+    check("...with its low-high range and bid count beside it",
+          card.includes(`${money(ramp[1])}–${money(ramp[2])}`) && card.includes(`${ramp[3]} bids`));
+    check("the source is named", /MoDOT Unit Bid Price Books/.test(card));
+
+    await page.selectOption("#home-rate-district", "STATEWIDE");
+    await page.waitForTimeout(300);
+    const statewide = await page.textContent("#home-rates");
+    check("switching district switches the numbers", statewide.includes(money(latest("6081010", "STATEWIDE")[0])));
+    check("the district choice is remembered",
+          (await page.evaluate(() => localStorage.getItem("price_district"))) === '"STATEWIDE"');
+    await page.selectOption("#home-rate-district", "SW");
+    await page.waitForTimeout(300);
+
+    await page.evaluate(() => openRates());
+    await page.waitForTimeout(400);
+    const sheet = await page.textContent("#modal-content");
+    const rows = await page.locator("#modal-content .rate-row").count();
+    check("the full sheet lists every SW item MoDOT priced",
+          rows === Object.keys(rates.prices).filter((i) => rates.prices[i].SW).length, `${rows} rows`);
+    check("each year of the trend is shown", rates.years.every((y) => sheet.includes(String(y))));
+    const thin = Object.keys(rates.prices).some((i) => rates.prices[i].SW && latest(i, "SW")[3] < 5);
+    check("a price on few bids is flagged as a rough guide", !thin || sheet.includes("few bids"));
+
+    const detailFor = async (city, i) => {
+      await page.evaluate(([c, n]) => { closeModal(); openDetail(c, bidData[c][n]); }, [city, i]);
+      await page.waitForTimeout(400);
+      return page.textContent("#detail-rates");
+    };
+    const rampDetail = await detailFor("Aurora, MO", 0);
+    check("an ADA ramp bid shows ramp and dome prices",
+          rampDetail.includes("Concrete curb ramp") && rampDetail.includes("Truncated domes"), rampDetail.slice(0, 160));
+    check("\"near the city hall entrance\" is not read as a driveway job", !rampDetail.includes("driveway"));
+    const curbDetail = await detailFor("Aurora, MO", 1);
+    check("a curb-and-gutter bid shows curb and gutter, not bare curb",
+          curbDetail.includes("Curb and gutter") && !curbDetail.includes("Concrete curb, 6"), curbDetail.slice(0, 160));
+    const ksDetail = await detailFor("Topeka, KS", 0);
+    check("a bid outside Missouri shows no Missouri prices", ksDetail.trim() === "");
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   await browser.close();
   server.close();
   console.log(failures ? `\n${failures} check(s) FAILED` : "\nAll checks passed");
