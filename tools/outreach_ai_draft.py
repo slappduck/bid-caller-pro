@@ -59,11 +59,46 @@ def voice():
         return f.read()
 
 
+# The number this whole pitch rests on counts AGENCIES that post this kind of
+# work -- not open bids. The Sep 23-24 batch went out with subjects like "78
+# open bids near Davie" over bodies that correctly said 78 agencies: ten
+# emails whose subject claimed something the product cannot promise, which is
+# exactly the misleading subject line CAN-SPAM prohibits. The voice file
+# already said "state plainly what this is" and the model did it anyway, so
+# this is checked in code, not asked for in the prompt.
+_COUNT_AS_WORK = (r"(?:open\s+|active\s+|new\s+|current\s+|live\s+)?"
+                  r"(?:bids?|jobs?|projects?|opportunities|contracts?|postings?)")
+# A draft saved through the Gmail API (the Gmail connector) has every link
+# rewritten to google.com/url?q=...&ust=... Every one of the first 24 emails
+# went out that way, so each click landed on Google's "Redirect Notice" page
+# instead of ours. See OUTREACH.md, "Before you press Send".
+_WRAPPED_LINK = re.compile(r"google\.[a-z.]+/url\?", re.I)
+
+
+def honesty_problem(subject, body, agencies):
+    """Why this draft must not go out as written, or "" if it may.
+
+    Held rather than repaired: rewording a subject is a judgement call, and a
+    held draft costs a day while a misleading one costs the lead.
+    """
+    n = re.escape(str(agencies))
+    for where, text in (("subject", subject), ("body", body)):
+        if re.search(rf"(?<![\d,]){n}\s+{_COUNT_AS_WORK}\b", text or "", re.I):
+            return (f"{where} calls the {agencies} agencies open bids/jobs -- "
+                    "that count is agencies, not open work")
+    if re.search(rf"\b\d[\d,]*\s+open\s+{_COUNT_AS_WORK}\b", subject or "", re.I):
+        return "subject promises a count of open bids, which the draft has no source for"
+    if _WRAPPED_LINK.search(body or ""):
+        return "body carries a google.com/url-wrapped link instead of the real one"
+    return ""
+
+
 def facts_block(row, agencies, nearest_mi, researched):
     """The only material the model is allowed to draw specifics from."""
     lines = [f"- {agencies} bid-posting agencies within {RADIUS} miles of "
              f"{row['city']}, {row['state']} (verified live, not from the "
-             "prospect's site)"]
+             "prospect's site). This counts AGENCIES, not open bids -- never "
+             "call it bids, jobs or projects, in the subject or the body"]
     if nearest_mi is not None:
         lines.append(f"- nearest one is {nearest_mi} miles away")
     if researched.get("founded"):
@@ -179,6 +214,10 @@ def main():
             held.append((row, f"no material to draft from ({researched['problem']})"))
             continue
         subject, body = draft_email(client, row, n, data.get("nearest_mi"), researched)
+        problem = honesty_problem(subject, body, n)
+        if problem:
+            held.append((row, f"draft not usable: {problem}"))
+            continue
         out = os.path.join(args.dest, f"{row['slug']}.txt")
         with open(out, "w", encoding="utf-8") as f:
             f.write(f"To: {row['email']}\nSubject: {subject}\n\n{body}\n\n{sig}\n")

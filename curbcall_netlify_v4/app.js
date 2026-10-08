@@ -4828,6 +4828,8 @@ async function renderAdminPanel(){
 
     <div class="account-email hdr-ic" style="font-size:var(--fs-base);margin-bottom:0.5rem;"><svg class="icon-svg"><use href="#i-mail"/></svg>Campaign Drafts</div>
     ${drafts.drafts.length?drafts.drafts.map(d=>`
+      ${d.preview?`<details style="margin:0.2rem 0 0.4rem;"><summary class="account-status" style="cursor:pointer;">Read it first: to ${esc((d.to||[]).join(", "))}${d.recipients>(d.to||[]).length?` and ${d.recipients-(d.to||[]).length} more`:""}</summary>
+        <pre style="white-space:pre-wrap;font-family:inherit;font-size:var(--fs-sm);color:var(--text2);background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:0.7rem;margin:0.4rem 0;">Subject: ${esc(d.subject||"")}\n\n${esc(d.preview)}</pre></details>`:""}
       <div class="detail-row" style="align-items:center;">
         <div class="detail-label" style="flex:1;">${esc(d.subject||"Untitled")} &mdash; ${plural(d.recipients,"recipient")}</div>
         <button class="btn-ghost" data-draft-send="${esc(d.draft_id)}" style="color:var(--green);border-color:var(--green);padding:0.3rem 0.7rem;font-size:var(--fs-sm);flex-shrink:0;">Send</button>

@@ -3381,9 +3381,18 @@ CAMPAIGN_MAX_PER_REQUEST = int(os.environ.get("CAMPAIGN_MAX_PER_REQUEST", "200")
 CAMPAIGN_PAUSE_SEC = float(os.environ.get("CAMPAIGN_PAUSE_SEC", "0.35"))
 _SUPPRESSION_KEY = "bidcaller:email_suppression"
 _DRAFTS_KEY = "bidcaller:campaign_drafts"
+# Who was actually mailed, and when. Without it nothing on the server can say
+# whether an address already got today's follow-up, so a scheduled drafter
+# would have no way to avoid mailing the same contractor twice.
+_SENT_LOG_KEY = "bidcaller:campaign_sent_log"
+SENT_LOG_MAX = 2000
 # A draft that's been sitting for a day is probably forgotten, and approving
 # a forgotten campaign is how the wrong thing goes out. They expire.
 DRAFT_TTL_HOURS = int(os.environ.get("CAMPAIGN_DRAFT_TTL_HOURS", "24"))
+# Where a recipient's reply lands. Without it a reply goes to FROM_EMAIL,
+# which is a sending address nobody reads (its default is Resend's own
+# onboarding@resend.dev) -- the one prospect who writes back would vanish.
+CAMPAIGN_REPLY_TO = os.environ.get("CAMPAIGN_REPLY_TO", "").strip()
 
 
 # Merge fields, written {{like_this}}. A campaign that cannot say "3 open
@@ -3671,10 +3680,13 @@ def campaign_approve():
         unsub = _unsub_url(addr)
         ok = _send_email(addr, draft["subject"],
                          _render_campaign(draft["body"], addr, variables),
+                         reply_to=CAMPAIGN_REPLY_TO or SUPPORT_EMAIL or None,
                          headers={"List-Unsubscribe": f"<{unsub}>",
                                   "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"})
         sent += 1 if ok else 0
         failed += 0 if ok else 1
+        if ok:
+            _log_sent(addr, draft["subject"])
         time.sleep(CAMPAIGN_PAUSE_SEC)  # don't burst a provider into rate-limiting us
 
     # Consume the draft either way, so an approval can't be replayed into a
@@ -3701,12 +3713,48 @@ def campaign_drafts():
     if discard:
         drafts.pop(discard, None)
         _save_drafts(drafts)
+    def _summary(k, v):
+        stored = v.get("recipients") or []
+        pairs = [(r[0], r[1]) if isinstance(r, (list, tuple)) else (r, {})
+                 for r in stored]
+        first = pairs[0] if pairs else None
+        return {"draft_id": k, "subject": v.get("subject", ""),
+                "recipients": len(pairs),
+                "to": [a for a, _ in pairs[:10]],
+                # The exact text the first recipient gets, footer and all. The
+                # admin panel's Send button used to show only the subject and a
+                # count -- approving a cold email nobody could read.
+                "preview": (_render_campaign(v.get("body", ""), first[0], first[1])
+                            if first else ""),
+                "created_at": v.get("created_at", "")}
+
     return jsonify({"ok": True, "drafts": [
-        {"draft_id": k, "subject": v.get("subject", ""),
-         "recipients": len(v.get("recipients") or []),
-         "created_at": v.get("created_at", "")}
+        _summary(k, v)
         for k, v in sorted(drafts.items(), key=lambda kv: kv[1].get("created_at", ""))
     ]})
+
+
+def _log_sent(addr, subject):
+    try:
+        log = kv_backend.get(_SENT_LOG_KEY, None)
+        log = log if isinstance(log, list) else []
+        log.append({"email": addr, "subject": subject,
+                    "at": datetime.datetime.now().isoformat(timespec="seconds")})
+        kv_backend.set(_SENT_LOG_KEY, log[-SENT_LOG_MAX:])
+    except Exception:
+        pass  # the mail went; a lost log line must not report it as failed
+
+
+@app.route("/campaign/sent", methods=["POST"])
+def campaign_sent():
+    """Every address a campaign actually reached, newest last. Admin only."""
+    data = request.get_json(force=True, silent=True) or {}
+    if not _admin_configured():
+        return jsonify({"ok": False, "reason": "admin_not_configured"}), 503
+    if not _admin_ok(data.get("admin_token")):
+        return jsonify({"ok": False, "reason": "unauthorized"}), 403
+    log = kv_backend.get(_SENT_LOG_KEY, None)
+    return jsonify({"ok": True, "sent": log if isinstance(log, list) else []})
 
 
 @app.route("/campaign/suppression", methods=["POST"])

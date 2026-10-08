@@ -205,5 +205,44 @@ class MainGuardTests(unittest.TestCase):
         self.assertIn("Josh\n123 Main St", text)
 
 
+class HonestyGuardTests(unittest.TestCase):
+    """Ten emails went out as "N open bids near <town>" when N counted
+    agencies, and all 24 carried google.com/url-wrapped links."""
+
+    def test_agency_count_called_open_bids_in_the_subject_is_caught(self):
+        self.assertIn("subject", A.honesty_problem("78 open bids near Davie", "x", 78))
+
+    def test_agency_count_called_jobs_in_the_body_is_caught(self):
+        self.assertIn("body", A.honesty_problem("Hi", "There are 415 jobs near you.", 415))
+
+    def test_any_open_bid_count_in_a_subject_is_caught(self):
+        self.assertTrue(A.honesty_problem("12 open bids this week", "x", 78))
+
+    def test_the_honest_phrasing_passes(self):
+        self.assertEqual(A.honesty_problem(
+            "78 agencies posting curb work near Davie",
+            "There are 78 agencies posting sidewalk work within 125 miles.", 78), "")
+
+    def test_a_different_number_next_to_bids_is_not_confused_for_the_count(self):
+        # "2001" is a year, not the 78.
+        self.assertEqual(A.honesty_problem("Hi", "Bidding since 2001 jobs aside, 78 agencies.", 78), "")
+
+    def test_a_google_wrapped_link_is_caught(self):
+        body = "See https://www.google.com/url?q=https://curbcallpro.com/go/x&ust=1"
+        self.assertIn("google", A.honesty_problem("Hi", body, 78))
+
+
+class HonestyGuardInMainTests(MainGuardTests):
+    def test_a_draft_calling_agencies_open_bids_is_held_not_written(self):
+        A.PROSPECTS = write_csv([row("acme")])
+        A._client = lambda: FakeClient("Subject: 51 open bids near Columbia\n\nBody.")
+        self.run_main(["--dest", self.dest])
+        self.assertEqual(os.listdir(self.dest), [])
+
+    def test_the_prompt_tells_the_model_the_number_is_agencies(self):
+        facts = A.facts_block(row("acme"), 51, None,
+                              {"founded": None, "specialties": [], "signals": {}})
+        self.assertIn("AGENCIES, not open bids", facts)
+
 if __name__ == "__main__":
     unittest.main()
