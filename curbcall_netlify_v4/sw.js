@@ -15,8 +15,8 @@
 //
 // API calls (Render backend, Supabase REST) and map tiles are still never
 // cached — bid data, auth, and the map must never be served stale.
-const SHELL_CACHE = "curbcall-shell-v86";
-const ASSET_CACHE = "curbcall-assets-v86";
+const SHELL_CACHE = "curbcall-shell-v87";
+const ASSET_CACHE = "curbcall-assets-v87";
 const KEEP = [SHELL_CACHE, ASSET_CACHE];
 
 // The published Terms and Privacy Policy, which must never be served stale.
@@ -43,8 +43,15 @@ const SHELL_FILES = [
   "favicon.ico",
   "icon-192.png",
   "icon-512.png",
-  // Going rates: read on a job site as often as anywhere, so kept offline.
-  "mo_unit_prices.json"
+  // Going rates and bid results: read on a job site as often as anywhere,
+  // so kept offline. One small file per state.
+  "rates/index.json",
+  "rates/mo.json",
+  "rates/fl.json",
+  "rates/or.json",
+  "rates/mn.json",
+  "rates/ok.json",
+  "results/mo.json"
 ];
 
 // Must stay in sync with the <script>/<link> tags in app.html. Version-pinned
