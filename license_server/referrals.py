@@ -292,6 +292,11 @@ CAMPAIGN_MAX_PER_REQUEST = int(os.environ.get("CAMPAIGN_MAX_PER_REQUEST", "200")
 CAMPAIGN_PAUSE_SEC = float(os.environ.get("CAMPAIGN_PAUSE_SEC", "0.35"))
 _SUPPRESSION_KEY = "bidcaller:email_suppression"
 _DRAFTS_KEY = "bidcaller:campaign_drafts"
+# Who was actually mailed, and when. Without it nothing on the server can say
+# whether an address already got today's follow-up, so a scheduled drafter
+# would have no way to avoid mailing the same contractor twice.
+_SENT_LOG_KEY = "bidcaller:campaign_sent_log"
+SENT_LOG_MAX = 2000
 # A draft that's been sitting for a day is probably forgotten, and approving
 # a forgotten campaign is how the wrong thing goes out. They expire.
 DRAFT_TTL_HOURS = int(os.environ.get("CAMPAIGN_DRAFT_TTL_HOURS", "24"))
@@ -591,6 +596,8 @@ def campaign_approve():
                                   "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"})
         sent += 1 if ok else 0
         failed += 0 if ok else 1
+        if ok:
+            _log_sent(addr, draft["subject"])
         time.sleep(CAMPAIGN_PAUSE_SEC)  # don't burst a provider into rate-limiting us
 
     # Consume the draft either way, so an approval can't be replayed into a
@@ -636,6 +643,29 @@ def campaign_drafts():
         _summary(k, v)
         for k, v in sorted(drafts.items(), key=lambda kv: kv[1].get("created_at", ""))
     ]})
+
+
+def _log_sent(addr, subject):
+    try:
+        log = kv_backend.get(_SENT_LOG_KEY, None)
+        log = log if isinstance(log, list) else []
+        log.append({"email": addr, "subject": subject,
+                    "at": datetime.datetime.now().isoformat(timespec="seconds")})
+        kv_backend.set(_SENT_LOG_KEY, log[-SENT_LOG_MAX:])
+    except Exception:
+        pass  # the mail went; a lost log line must not report it as failed
+
+
+@app.route("/campaign/sent", methods=["POST"])
+def campaign_sent():
+    """Every address a campaign actually reached, newest last. Admin only."""
+    data = request.get_json(force=True, silent=True) or {}
+    if not _admin_configured():
+        return jsonify({"ok": False, "reason": "admin_not_configured"}), 503
+    if not _admin_ok(data.get("admin_token")):
+        return jsonify({"ok": False, "reason": "unauthorized"}), 403
+    log = kv_backend.get(_SENT_LOG_KEY, None)
+    return jsonify({"ok": True, "sent": log if isinstance(log, list) else []})
 
 
 @app.route("/campaign/suppression", methods=["POST"])

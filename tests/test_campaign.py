@@ -231,6 +231,29 @@ class ReviewAndReplyTests(CampaignTests):
             self._send()
         self.assertEqual(self.sent[0]["reply_to"], ls.SUPPORT_EMAIL)
 
+class SentLogTests(CampaignTests):
+    """A scheduled drafter has to know who was already mailed."""
+
+    def test_a_sent_email_is_logged(self):
+        self._send(subject="Hi", recipients=["a@x.com"])
+        log = self.client.post("/campaign/sent", json={"admin_token": TOKEN}).get_json()["sent"]
+        self.assertEqual([(e["email"], e["subject"]) for e in log], [("a@x.com", "Hi")])
+
+    def test_a_draft_that_was_never_approved_is_not_logged(self):
+        self._draft(recipients=["a@x.com"])
+        log = self.client.post("/campaign/sent", json={"admin_token": TOKEN}).get_json()["sent"]
+        self.assertEqual(log, [])
+
+    def test_a_failed_send_is_not_logged(self):
+        with patch.object(ls, "_send_email", return_value=False):
+            self._send(recipients=["a@x.com"])
+        log = self.client.post("/campaign/sent", json={"admin_token": TOKEN}).get_json()["sent"]
+        self.assertEqual(log, [])
+
+    def test_the_log_needs_the_admin_token(self):
+        self.assertEqual(self.client.post("/campaign/sent",
+                                          json={"admin_token": "no"}).status_code, 403)
+
 class MergeFieldTests(CampaignTests):
     """Per-recipient personalisation.
 
