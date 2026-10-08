@@ -254,6 +254,28 @@ class SentLogTests(CampaignTests):
         self.assertEqual(self.client.post("/campaign/sent",
                                           json={"admin_token": "no"}).status_code, 403)
 
+class BearerHeaderTests(CampaignTests):
+    """The scheduled drafter authenticates with a header a network secret adds."""
+
+    def test_a_bearer_header_is_accepted(self):
+        r = self.client.post("/campaign/sent", json={},
+                             headers={"Authorization": f"Bearer {TOKEN}"})
+        self.assertEqual(r.status_code, 200)
+
+    def test_a_wrong_bearer_is_refused(self):
+        r = self.client.post("/campaign/sent", json={},
+                             headers={"Authorization": "Bearer nope"})
+        self.assertEqual(r.status_code, 403)
+
+    def test_no_token_at_all_is_refused(self):
+        self.assertEqual(self.client.post("/campaign/sent", json={}).status_code, 403)
+
+    def test_a_draft_can_be_made_with_the_header(self):
+        r = self.client.post("/campaign/send", headers={"Authorization": f"Bearer {TOKEN}"},
+                             json={"subject": "Hi", "body": "Text.", "recipients": ["a@x.com"]})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(self.sent, [], "drafting must still send nothing")
+
 class MergeFieldTests(CampaignTests):
     """Per-recipient personalisation.
 
