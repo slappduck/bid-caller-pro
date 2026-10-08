@@ -347,6 +347,15 @@ body{font-family:var(--ui);background:radial-gradient(ellipse 120% 60% at 50% -1
 .pt-grand span{color:var(--text);font-weight:800;}
 .pt-grand b{color:var(--accent);font-size:var(--fs-xl);}
 .doc-pick{margin-top:0.5rem;text-align:left;}
+.pl-hist b{font-weight:700;}
+.pl-hist .h-won{color:var(--green);}
+.pl-hist .h-lost{color:var(--red);}
+.past-bid{display:flex;justify-content:space-between;align-items:center;gap:0.6rem;padding:0.6rem 0;border-bottom:1px solid var(--border);}
+.past-bid b{color:var(--text);display:block;}
+.past-bid small{color:var(--text3);font-size:var(--fs-xs);}
+.past-actions{display:flex;flex-direction:column;gap:0.3rem;flex-shrink:0;}
+.past-actions .btn-ghost{width:auto;margin:0;padding:0.4rem 0.7rem;font-size:var(--fs-sm);}
+.ps-table small{color:var(--text3);}
 .ps-co{color:var(--text2);font-size:var(--fs-sm);margin-bottom:0.6rem;}
 .ps-co b{display:block;color:var(--text);font-size:var(--fs-base);}
 .ps-table{width:100%;border-collapse:collapse;font-size:var(--fs-sm);}

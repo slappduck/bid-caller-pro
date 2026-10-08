@@ -1593,6 +1593,74 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── Phase 3: your own pricing history ──
+  console.log("\nPast bids feed your prices: history, copy, won vs lost");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const host = new URL(route.request().url()).hostname;
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") {
+        return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      }
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      const sw = (price) => ({ name: "Concrete sidewalk, 4 in.", item: "6086004", unit: "sq yd", qty: 100, price });
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      localStorage.setItem("last_feed", JSON.stringify({ "Aurora, MO": [
+        { title: "Elm St Sidewalk", scope: "1,200 LF sidewalk, 4 ADA ramps", deadline: "2099-01-01", status: "open", url: "https://e.gov/3" }] }));
+      localStorage.setItem("price_district", JSON.stringify("SW"));
+      localStorage.setItem("saved", JSON.stringify({
+        pastwon: { title: "Oak St Ramps", _city: "Aurora, MO" }, pastlost: { title: "Pine Ave Walks", _city: "Aurora, MO" } }));
+      localStorage.setItem("pipeline", JSON.stringify({ pastwon: "won", pastlost: "lost" }));
+      localStorage.setItem("bid_prep", JSON.stringify({
+        pastwon: { checks: {}, custom: [], markup: 0, addenda: "", updated: 1000,
+          lines: [sw(60), { name: "ADA curb ramp", unit: "each", qty: 6, price: 1800 }] },
+        pastlost: { checks: {}, custom: [], markup: 0, addenda: "", updated: 2000, lines: [sw(75)] } }));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(800);
+    const id = await page.evaluate(() => bidId("Aurora, MO", bidData["Aurora, MO"][0]));
+    await page.evaluate((i) => openPrep("Aurora, MO", i, "pricing"), id);
+    await page.waitForTimeout(400);
+    const sheet = await page.textContent("#prep-body");
+    check("each line shows your past prices, newest first, with the outcome",
+          /Your past prices: \$75\.00 lost · \$60\.00 won/.test(sheet), sheet.slice(0, 400));
+    check("the ramp line shows your past ramp price", /\$1,800\.00 won/.test(sheet));
+
+    await page.click("#pl-past");
+    await page.waitForTimeout(200);
+    check("past bids are listed by name", /Oak St Ramps/.test(await page.textContent("#prep-body")));
+    await page.click('[data-prices="pastwon"]');
+    await page.waitForTimeout(300);
+    const lines = await page.evaluate((i) => bidPrep[i].lines, id);
+    check("copy my prices fills matching lines from that bid",
+          lines.find((l) => l.item === "6086004").price === 60 && lines.find((l) => /ramp/i.test(l.name)).price === 1800, JSON.stringify(lines));
+    const qtyBefore = lines.find((l) => l.item === "6086004").qty;
+    check("...without touching this job's quantities", Math.abs(qtyBefore - 666.7) < 0.1);
+    await page.click("#pl-past");
+    await page.waitForTimeout(200);
+    await page.click('[data-lines="pastlost"]');
+    await page.waitForTimeout(300);
+    const after = await page.evaluate((i) => bidPrep[i].lines, id);
+    check("copy lines adds that bid's lines with quantities left blank",
+          after.length === lines.length + 1 && after[after.length - 1].qty === "" && after[after.length - 1].price === 75);
+
+    await page.evaluate(() => { closeModal(); openRates(); });
+    await page.waitForTimeout(400);
+    const rates = await page.textContent("#modal-content");
+    check("the rates sheet compares your won and lost prices with MoDOT",
+          /Your bids vs MoDOT/.test(rates) && /\$60\.00 \(1\)/.test(rates) && /\$75\.00 \(1\)/.test(rates));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   await browser.close();
   server.close();
   console.log(failures ? `\n${failures} check(s) FAILED` : "\nAll checks passed");

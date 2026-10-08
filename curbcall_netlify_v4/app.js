@@ -3651,6 +3651,7 @@ async function openRates(){
   mc.innerHTML=`<div class="sheet-head"><h2>Going rates</h2>
       <div class="sheet-sub"><span class="chip">MoDOT bid prices, ${Math.min(...d.years)}–${Math.max(...d.years)}</span></div></div>
     ${districtSelect(d,"rates-district")}
+    ${yourBidsVsModot(d,district)}
     ${items.length?items.map(i=>rateRow(d,i,district,true)).join("")
       :`<div class="account-status">No prices for this district.</div>`}
     ${rateFootnote(d,district)}
@@ -4110,8 +4111,109 @@ function renderDocReview(body,city,id,b,doc,res){
   document.getElementById("doc-back").onclick=()=>openPrep(city,id,"pricing");
 }
 
+// ── Your own pricing history ──
+// Every prepared bid is a record of what this contractor charged for each
+// item, and its Bid Status says whether that price won. Lines match on the
+// MoDOT item they were priced against, or else on their name and unit, so
+// "4 in. concrete sidewalk / sq yd" on two bids is the same thing.
+function lineKey(l){
+  if(l&&l.item)return"m:"+l.item;
+  const n=String((l&&l.name)||"").toLowerCase()
+    .replace(/^\s*[a-z0-9-]{1,6}\.\s+/,"")      // "2. " item numbers
+    .replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ").trim();
+  return n?`n:${n}|${(l&&l.unit)||""}`:null;
+}
+function bidTitleFor(id){
+  const b=saved[id]||findBid(id);
+  return (b&&b.title)||"Untitled bid";
+}
+// key -> [{id, title, price, status, updated}], newest first.
+function priceHistory(excludeId){
+  const h={};
+  for(const id in bidPrep){
+    if(id===excludeId)continue;
+    const p=bidPrep[id];
+    (p&&p.lines||[]).forEach(l=>{
+      const price=Number(l.price),k=lineKey(l);
+      if(!k||!(price>0))return;
+      (h[k]=h[k]||[]).push({id,title:bidTitleFor(id),price,status:pipeline[id]||"",updated:p.updated||0});
+    });
+  }
+  for(const k in h)h[k].sort((a,b)=>b.updated-a.updated);
+  return h;
+}
+function historyHint(hist){
+  if(!hist||!hist.length)return"";
+  const label={won:"won",lost:"lost",submitted:"submitted",passed:"passed"};
+  return`<small class="pl-ref pl-hist">Your past prices: ${hist.slice(0,3).map(x=>
+    `${money2(x.price)}${label[x.status]?` <b class="h-${esc(x.status)}">${label[x.status]}</b>`:""}`).join(" · ")}</small>`;
+}
+// Other bids with at least one priced line, newest first.
+function pastPreparedBids(excludeId){
+  return Object.keys(bidPrep)
+    .filter(id=>id!==excludeId&&(bidPrep[id].lines||[]).some(l=>Number(l.price)>0))
+    .sort((a,b)=>(bidPrep[b].updated||0)-(bidPrep[a].updated||0));
+}
+function renderPastBidPicker(body,city,id,b){
+  const p=prepFor(id);
+  const past=pastPreparedBids(id);
+  body.innerHTML=`<div class="rate-note" style="margin-top:0;">Copy your prices onto matching lines here, or copy a past bid's lines (quantities left blank, since it's a different job).</div>
+    ${past.map(pid=>{
+      const pp=bidPrep[pid],t=prepTotals(pp),st=pipeline[pid];
+      return`<div class="past-bid"><div><b>${esc(bidTitleFor(pid))}</b>
+          <small>${money0(t.total)}${st?` · ${esc(st)}`:""} · ${plural((pp.lines||[]).length,"line")}</small></div>
+        <div class="past-actions"><button class="btn-ghost" data-prices="${esc(pid)}">Copy my prices</button>
+          <button class="btn-ghost" data-lines="${esc(pid)}">Copy lines</button></div></div>`;}).join("")}
+    <button class="btn-ghost" id="past-cancel" style="margin-top:0.5rem;">Cancel</button>`;
+  body.querySelectorAll("[data-prices]").forEach(btn=>btn.onclick=()=>{
+    const src={};
+    (bidPrep[btn.dataset.prices].lines||[]).forEach(l=>{const k=lineKey(l);if(k&&Number(l.price)>0)src[k]=Number(l.price);});
+    let n=0;
+    (p.lines||[]).forEach(l=>{const k=lineKey(l);if(k&&src[k]!=null){l.price=src[k];n++;}});
+    savePrep(id,city);
+    toast(n?`Copied ${plural(n,"price")}`:"No lines here match that bid");
+    openPrep(city,id,"pricing");
+  });
+  body.querySelectorAll("[data-lines]").forEach(btn=>btn.onclick=()=>{
+    const copied=(bidPrep[btn.dataset.lines].lines||[])
+      .filter(l=>(l.name||"").trim())
+      .map(l=>({name:l.name,qty:"",unit:l.unit||"",price:l.price,ref:l.ref||null,item:l.item}));
+    p.lines=(p.lines||[]).filter(l=>(l.name||"").trim()||l.qty||l.price).concat(copied);
+    savePrep(id,city);
+    toast(`Added ${plural(copied.length,"line")}. Fill in this job's quantities.`);
+    openPrep(city,id,"pricing");
+  });
+  document.getElementById("past-cancel").onclick=()=>openPrep(city,id,"pricing");
+}
+// Won/lost averages per MoDOT item, beside MoDOT's own average.
+function yourBidsVsModot(d,district){
+  const rows={};
+  for(const id in bidPrep){
+    const st=pipeline[id];
+    if(st!=="won"&&st!=="lost")continue;
+    (bidPrep[id].lines||[]).forEach(l=>{
+      const price=Number(l.price);
+      if(!l.item||!(price>0)||!d.items[l.item])return;
+      const r=rows[l.item]=rows[l.item]||{won:[],lost:[]};
+      r[st].push(price);
+    });
+  }
+  const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
+  const items=Object.keys(rows);
+  if(!items.length)return"";
+  return`<div class="workspace-title" style="margin-top:0.6rem;">Your bids vs MoDOT</div>
+    <table class="ps-table"><thead><tr><th>Item</th><th>You won at</th><th>You lost at</th><th>MoDOT avg</th></tr></thead><tbody>
+    ${items.map(i=>{
+      const r=rows[i],w=avg(r.won),lo=avg(r.lost),m=latestRate(d,i,district);
+      return`<tr><td>${esc(d.items[i].name)}</td><td>${w!=null?`${money2(w)}<small> (${r.won.length})</small>`:"—"}</td>
+        <td>${lo!=null?`${money2(lo)}<small> (${r.lost.length})</small>`:"—"}</td><td>${m?money2(m.avg):"—"}</td></tr>`;}).join("")}
+    </tbody></table>
+    <div class="rate-note">From bids you priced in Prepare bid and marked Won or Lost, per unit as MoDOT prices each item.</div>`;
+}
+
 function renderPrepPricing(body,city,id,b){
   const p=prepFor(id);
+  const hist=priceHistory(id);
   const lineRow=(l,i)=>`<div class="prep-line" data-i="${i}">
       <input class="input pl-name" data-f="name" value="${esc(l.name||"")}" placeholder="Item" aria-label="Item">
       <div class="pl-nums">
@@ -4123,10 +4225,13 @@ function renderPrepPricing(body,city,id,b){
       </div>
       ${l.ref?`<small class="pl-ref">MoDOT ${esc(unitPrices?unitPrices.districts[priceDistrict(unitPrices)]:"")} average ${money2(l.ref)}/${esc(l.unit||"")}</small>`:""}
       ${l.note?`<small class="pl-ref rate-thin">${esc(l.note)}</small>`:""}
+      ${historyHint(hist[lineKey(l)])}
     </div>`;
   const t=prepTotals(p);
   const canRead=prepDocCandidates(b).length>0;
+  const hasPast=pastPreparedBids(id).length>0;
   body.innerHTML=`${canRead?`<button class="btn-primary" id="pl-read" style="margin-bottom:0.6rem;">Read quantities from the bid form</button>`:""}
+    ${hasPast?`<button class="btn-ghost" id="pl-past" style="margin:0 0 0.6rem;">Use a past bid</button>`:""}
     <div class="rate-note" style="margin-top:0;">${p.docInfo&&p.docInfo.source?`Bid documents read: ${esc(p.docInfo.source)}. `:""}Starts from the quantities in the posting at MoDOT's average. Change anything to your own numbers.</div>
     <div id="prep-lines">${p.lines.map(lineRow).join("")}</div>
     <div class="prep-add"><button class="btn-ghost" id="pl-add">+ Add line</button><button class="btn-ghost" id="pl-reset">Start over from ballpark</button></div>
@@ -4158,6 +4263,8 @@ function renderPrepPricing(body,city,id,b){
     if(!p.lines.length)p.lines.push({name:"",qty:"",unit:"",price:"",ref:null});
     savePrep(id,city);openPrep(city,id,"pricing");
   });
+  const past=document.getElementById("pl-past");
+  if(past)past.onclick=()=>renderPastBidPicker(body,city,id,b);
   const rd=document.getElementById("pl-read");
   if(rd)rd.onclick=()=>renderDocPicker(body,city,id,b);
   document.getElementById("pl-add").onclick=()=>{
