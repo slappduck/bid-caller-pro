@@ -1404,6 +1404,105 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── Prepare bid: checklist, pricing, summary ──
+  console.log("\nPrepare bid keeps the whole bid in the app");
+  {
+    const rates = JSON.parse(fs.readFileSync(path.join(ROOT, "mo_unit_prices.json"), "utf8"));
+    const swAvg = (() => { const by = rates.prices["6086004"].SW; return by[Object.keys(by).sort().pop()][0]; })();
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const host = new URL(route.request().url()).hostname;
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") {
+        return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      }
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      if (sessionStorage.getItem("seeded")) return;   // keep state across the reload below
+      sessionStorage.setItem("seeded", "1");
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      localStorage.setItem("last_feed", JSON.stringify({ "Aurora, MO": [
+        { title: "Elm St Sidewalk", scope: "1,200 LF sidewalk, 4 ADA ramps", value: "$120k",
+          deadline: "2099-01-01", status: "open", url: "https://e.gov/3", addenda: true,
+          documents: [{ name: "Plans", url: "https://e.gov/plans.pdf" }] }] }));
+      localStorage.setItem("price_district", JSON.stringify("SW"));
+      localStorage.setItem("company_profile", JSON.stringify({ name: "Test Concrete LLC", contact: "Pat", phone: "417-555-0100" }));
+    });
+    const boot = async () => {
+      await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+      await page.waitForTimeout(600);
+      await page.evaluate(() => showApp());
+      await page.waitForTimeout(800);
+    };
+    await boot();
+    const id = await page.evaluate(() => bidId("Aurora, MO", bidData["Aurora, MO"][0]));
+    await page.evaluate(() => openDetail("Aurora, MO", bidData["Aurora, MO"][0]));
+    await page.waitForTimeout(300);
+    check("bid details offer Prepare bid", /Prepare bid/.test(await page.textContent("#prep-open")));
+    await page.click("#prep-open");
+    await page.waitForTimeout(500);
+
+    const checklist = await page.textContent("#prep-body");
+    check("the checklist covers the posting's addenda and the submit step",
+          /Read every addendum/.test(checklist) && /This bid has addenda/.test(checklist) && /Submit before the deadline/.test(checklist));
+    check("the bid's documents are linked from the checklist", /Plans/.test(checklist));
+    check("nothing is ticked yet", /0\/\d+/.test(await page.textContent(".prep-tabs")));
+    await page.check('[data-check="docs"]');
+    await page.waitForTimeout(300);
+    check("ticking a step updates progress", /1\/\d+/.test(await page.textContent(".prep-tabs")));
+    await page.fill("#prep-new", "Call the bonding company");
+    await page.click("#prep-add-btn");
+    await page.waitForTimeout(300);
+    check("your own step can be added", /Call the bonding company/.test(await page.textContent("#prep-body")));
+    check("preparing a bid saves it", await page.evaluate((i) => !!saved[i], id));
+
+    await page.click('[data-step="pricing"]');
+    await page.waitForTimeout(400);
+    const lines = await page.evaluate((i) => bidPrep[i].lines, id);
+    const swLine = lines.find((l) => /sidewalk/i.test(l.name));
+    const rampLine = lines.find((l) => /ramp/i.test(l.name));
+    check("pricing starts from the ballpark: sidewalk at the SW average",
+          swLine && Math.abs(swLine.qty - 666.7) < 0.1 && swLine.price === Math.round(swAvg * 100) / 100, JSON.stringify(swLine));
+    check("the ramp count becomes a line for you to price, not a guess",
+          rampLine && rampLine.qty === 4 && rampLine.unit === "each" && rampLine.price === "", JSON.stringify(rampLine));
+    const rampIdx = lines.indexOf(rampLine);
+    await page.fill(`.prep-line[data-i="${rampIdx}"] input[data-f="price"]`, "2000");
+    await page.fill("#pt-mk", "10");
+    await page.waitForTimeout(300);
+    const expected = (swLine.qty * swLine.price + 4 * 2000) * 1.1;
+    const shown = await page.textContent("#pt-total");
+    check("the total is quantity x price plus markup", shown === "$" + Math.round(expected).toLocaleString("en-US"), `${shown} vs ${expected}`);
+
+    await page.click('[data-step="summary"]');
+    await page.waitForTimeout(300);
+    const summary = await page.textContent("#prep-body");
+    check("the summary carries company, lines and the total",
+          /Test Concrete LLC/.test(summary) && /ADA curb ramp/.test(summary) && summary.includes(expected.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })));
+    const text = await page.evaluate((i) => prepSummaryText(prepSummaryData(i, bidData["Aurora, MO"][0], "Aurora, MO")), id);
+    check("copy-as-text has the total bid", /TOTAL BID: \$[\d,]+\.\d\d/.test(text) && /Bidder: Test Concrete LLC/.test(text));
+    const printed = await page.evaluate(() => {
+      let html = ""; const orig = window.open;
+      window.open = () => ({ document: { open() {}, write(h) { html += h; }, close() {} } });
+      document.getElementById("ps-print").click();
+      window.open = orig; return html;
+    });
+    check("the printable page has the line items and total", /Total bid: \$/.test(printed) && /ADA curb ramp/.test(printed));
+    check("printed text is escaped", !/<script>alert/.test(printed));
+
+    await boot();   // a reload: the workspace has to survive it
+    const after = await page.evaluate((i) => bidPrep[i], id);
+    check("the workspace survives a reload", after && after.checks.docs === true && after.custom[0] === "Call the bonding company" && Number(after.markup) === 10);
+    await page.evaluate(() => switchScreen("feed"));
+    await page.waitForTimeout(300);
+    check("the bid card shows prep progress", /Prep 1\/\d+/.test(await page.textContent("#feed-list")));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   await browser.close();
   server.close();
   console.log(failures ? `\n${failures} check(s) FAILED` : "\nAll checks passed");

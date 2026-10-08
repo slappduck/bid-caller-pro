@@ -245,6 +245,11 @@ let bidData=store.get("last_feed",{});
 let saved=store.get("saved",{});
 let pipeline=store.get("pipeline",{}); // bid id -> "submitted"|"won"|"lost"|"passed"
 let notes=store.get("notes",{}); // bid id -> freeform text, private/local only
+// Declared up here with the other per-bid state rather than beside the code
+// that uses them: bidCard() reads both, and a card drawn before a later
+// "let" line has run would throw instead of rendering.
+let bidPrep=store.get("bid_prep",{}); // bid id -> Prepare-bid workspace
+let unitPrices=null,unitPricesLoading=null; // MoDOT going rates, loaded lazily
 let dismissed=store.get("dismissed",{}); // bid id -> true, hidden from the feed even if a rescan brings it back
 let companyProfile=store.get("company_profile",{}); // used to personalize AI proposal drafts
 
@@ -301,13 +306,26 @@ function bidRowForSync(id,city){
     phone:b.phone||"",url:b.url||"",status:b.status||"",
     pipeline:pipeline[id]||"",note:notes[id]||"",
     saved_at:b.saved_at||new Date().toISOString().slice(0,10),
+    ...(prepColumnMissing?{}:{prep:bidPrep[id]||null}),
   };
 }
+// The prep column is added by supabase_sync_schema.sql. A project that hasn't
+// re-run it rejects the whole row for naming an unknown column, which would
+// stop saved bids syncing at all -- so on that error, drop the field and send
+// the row again, and stop sending it for the rest of the session.
+let prepColumnMissing=false;
 async function pushSavedBid(id,city){
   if(!sb||!currentUser)return;
   const row=bidRowForSync(id,city);
   if(!row)return;
-  try{await sb.from("saved_bids").upsert(row,{onConflict:"user_id,bid_id"});}catch(e){}
+  try{
+    const r=await sb.from("saved_bids").upsert(row,{onConflict:"user_id,bid_id"});
+    if(r&&r.error&&"prep" in row&&/prep/i.test(String(r.error.message||""))){
+      prepColumnMissing=true;
+      delete row.prep;
+      await sb.from("saved_bids").upsert(row,{onConflict:"user_id,bid_id"});
+    }
+  }catch(e){}
 }
 async function deleteSavedBidCloud(id){
   if(!sb||!currentUser)return;
@@ -337,7 +355,12 @@ async function syncPullSavedBids(){
     };
     if(row.pipeline)pipeline[id]=row.pipeline;else delete pipeline[id];
     if(row.note)notes[id]=row.note;else delete notes[id];
+    // Newer edit wins, so preparing on the phone and the desktop on the same
+    // day doesn't let a stale copy overwrite the latest checklist.
+    const cp=row.prep&&typeof row.prep==="object"?row.prep:null;
+    if(cp&&(!bidPrep[id]||(cp.updated||0)>(bidPrep[id].updated||0)))bidPrep[id]=cp;
   });
+  store.set("bid_prep",bidPrep);
   const localOnlyIds=Object.keys(saved).filter(id=>!cloudIds.has(id));
   store.set("saved",saved);store.set("pipeline",pipeline);store.set("notes",notes);
   for(const id of localOnlyIds)await pushSavedBid(id,saved[id]._city);
@@ -3543,7 +3566,6 @@ function renderScanSummary(){
 const PRICE_DISTRICT_KEY="price_district";
 const RATE_THIN_BIDS=5;
 const HEADLINE_RATES=["6081010","6081012","6086004","6091052"];
-let unitPrices=null,unitPricesLoading=null;
 function loadUnitPrices(){
   if(unitPrices)return Promise.resolve(unitPrices);
   if(!unitPricesLoading){
@@ -3806,6 +3828,313 @@ function ballparkHTML(b,d,district){
     <div class="rate-note">Only the quantities shown, at MoDOT's average bid. Removal, mobilization, traffic control and anything else the job needs aren't included.</div>`;
 }
 
+// ── Bid workspace ("Prepare bid") ──
+// Keeps the contractor in the app from "worth bidding" to "ready to sign":
+// a checklist built from what the posting says, a pricing sheet that starts
+// from the ballpark, and a one-page summary to copy onto the agency's own
+// form. The app never signs, bonds, notarizes or submits -- those steps are
+// listed so nothing is missed, and left to the contractor.
+//
+// One record per bid id, saved locally and synced with the saved bid (the
+// saved_bids.prep column). Preparing a bid saves it, so the work follows the
+// account to other devices.
+function prepFor(id){
+  if(!bidPrep[id])bidPrep[id]={checks:{},custom:[],lines:null,markup:0,addenda:"",updated:0};
+  return bidPrep[id];
+}
+const _prepPushTimers={};
+function savePrep(id,city){
+  prepFor(id).updated=Date.now();
+  store.set("bid_prep",bidPrep);
+  // Preparing a bid is a decision to pursue it: keep it saved so it syncs
+  // and stays on the Active tab after a rescan drops it from the feed.
+  if(!saved[id]){
+    const b=findBid(id);
+    if(b){saved[id]={...b,_city:city};store.set("saved",saved);}
+  }
+  clearTimeout(_prepPushTimers[id]);
+  _prepPushTimers[id]=setTimeout(()=>pushSavedBid(id,city),1200);
+}
+// What a public concrete bid usually takes. Generic items say "if required":
+// the posting decides, and inventing a requirement is as bad as missing one.
+function prepChecklist(b){
+  const docs=((b&&b.documents)||[]).map(d=>({
+    name:(d&&d.name)?String(d.name):"Document",url:safeUrl(typeof d==="string"?d:(d&&d.url))
+  })).filter(d=>d.url);
+  const items=[
+    {key:"docs",label:"Get the bid documents",
+      detail:docs.length?"Plans, specs and the bid form. Linked below."
+        :"Plans, specs and the bid form. Some agencies require registering on their plan room first.",docs},
+    b&&b.prebid?{key:"prebid",label:b.prebid==="mandatory"?"Attend the MANDATORY pre-bid meeting":"Attend the pre-bid meeting",
+      detail:b.prebid==="mandatory"?"Missing it disqualifies the bid. Date and place are in the posting.":"Date and place are in the posting.",
+      urgent:b.prebid==="mandatory"}:null,
+    {key:"addenda",label:"Read every addendum",
+      detail:(b&&b.addenda?"This bid has addenda. ":"")+"Check for new ones up to the deadline. Most bid forms ask you to list each addendum by number.",
+      urgent:!!(b&&b.addenda)},
+    {key:"site",label:"Visit the site",detail:"Optional, but quantities on paper and in the field don't always agree.",optional:true},
+    {key:"price",label:"Price every line item",detail:"Use the Pricing tab."},
+    {key:"bond",label:"Bid bond or bid security, if required",detail:"Often a percentage of the bid amount. The posting says if one is needed. Ask your bonding company early."},
+    {key:"forms",label:"Fill out the bid form and required affidavits",detail:"Use the agency's own form. Copy prices from the Summary tab."},
+    {key:"insurance",label:"Insurance certificate, if requested",detail:"Check the posting for limits and who to name as additional insured."},
+    {key:"sign",label:"Sign, and notarize if required",detail:"Done by you, outside the app."},
+    {key:"submit",label:"Submit before the deadline",
+      detail:`${b&&b.deadline?`Due ${b.deadline}. `:""}Sealed envelope or online, as the posting says. Late bids are usually returned unopened.`,urgent:true},
+  ];
+  return items.filter(Boolean);
+}
+function prepProgress(id,b){
+  const p=bidPrep[id];
+  if(!p)return null;
+  const list=prepChecklist(b).filter(i=>!i.optional).concat((p.custom||[]).map((c,i)=>({key:"c"+i})));
+  const done=list.filter(i=>p.checks[i.key]).length;
+  return{done,total:list.length};
+}
+// Starting lines: the ballpark's priced quantities, then anything it could
+// read but not price (ramp counts), then one blank line to fill in.
+function defaultPrepLines(b){
+  const lines=[];
+  if(unitPrices){
+    const d=unitPrices,district=priceDistrict(d);
+    const est=ballpark(b,d,district,sidewalkWidth());
+    est.lines.forEach(l=>lines.push({name:l.name,qty:Math.round(l.qty*10)/10,unit:l.unit,
+      price:Math.round(l.rate.avg*100)/100,ref:l.rate.avg,item:l.item,
+      // The assumption travels with the number it produced.
+      note:l.assumedWidth?`From ${l.stated.raw} at ${l.assumedWidth} ft wide (assumed). Check the plans.`:""}));
+    extractQuantities(`${b.title||""}\n${b.scope||""}`).rampCounts.forEach(n=>
+      lines.push({name:"ADA curb ramp",qty:n,unit:"each",price:"",ref:null}));
+  }
+  if(!lines.length)lines.push({name:"",qty:"",unit:"",price:"",ref:null});
+  return lines;
+}
+function prepTotals(p){
+  const sub=(p.lines||[]).reduce((t,l)=>t+(Number(l.qty)||0)*(Number(l.price)||0),0);
+  const mk=Number(p.markup)||0;
+  return{sub,markup:sub*mk/100,total:sub*(1+mk/100)};
+}
+function money0(n){return"$"+Math.round(n).toLocaleString();}
+function money2(n){return"$"+(Number(n)||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});}
+
+async function openPrep(city,id,step){
+  const b=findBid(id)||saved[id];
+  if(!b){toast("That bid isn't available any more");return;}
+  await loadUnitPrices();
+  const p=prepFor(id);
+  if(!p.lines)p.lines=defaultPrepLines(b);
+  savePrep(id,city);
+  step=step||p.step||"checklist";
+  p.step=step;
+  const mc=document.getElementById("modal-content");
+  const prog=prepProgress(id,b);
+  const t=prepTotals(p);
+  const dleft=daysUntil(b);
+  mc.innerHTML=`<div class="sheet-head"><h2>Prepare bid</h2>
+      <div class="sheet-sub"><span class="chip">${esc(b.title||"Untitled")}</span>
+        ${b.deadline?`<span class="chip"${dleft!=null&&dleft<=2?' style="color:var(--red);"':""}>Due ${esc(b.deadline)}${dleft!=null&&dleft>=0?` · ${dleft===0?"today":dleft+"d left"}`:""}</span>`:""}</div></div>
+    <a href="#" class="prep-back" id="prep-back">← Bid details</a>
+    <div class="prep-tabs" role="tablist">
+      <button role="tab" data-step="checklist" class="${step==="checklist"?"on":""}">Checklist <span>${prog.done}/${prog.total}</span></button>
+      <button role="tab" data-step="pricing" class="${step==="pricing"?"on":""}">Pricing <span id="prep-tab-total">${t.total?money0(t.total):""}</span></button>
+      <button role="tab" data-step="summary" class="${step==="summary"?"on":""}">Summary</button>
+    </div>
+    <div id="prep-body"></div>`;
+  mc.querySelectorAll(".prep-tabs button").forEach(btn=>btn.onclick=()=>openPrep(city,id,btn.dataset.step));
+  document.getElementById("prep-back").onclick=(e)=>{e.preventDefault();openDetail(city,b);};
+  const body=document.getElementById("prep-body");
+  if(step==="checklist")renderPrepChecklist(body,city,id,b);
+  else if(step==="pricing")renderPrepPricing(body,city,id,b);
+  else renderPrepSummary(body,city,id,b);
+  document.getElementById("modal-back").classList.add("open");
+  document.getElementById("modal").classList.add("open");
+}
+
+function renderPrepChecklist(body,city,id,b){
+  const p=prepFor(id);
+  const items=prepChecklist(b);
+  const row=(key,label,detail,opts={})=>`<label class="prep-check${p.checks[key]?" done":""}${opts.urgent?" urgent":""}">
+      <input type="checkbox" data-check="${esc(key)}"${p.checks[key]?" checked":""}>
+      <span><b>${esc(label)}</b>${opts.optional?' <em>optional</em>':""}
+        ${detail?`<small>${esc(detail)}</small>`:""}
+        ${opts.docs&&opts.docs.length?`<small class="prep-docs">${opts.docs.slice(0,6).map(d=>`<a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">${esc(d.name)}</a>`).join(" · ")}</small>`:""}
+        ${opts.remove!=null?`<button type="button" class="prep-x" data-remove="${opts.remove}" aria-label="Remove">×</button>`:""}</span>
+    </label>`;
+  body.innerHTML=`${items.map(i=>row(i.key,i.label,i.detail,i)).join("")}
+    ${(p.custom||[]).map((c,i)=>row("c"+i,c,"",{remove:i})).join("")}
+    <div class="prep-add"><input class="input" id="prep-new" placeholder="Add your own step"><button class="btn-ghost" id="prep-add-btn">Add</button></div>
+    ${b.deadline?`<button class="btn-ghost" id="prep-cal" style="margin-top:0.6rem;">Add deadline to calendar</button>`:""}`;
+  body.querySelectorAll("[data-check]").forEach(cb=>cb.onchange=()=>{
+    p.checks[cb.dataset.check]=cb.checked;
+    if(!cb.checked)delete p.checks[cb.dataset.check];
+    savePrep(id,city);openPrep(city,id,"checklist");
+  });
+  body.querySelectorAll("[data-remove]").forEach(x=>x.onclick=(e)=>{
+    e.preventDefault();
+    const i=Number(x.dataset.remove);
+    p.custom.splice(i,1);
+    // Re-key the checks of the custom items after the removed one.
+    const next={};
+    Object.keys(p.checks).forEach(k=>{
+      const m=/^c(\d+)$/.exec(k);
+      if(!m)next[k]=p.checks[k];
+      else if(+m[1]<i)next[k]=p.checks[k];
+      else if(+m[1]>i)next["c"+(+m[1]-1)]=p.checks[k];
+    });
+    p.checks=next;
+    savePrep(id,city);openPrep(city,id,"checklist");
+  });
+  const add=()=>{
+    const v=document.getElementById("prep-new").value.trim();
+    if(!v)return;
+    (p.custom=p.custom||[]).push(v.slice(0,200));
+    savePrep(id,city);openPrep(city,id,"checklist");
+  };
+  document.getElementById("prep-add-btn").onclick=add;
+  document.getElementById("prep-new").onkeydown=(e)=>{if(e.key==="Enter")add();};
+  const cal=document.getElementById("prep-cal");
+  if(cal)cal.onclick=()=>addToCalendar(city,id);
+}
+
+function renderPrepPricing(body,city,id,b){
+  const p=prepFor(id);
+  const lineRow=(l,i)=>`<div class="prep-line" data-i="${i}">
+      <input class="input pl-name" data-f="name" value="${esc(l.name||"")}" placeholder="Item" aria-label="Item">
+      <div class="pl-nums">
+        <input class="input" data-f="qty" inputmode="decimal" value="${esc(String(l.qty??""))}" placeholder="Qty" aria-label="Quantity">
+        <input class="input" data-f="unit" value="${esc(l.unit||"")}" placeholder="Unit" aria-label="Unit">
+        <input class="input" data-f="price" inputmode="decimal" value="${esc(String(l.price??""))}" placeholder="$/unit" aria-label="Unit price">
+        <span class="pl-total" data-total="${i}">${money0((Number(l.qty)||0)*(Number(l.price)||0))}</span>
+        <button type="button" class="prep-x" data-del="${i}" aria-label="Delete line">×</button>
+      </div>
+      ${l.ref?`<small class="pl-ref">MoDOT ${esc(unitPrices?unitPrices.districts[priceDistrict(unitPrices)]:"")} average ${money2(l.ref)}/${esc(l.unit||"")}</small>`:""}
+      ${l.note?`<small class="pl-ref rate-thin">${esc(l.note)}</small>`:""}
+    </div>`;
+  const t=prepTotals(p);
+  body.innerHTML=`<div class="rate-note" style="margin-top:0;">Starts from the quantities in the posting at MoDOT's average. Change anything to your own numbers.</div>
+    <div id="prep-lines">${p.lines.map(lineRow).join("")}</div>
+    <div class="prep-add"><button class="btn-ghost" id="pl-add">+ Add line</button><button class="btn-ghost" id="pl-reset">Start over from ballpark</button></div>
+    <div class="prep-totals">
+      <div><span>Subtotal</span><b id="pt-sub">${money0(t.sub)}</b></div>
+      <div><span>Markup <input class="input pt-mk" id="pt-mk" inputmode="decimal" value="${esc(String(p.markup||0))}" aria-label="Markup percent">%</span><b id="pt-mkv">${money0(t.markup)}</b></div>
+      <div class="pt-grand"><span>Your bid</span><b id="pt-total">${money0(t.total)}</b></div>
+    </div>
+    ${b.value?`<div class="rate-note">Posted value: <b>${esc(b.value)}</b></div>`:""}
+    <div class="rate-note">Add lines the posting doesn't list: removal, mobilization, traffic control, testing.</div>`;
+  const refresh=()=>{
+    const tt=prepTotals(p);
+    p.lines.forEach((l,i)=>{const el=body.querySelector(`[data-total="${i}"]`);if(el)el.textContent=money0((Number(l.qty)||0)*(Number(l.price)||0));});
+    document.getElementById("pt-sub").textContent=money0(tt.sub);
+    document.getElementById("pt-mkv").textContent=money0(tt.markup);
+    document.getElementById("pt-total").textContent=money0(tt.total);
+    const tab=document.getElementById("prep-tab-total");
+    if(tab)tab.textContent=tt.total?money0(tt.total):"";
+  };
+  body.querySelectorAll(".prep-line input").forEach(inp=>inp.oninput=()=>{
+    const i=Number(inp.closest(".prep-line").dataset.i),f=inp.dataset.f;
+    let v=inp.value;
+    if(f==="qty"||f==="price")v=v.replace(/[^0-9.]/g,"");
+    p.lines[i][f]=v;
+    savePrep(id,city);refresh();
+  });
+  body.querySelectorAll("[data-del]").forEach(x=>x.onclick=()=>{
+    p.lines.splice(Number(x.dataset.del),1);
+    if(!p.lines.length)p.lines.push({name:"",qty:"",unit:"",price:"",ref:null});
+    savePrep(id,city);openPrep(city,id,"pricing");
+  });
+  document.getElementById("pl-add").onclick=()=>{
+    p.lines.push({name:"",qty:"",unit:"",price:"",ref:null});
+    savePrep(id,city);openPrep(city,id,"pricing");
+  };
+  document.getElementById("pl-reset").onclick=()=>{
+    if(!confirm("Replace your lines with the ballpark from the posting?"))return;
+    p.lines=defaultPrepLines(b);
+    savePrep(id,city);openPrep(city,id,"pricing");
+  };
+  document.getElementById("pt-mk").oninput=(e)=>{
+    p.markup=e.target.value.replace(/[^0-9.]/g,"");
+    savePrep(id,city);refresh();
+  };
+}
+
+// Plain text of the summary -- what "Copy" puts on the clipboard and the
+// printable page is built from, so the two can't disagree.
+function prepSummaryData(id,b,city){
+  const p=prepFor(id);
+  const lines=(p.lines||[]).filter(l=>(l.name||"").trim()||Number(l.qty)||Number(l.price));
+  return{company:companyProfile||{},b,city,lines,t:prepTotals(p),markup:Number(p.markup)||0,addenda:p.addenda||""};
+}
+function prepSummaryText(s){
+  const c=s.company,out=[];
+  out.push(`BID SUMMARY: ${s.b.title||""}`);
+  if(s.city)out.push(`Location: ${s.city}`);
+  if(s.b.bid_number)out.push(`Bid number: ${s.b.bid_number}`);
+  if(s.b.deadline)out.push(`Due: ${s.b.deadline}`);
+  out.push("");
+  out.push(`Bidder: ${c.name||"(company name)"}`);
+  if(c.contact)out.push(`Contact: ${c.contact}`);
+  if(c.phone)out.push(`Phone: ${c.phone}`);
+  if(c.email)out.push(`Email: ${c.email}`);
+  out.push("");
+  s.lines.forEach((l,i)=>out.push(`${i+1}. ${l.name||"Item"}: ${l.qty||0} ${l.unit||""} x ${money2(l.price)} = ${money2((Number(l.qty)||0)*(Number(l.price)||0))}`));
+  out.push("");
+  out.push(`Subtotal: ${money2(s.t.sub)}`);
+  if(s.markup)out.push(`Markup (${s.markup}%): ${money2(s.t.markup)}`);
+  out.push(`TOTAL BID: ${money2(s.t.total)}`);
+  if(s.addenda)out.push(`Addenda acknowledged: ${s.addenda}`);
+  return out.join("\n");
+}
+function renderPrepSummary(body,city,id,b){
+  const p=prepFor(id);
+  const s=prepSummaryData(id,b,city);
+  const c=s.company;
+  body.innerHTML=`<div class="prep-summary">
+      <div class="ps-co">${c.name?`<b>${esc(c.name)}</b>`:`<span class="rate-thin">Add your company name in Account so it prints here.</span>`}
+        ${[c.contact,c.phone,c.email].filter(Boolean).map(esc).join(" · ")}</div>
+      <table class="ps-table"><thead><tr><th>Item</th><th>Qty</th><th>Unit price</th><th>Amount</th></tr></thead><tbody>
+        ${s.lines.map(l=>`<tr><td>${esc(l.name||"Item")}</td><td>${esc(String(l.qty||0))} ${esc(l.unit||"")}</td><td>${money2(l.price)}</td><td>${money2((Number(l.qty)||0)*(Number(l.price)||0))}</td></tr>`).join("")
+          ||`<tr><td colspan="4">No priced lines yet. Use the Pricing tab.</td></tr>`}
+      </tbody></table>
+      <div class="prep-totals">
+        <div><span>Subtotal</span><b>${money2(s.t.sub)}</b></div>
+        ${s.markup?`<div><span>Markup (${esc(String(s.markup))}%)</span><b>${money2(s.t.markup)}</b></div>`:""}
+        <div class="pt-grand"><span>Total bid</span><b>${money2(s.t.total)}</b></div>
+      </div>
+      <div class="detail-label" style="margin-top:0.8rem;">Addenda acknowledged</div>
+      <input class="input" id="ps-addenda" value="${esc(p.addenda||"")}" placeholder="e.g. #1, #2 (or none)">
+    </div>
+    <div class="act-primary">
+      <button class="ma-gold" id="ps-print">Print / save PDF</button>
+      <button class="ma-ghost" id="ps-copy">Copy as text</button>
+    </div>
+    <div class="rate-note">Copy these onto the agency's own bid form. Most agencies only accept their form, signed by you.</div>`;
+  document.getElementById("ps-addenda").oninput=(e)=>{p.addenda=e.target.value.slice(0,200);savePrep(id,city);};
+  document.getElementById("ps-copy").onclick=async()=>{
+    try{await navigator.clipboard.writeText(prepSummaryText(prepSummaryData(id,b,city)));toast("Summary copied");}
+    catch(e){toast("Couldn't copy. Use Print instead");}
+  };
+  document.getElementById("ps-print").onclick=()=>printPrepSummary(prepSummaryData(id,b,city));
+}
+function printPrepSummary(s){
+  const c=s.company;
+  const html=`<!doctype html><html><head><meta charset="utf-8"><title>Bid summary - ${esc(s.b.title||"")}</title>
+<style>body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:32px;font-size:13px;}h1{font-size:18px;margin:0 0 4px;}
+.m{color:#444;margin:2px 0;}table{width:100%;border-collapse:collapse;margin-top:16px;}th,td{border:1px solid #bbb;padding:6px 8px;text-align:left;}
+th{background:#f0f0f0;}td:nth-child(n+2),th:nth-child(n+2){text-align:right;}.t{margin-top:12px;text-align:right;}.t div{margin:3px 0;}
+.g{font-size:16px;font-weight:bold;}.n{margin-top:24px;color:#666;font-size:11px;}</style></head><body>
+<h1>Bid summary: ${esc(s.b.title||"")}</h1>
+${s.city?`<div class="m">Location: ${esc(s.city)}</div>`:""}${s.b.bid_number?`<div class="m">Bid number: ${esc(s.b.bid_number)}</div>`:""}
+${s.b.deadline?`<div class="m">Due: ${esc(s.b.deadline)}</div>`:""}
+<p><b>${esc(c.name||"")}</b><br>${[c.contact,c.phone,c.email].filter(Boolean).map(esc).join(" &middot; ")}</p>
+<table><thead><tr><th>#</th><th>Item</th><th>Quantity</th><th>Unit price</th><th>Amount</th></tr></thead><tbody>
+${s.lines.map((l,i)=>`<tr><td>${i+1}</td><td style="text-align:left">${esc(l.name||"Item")}</td><td>${esc(String(l.qty||0))} ${esc(l.unit||"")}</td><td>${money2(l.price)}</td><td>${money2((Number(l.qty)||0)*(Number(l.price)||0))}</td></tr>`).join("")}
+</tbody></table>
+<div class="t"><div>Subtotal: ${money2(s.t.sub)}</div>${s.markup?`<div>Markup (${esc(String(s.markup))}%): ${money2(s.t.markup)}</div>`:""}
+<div class="g">Total bid: ${money2(s.t.total)}</div>${s.addenda?`<div>Addenda acknowledged: ${esc(s.addenda)}</div>`:""}</div>
+<div class="n">Prepared with CurbCall Pro. Working copy for transfer onto the agency's official bid form.</div>
+<script>window.onload=function(){window.print();}<\/script></body></html>`;
+  const w=window.open("","_blank");
+  if(!w){toast("Allow pop-ups to print, or use Copy");return;}
+  w.document.open();w.document.write(html);w.document.close();
+}
+
 async function fillDetailRates(city,b){
   const box=document.getElementById("detail-rates");
   if(!box||!bidIsMissouri(city,b))return;
@@ -4041,6 +4370,7 @@ function bidCard(city,b){
         ${deadlineChip}
         ${pipeline[id]?`<span class="chip status-${esc(pipeline[id])}">${esc(String(pipeline[id]).toUpperCase())}</span>`:""}
         ${notes[id]?`<span class="chip">Note</span>`:""}
+        ${(()=>{const pg=bidPrep[id]&&prepProgress(id,b);return pg?`<span class="chip">Prep ${pg.done}/${pg.total}</span>`:"";})()}
       </div>
     </div>
   </div>`;
@@ -4224,6 +4554,8 @@ function openDetail(city,b){
       who need your ramps and sidewalks priced.${b.also_in&&b.also_in.length
         ?` This job also covers ${esc(b.also_in.slice(0,4).map(titleCase).join(", "))}${b.also_in.length>4?" and more":""}.`
         :""}</span></div>`:""}
+    ${(()=>{const pg=prepProgress(id,b);return`<button class="btn-primary prep-cta" id="prep-open">${
+      pg?`Continue preparing \u00b7 ${pg.done}/${pg.total} done`:"Prepare bid \u2192"}</button>`;})()}
     ${holderBlock(b)}
     ${row("Scope of Work",b.scope)}
     <div id="detail-rates"></div>
@@ -4272,6 +4604,7 @@ function openDetail(city,b){
   // handler — every button on that bid silently did nothing. Closing over the
   // values sidesteps quoting entirely. (encodeURIComponent was not protection
   // here: it leaves apostrophes untouched.)
+  document.getElementById("prep-open").onclick=()=>openPrep(city,id);
   mc.querySelectorAll("[data-pstatus]").forEach(btn=>{
     btn.onclick=()=>{setPipelineStatus(id,btn.dataset.pstatus);refreshAfterPipeline(city,id);};
   });

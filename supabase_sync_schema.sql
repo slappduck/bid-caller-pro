@@ -120,6 +120,12 @@ alter table user_feeds alter column user_id set default auth.uid();
 -- itself synced but which bids had been dismissed from it never did.
 alter table user_feeds add column if not exists dismissed jsonb default '{}'::jsonb;
 
+-- A bid's "Prepare bid" workspace: checklist ticks, pricing lines, markup,
+-- addenda. Kept with the saved bid so a bid started on the phone can be
+-- finished on the desktop. The app checks for this column and keeps the
+-- workspace on the device until it exists, so running this late loses nothing.
+alter table saved_bids add column if not exists prep jsonb;
+
 -- Customer reviews, shown as testimonials on the marketing page.
 --
 -- Nothing appears publicly until approved is flipped to true by hand
