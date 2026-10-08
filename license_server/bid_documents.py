@@ -65,13 +65,37 @@ class _CheckedRedirect(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
+def _robots_allows_checked(url, opener):
+    """robots.txt, fetched through the same checked opener as the document.
+
+    The scanner's shared _robots_allows follows redirects unchecked, which is
+    fine for URLs the scanner found itself but not here: a site could point
+    its robots.txt at an internal address and have this server request it.
+    Unreadable robots.txt is not a refusal, matching the shared rule.
+    """
+    parts = urllib.parse.urlsplit(url)
+    robots_url = f"{parts.scheme}://{parts.netloc}/robots.txt"
+    try:
+        req = urllib.request.Request(robots_url, headers=_page_headers())
+        with opener.open(req, timeout=ROBOTS_TIMEOUT) as resp:
+            body = resp.read(200000).decode("utf-8", "replace")
+    except Exception:
+        return True
+    parser = urllib.robotparser.RobotFileParser()
+    parser.parse(body.splitlines())
+    try:
+        return parser.can_fetch(_page_headers().get("User-Agent", "*"), url)
+    except Exception:
+        return True
+
+
 def _fetch_document(url):
     """(bytes, content_type, outcome). Never raises."""
     if not _public_http_url(url):
         return b"", "", "not_public"
-    if not _robots_allows(url):
-        return b"", "", "robots_disallow"
     opener = urllib.request.build_opener(_CheckedRedirect())
+    if RESPECT_ROBOTS and not _robots_allows_checked(url, opener):
+        return b"", "", "robots_disallow"
     try:
         req = urllib.request.Request(url, headers=_page_headers())
         with opener.open(req, timeout=BID_DOC_TIMEOUT) as resp:

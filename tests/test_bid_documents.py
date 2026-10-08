@@ -34,6 +34,40 @@ class PublicUrlTests(unittest.TestCase):
             handler.redirect_request(None, None, 302, "Found", {}, "http://169.254.169.254/")
 
 
+class RobotsCheckTests(unittest.TestCase):
+    """robots.txt is fetched through the checked opener, not the shared one."""
+
+    def _opener(self, body=None, exc=None):
+        class R:
+            def __init__(s, b): s.b = b
+            def read(s, n): return s.b
+            def __enter__(s): return s
+            def __exit__(s, *a): return False
+        class O:
+            def __init__(s): s.urls = []
+            def open(s, req, timeout=None):
+                s.urls.append(req.full_url)
+                if exc: raise exc
+                return R(body)
+        return O()
+
+    def test_a_disallow_is_honoured(self):
+        o = self._opener(b"User-agent: *\nDisallow: /bids/")
+        self.assertFalse(ls._robots_allows_checked("https://93.184.216.34/bids/form.pdf", o))
+        self.assertEqual(o.urls, ["https://93.184.216.34/robots.txt"])
+
+    def test_an_unreadable_robots_txt_is_not_a_refusal(self):
+        o = self._opener(exc=ls.urllib.error.URLError("redirect to a non-public address"))
+        self.assertTrue(ls._robots_allows_checked("https://93.184.216.34/form.pdf", o))
+
+    def test_the_document_fetch_uses_the_checked_robots_rule(self):
+        with patch.object(ls, "_public_http_url", return_value=True), \
+             patch.object(ls, "_robots_allows_checked", return_value=False) as checked, \
+             patch.object(ls, "_robots_allows", side_effect=AssertionError("shared robots check used")):
+            self.assertEqual(ls._fetch_document("https://93.184.216.34/x.pdf")[2], "robots_disallow")
+        checked.assert_called_once()
+
+
 class CleanResultTests(unittest.TestCase):
     def test_quantities_are_numbers_and_bad_rows_are_dropped(self):
         got = ls._clean_doc_result({"line_items": [
@@ -140,3 +174,33 @@ class EndpointTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DocumentPickerTests(unittest.TestCase):
+    """Which links on a posting count as the bid's documents."""
+
+    import bid_sources as B
+
+    def test_documents_keep_their_names(self):
+        html = ('<a href="/DocumentCenter/View/88/Bid-Form">Bid Form &amp; Schedule</a>'
+                '<a href="/DocumentCenter/View/89/Plans">Plans</a>')
+        got = self.B.detail_documents(html, "https://city.gov/bids.aspx?bidID=1")
+        self.assertEqual(got, [{"name": "Bid Form & Schedule", "url": "https://city.gov/DocumentCenter/View/88/Bid-Form"},
+                               {"name": "Plans", "url": "https://city.gov/DocumentCenter/View/89/Plans"}])
+
+    def test_a_site_wide_civic_form_is_not_a_bid_document(self):
+        # Rogers County, OK links this from every page, bids included.
+        html = ('<a href="/DocumentCenter/View/1256/Open-Records-Request-Form">Open Records Request</a>'
+                '<a href="/DocumentCenter/View/12/Agenda-2026-10-01">Council agenda</a>'
+                '<a href="/files/specs.pdf">Specifications</a>')
+        got = self.B.detail_documents(html, "https://county.gov/bids.aspx?bidID=137")
+        self.assertEqual([d["name"] for d in got], ["Specifications"])
+
+    def test_a_link_with_no_useful_text_is_named_from_its_file(self):
+        got = self.B.detail_documents('<a href="/docs/2026_Sidewalk_Bid_Tabulation_Sheet.pdf">click here</a>', "https://t.gov/")
+        self.assertEqual(got[0]["name"], "2026 Sidewalk Bid Tabulation Sheet")
+
+    def test_bid_packet_items_that_sound_civic_are_kept(self):
+        html = ('<a href="/d/location-map.pdf">Project location map</a>'
+                '<a href="/d/prevailing-wage.pdf">Prevailing wage ordinance</a>')
+        self.assertEqual(len(self.B.detail_documents(html, "https://t.gov/")), 2)
