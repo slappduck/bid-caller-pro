@@ -1,0 +1,142 @@
+"""Reading a bid's own documents: safe to fetch, honest about what it read.
+
+The URL comes from the app, so this is the one fetch on the server that is
+pointed by the client. It must never reach the server's own network, and
+what the AI returns is validated rather than trusted.
+"""
+import os
+import sys
+import unittest
+from unittest.mock import patch
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import license_server as ls
+import kv_backend
+
+
+class PublicUrlTests(unittest.TestCase):
+    def test_private_and_local_addresses_are_refused(self):
+        for url in ("http://127.0.0.1/x", "http://10.0.0.5/bid.pdf", "http://192.168.1.1/",
+                    "http://169.254.169.254/latest/meta-data/", "http://[::1]/", "http://localhost/"):
+            self.assertFalse(ls._public_http_url(url), url)
+
+    def test_other_schemes_and_ports_are_refused(self):
+        for url in ("file:///etc/passwd", "ftp://93.184.216.34/x", "http://93.184.216.34:8080/x",
+                    "gopher://93.184.216.34/", "", "not a url"):
+            self.assertFalse(ls._public_http_url(url), url)
+
+    def test_a_public_address_is_allowed(self):
+        self.assertTrue(ls._public_http_url("https://93.184.216.34/bid-form.pdf"))
+
+    def test_a_redirect_to_a_private_address_is_refused(self):
+        handler = ls._CheckedRedirect()
+        with self.assertRaises(ls.urllib.error.URLError):
+            handler.redirect_request(None, None, 302, "Found", {}, "http://169.254.169.254/")
+
+
+class CleanResultTests(unittest.TestCase):
+    def test_quantities_are_numbers_and_bad_rows_are_dropped(self):
+        got = ls._clean_doc_result({"line_items": [
+            {"item_no": "1", "description": "4 in. concrete sidewalk", "quantity": "1,250", "unit": "SY"},
+            {"item_no": "2", "description": "", "quantity": "5", "unit": "EA"},
+            "not a dict",
+            {"item_no": "3", "description": "Mobilization", "quantity": "", "unit": "LS"},
+            {"item_no": "4", "description": "Curb", "quantity": "-3", "unit": "<script>"},
+        ], "required_forms": ["Non-collusion affidavit", "  "], "submission": 42})
+        items = got["line_items"]
+        self.assertEqual([i["description"] for i in items], ["4 in. concrete sidewalk", "Mobilization", "Curb"])
+        self.assertEqual(items[0]["quantity"], 1250.0)
+        self.assertIsNone(items[1]["quantity"])
+        self.assertIsNone(items[2]["quantity"], "a negative quantity is not a quantity")
+        self.assertEqual(items[2]["unit"], "", "an odd unit is dropped, not passed to the app")
+        self.assertEqual(got["required_forms"], ["Non-collusion affidavit"])
+        self.assertEqual(got["submission"], "", "a non-string field is blanked")
+
+    def test_a_non_object_is_rejected(self):
+        self.assertIsNone(ls._clean_doc_result(["a list"]))
+
+
+class DocumentTextTests(unittest.TestCase):
+    def test_html_is_read_as_text(self):
+        text, pages, truncated = ls._document_text(
+            b"<html><body><p>Item 1 Concrete sidewalk 100 SY</p></body></html>", "text/html")
+        self.assertIn("Concrete sidewalk 100 SY", text)
+        self.assertFalse(truncated)
+
+    def test_a_broken_pdf_reads_as_nothing_rather_than_raising(self):
+        self.assertEqual(ls._document_text(b"%PDF-1.4 garbage", "application/pdf")[0], "")
+
+
+class EndpointTests(unittest.TestCase):
+    URL = "https://93.184.216.34/bid-form.pdf"
+
+    def setUp(self):
+        self.client = ls.app.test_client()
+        self.store = {}
+        self.fetches = []
+        self._p = [
+            patch.object(ls, "_license_is_active", return_value=True),
+            patch.object(ls, "OPENAI_API_KEY", "k"),
+            patch.object(kv_backend, "get", side_effect=lambda k, d=None: self.store.get(k, d)),
+            patch.object(kv_backend, "set", side_effect=lambda k, v: self.store.__setitem__(k, v)),
+            patch.object(ls, "_fetch_document",
+                         side_effect=lambda u: (self.fetches.append(u), (b"%PDF-", "application/pdf", "ok"))[1]),
+            patch.object(ls, "_document_text", return_value=("Item 1 sidewalk 100 SY", 3, False)),
+            patch.object(ls, "_ai_read_bid_document", return_value={
+                "line_items": [{"item_no": "1", "description": "Sidewalk", "quantity": 100.0, "unit": "SY"}],
+                "submission": "Sealed envelope to City Clerk", "bid_security": "5% bid bond",
+                "prebid": "", "required_forms": []}),
+            patch.object(ls, "_ip_rate_ok", return_value=True),
+        ]
+        for p in self._p:
+            p.start()
+
+    def tearDown(self):
+        for p in self._p:
+            p.stop()
+
+    def post(self, **over):
+        body = {"key": "k", "device_id": "d", "url": self.URL}
+        body.update(over)
+        return self.client.post("/bid-documents/read", json=body)
+
+    def test_a_read_returns_the_schedule_and_requirements(self):
+        d = self.post().get_json()
+        self.assertTrue(d["ok"])
+        self.assertEqual(d["line_items"][0]["quantity"], 100.0)
+        self.assertEqual(d["bid_security"], "5% bid bond")
+        self.assertEqual(d["pages_read"], 3)
+
+    def test_an_unlicensed_caller_is_refused_before_any_fetch(self):
+        with patch.object(ls, "_license_is_active", return_value=False):
+            self.assertEqual(self.post().status_code, 403)
+        self.assertEqual(self.fetches, [])
+
+    def test_a_private_url_is_refused_before_any_fetch(self):
+        self.assertEqual(self.post(url="http://169.254.169.254/").status_code, 400)
+        self.assertEqual(self.fetches, [])
+
+    def test_the_second_read_of_a_document_comes_from_cache(self):
+        self.post()
+        d = self.post().get_json()
+        self.assertTrue(d["cached"])
+        self.assertEqual(len(self.fetches), 1)
+
+    def test_the_daily_limit_applies(self):
+        with patch.object(ls, "_ip_rate_ok", return_value=False):
+            self.assertEqual(self.post().status_code, 429)
+        self.assertEqual(self.fetches, [])
+
+    def test_a_scanned_pdf_says_so(self):
+        with patch.object(ls, "_document_text", return_value=("", 2, False)):
+            d = self.post().get_json()
+        self.assertEqual(d["reason"], "no_text")
+
+    def test_a_failed_fetch_is_reported(self):
+        with patch.object(ls, "_fetch_document", return_value=(b"", "", "http_404")):
+            d = self.post().get_json()
+        self.assertEqual((d["ok"], d["detail"]), (False, "http_404"))
+
+
+if __name__ == "__main__":
+    unittest.main()

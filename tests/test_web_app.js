@@ -1503,6 +1503,96 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── Phase 2: read the bid form's schedule of items ──
+  console.log("\nThe bid form's own items fill the pricing sheet, after review");
+  {
+    const rates = JSON.parse(fs.readFileSync(path.join(ROOT, "mo_unit_prices.json"), "utf8"));
+    const swAvg = (() => { const by = rates.prices["6086004"].SW; return by[Object.keys(by).sort().pop()][0]; })();
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    page.on("dialog", (d) => d.accept());
+    let readCalls = 0, readBody = null, failNext = false;
+    await page.route("**/*", (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      if (u.endsWith("/bid-documents/read")) {
+        readCalls++; readBody = JSON.parse(route.request().postData() || "{}");
+        if (failNext) {
+          failNext = false;
+          return route.fulfill({ status: 200, contentType: "application/json",
+            body: JSON.stringify({ ok: false, reason: "fetch_failed", detail: "robots_disallow" }) });
+        }
+        return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+          ok: true, cached: false, pages_read: 6, truncated: false,
+          line_items: [
+            { item_no: "1", description: "Mobilization", quantity: 1, unit: "LS" },
+            { item_no: "2", description: "4 in. concrete sidewalk", quantity: 1250, unit: "SY" },
+            { item_no: "3", description: "Concrete sidewalk", quantity: 1, unit: "LS" },
+          ],
+          submission: "Sealed envelope to the City Clerk, 100 Main St",
+          bid_security: "5% bid bond", prebid: "", required_forms: ["Non-collusion affidavit", "E-Verify affidavit"] }) });
+      }
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") {
+        return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      }
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      localStorage.setItem("last_feed", JSON.stringify({ "Aurora, MO": [
+        { title: "Elm St Sidewalk", scope: "Sidewalk replacement", deadline: "2099-01-01", status: "open",
+          url: "https://e.gov/3", documents: [{ name: "Bid form", url: "https://e.gov/form.pdf" }] }] }));
+      localStorage.setItem("price_district", JSON.stringify("SW"));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(800);
+    const id = await page.evaluate(() => bidId("Aurora, MO", bidData["Aurora, MO"][0]));
+    await page.evaluate((i) => openPrep("Aurora, MO", i, "pricing"), id);
+    await page.waitForTimeout(400);
+    check("pricing offers to read the bid form", (await page.locator("#pl-read").count()) === 1);
+
+    await page.click("#pl-read");
+    await page.waitForTimeout(200);
+    failNext = true;
+    await page.click('[data-doc="0"]');
+    await page.waitForTimeout(500);
+    check("a site that blocks robots says so plainly",
+          /doesn't allow automated reading/.test(await page.textContent("#prep-body")));
+    await page.click("#doc-back");
+    await page.waitForTimeout(300);
+
+    await page.click("#pl-read");
+    await page.waitForTimeout(200);
+    await page.click('[data-doc="0"]');
+    await page.waitForTimeout(600);
+    check("the server is asked for the document the user picked", readBody && readBody.url === "https://e.gov/form.pdf");
+    const review = await page.textContent("#prep-body");
+    check("what was read is shown for review first", /3 line items found/.test(review) && /4 in. concrete sidewalk/.test(review));
+    check("nothing has replaced the lines yet", await page.evaluate((i) => !bidPrep[i].lines.some((l) => /Mobilization/.test(l.name)), id));
+    await page.click("#doc-replace");
+    await page.waitForTimeout(400);
+    const lines = await page.evaluate((i) => bidPrep[i].lines, id);
+    const sy = lines.find((l) => /^2\./.test(l.name)), ls = lines.find((l) => /^3\./.test(l.name));
+    check("a sidewalk item in SY gets the SW sidewalk average",
+          sy && sy.qty === 1250 && sy.unit === "sq yd" && sy.price === Math.round(swAvg * 100) / 100, JSON.stringify(sy));
+    check("the same words in a lump-sum unit get no MoDOT price", ls && ls.unit === "lump sum" && ls.price === "", JSON.stringify(ls));
+    check("mobilization comes through to be priced", lines.some((l) => /Mobilization/.test(l.name) && l.unit === "lump sum"));
+
+    await page.click('[data-step="checklist"]');
+    await page.waitForTimeout(300);
+    const cl = await page.textContent("#prep-body");
+    check("the checklist shows the bid security the documents require", /From the bid documents: 5% bid bond/.test(cl));
+    check("...how to submit", /Sealed envelope to the City Clerk/.test(cl));
+    check("...and the required forms", /Non-collusion affidavit; E-Verify affidavit/.test(cl));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   await browser.close();
   server.close();
   console.log(failures ? `\n${failures} check(s) FAILED` : "\nAll checks passed");

@@ -346,6 +346,7 @@ body{font-family:var(--ui);background:radial-gradient(ellipse 120% 60% at 50% -1
 .pt-grand{border-top:1px solid var(--border);margin-top:0.3rem;padding-top:0.6rem!important;}
 .pt-grand span{color:var(--text);font-weight:800;}
 .pt-grand b{color:var(--accent);font-size:var(--fs-xl);}
+.doc-pick{margin-top:0.5rem;text-align:left;}
 .ps-co{color:var(--text2);font-size:var(--fs-sm);margin-bottom:0.6rem;}
 .ps-co b{display:block;color:var(--text);font-size:var(--fs-base);}
 .ps-table{width:100%;border-collapse:collapse;font-size:var(--fs-sm);}

@@ -3857,7 +3857,9 @@ function savePrep(id,city){
 }
 // What a public concrete bid usually takes. Generic items say "if required":
 // the posting decides, and inventing a requirement is as bad as missing one.
-function prepChecklist(b){
+function prepChecklist(b,info){
+  info=info||{};
+  const fromDocs=(t)=>t?` From the bid documents: ${t}`:"";
   const docs=((b&&b.documents)||[]).map(d=>({
     name:(d&&d.name)?String(d.name):"Document",url:safeUrl(typeof d==="string"?d:(d&&d.url))
   })).filter(d=>d.url);
@@ -3865,27 +3867,33 @@ function prepChecklist(b){
     {key:"docs",label:"Get the bid documents",
       detail:docs.length?"Plans, specs and the bid form. Linked below."
         :"Plans, specs and the bid form. Some agencies require registering on their plan room first.",docs},
+    !(b&&b.prebid)&&info.prebid?{key:"prebid",label:"Attend the pre-bid meeting",
+      detail:fromDocs(info.prebid).trim(),urgent:/mandatory/i.test(info.prebid)}:null,
     b&&b.prebid?{key:"prebid",label:b.prebid==="mandatory"?"Attend the MANDATORY pre-bid meeting":"Attend the pre-bid meeting",
-      detail:b.prebid==="mandatory"?"Missing it disqualifies the bid. Date and place are in the posting.":"Date and place are in the posting.",
+      detail:(b.prebid==="mandatory"?"Missing it disqualifies the bid. Date and place are in the posting.":"Date and place are in the posting.")+fromDocs(info.prebid),
       urgent:b.prebid==="mandatory"}:null,
     {key:"addenda",label:"Read every addendum",
       detail:(b&&b.addenda?"This bid has addenda. ":"")+"Check for new ones up to the deadline. Most bid forms ask you to list each addendum by number.",
       urgent:!!(b&&b.addenda)},
     {key:"site",label:"Visit the site",detail:"Optional, but quantities on paper and in the field don't always agree.",optional:true},
     {key:"price",label:"Price every line item",detail:"Use the Pricing tab."},
-    {key:"bond",label:"Bid bond or bid security, if required",detail:"Often a percentage of the bid amount. The posting says if one is needed. Ask your bonding company early."},
-    {key:"forms",label:"Fill out the bid form and required affidavits",detail:"Use the agency's own form. Copy prices from the Summary tab."},
+    {key:"bond",label:info.bid_security?"Bid bond or bid security":"Bid bond or bid security, if required",
+      detail:info.bid_security?fromDocs(info.bid_security).trim()+" Ask your bonding company early."
+        :"Often a percentage of the bid amount. The posting says if one is needed. Ask your bonding company early.",urgent:!!info.bid_security},
+    {key:"forms",label:"Fill out the bid form and required affidavits",
+      detail:"Use the agency's own form. Copy prices from the Summary tab."+(info.required_forms&&info.required_forms.length
+        ?` Required by the bid documents: ${info.required_forms.join("; ")}.`:"")},
     {key:"insurance",label:"Insurance certificate, if requested",detail:"Check the posting for limits and who to name as additional insured."},
     {key:"sign",label:"Sign, and notarize if required",detail:"Done by you, outside the app."},
     {key:"submit",label:"Submit before the deadline",
-      detail:`${b&&b.deadline?`Due ${b.deadline}. `:""}Sealed envelope or online, as the posting says. Late bids are usually returned unopened.`,urgent:true},
+      detail:`${b&&b.deadline?`Due ${b.deadline}. `:""}${info.submission?fromDocs(info.submission).trim():"Sealed envelope or online, as the posting says."} Late bids are usually returned unopened.`,urgent:true},
   ];
   return items.filter(Boolean);
 }
 function prepProgress(id,b){
   const p=bidPrep[id];
   if(!p)return null;
-  const list=prepChecklist(b).filter(i=>!i.optional).concat((p.custom||[]).map((c,i)=>({key:"c"+i})));
+  const list=prepChecklist(b,p.docInfo).filter(i=>!i.optional).concat((p.custom||[]).map((c,i)=>({key:"c"+i})));
   const done=list.filter(i=>p.checks[i.key]).length;
   return{done,total:list.length};
 }
@@ -3949,7 +3957,7 @@ async function openPrep(city,id,step){
 
 function renderPrepChecklist(body,city,id,b){
   const p=prepFor(id);
-  const items=prepChecklist(b);
+  const items=prepChecklist(b,p.docInfo);
   const row=(key,label,detail,opts={})=>`<label class="prep-check${p.checks[key]?" done":""}${opts.urgent?" urgent":""}">
       <input type="checkbox" data-check="${esc(key)}"${p.checks[key]?" checked":""}>
       <span><b>${esc(label)}</b>${opts.optional?' <em>optional</em>':""}
@@ -3993,6 +4001,115 @@ function renderPrepChecklist(body,city,id,b){
   if(cal)cal.onclick=()=>addToCalendar(city,id);
 }
 
+// ── Reading the bid documents (server: /bid-documents/read) ──
+// The bid form's own schedule of items is the exact list to price. The
+// server fetches the document, reads it, and returns the items and what it
+// says about submitting, bid security, the pre-bid meeting and forms.
+// Nothing replaces the contractor's lines until they've seen what was read.
+function prepDocCandidates(b){
+  const out=[];
+  ((b&&b.documents)||[]).forEach((d,i)=>{
+    const url=safeUrl(typeof d==="string"?d:(d&&d.url));
+    if(url&&/^https?:/i.test(url))out.push({name:(d&&d.name)?String(d.name):"Document "+(i+1),url});
+  });
+  const post=safeUrl(b&&b.url);
+  if(post&&/^https?:/i.test(post)&&!out.some(d=>d.url===post))out.push({name:"Original posting",url:post});
+  return out;
+}
+const DOC_UNITS={SY:"sq yd",SQYD:"sq yd",SQYDS:"sq yd",SF:"sq ft",SQFT:"sq ft",LF:"ft",FT:"ft",LINFT:"ft",
+  EA:"each",EACH:"each",LS:"lump sum",LUMPSUM:"lump sum",CY:"cu yd",TON:"ton",TONS:"ton",GAL:"gal",HR:"hour",HOUR:"hour"};
+function docUnit(u){
+  const k=String(u||"").toUpperCase().replace(/[^A-Z]/g,"");
+  return DOC_UNITS[k]||String(u||"").toLowerCase();
+}
+// A schedule row as a pricing line. The MoDOT average is filled in only when
+// the description names a flatwork item AND the units agree -- "4 in.
+// sidewalk, SY" gets the sidewalk rate; "sidewalk, LS" gets nothing.
+function lineFromDocItem(it){
+  const unit=docUnit(it.unit);
+  const line={name:`${it.item_no?it.item_no+". ":""}${it.description}`,qty:it.quantity??"",unit,price:"",ref:null};
+  const code=nearestItem(it.description||"",false);
+  if(code&&unitPrices&&unitPrices.items[code]&&unitPrices.items[code].unit===unit){
+    const r=latestRate(unitPrices,code,priceDistrict(unitPrices));
+    if(r){line.ref=r.avg;line.price=Math.round(r.avg*100)/100;line.item=code;}
+  }
+  return line;
+}
+const DOC_ERRORS={
+  not_licensed:"Your trial or subscription isn't active.",
+  rate_limited:"Daily limit for reading documents reached. Try again tomorrow.",
+  no_text:"This document has no readable text. It may be a scanned image.",
+  bad_url:"That link can't be read.",
+  ai_unavailable:"Document reading isn't available right now.",
+  ai_error:"Couldn't read that document. Try again in a minute.",
+};
+const FETCH_ERRORS={robots_disallow:"That site doesn't allow automated reading. Open it and enter the items by hand.",
+  too_large:"That file is too large to read.",http_404:"That document isn't there any more.",http_403:"That site refused the request."};
+async function readBidDocument(url){
+  try{
+    const token=await getSupabaseToken();
+    const r=await fetchWithTimeout(SERVER+"/bid-documents/read",{method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,url})},100000);
+    const d=await r.json();
+    if(d&&d.ok)return d;
+    const msg=d&&d.reason==="fetch_failed"?(FETCH_ERRORS[d.detail]||"Couldn't download that document.")
+      :(d&&(DOC_ERRORS[d.reason]||d.detail))||"Couldn't read that document.";
+    return{ok:false,msg};
+  }catch(e){return{ok:false,msg:offlineOrServer()};}
+}
+function renderDocPicker(body,city,id,b){
+  const docs=prepDocCandidates(b);
+  body.innerHTML=`<div class="rate-note" style="margin-top:0;">Pick the document with the bid form or schedule of items.
+      The quantities it lists replace the estimate, after you've checked them.</div>
+    ${docs.map((d,i)=>`<button class="btn-ghost doc-pick" data-doc="${i}">${esc(d.name)}</button>`).join("")}
+    <button class="btn-ghost" id="doc-cancel">Cancel</button>`;
+  body.querySelectorAll("[data-doc]").forEach(btn=>btn.onclick=async()=>{
+    const d=docs[Number(btn.dataset.doc)];
+    body.innerHTML=`<div class="account-status"><span class="spin"></span> Reading ${esc(d.name)}… this can take up to a minute.</div>`;
+    const res=await readBidDocument(d.url);
+    if(!document.getElementById("prep-body"))return;
+    if(!res.ok){
+      body.innerHTML=`<div class="alert alert-amber"><span>${esc(res.msg)}</span></div><button class="btn-ghost" id="doc-back">Back to pricing</button>`;
+      document.getElementById("doc-back").onclick=()=>openPrep(city,id,"pricing");
+      return;
+    }
+    renderDocReview(body,city,id,b,d,res);
+  });
+  document.getElementById("doc-cancel").onclick=()=>openPrep(city,id,"pricing");
+}
+function renderDocReview(body,city,id,b,doc,res){
+  const p=prepFor(id);
+  // What the documents say about the bid is kept whatever happens to the
+  // lines -- it feeds the checklist.
+  p.docInfo={source:doc.name,submission:res.submission||"",bid_security:res.bid_security||"",
+    prebid:res.prebid||"",required_forms:res.required_forms||[],read_at:Date.now()};
+  savePrep(id,city);
+  const items=res.line_items||[];
+  const found=[res.submission&&"how to submit",res.bid_security&&"bid security",res.prebid&&"the pre-bid meeting",
+    (res.required_forms||[]).length&&"required forms"].filter(Boolean);
+  body.innerHTML=`<div class="workspace-title">Read from ${esc(doc.name)}${res.pages_read?` · ${plural(res.pages_read,"page")}`:""}</div>
+    ${res.truncated?`<div class="rate-note">Long document: only the first part was read. Check the rest by hand.</div>`:""}
+    ${items.length?`<div class="rate-note">${plural(items.length,"line item")} found. Check them against the document before relying on them.</div>
+      <table class="ps-table"><thead><tr><th>Item</th><th>Qty</th></tr></thead><tbody>
+      ${items.slice(0,40).map(it=>`<tr><td>${esc(`${it.item_no?it.item_no+". ":""}${it.description}`)}</td><td>${it.quantity!=null?esc(String(it.quantity)):"—"} ${esc(it.unit||"")}</td></tr>`).join("")}
+      </tbody></table>
+      <div class="act-primary"><button class="ma-gold" id="doc-replace">Use these lines</button><button class="ma-ghost" id="doc-add">Add to my lines</button></div>`
+    :`<div class="alert alert-amber"><span>No schedule of items found in this document. Try the bid form if there's another document.</span></div>`}
+    ${found.length?`<div class="rate-note">Also found ${found.join(", ")}. It's now on your Checklist.</div>`:""}
+    <button class="btn-ghost" id="doc-back" style="margin-top:0.5rem;">Back to pricing</button>`;
+  const take=(replace)=>{
+    const lines=items.map(lineFromDocItem);
+    p.lines=replace?lines:(p.lines||[]).filter(l=>(l.name||"").trim()||l.qty||l.price).concat(lines);
+    if(!p.lines.length)p.lines.push({name:"",qty:"",unit:"",price:"",ref:null});
+    savePrep(id,city);openPrep(city,id,"pricing");
+  };
+  const rep=document.getElementById("doc-replace"),add=document.getElementById("doc-add");
+  if(rep)rep.onclick=()=>{if(confirm("Replace your current lines with the items read from the document?"))take(true);};
+  if(add)add.onclick=()=>take(false);
+  document.getElementById("doc-back").onclick=()=>openPrep(city,id,"pricing");
+}
+
 function renderPrepPricing(body,city,id,b){
   const p=prepFor(id);
   const lineRow=(l,i)=>`<div class="prep-line" data-i="${i}">
@@ -4008,7 +4125,9 @@ function renderPrepPricing(body,city,id,b){
       ${l.note?`<small class="pl-ref rate-thin">${esc(l.note)}</small>`:""}
     </div>`;
   const t=prepTotals(p);
-  body.innerHTML=`<div class="rate-note" style="margin-top:0;">Starts from the quantities in the posting at MoDOT's average. Change anything to your own numbers.</div>
+  const canRead=prepDocCandidates(b).length>0;
+  body.innerHTML=`${canRead?`<button class="btn-primary" id="pl-read" style="margin-bottom:0.6rem;">Read quantities from the bid form</button>`:""}
+    <div class="rate-note" style="margin-top:0;">${p.docInfo&&p.docInfo.source?`Bid documents read: ${esc(p.docInfo.source)}. `:""}Starts from the quantities in the posting at MoDOT's average. Change anything to your own numbers.</div>
     <div id="prep-lines">${p.lines.map(lineRow).join("")}</div>
     <div class="prep-add"><button class="btn-ghost" id="pl-add">+ Add line</button><button class="btn-ghost" id="pl-reset">Start over from ballpark</button></div>
     <div class="prep-totals">
@@ -4039,6 +4158,8 @@ function renderPrepPricing(body,city,id,b){
     if(!p.lines.length)p.lines.push({name:"",qty:"",unit:"",price:"",ref:null});
     savePrep(id,city);openPrep(city,id,"pricing");
   });
+  const rd=document.getElementById("pl-read");
+  if(rd)rd.onclick=()=>renderDocPicker(body,city,id,b);
   document.getElementById("pl-add").onclick=()=>{
     p.lines.push({name:"",qty:"",unit:"",price:"",ref:null});
     savePrep(id,city);openPrep(city,id,"pricing");
