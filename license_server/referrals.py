@@ -458,6 +458,21 @@ def unsubscribe():
                        f"<b>{email}</b> again. Nothing else is needed.</p>")
 
 
+def _campaign_admin_token(data):
+    """The admin token from the body, or else from an Authorization: Bearer
+    header. The header form is what a Claude Code "network secret" attaches:
+    the scheduled outreach drafter calls these routes without ever holding the
+    token itself, so it can't leak it into a log or a chat. The app's admin
+    panel keeps sending it in the body as before."""
+    supplied = (data or {}).get("admin_token")
+    if supplied:
+        return supplied
+    auth = request.headers.get("Authorization", "")
+    if auth[:7].lower() == "bearer ":
+        return auth[7:].strip()
+    return ""
+
+
 @app.route("/campaign/send", methods=["POST"])
 def campaign_send():
     """Prepare a campaign for a caller-supplied list. SENDS NOTHING.
@@ -470,7 +485,7 @@ def campaign_send():
     data = request.get_json(force=True, silent=True) or {}
     if not _admin_configured():
         return jsonify({"ok": False, "reason": "admin_not_configured"}), 503
-    if not _admin_ok(data.get("admin_token")):
+    if not _admin_ok(_campaign_admin_token(data)):
         return jsonify({"ok": False, "reason": "unauthorized"}), 403
     if not RESEND_API_KEY:
         return jsonify({"ok": False, "reason": "email_unavailable"}), 503
@@ -551,7 +566,7 @@ def campaign_approve():
     data = request.get_json(force=True, silent=True) or {}
     if not _admin_configured():
         return jsonify({"ok": False, "reason": "admin_not_configured"}), 503
-    if not _admin_ok(data.get("admin_token")):
+    if not _admin_ok(_campaign_admin_token(data)):
         return jsonify({"ok": False, "reason": "unauthorized"}), 403
     if not RESEND_API_KEY:
         return jsonify({"ok": False, "reason": "email_unavailable"}), 503
@@ -617,7 +632,7 @@ def campaign_drafts():
     data = request.get_json(force=True, silent=True) or {}
     if not _admin_configured():
         return jsonify({"ok": False, "reason": "admin_not_configured"}), 503
-    if not _admin_ok(data.get("admin_token")):
+    if not _admin_ok(_campaign_admin_token(data)):
         return jsonify({"ok": False, "reason": "unauthorized"}), 403
     discard = (data.get("discard") or "").strip()
     drafts = _drafts()
@@ -662,7 +677,7 @@ def campaign_sent():
     data = request.get_json(force=True, silent=True) or {}
     if not _admin_configured():
         return jsonify({"ok": False, "reason": "admin_not_configured"}), 503
-    if not _admin_ok(data.get("admin_token")):
+    if not _admin_ok(_campaign_admin_token(data)):
         return jsonify({"ok": False, "reason": "unauthorized"}), 403
     log = kv_backend.get(_SENT_LOG_KEY, None)
     return jsonify({"ok": True, "sent": log if isinstance(log, list) else []})
@@ -674,7 +689,7 @@ def campaign_suppression():
     data = request.get_json(force=True, silent=True) or {}
     if not _admin_configured():
         return jsonify({"ok": False, "reason": "admin_not_configured"}), 503
-    if not _admin_ok(data.get("admin_token")):
+    if not _admin_ok(_campaign_admin_token(data)):
         return jsonify({"ok": False, "reason": "unauthorized"}), 403
     for addr in (data.get("add") or []):
         _suppress(addr)
