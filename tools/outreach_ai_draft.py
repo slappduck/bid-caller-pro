@@ -68,9 +68,10 @@ def voice():
 # this is checked in code, not asked for in the prompt.
 _COUNT_AS_WORK = (r"(?:open\s+|active\s+|new\s+|current\s+|live\s+)?"
                   r"(?:bids?|jobs?|projects?|opportunities|contracts?|postings?)")
-# Links pasted out of an email Gmail has already displayed come out wrapped as
-# google.com/url?q=...&ust=... Every one of the first 24 emails went out that
-# way, so each click landed on Google's "Redirect Notice" page instead of ours.
+# A draft saved through the Gmail API (the Gmail connector) has every link
+# rewritten to google.com/url?q=...&ust=... Every one of the first 24 emails
+# went out that way, so each click landed on Google's "Redirect Notice" page
+# instead of ours. See OUTREACH.md, "Before you press Send".
 _WRAPPED_LINK = re.compile(r"google\.[a-z.]+/url\?", re.I)
 
 

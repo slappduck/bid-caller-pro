@@ -204,11 +204,17 @@ first one:
 
 1. **Click the tracking link in the compose window.** It must open
    `curbcallpro.com/go/<slug>`. If the address bar shows
-   `google.com/url?q=...`, the link was copied out of an email Gmail had
-   already displayed. Gmail rewrites links in mail it shows you, and pasting
-   carries the rewrite along: recipients land on Google's "Redirect Notice"
-   warning, and cold mail carrying google.com redirect links is a known spam
-   signal. Copy from the draft *file*, never from an email you sent yourself.
+   `google.com/url?q=...`, recipients will land on Google's "Redirect
+   Notice" warning instead of our site, and cold mail carrying google.com
+   redirect links is a known spam signal.
+
+   **Never create outreach drafts through the Gmail connector (Claude's
+   Gmail tools / the Gmail API).** Tested 2026-10-08: it rewrites every
+   link it saves into a `google.com/url?q=...&ust=...` redirect -- with or
+   without `https://`, in plain text and in HTML `href`s alike. That is how
+   all 24 of the first emails went out broken. Compose in Gmail itself and
+   paste the text from the draft file or from a chat; links typed or pasted
+   into Gmail's own compose window stay as written.
 2. **Read the subject against the body.** The count is *agencies*, never open
    bids. Ten emails went out as "78 open bids near Davie" over bodies that
    said 78 agencies. `outreach_ai_draft.py` now holds any draft that does
