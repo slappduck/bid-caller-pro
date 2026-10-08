@@ -1292,6 +1292,375 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     }
   }
 
+  // ── Going rates ──
+  // Every figure shown must be one MoDOT printed, read from the committed
+  // data file -- so the checks compare against that file, not hard-coded
+  // numbers that would go stale when next year's book is added.
+  console.log("\nGoing rates show MoDOT's real prices, with their range");
+  {
+    const rates = JSON.parse(fs.readFileSync(path.join(ROOT, "mo_unit_prices.json"), "utf8"));
+    const latest = (item, d) => {
+      const by = rates.prices[item][d]; const y = Object.keys(by).sort().pop(); return by[y];
+    };
+    const money = (n) => "$" + (n >= 1000 ? Math.round(n).toLocaleString("en-US") : n.toFixed(2));
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const host = new URL(route.request().url()).hostname;
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") {
+        return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      }
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      const bids = [
+        { title: "City Hall ADA Ramp", scope: "4 ADA ramps near the city hall entrance", deadline: "2099-01-01", status: "open", url: "https://e.gov/1" },
+        { title: "Main St Curb and Gutter", scope: "800 LF curb and gutter", deadline: "2099-01-01", status: "open", url: "https://e.gov/2" },
+        { title: "Elm St Sidewalk", scope: "1,200 LF sidewalk, 4 ADA ramps", value: "$120k", deadline: "2099-01-01", status: "open", url: "https://e.gov/3" },
+      ];
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      localStorage.setItem("last_feed", JSON.stringify({ "Aurora, MO": bids, "Topeka, KS": [bids[0]] }));
+      localStorage.setItem("price_district", JSON.stringify("SW"));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(900);
+
+    const card = await page.textContent("#home-rates");
+    const ramp = latest("6081010", "SW");
+    check("Home shows the SW curb-ramp average MoDOT printed", card.includes(money(ramp[0])), card.slice(0, 200));
+    check("...with its low-high range and bid count beside it",
+          card.includes(`${money(ramp[1])}–${money(ramp[2])}`) && card.includes(`${ramp[3]} bids`));
+    check("the source is named", /MoDOT Unit Bid Price Books/.test(card));
+
+    await page.selectOption("#home-rate-district", "STATEWIDE");
+    await page.waitForTimeout(300);
+    const statewide = await page.textContent("#home-rates");
+    check("switching district switches the numbers", statewide.includes(money(latest("6081010", "STATEWIDE")[0])));
+    check("the district choice is remembered",
+          (await page.evaluate(() => localStorage.getItem("price_district"))) === '"STATEWIDE"');
+    await page.selectOption("#home-rate-district", "SW");
+    await page.waitForTimeout(300);
+
+    await page.evaluate(() => openRates());
+    await page.waitForTimeout(400);
+    const sheet = await page.textContent("#modal-content");
+    const rows = await page.locator("#modal-content .rate-row").count();
+    check("the full sheet lists every SW item MoDOT priced",
+          rows === Object.keys(rates.prices).filter((i) => rates.prices[i].SW).length, `${rows} rows`);
+    check("each year of the trend is shown", rates.years.every((y) => sheet.includes(String(y))));
+    const thin = Object.keys(rates.prices).some((i) => rates.prices[i].SW && latest(i, "SW")[3] < 5);
+    check("a price on few bids is flagged as a rough guide", !thin || sheet.includes("few bids"));
+
+    const detailFor = async (city, i) => {
+      await page.evaluate(([c, n]) => { closeModal(); openDetail(c, bidData[c][n]); }, [city, i]);
+      await page.waitForTimeout(400);
+      return page.textContent("#detail-rates");
+    };
+    const rampDetail = await detailFor("Aurora, MO", 0);
+    check("an ADA ramp bid shows ramp and dome prices",
+          rampDetail.includes("Concrete curb ramp") && rampDetail.includes("Truncated domes"), rampDetail.slice(0, 160));
+    check("\"near the city hall entrance\" is not read as a driveway job", !rampDetail.includes("driveway"));
+    const curbDetail = await detailFor("Aurora, MO", 1);
+    check("a curb-and-gutter bid shows curb and gutter, not bare curb",
+          curbDetail.includes("Curb and gutter") && !curbDetail.includes("Concrete curb, 6"), curbDetail.slice(0, 160));
+    // ── Ballpark: stated quantity x the district's average, nothing guessed ──
+    const cg = latest("6091052", "SW")[0], sw = latest("6086004", "SW")[0];
+    const whole = (x) => Math.round(x).toLocaleString("en-US");
+    const k = (n) => n >= 1000000 ? "$" + (n / 1e6).toFixed(n % 1e6 ? 1 : 0) + "M"
+      : n >= 1000 ? "$" + (n / 1000).toFixed(n % 1000 ? 1 : 0) + "k" : "$" + Math.round(n);
+    check("curb-and-gutter detail prices 800 ft at the SW average",
+          curbDetail.includes(`$${whole(800 * cg)}`), curbDetail.slice(0, 300));
+    await page.evaluate(() => { closeModal(); switchScreen("feed"); });
+    await page.waitForTimeout(400);
+    const cards = await page.$$eval("#feed-list .bid", (els) => els.map((e) => e.textContent));
+    const cgCard = cards.find((t) => t.includes("Main St Curb and Gutter")) || "";
+    check("the bid card carries the ballpark", cgCard.includes(`\u2248 ${k(800 * cg)} ballpark`), cgCard.slice(0, 200));
+    const rampCard = cards.find((t) => t.includes("City Hall ADA Ramp") && !t.includes("Topeka")) || "";
+    check("a bid with no quantities gets no ballpark", !/ballpark/.test(rampCard));
+
+    const swDetail = await detailFor("Aurora, MO", 2);
+    check("sidewalk in feet uses the stated width assumption",
+          swDetail.includes("5\u00a0ft wide (assumed)") && swDetail.includes(`$${whole(1200 * 5 / 9 * sw)}`), swDetail.slice(0, 300));
+    check("a ramp count is listed as not counted, not guessed",
+          /Not counted: 4 ramps/.test(swDetail));
+    check("the posted value is shown beside the ballpark", swDetail.includes("Posted value") && swDetail.includes("$120k"));
+    await page.fill("#est-width", "4");
+    await page.dispatchEvent("#est-width", "change");
+    await page.waitForTimeout(400);
+    const sw4 = await page.textContent("#detail-rates");
+    check("changing the width recalculates", sw4.includes(`$${whole(1200 * 4 / 9 * sw)}`), sw4.slice(0, 300));
+    await page.fill("#est-width", "5");
+    await page.dispatchEvent("#est-width", "change");
+    await page.waitForTimeout(200);
+
+    const ksDetail = await detailFor("Topeka, KS", 0);
+    check("a bid outside Missouri shows no Missouri prices", ksDetail.trim() === "");
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
+  // ── Prepare bid: checklist, pricing, summary ──
+  console.log("\nPrepare bid keeps the whole bid in the app");
+  {
+    const rates = JSON.parse(fs.readFileSync(path.join(ROOT, "mo_unit_prices.json"), "utf8"));
+    const swAvg = (() => { const by = rates.prices["6086004"].SW; return by[Object.keys(by).sort().pop()][0]; })();
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const host = new URL(route.request().url()).hostname;
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") {
+        return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      }
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      if (sessionStorage.getItem("seeded")) return;   // keep state across the reload below
+      sessionStorage.setItem("seeded", "1");
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      localStorage.setItem("last_feed", JSON.stringify({ "Aurora, MO": [
+        { title: "Elm St Sidewalk", scope: "1,200 LF sidewalk, 4 ADA ramps", value: "$120k",
+          deadline: "2099-01-01", status: "open", url: "https://e.gov/3", addenda: true,
+          documents: [{ name: "Plans", url: "https://e.gov/plans.pdf" }] }] }));
+      localStorage.setItem("price_district", JSON.stringify("SW"));
+      localStorage.setItem("company_profile", JSON.stringify({ name: "Test Concrete LLC", contact: "Pat", phone: "417-555-0100" }));
+    });
+    const boot = async () => {
+      await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+      await page.waitForTimeout(600);
+      await page.evaluate(() => showApp());
+      await page.waitForTimeout(800);
+    };
+    await boot();
+    const id = await page.evaluate(() => bidId("Aurora, MO", bidData["Aurora, MO"][0]));
+    await page.evaluate(() => openDetail("Aurora, MO", bidData["Aurora, MO"][0]));
+    await page.waitForTimeout(300);
+    check("bid details offer Prepare bid", /Prepare bid/.test(await page.textContent("#prep-open")));
+    await page.click("#prep-open");
+    await page.waitForTimeout(500);
+
+    const checklist = await page.textContent("#prep-body");
+    check("the checklist covers the posting's addenda and the submit step",
+          /Read every addendum/.test(checklist) && /This bid has addenda/.test(checklist) && /Submit before the deadline/.test(checklist));
+    check("the bid's documents are linked from the checklist", /Plans/.test(checklist));
+    check("nothing is ticked yet", /0\/\d+/.test(await page.textContent(".prep-tabs")));
+    await page.check('[data-check="docs"]');
+    await page.waitForTimeout(300);
+    check("ticking a step updates progress", /1\/\d+/.test(await page.textContent(".prep-tabs")));
+    await page.fill("#prep-new", "Call the bonding company");
+    await page.click("#prep-add-btn");
+    await page.waitForTimeout(300);
+    check("your own step can be added", /Call the bonding company/.test(await page.textContent("#prep-body")));
+    check("preparing a bid saves it", await page.evaluate((i) => !!saved[i], id));
+
+    await page.click('[data-step="pricing"]');
+    await page.waitForTimeout(400);
+    const lines = await page.evaluate((i) => bidPrep[i].lines, id);
+    const swLine = lines.find((l) => /sidewalk/i.test(l.name));
+    const rampLine = lines.find((l) => /ramp/i.test(l.name));
+    check("pricing starts from the ballpark: sidewalk at the SW average",
+          swLine && Math.abs(swLine.qty - 666.7) < 0.1 && swLine.price === Math.round(swAvg * 100) / 100, JSON.stringify(swLine));
+    check("the ramp count becomes a line for you to price, not a guess",
+          rampLine && rampLine.qty === 4 && rampLine.unit === "each" && rampLine.price === "", JSON.stringify(rampLine));
+    const rampIdx = lines.indexOf(rampLine);
+    await page.fill(`.prep-line[data-i="${rampIdx}"] input[data-f="price"]`, "2000");
+    await page.fill("#pt-mk", "10");
+    await page.waitForTimeout(300);
+    const expected = (swLine.qty * swLine.price + 4 * 2000) * 1.1;
+    const shown = await page.textContent("#pt-total");
+    check("the total is quantity x price plus markup", shown === "$" + Math.round(expected).toLocaleString("en-US"), `${shown} vs ${expected}`);
+
+    await page.click('[data-step="summary"]');
+    await page.waitForTimeout(300);
+    const summary = await page.textContent("#prep-body");
+    check("the summary carries company, lines and the total",
+          /Test Concrete LLC/.test(summary) && /ADA curb ramp/.test(summary) && summary.includes(expected.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })));
+    const text = await page.evaluate((i) => prepSummaryText(prepSummaryData(i, bidData["Aurora, MO"][0], "Aurora, MO")), id);
+    check("copy-as-text has the total bid", /TOTAL BID: \$[\d,]+\.\d\d/.test(text) && /Bidder: Test Concrete LLC/.test(text));
+    const printed = await page.evaluate(() => {
+      let html = ""; const orig = window.open;
+      window.open = () => ({ document: { open() {}, write(h) { html += h; }, close() {} } });
+      document.getElementById("ps-print").click();
+      window.open = orig; return html;
+    });
+    check("the printable page has the line items and total", /Total bid: \$/.test(printed) && /ADA curb ramp/.test(printed));
+    check("printed text is escaped", !/<script>alert/.test(printed));
+
+    await boot();   // a reload: the workspace has to survive it
+    const after = await page.evaluate((i) => bidPrep[i], id);
+    check("the workspace survives a reload", after && after.checks.docs === true && after.custom[0] === "Call the bonding company" && Number(after.markup) === 10);
+    await page.evaluate(() => switchScreen("feed"));
+    await page.waitForTimeout(300);
+    check("the bid card shows prep progress", /Prep 1\/\d+/.test(await page.textContent("#feed-list")));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
+  // ── Phase 2: read the bid form's schedule of items ──
+  console.log("\nThe bid form's own items fill the pricing sheet, after review");
+  {
+    const rates = JSON.parse(fs.readFileSync(path.join(ROOT, "mo_unit_prices.json"), "utf8"));
+    const swAvg = (() => { const by = rates.prices["6086004"].SW; return by[Object.keys(by).sort().pop()][0]; })();
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    page.on("dialog", (d) => d.accept());
+    let readCalls = 0, readBody = null, failNext = false;
+    await page.route("**/*", (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      if (u.endsWith("/bid-documents/read")) {
+        readCalls++; readBody = JSON.parse(route.request().postData() || "{}");
+        if (failNext) {
+          failNext = false;
+          return route.fulfill({ status: 200, contentType: "application/json",
+            body: JSON.stringify({ ok: false, reason: "fetch_failed", detail: "robots_disallow" }) });
+        }
+        return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+          ok: true, cached: false, pages_read: 6, truncated: false,
+          line_items: [
+            { item_no: "1", description: "Mobilization", quantity: 1, unit: "LS" },
+            { item_no: "2", description: "4 in. concrete sidewalk", quantity: 1250, unit: "SY" },
+            { item_no: "3", description: "Concrete sidewalk", quantity: 1, unit: "LS" },
+          ],
+          submission: "Sealed envelope to the City Clerk, 100 Main St",
+          bid_security: "5% bid bond", prebid: "", required_forms: ["Non-collusion affidavit", "E-Verify affidavit"] }) });
+      }
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") {
+        return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      }
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      localStorage.setItem("last_feed", JSON.stringify({ "Aurora, MO": [
+        { title: "Elm St Sidewalk", scope: "Sidewalk replacement", deadline: "2099-01-01", status: "open",
+          url: "https://e.gov/3", documents: [{ name: "Bid form", url: "https://e.gov/form.pdf" }] }] }));
+      localStorage.setItem("price_district", JSON.stringify("SW"));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(800);
+    const id = await page.evaluate(() => bidId("Aurora, MO", bidData["Aurora, MO"][0]));
+    await page.evaluate((i) => openPrep("Aurora, MO", i, "pricing"), id);
+    await page.waitForTimeout(400);
+    check("pricing offers to read the bid form", (await page.locator("#pl-read").count()) === 1);
+
+    await page.click("#pl-read");
+    await page.waitForTimeout(200);
+    failNext = true;
+    await page.click('[data-doc="0"]');
+    await page.waitForTimeout(500);
+    check("a site that blocks robots says so plainly",
+          /doesn't allow automated reading/.test(await page.textContent("#prep-body")));
+    await page.click("#doc-back");
+    await page.waitForTimeout(300);
+
+    await page.click("#pl-read");
+    await page.waitForTimeout(200);
+    await page.click('[data-doc="0"]');
+    await page.waitForTimeout(600);
+    check("the server is asked for the document the user picked", readBody && readBody.url === "https://e.gov/form.pdf");
+    const review = await page.textContent("#prep-body");
+    check("what was read is shown for review first", /3 line items found/.test(review) && /4 in. concrete sidewalk/.test(review));
+    check("nothing has replaced the lines yet", await page.evaluate((i) => !bidPrep[i].lines.some((l) => /Mobilization/.test(l.name)), id));
+    await page.click("#doc-replace");
+    await page.waitForTimeout(400);
+    const lines = await page.evaluate((i) => bidPrep[i].lines, id);
+    const sy = lines.find((l) => /^2\./.test(l.name)), ls = lines.find((l) => /^3\./.test(l.name));
+    check("a sidewalk item in SY gets the SW sidewalk average",
+          sy && sy.qty === 1250 && sy.unit === "sq yd" && sy.price === Math.round(swAvg * 100) / 100, JSON.stringify(sy));
+    check("the same words in a lump-sum unit get no MoDOT price", ls && ls.unit === "lump sum" && ls.price === "", JSON.stringify(ls));
+    check("mobilization comes through to be priced", lines.some((l) => /Mobilization/.test(l.name) && l.unit === "lump sum"));
+
+    await page.click('[data-step="checklist"]');
+    await page.waitForTimeout(300);
+    const cl = await page.textContent("#prep-body");
+    check("the checklist shows the bid security the documents require", /From the bid documents: 5% bid bond/.test(cl));
+    check("...how to submit", /Sealed envelope to the City Clerk/.test(cl));
+    check("...and the required forms", /Non-collusion affidavit; E-Verify affidavit/.test(cl));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
+  // ── Phase 3: your own pricing history ──
+  console.log("\nPast bids feed your prices: history, copy, won vs lost");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const host = new URL(route.request().url()).hostname;
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") {
+        return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      }
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      const sw = (price) => ({ name: "Concrete sidewalk, 4 in.", item: "6086004", unit: "sq yd", qty: 100, price });
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      localStorage.setItem("last_feed", JSON.stringify({ "Aurora, MO": [
+        { title: "Elm St Sidewalk", scope: "1,200 LF sidewalk, 4 ADA ramps", deadline: "2099-01-01", status: "open", url: "https://e.gov/3" }] }));
+      localStorage.setItem("price_district", JSON.stringify("SW"));
+      localStorage.setItem("saved", JSON.stringify({
+        pastwon: { title: "Oak St Ramps", _city: "Aurora, MO" }, pastlost: { title: "Pine Ave Walks", _city: "Aurora, MO" } }));
+      localStorage.setItem("pipeline", JSON.stringify({ pastwon: "won", pastlost: "lost" }));
+      localStorage.setItem("bid_prep", JSON.stringify({
+        pastwon: { checks: {}, custom: [], markup: 0, addenda: "", updated: 1000,
+          lines: [sw(60), { name: "ADA curb ramp", unit: "each", qty: 6, price: 1800 }] },
+        pastlost: { checks: {}, custom: [], markup: 0, addenda: "", updated: 2000, lines: [sw(75)] } }));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(800);
+    const id = await page.evaluate(() => bidId("Aurora, MO", bidData["Aurora, MO"][0]));
+    await page.evaluate((i) => openPrep("Aurora, MO", i, "pricing"), id);
+    await page.waitForTimeout(400);
+    const sheet = await page.textContent("#prep-body");
+    check("each line shows your past prices, newest first, with the outcome",
+          /Your past prices: \$75\.00 lost · \$60\.00 won/.test(sheet), sheet.slice(0, 400));
+    check("the ramp line shows your past ramp price", /\$1,800\.00 won/.test(sheet));
+
+    await page.click("#pl-past");
+    await page.waitForTimeout(200);
+    check("past bids are listed by name", /Oak St Ramps/.test(await page.textContent("#prep-body")));
+    await page.click('[data-prices="pastwon"]');
+    await page.waitForTimeout(300);
+    const lines = await page.evaluate((i) => bidPrep[i].lines, id);
+    check("copy my prices fills matching lines from that bid",
+          lines.find((l) => l.item === "6086004").price === 60 && lines.find((l) => /ramp/i.test(l.name)).price === 1800, JSON.stringify(lines));
+    const qtyBefore = lines.find((l) => l.item === "6086004").qty;
+    check("...without touching this job's quantities", Math.abs(qtyBefore - 666.7) < 0.1);
+    await page.click("#pl-past");
+    await page.waitForTimeout(200);
+    await page.click('[data-lines="pastlost"]');
+    await page.waitForTimeout(300);
+    const after = await page.evaluate((i) => bidPrep[i].lines, id);
+    check("copy lines adds that bid's lines with quantities left blank",
+          after.length === lines.length + 1 && after[after.length - 1].qty === "" && after[after.length - 1].price === 75);
+
+    await page.evaluate(() => { closeModal(); openRates(); });
+    await page.waitForTimeout(400);
+    const rates = await page.textContent("#modal-content");
+    check("the rates sheet compares your won and lost prices with MoDOT",
+          /Your bids vs MoDOT/.test(rates) && /\$60\.00 \(1\)/.test(rates) && /\$75\.00 \(1\)/.test(rates));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   await browser.close();
   server.close();
   console.log(failures ? `\n${failures} check(s) FAILED` : "\nAll checks passed");

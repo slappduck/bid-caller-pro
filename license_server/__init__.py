@@ -113,6 +113,7 @@ _FILES = (
     "community_submissions.py",
     "search_sources.py",
     "scan.py",
+    "bid_documents.py",
 )
 
 _pkg_dir = _os.path.dirname(_os.path.abspath(__file__))

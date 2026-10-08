@@ -2024,11 +2024,42 @@ def detail_has_addenda(html):
     return bool(_ADDENDA_RE.search(_clean(_unescape(str(html or "")))))
 
 
+_DOC_ANCHOR_RE = re.compile(
+    r'<a\b[^>]*?href="([^"]*(?:DocumentCenter/View|ShowDocument|\.pdf|\.docx?|\.zip)[^"]*)"[^>]*>(.*?)</a>',
+    re.I | re.S)
+# Documents a town links from every page -- its menu or footer -- rather
+# than from this bid. Rogers County, OK links its open-records request form
+# site-wide, so every one of its postings "had" that PDF as its only bid
+# document. Kept narrow on purpose: a location map, a prevailing-wage
+# ordinance or a W-9 can genuinely belong to a bid packet.
+_SITEWIDE_DOC_RE = re.compile(
+    r"open[\s_-]*records|records[\s_-]*request|\bfoia\b|employment|job[\s_-]*application"
+    r"|\bagenda|\bminutes\b|newsletter|privacy[\s_-]*policy|accessibility"
+    r"|annual[\s_-]*report|comprehensive[\s_-]*plan", re.I)
+
+
+def _doc_name(anchor_html, url):
+    """The link's own words, else a name made from the file's URL."""
+    name = _clean(_unescape(re.sub(r"<[^>]+>", " ", anchor_html or ""))).strip()
+    if not name or name.lower() in ("click here", "here", "download", "view", "link"):
+        tail = urllib.parse.unquote(urllib.parse.urlsplit(url).path.rstrip("/").rsplit("/", 1)[-1])
+        tail = re.sub(r"\.(pdf|docx?|zip)$", "", tail, flags=re.I)
+        name = re.sub(r"[-_]+", " ", tail).strip()
+        if name.isdigit():
+            name = ""
+    return name[:120]
+
+
 def detail_documents(html, base_url="", limit=5):
     """Links to the bid packet -- the drawings and specs, where the
-    quantities a contractor prices from actually live."""
+    quantities a contractor prices from actually live.
+
+    [{"name", "url"}]. Site-wide civic documents are left out (see
+    _SITEWIDE_DOC_RE), and each keeps the name the page gives it, so the
+    app can offer "Bid Form" rather than "Document 1".
+    """
     out, seen = [], set()
-    for href in _DOC_LINK_RE.findall(str(html or "")):
+    for href, anchor in _DOC_ANCHOR_RE.findall(str(html or "")):
         url = urllib.parse.urljoin(base_url, _unescape(href)) if base_url \
             else _unescape(href)
         # A bare /DocumentCenter is the index, not a document.
@@ -2037,7 +2068,10 @@ def detail_documents(html, base_url="", limit=5):
         if url in seen:
             continue
         seen.add(url)
-        out.append(url)
+        name = _doc_name(anchor, url)
+        if _SITEWIDE_DOC_RE.search(name) or _SITEWIDE_DOC_RE.search(urllib.parse.unquote(url)):
+            continue
+        out.append({"name": name, "url": url})
         if len(out) >= limit:
             break
     return out
