@@ -1762,6 +1762,107 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── Paperwork: fill the agency's form, then bond, concrete, dates ──
+  console.log("\nThe agency's form gets filled in, and the next steps write themselves");
+  {
+    const ctx = await browser.newContext({ ...MOBILE_VIEWPORT, acceptDownloads: true });
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    let fillBody = null;
+    await page.route("**/*", (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      if (u.endsWith("/bid-documents/fill")) {
+        fillBody = JSON.parse(route.request().postData() || "{}");
+        return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+          ok: true, fields: 9, left_blank: 7, pdf_b64: Buffer.from("%PDF-1.4 filled").toString("base64"),
+          filled: [{ field: "Bidder", label: "Name of bidder", value: "Test Concrete LLC", key: "company.name" },
+                   { field: "Total", label: "Total base bid", value: "75,000.00", key: "total" }] }) });
+      }
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") {
+        return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      }
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      const bid = { title: "Elm St Sidewalk", scope: "Sidewalk replacement", deadline: "2099-11-01", status: "open",
+        url: "https://e.gov/3", email: "clerk@e.gov", bid_number: "B-17",
+        documents: [{ name: "Bid form", url: "https://e.gov/form.pdf" }] };
+      localStorage.setItem("last_feed", JSON.stringify({ "Aurora, MO": [bid] }));
+      localStorage.setItem("company_profile", JSON.stringify({ name: "Test Concrete LLC", contact: "Pat Lee", phone: "417-555-0100",
+        bid_info: { title: "Owner", address: "1 Main St", bond_agent: "Sam Surety", bond_email: "sam@surety.example", supplier_email: "orders@mix.example" } }));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(800);
+    const id = await page.evaluate(() => bidId("Aurora, MO", bidData["Aurora, MO"][0]));
+    await page.evaluate((i) => {
+      const p = prepFor(i);
+      p.lines = [{ name: "2. 4 in. concrete sidewalk", qty: 1250, unit: "sq yd", price: 60 },
+                 { name: "3. Curb and gutter", qty: 300, unit: "ft", price: 0 }];
+      p.addenda = "#1";
+      p.docInfo = { source: "Bid form", bid_security: "5% bid bond", prebid: "Mandatory pre-bid meeting October 20, 2099 at 10 AM",
+                    questions_due: "Questions due by October 25, 2099", submission: "", required_forms: [] };
+      savePrep(i, "Aurora, MO");
+      openPrep("Aurora, MO", i, "summary");
+    }, id);
+    await page.waitForTimeout(400);
+
+    const bond = decodeURIComponent(await page.getAttribute("#ps-bond", "href"));
+    check("the bond request goes to the bonding agent", bond.startsWith("mailto:sam@surety.example"), bond.slice(0, 60));
+    check("...with the project, the bid and the bond the documents ask for",
+          /Hi Sam,/.test(bond) && /Bid due: 2099-11-01/.test(bond) && /Our bid: about \$75,000/.test(bond) && /Bond required: 5% bid bond/.test(bond));
+    const q = decodeURIComponent(await page.getAttribute("#ps-question", "href"));
+    check("a question to the agency is addressed to its contact", q.startsWith("mailto:clerk@e.gov") && /B-17/.test(q));
+    check("every date the documents give is offered for the calendar", /Add 3 dates/.test(await page.textContent("#ps-dates")));
+    const [ics] = await Promise.all([page.waitForEvent("download"), page.click("#ps-dates")]);
+    const icsText = fs.readFileSync(await ics.path(), "utf8");
+    check("...due date, mandatory pre-bid meeting and questions deadline",
+          /DTSTART;VALUE=DATE:20991101/.test(icsText) && /MANDATORY pre-bid meeting/.test(icsText) && /DTSTART;VALUE=DATE:20991025/.test(icsText));
+
+    await page.click("#ps-concrete");
+    await page.waitForTimeout(300);
+    const conc = await page.textContent("#prep-body");
+    check("concrete is worked out from area and thickness", conc.includes("138.9 CY"), conc.slice(0, 200));
+    check("...with waste added for the order", /146 CY/.test(conc));
+    check("...and curb is left to size from the plans, not guessed", /Not counted, size from the plans: 3\. Curb and gutter/.test(conc));
+    const quote = decodeURIComponent(await page.getAttribute("#cq-send", "href"));
+    check("the quote request goes to the supplier", quote.startsWith("mailto:orders@mix.example") && /about 146 CY/.test(quote));
+    await page.click("#cq-back");
+    await page.waitForTimeout(300);
+
+    await page.click("#ps-fill");
+    await page.waitForTimeout(300);
+    await page.click('[data-doc="0"]');
+    await page.waitForTimeout(600);
+    check("the form filler is sent the company, the prices and the total",
+          fillBody && fillBody.url === "https://e.gov/form.pdf" && fillBody.company.name === "Test Concrete LLC"
+            && fillBody.company.title === "Owner" && fillBody.bid.total === 75000 && fillBody.bid.addenda === "#1"
+            && fillBody.lines[0].item_no === "2" && fillBody.lines[0].unit_price === 60 && fillBody.lines[0].amount === 75000,
+          JSON.stringify(fillBody && fillBody.lines));
+    const filled = await page.textContent("#prep-body");
+    check("every filled box is listed for checking", /Name of bidder/.test(filled) && /75,000\.00/.test(filled) && /7 boxes left blank/.test(filled));
+    const [pdf] = await Promise.all([page.waitForEvent("download"), page.click("#ff-download")]);
+    check("the filled form downloads", fs.readFileSync(await pdf.path(), "utf8").startsWith("%PDF") && /filled\.pdf$/.test(pdf.suggestedFilename()));
+
+    await page.evaluate(() => { closeModal(); switchScreen("account"); });
+    await page.waitForTimeout(500);
+    check("Account shows how much of the bid paperwork is saved", /5 of 11 saved/.test(await page.textContent("#screen-account")));
+    await page.click("#bi-edit-btn");
+    await page.waitForTimeout(300);
+    await page.fill('.bi-field[data-k="license"]', "MO-12345");
+    await page.click("#bi-save");
+    await page.waitForTimeout(300);
+    check("bid details save with the company profile",
+          await page.evaluate(() => JSON.parse(localStorage.getItem("company_profile")).bid_info.license === "MO-12345"));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   await browser.close();
   server.close();
   console.log(failures ? `\n${failures} check(s) FAILED` : "\nAll checks passed");

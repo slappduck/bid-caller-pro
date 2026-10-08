@@ -385,6 +385,7 @@ async function pushCompanyProfile(){
   if(!currentUser){toast("Sign in again to save your company info");return;}
   const row={};
   COMPANY_FIELDS.forEach(k=>{row[k]=companyProfile[k]||"";});
+  row.bid_info=bidInfo();
   // Send user_id explicitly rather than leaning on the column's DEFAULT
   // auth.uid(). "create table if not exists" never alters an existing table,
   // so a project whose company_profiles predates that default silently
@@ -402,9 +403,13 @@ async function pushCompanyProfile(){
   // and phone syncing too. Retry without it: the photo stays local until the
   // migration runs, everything else still follows the account.
   console.warn("[curbcall] company profile push failed:", err);
+  // bid_info arrives with a later migration too; same treatment.
   const rest={};
   COMPANY_FIELDS.filter(k=>k!=="avatar_url")
     .forEach(k=>{rest[k]=companyProfile[k]||"";});
+  const errText=String((err&&(err.message||err.details||err.hint))||"");
+  if(/avatar_url/.test(errText)&&!/bid_info/.test(errText)){rest.bid_info=bidInfo();}
+  if(/bid_info/.test(errText)&&!/avatar_url/.test(errText)){rest.avatar_url=companyProfile.avatar_url||"";}
   if(currentUser&&currentUser.id)rest.user_id=currentUser.id;
   let err2=null;
   try{const r=await sb.from("company_profiles").upsert(rest,{onConflict:"user_id"});err2=r&&r.error;}
@@ -422,11 +427,14 @@ async function syncPullCompanyProfile(){
   // photo and a contact but left the company name blank had the stored row
   // ignored on every other device -- and the else-branch then pushed the
   // empty local copy back over it.
-  const hasRemote=data&&COMPANY_FIELDS.some(k=>data[k]);
-  const hasLocal=COMPANY_FIELDS.some(k=>companyProfile[k]);
+  const remoteInfo=data&&data.bid_info&&typeof data.bid_info==="object"?data.bid_info:null;
+  const hasRemote=data&&(COMPANY_FIELDS.some(k=>data[k])||(remoteInfo&&Object.keys(remoteInfo).length));
+  const hasLocal=COMPANY_FIELDS.some(k=>companyProfile[k])||bidInfoCount()>0;
   if(hasRemote){
     const next={};
     COMPANY_FIELDS.forEach(k=>{next[k]=data[k]||"";});
+    // A project without the bid_info column keeps this device's copy.
+    next.bid_info=remoteInfo&&Object.keys(remoteInfo).length?remoteInfo:bidInfo();
     companyProfile=next;
     store.set("company_profile",companyProfile);
     updateUserChip();
@@ -4047,6 +4055,7 @@ function prepChecklist(b,info){
     {key:"addenda",label:"Read every addendum",
       detail:(b&&b.addenda?"This bid has addenda. ":"")+"Check for new ones up to the deadline. Most bid forms ask you to list each addendum by number.",
       urgent:!!(b&&b.addenda)},
+    info.questions_due?{key:"questions",label:"Send any questions before the deadline",detail:fromDocs(info.questions_due).trim()}:null,
     {key:"site",label:"Visit the site",detail:"Optional, but quantities on paper and in the field don't always agree.",optional:true},
     {key:"price",label:"Price every line item",detail:"Use the Pricing tab."},
     {key:"bond",label:info.bid_security?"Bid bond or bid security":"Bid bond or bid security, if required",
@@ -4262,7 +4271,7 @@ function renderDocReview(body,city,id,b,doc,res){
   // What the documents say about the bid is kept whatever happens to the
   // lines -- it feeds the checklist.
   p.docInfo={source:doc.name,submission:res.submission||"",bid_security:res.bid_security||"",
-    prebid:res.prebid||"",required_forms:res.required_forms||[],read_at:Date.now()};
+    prebid:res.prebid||"",questions_due:res.questions_due||"",required_forms:res.required_forms||[],read_at:Date.now()};
   savePrep(id,city);
   const items=res.line_items||[];
   const found=[res.submission&&"how to submit",res.bid_security&&"bid security",res.prebid&&"the pre-bid meeting",
@@ -4501,6 +4510,8 @@ function renderPrepSummary(body,city,id,b){
   const p=prepFor(id);
   const s=prepSummaryData(id,b,city);
   const c=s.company;
+  const canFill=prepDocCandidates(b).some(d=>d.name!=="Original posting");
+  const dates=bidDates(b,p),info=bidInfoCount();
   body.innerHTML=`<div class="prep-summary">
       <div class="ps-co">${c.name?`<b>${esc(c.name)}</b>`:`<span class="rate-thin">Add your company name in Account so it prints here.</span>`}
         ${[c.contact,c.phone,c.email].filter(Boolean).map(esc).join(" · ")}</div>
@@ -4517,16 +4528,31 @@ function renderPrepSummary(body,city,id,b){
       <input class="input" id="ps-addenda" value="${esc(p.addenda||"")}" placeholder="e.g. #1, #2 (or none)">
     </div>
     <div class="act-primary">
-      <button class="ma-gold" id="ps-print">Print / save PDF</button>
+      ${canFill?`<button class="ma-gold" id="ps-fill">Fill in the agency's bid form</button>`:""}
+      <button class="${canFill?"ma-ghost":"ma-gold"}" id="ps-print">Print / save PDF</button>
       <button class="ma-ghost" id="ps-copy">Copy as text</button>
     </div>
-    <div class="rate-note">Copy these onto the agency's own bid form. Most agencies only accept their form, signed by you.</div>`;
+    <div class="rate-note">Most agencies only accept their own form, signed by you.${canFill?" Filling it in puts your details and prices into its boxes; you check it and sign.":" Copy these onto it."}</div>
+    <div class="workspace-title" style="margin-top:1.2rem;">Next steps</div>
+    <div class="ps-steps">
+      <a class="btn-ghost" id="ps-bond" href="${esc(bondRequestMail(b,p,city))}">Ask for a bid bond</a>
+      <button class="btn-ghost" id="ps-concrete">Get a concrete quote</button>
+      ${b.email?`<a class="btn-ghost" id="ps-question" href="${esc(agencyQuestionMail(b))}">Ask the agency a question</a>`:""}
+      ${dates.length?`<button class="btn-ghost" id="ps-dates">Add ${dates.length>1?`${dates.length} dates`:"the due date"} to my calendar</button>`:""}
+    </div>
+    <div class="rate-note">${info>=BID_INFO_FIELDS.length?"":`${info?`${info} of ${BID_INFO_FIELDS.length}`:"No"} bid details saved. `}<a href="#" id="ps-profile">${info?"Edit":"Add"} bid details</a>: your address, license, bonding agent and supplier, so these fill themselves in.</div>`;
   document.getElementById("ps-addenda").oninput=(e)=>{p.addenda=e.target.value.slice(0,200);savePrep(id,city);};
   document.getElementById("ps-copy").onclick=async()=>{
     try{await navigator.clipboard.writeText(prepSummaryText(prepSummaryData(id,b,city)));toast("Summary copied");}
     catch(e){toast("Couldn't copy. Use Print instead");}
   };
   document.getElementById("ps-print").onclick=()=>printPrepSummary(prepSummaryData(id,b,city));
+  const fill=document.getElementById("ps-fill");
+  if(fill)fill.onclick=()=>renderFormFill(body,city,id,b);
+  document.getElementById("ps-concrete").onclick=()=>renderConcretePanel(body,city,id,b);
+  const dl=document.getElementById("ps-dates");
+  if(dl)dl.onclick=()=>downloadBidDates(b,p,city,id);
+  document.getElementById("ps-profile").onclick=(e)=>{e.preventDefault();openBidInfo(()=>openPrep(city,id,"summary"));};
 }
 function printPrepSummary(s){
   const c=s.company;
@@ -4549,6 +4575,238 @@ ${s.lines.map((l,i)=>`<tr><td>${i+1}</td><td style="text-align:left">${esc(l.nam
   const w=window.open("","_blank");
   if(!w){toast("Allow pop-ups to print, or use Copy");return;}
   w.document.open();w.document.write(html);w.document.close();
+}
+
+// ── Bid paperwork: details every bid form asks for ──
+// Entered once, kept with the company profile (company_profiles.bid_info),
+// and used to fill the agency's form and write the bond and quote requests.
+// No tax ID, signature or anything sworn: those stay with the contractor.
+const BID_INFO_FIELDS=[
+  ["address","Street address","123 Main St"],
+  ["city_state_zip","City, state, ZIP","Aurora, MO 65605"],
+  ["title","Your title, for signing","Owner"],
+  ["license","License / registration numbers","State or city contractor numbers"],
+  ["years","Years in business","12"],
+  ["insurance","Insurance carrier and agent","Carrier, agent name and phone"],
+  ["bond_company","Bonding company (surety)","Surety name"],
+  ["bond_agent","Bonding agent","Agent's name"],
+  ["bond_email","Bonding agent's email","agent@example.com"],
+  ["supplier","Ready-mix supplier","Supplier name"],
+  ["supplier_email","Ready-mix supplier's email","orders@example.com"],
+];
+function bidInfo(){return (companyProfile&&companyProfile.bid_info&&typeof companyProfile.bid_info==="object")?companyProfile.bid_info:{};}
+function bidInfoCount(){const i=bidInfo();return BID_INFO_FIELDS.filter(([k])=>String(i[k]||"").trim()).length;}
+function openBidInfo(after){
+  const mc=document.getElementById("modal-content");
+  const info=bidInfo();
+  mc.innerHTML=`<div class="sheet-head"><h2>Bid paperwork details</h2>
+      <div class="sheet-sub"><span class="chip">Entered once, used on every bid</span></div></div>
+    <div class="rate-note" style="margin-top:0;">Fills the agency's bid form and your bond and concrete requests. Leave out anything you'd rather type yourself. Tax IDs, signatures and notary blocks are never filled in.</div>
+    ${BID_INFO_FIELDS.map(([k,label,ph])=>`<div class="field-label">${esc(label)}</div>
+      <input class="input bi-field" data-k="${esc(k)}" placeholder="${esc(ph)}" value="${esc(info[k]||"")}" style="margin-bottom:0.6rem;">`).join("")}
+    <div class="modal-actions"><button class="ma-gold" id="bi-save">Save</button><button class="ma-ghost" id="bi-cancel">Cancel</button></div>`;
+  document.getElementById("bi-save").onclick=()=>{
+    const next={};
+    mc.querySelectorAll(".bi-field").forEach(f=>{const v=f.value.trim().slice(0,300);if(v)next[f.dataset.k]=v;});
+    companyProfile.bid_info=next;
+    store.set("company_profile",companyProfile);
+    pushCompanyProfile();
+    toast("Bid details saved");
+    if(after)after();else closeModal();
+  };
+  document.getElementById("bi-cancel").onclick=()=>{if(after)after();else closeModal();};
+  document.getElementById("modal-back").classList.add("open");
+  document.getElementById("modal").classList.add("open");
+}
+
+// ── Filling the agency's own bid form (server: /bid-documents/fill) ──
+// "2. 4 in. concrete sidewalk" -> item 2, "4 in. concrete sidewalk".
+function splitItemNo(name){
+  const m=/^\s*([A-Za-z0-9-]{1,6})\.\s+(.+)$/.exec(String(name||""));
+  return m?{item_no:m[1],description:m[2]}:{item_no:"",description:String(name||"").trim()};
+}
+function fillPayload(b,p){
+  const c=companyProfile||{},i=bidInfo(),t=prepTotals(p);
+  const now=new Date(),pad=n=>String(n).padStart(2,"0");
+  // Lines carry the markup the way the total does, so the form's unit
+  // prices add up to the bid it states.
+  const k=1+(Number(p.markup)||0)/100;
+  return{
+    company:{name:c.name||"",contact:c.contact||"",phone:c.phone||"",email:c.email||"",
+      title:i.title||"",address:i.address||"",city_state_zip:i.city_state_zip||"",license:i.license||"",years:i.years||""},
+    bid:{number:b.bid_number||"",title:b.title||"",addenda:p.addenda||"",total:Math.round(t.total*100)/100,
+      date:`${pad(now.getMonth()+1)}/${pad(now.getDate())}/${now.getFullYear()}`},
+    lines:(p.lines||[]).filter(l=>(l.name||"").trim()).map(l=>{
+      const s=splitItemNo(l.name),price=Math.round((Number(l.price)||0)*k*100)/100,qty=Number(l.qty)||0;
+      return{...s,quantity:qty||"",unit:l.unit||"",unit_price:Number(l.price)?price:"",amount:qty&&Number(l.price)?Math.round(qty*price*100)/100:""};
+    }),
+  };
+}
+const FILL_ERRORS={not_fillable:"This form isn't a fillable PDF, so it can't be filled in automatically. Print the summary: its item numbers match the form.",
+  nothing_matched:"None of the form's boxes matched your details. Print the summary and copy it over.",
+  nothing_to_fill:"Add your company details and prices first.",rate_limited:"Daily limit for filling forms reached. Try again tomorrow."};
+async function fillBidForm(url,payload){
+  try{
+    const token=await getSupabaseToken();
+    const r=await fetchWithTimeout(SERVER+"/bid-documents/fill",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,url,...payload})},120000);
+    const d=await r.json();
+    if(d&&d.ok)return d;
+    const msg=d&&d.reason==="fetch_failed"?(FETCH_ERRORS[d.detail]||"Couldn't download that form.")
+      :(d&&(FILL_ERRORS[d.reason]||DOC_ERRORS[d.reason]))||"Couldn't fill that form.";
+    return{ok:false,msg};
+  }catch(e){return{ok:false,msg:offlineOrServer()};}
+}
+function downloadBase64Pdf(b64,name){
+  const bin=atob(b64),bytes=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
+  const url=URL.createObjectURL(new Blob([bytes],{type:"application/pdf"}));
+  const a=document.createElement("a");
+  a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),4000);
+}
+function renderFormFill(body,city,id,b){
+  const p=prepFor(id);
+  const docs=prepDocCandidates(b).filter(d=>d.name!=="Original posting");
+  // The document the schedule was read from is most likely the bid form.
+  docs.sort((x,y)=>(y.name===(p.docInfo&&p.docInfo.source))-(x.name===(p.docInfo&&p.docInfo.source)));
+  const missing=!(companyProfile&&companyProfile.name)||!bidInfoCount();
+  body.innerHTML=`<div class="rate-note" style="margin-top:0;">Pick the bid form. Your company details and prices go into its boxes; signatures, notary blocks and tax IDs are left for you.</div>
+    ${missing?`<div class="alert alert-amber"><span>Add your company and bid details first so there's something to fill in.</span></div>
+      <button class="btn-ghost" id="ff-profile">Add bid details</button>`:""}
+    ${docs.map((d,i)=>`<button class="btn-ghost doc-pick" data-doc="${i}">${esc(d.name)}</button>`).join("")||
+      `<div class="account-status">No documents are linked to this bid.</div>`}
+    <button class="btn-ghost" id="ff-cancel">Back to summary</button>`;
+  const prof=document.getElementById("ff-profile");
+  if(prof)prof.onclick=()=>openBidInfo(()=>openPrep(city,id,"summary"));
+  document.getElementById("ff-cancel").onclick=()=>openPrep(city,id,"summary");
+  body.querySelectorAll("[data-doc]").forEach(btn=>btn.onclick=async()=>{
+    const d=docs[Number(btn.dataset.doc)];
+    body.innerHTML=`<div class="account-status"><span class="spin"></span> Filling in ${esc(d.name)}…</div>`;
+    const res=await fillBidForm(d.url,fillPayload(b,p));
+    if(!document.getElementById("prep-body"))return;
+    if(!res.ok){
+      body.innerHTML=`<div class="alert alert-amber"><span>${esc(res.msg)}</span></div><button class="btn-ghost" id="ff-back">Back to summary</button>`;
+      document.getElementById("ff-back").onclick=()=>openPrep(city,id,"summary");
+      return;
+    }
+    const fname=`${String(b.title||"bid").replace(/[^a-z0-9]+/gi,"_").slice(0,40)}_bid_form_filled.pdf`;
+    body.innerHTML=`<div class="workspace-title">Filled ${plural(res.filled.length,"box","boxes")} on ${esc(d.name)}</div>
+      <table class="ps-table"><thead><tr><th>Box on the form</th><th>Filled with</th></tr></thead><tbody>
+      ${res.filled.map(f=>`<tr><td>${esc(f.label)}</td><td>${esc(f.value)}</td></tr>`).join("")}</tbody></table>
+      <div class="rate-note">${plural(res.left_blank,"box","boxes")} left blank: signatures, notary, tax ID, and anything you haven't entered. Check every box before you sign.</div>
+      <div class="act-primary"><button class="ma-gold" id="ff-download">Download filled form</button></div>
+      <button class="btn-ghost" id="ff-back" style="margin-top:0.5rem;">Back to summary</button>`;
+    document.getElementById("ff-download").onclick=()=>downloadBase64Pdf(res.pdf_b64,fname);
+    document.getElementById("ff-back").onclick=()=>openPrep(city,id,"summary");
+  });
+}
+
+// ── Next steps: bond, concrete, questions, dates ──
+// Each one writes an email in the contractor's own mail app for them to
+// read and send; nothing is sent from here.
+function mailtoUrl(to,subject,body){
+  return`mailto:${encodeURIComponent(to||"")}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+function signOff(){
+  const c=companyProfile||{};
+  return[c.contact,bidInfo().title&&c.contact?bidInfo().title:"",c.name,c.phone,c.email].filter(Boolean).join("\n");
+}
+function bondRequestMail(b,p,city){
+  const i=bidInfo(),t=prepTotals(p);
+  const first=String(i.bond_agent||"").trim().split(/\s+/)[0];
+  const body=[`${first?`Hi ${first},`:"Hello,"}`,"",
+    "We're bidding the project below and need a bid bond.","",
+    `Project: ${b.title||""}`,city?`Location: ${city}`:"",b.bid_number?`Bid number: ${b.bid_number}`:"",
+    b.deadline?`Bid due: ${b.deadline}`:"",t.total?`Our bid: about ${money0(t.total)}`:"",
+    `Bond required: ${(p.docInfo&&p.docInfo.bid_security)||"see the bid documents"}`,
+    b.url?`Bid documents: ${b.url}`:"","","Thanks,",signOff()].filter((x,k,a)=>x!==""||a[k-1]!=="").join("\n");
+  return mailtoUrl(i.bond_email,`Bid bond request: ${b.title||"upcoming bid"}`,body);
+}
+// Concrete volume from the priced lines: area items with a thickness in
+// their name. Curb, ramps and anything else are listed for the supplier to
+// size from the plans, never guessed.
+function concreteYards(lines){
+  const out=[],other=[];
+  (lines||[]).forEach(l=>{
+    const qty=Number(l.qty)||0,name=String(l.name||"").trim();
+    if(!qty||!name)return;
+    const m=/(\d+(?:\.\d+)?)\s*(?:in\b|in\.|inch|")/i.exec(name);
+    const tIn=m?Number(m[1]):0;
+    const area=l.unit==="sq yd"?qty*9:l.unit==="sq ft"?qty:0;
+    if(area&&tIn>0&&tIn<=24)out.push({name,qty,unit:l.unit,cy:area*tIn/12/27});
+    else if(/concrete|curb|gutter|ramp|sidewalk|walk|driveway|approach|median|slab|flatwork/i.test(name))other.push({name,qty,unit:l.unit});
+  });
+  return{out,other,total:out.reduce((s,x)=>s+x.cy,0)};
+}
+function concreteQuoteMail(b,p,city,waste){
+  const i=bidInfo(),y=concreteYards(p.lines);
+  const k=1+(Number(waste)||0)/100;
+  const body=["Hello,","",
+    `We're bidding ${b.title||"a concrete job"}${city?` in ${city}`:""}${b.deadline?` (bids due ${b.deadline})`:""} and would like a price on ready-mix.`,"",
+    ...y.out.map(x=>`- ${x.name}: ${Math.round(x.qty).toLocaleString()} ${x.unit}, about ${x.cy.toFixed(1)} CY`),
+    ...y.other.map(x=>`- ${x.name}: ${Math.round(x.qty).toLocaleString()} ${x.unit} (volume from the plans)`),
+    "",y.total?`Total: about ${Math.ceil(y.total*k)} CY including ${Number(waste)||0}% waste.`:"",
+    "Mix per the project specs. Start date to be set once the job is awarded.","",
+    "Please include delivery and any short-load or minimum charges.","","Thanks,",signOff()].filter((x,j,a)=>x!==""||a[j-1]!=="").join("\n");
+  return mailtoUrl(i.supplier_email,`Ready-mix quote: ${y.total?`~${Math.ceil(y.total*k)} CY, `:""}${b.title||""}`,body);
+}
+function agencyQuestionMail(b){
+  const body=["Hello,","",`Regarding ${b.title||"the bid"}${b.bid_number?` (${b.bid_number})`:""}${b.deadline?`, due ${b.deadline}`:""}:`,"",
+    "[Your question]","","Thank you,",signOff()].join("\n");
+  return mailtoUrl(b.email,`Question: ${b.title||"bid"}${b.bid_number?` (${b.bid_number})`:""}`,body);
+}
+// Every date the bid's own words give: due, pre-bid meeting, questions.
+function bidDates(b,p){
+  const info=(p&&p.docInfo)||{},out=[];
+  const add=(label,text)=>{const d=deadlineDate({deadline:text});if(d&&!out.some(x=>+x.date===+d&&x.label===label))out.push({label,date:d,text:String(text)});};
+  if(b.deadline)add("Bid due",b.deadline);
+  if(info.prebid)add(/mandatory/i.test(info.prebid)?"MANDATORY pre-bid meeting":"Pre-bid meeting",info.prebid);
+  if(info.questions_due)add("Questions due",info.questions_due);
+  return out;
+}
+function downloadBidDates(b,p,city,id){
+  const events=bidDates(b,p);
+  if(!events.length){toast("Couldn't read a calendar date for this bid");return;}
+  const pad=n=>String(n).padStart(2,"0"),d8=d=>`${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
+  const stamp=new Date().toISOString().replace(/[-:]/g,"").split(".")[0]+"Z";
+  const lines=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//CurbCall Pro//Bid Dates//EN"];
+  events.forEach((e,i)=>lines.push("BEGIN:VEVENT",`UID:${id}-${i}@curbcall.app`,`DTSTAMP:${stamp}`,
+    `DTSTART;VALUE=DATE:${d8(e.date)}`,`SUMMARY:${icsEscape(`${e.label}: ${b.title||"Bid"}`)}`,
+    `DESCRIPTION:${icsEscape(`${e.text}${city?" — "+city:""}`)}`,`LOCATION:${icsEscape(city||"")}`,
+    "BEGIN:VALARM","TRIGGER:-P1D","ACTION:DISPLAY",`DESCRIPTION:${icsEscape(e.label)}`,"END:VALARM","END:VEVENT"));
+  lines.push("END:VCALENDAR");
+  const url=URL.createObjectURL(new Blob([lines.join("\r\n")],{type:"text/calendar"}));
+  const a=document.createElement("a");
+  a.href=url;a.download=(b.title||"bid").replace(/[^a-z0-9]+/gi,"_").slice(0,40)+"_dates.ics";
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  toast(`${plural(events.length,"date")} downloaded for your calendar`);
+}
+function renderConcretePanel(body,city,id,b){
+  const p=prepFor(id),y=concreteYards(p.lines);
+  const waste=Number(store.get("concrete_waste_pct",5))||0;
+  body.innerHTML=`<div class="workspace-title">Concrete for this bid</div>
+    ${y.out.length?`<table class="ps-table"><thead><tr><th>Line</th><th>Quantity</th><th>Concrete</th></tr></thead><tbody>
+      ${y.out.map(x=>`<tr><td>${esc(x.name)}</td><td>${Math.round(x.qty).toLocaleString()} ${esc(x.unit)}</td><td>${x.cy.toFixed(1)} CY</td></tr>`).join("")}</tbody></table>`
+      :`<div class="account-status">No line gives an area and a thickness (like "4 in. sidewalk, sq yd"), so there's no volume to work out. The email still lists your lines.</div>`}
+    ${y.other.length?`<div class="rate-note">Not counted, size from the plans: ${y.other.map(x=>esc(x.name)).join("; ")}.</div>`:""}
+    <div class="rate-note est-width">Waste <input id="cq-waste" type="number" min="0" max="30" step="1" value="${esc(String(waste))}" aria-label="Waste percent"> %
+      ${y.total?` · <b id="cq-total">${Math.ceil(y.total*(1+waste/100))} CY</b> to order`:""}</div>
+    ${bidInfo().supplier_email?"":`<div class="rate-note">Add your supplier's email in <a href="#" id="cq-profile">bid details</a> and it's filled in for you.</div>`}
+    <div class="act-primary"><a class="ma-gold" id="cq-send" href="${esc(concreteQuoteMail(b,p,city,waste))}">Write the quote request</a></div>
+    <button class="btn-ghost" id="cq-back" style="margin-top:0.5rem;">Back to summary</button>`;
+  const w=document.getElementById("cq-waste");
+  w.oninput=()=>{
+    const v=Math.max(0,Math.min(30,Number(w.value)||0));
+    store.set("concrete_waste_pct",v);
+    const tot=document.getElementById("cq-total");
+    if(tot)tot.textContent=`${Math.ceil(y.total*(1+v/100))} CY`;
+    document.getElementById("cq-send").href=concreteQuoteMail(b,p,city,v);
+  };
+  const prof=document.getElementById("cq-profile");
+  if(prof)prof.onclick=(e)=>{e.preventDefault();openBidInfo(()=>{openPrep(city,id,"summary");});};
+  document.getElementById("cq-back").onclick=()=>openPrep(city,id,"summary");
 }
 
 async function fillDetailRates(city,b){
@@ -5558,6 +5816,13 @@ function renderAccount(){
       `}
     </div>
     <div class="account-card">
+      <div style="font-size:var(--fs-base);font-weight:700;display:flex;flex-wrap:wrap;gap:0.5rem;justify-content:space-between;align-items:center;">
+        <span class="hdr-ic" style="white-space:nowrap;"><svg class="icon-svg"><use href="#i-briefcase"/></svg>Bid Paperwork</span>
+        <button class="btn-ghost hdr-ic" id="bi-edit-btn" style="padding:0.35rem 0.9rem;min-height:44px;font-size:var(--fs-sm);flex-shrink:0;justify-content:center;align-items:center;"><svg class="icon-svg"><use href="#i-pencil"/></svg>${bidInfoCount()?"Edit":"Add"}</button>
+      </div>
+      <div class="account-status">Your address, license numbers, bonding agent and ready-mix supplier, entered once. Used to fill in agencies' bid forms and to write bond and concrete quote requests from Prepare bid. ${bidInfoCount()} of ${BID_INFO_FIELDS.length} saved.</div>
+    </div>
+    <div class="account-card">
       <div class="account-email hdr-ic" style="font-size:var(--fs-base);"><svg class="icon-svg"><use href="#i-life-buoy"/></svg>Support</div>
       <div class="account-status" style="margin-bottom:0.7rem;">Send us a message and we'll get back to you, or email <a href="mailto:${SUPPORT_EMAIL}" style="color:var(--amber);">${SUPPORT_EMAIL}</a> directly.</div>
       <textarea class="input" id="support-msg" rows="4" placeholder="What's going on?" style="resize:vertical;margin-bottom:0.6rem;"></textarea>
@@ -5778,6 +6043,8 @@ function renderAccount(){
   };
   const coCancelBtn=document.getElementById("co-cancel-btn");
   if(coCancelBtn)coCancelBtn.onclick=()=>{companyEditMode=false;renderAccount();};
+  const biEditBtn=document.getElementById("bi-edit-btn");
+  if(biEditBtn)biEditBtn.onclick=()=>openBidInfo(()=>{closeModal();renderAccount();});
 
   loadAccountStatus();
 }

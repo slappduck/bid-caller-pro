@@ -308,6 +308,9 @@ body{font-family:var(--ui);background:radial-gradient(ellipse 120% 60% at 50% -1
 .rate-note{color:var(--text3);font-size:var(--fs-xs);line-height:1.5;margin-top:0.6rem;}
 .rate-note a{color:var(--text2);}
 .rate-win{color:var(--green);}
+/* Prepare bid: next steps after pricing */
+.ps-steps{display:grid;gap:0.5rem;}
+.ps-steps .btn-ghost{margin-top:0;display:block;box-sizing:border-box;text-align:center;text-decoration:none;}
 /* Price check on a pricing line: where this price sits against what wins. */
 .pc{display:inline-block;margin-left:0.25rem;font-weight:700;}
 .pc-ok{color:var(--green);}

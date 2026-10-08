@@ -172,6 +172,124 @@ class EndpointTests(unittest.TestCase):
         self.assertEqual((d["ok"], d["detail"]), (False, "http_404"))
 
 
+def fillable_pdf(fields):
+    """A one-page PDF with an AcroForm text field per name, built by hand."""
+    objs = ["<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [%s] >> >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Annots [%s] >>"]
+    refs = []
+    for i, name in enumerate(fields):
+        n = 4 + i
+        refs.append(f"{n} 0 R")
+        objs.append(f"<< /Type /Annot /Subtype /Widget /FT /Tx /T ({name}) /TU ({name}) "
+                    f"/Rect [50 {700 - 30 * i} 300 {720 - 30 * i}] /P 3 0 R /V () >>")
+    objs[0] = objs[0] % " ".join(refs)
+    objs[2] = objs[2] % " ".join(refs)
+    out, offsets = b"%PDF-1.4\n", []
+    for i, o in enumerate(objs, start=1):
+        offsets.append(len(out))
+        out += f"{i} 0 obj\n{o}\nendobj\n".encode()
+    xref = len(out)
+    out += f"xref\n0 {len(objs) + 1}\n0000000000 65535 f \n".encode()
+    out += "".join(f"{o:010d} 00000 n \n" for o in offsets).encode()
+    out += f"trailer\n<< /Size {len(objs) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode()
+    return out
+
+
+class FillValuesTests(unittest.TestCase):
+    def test_only_supplied_values_exist(self):
+        vals = ls._fill_values({"company": {"name": "Test Concrete LLC", "phone": ""},
+                                "bid": {"total": 120500.25, "addenda": "#1"},
+                                "lines": [{"item_no": "2", "description": "Sidewalk", "quantity": 1250,
+                                           "unit": "SY", "unit_price": 62.5, "amount": 78125}]})
+        self.assertEqual(vals["company.name"][1], "Test Concrete LLC")
+        self.assertNotIn("company.phone", vals)
+        self.assertEqual(vals["total"][1], "120,500.25")
+        self.assertEqual(vals["line.1.unit_price"][1], "62.50")
+        self.assertEqual(vals["line.1.quantity"][1], "1,250")
+
+    def test_dollars_in_words(self):
+        self.assertEqual(ls._dollars_in_words(120500.25),
+                         "One hundred twenty thousand five hundred dollars and 25/100")
+        self.assertEqual(ls._dollars_in_words(1001), "One thousand one dollars and 00/100")
+
+
+class ResolveFillTests(unittest.TestCase):
+    FIELDS = [("Bidder Name", ""), ("Total Bid", ""), ("Authorized Signature", ""),
+              ("Text7", "Notary public commission expires")]
+    VALS = {"company.name": ("Company name", "Test Concrete LLC"), "total": ("Total bid", "1,000.00")}
+
+    def test_the_matcher_cannot_invent_fields_or_values(self):
+        plan = ls._resolve_fill(self.FIELDS, self.VALS, {
+            "Bidder Name": "company.name", "Total Bid": "total",
+            "Made Up Field": "company.name", "Total Bid ": "a value nobody supplied"})
+        self.assertEqual(plan, {"Bidder Name": "company.name", "Total Bid": "total"})
+
+    def test_signature_and_notary_fields_are_never_filled(self):
+        plan = ls._resolve_fill(self.FIELDS, self.VALS, {
+            "Authorized Signature": "company.name", "Text7": "company.name"})
+        self.assertEqual(plan, {})
+
+
+class FillEndpointTests(unittest.TestCase):
+    URL = "https://93.184.216.34/bid-form.pdf"
+    PDF = fillable_pdf(["Bidder Name", "Total Bid", "Authorized Signature"])
+
+    def setUp(self):
+        self.client = ls.app.test_client()
+        self.asked = []
+        self._p = [
+            patch.object(ls, "_license_is_active", return_value=True),
+            patch.object(ls, "OPENAI_API_KEY", "k"),
+            patch.object(ls, "_ip_rate_ok", return_value=True),
+            patch.object(ls, "_fetch_document", return_value=(self.PDF, "application/pdf", "ok")),
+            patch.object(ls, "_ai_match_fields", side_effect=lambda f, v: (self.asked.append((f, v)), {
+                "Bidder Name": "company.name", "Total Bid": "total",
+                "Authorized Signature": "company.contact"})[1]),
+        ]
+        for p in self._p:
+            p.start()
+
+    def tearDown(self):
+        for p in self._p:
+            p.stop()
+
+    def post(self, **over):
+        body = {"key": "k", "device_id": "d", "url": self.URL,
+                "company": {"name": "Test Concrete LLC", "contact": "Pat"},
+                "bid": {"total": 1000}}
+        body.update(over)
+        return self.client.post("/bid-documents/fill", json=body)
+
+    def test_the_form_comes_back_filled_and_listed(self):
+        d = self.post().get_json()
+        self.assertTrue(d["ok"], d)
+        self.assertEqual({f["field"]: f["value"] for f in d["filled"]},
+                         {"Bidder Name": "Test Concrete LLC", "Total Bid": "1,000.00"})
+        from pypdf import PdfReader
+        got = PdfReader(ls.io.BytesIO(ls.base64.b64decode(d["pdf_b64"]))).get_fields()
+        self.assertEqual(got["Bidder Name"].get("/V"), "Test Concrete LLC")
+        self.assertFalse(got["Authorized Signature"].get("/V"))   # left for the contractor
+
+    def test_the_matcher_sees_field_names_and_value_names_not_a_free_hand(self):
+        self.post()
+        fields, vals = self.asked[0]
+        self.assertIn(("Bidder Name", "Bidder Name"), fields)
+        self.assertEqual(vals["company.name"], ("Company name", "Test Concrete LLC"))
+
+    def test_a_form_with_no_fields_says_so(self):
+        with patch.object(ls, "_fetch_document", return_value=(fillable_pdf([]), "application/pdf", "ok")):
+            d = self.post().get_json()
+        self.assertEqual((d["ok"], d["reason"]), (False, "not_fillable"))
+
+    def test_an_unlicensed_caller_is_refused(self):
+        with patch.object(ls, "_license_is_active", return_value=False):
+            self.assertEqual(self.post().status_code, 403)
+
+    def test_a_private_url_is_refused(self):
+        self.assertEqual(self.post(url="http://10.0.0.1/f.pdf").status_code, 400)
+
+
 if __name__ == "__main__":
     unittest.main()
 

@@ -144,6 +144,7 @@ _BID_DOC_PROMPT = (
     "\"prebid\": pre-bid meeting date, place and whether mandatory, as stated.\n"
     "\"required_forms\": names of forms, affidavits or certificates the bid "
     "must include, as stated.\n"
+    "\"questions_due\": the deadline for written questions, as stated.\n"
     "No markdown, nothing outside the object.\n\nDOCUMENT TEXT:\n"
 )
 
@@ -184,7 +185,7 @@ def _clean_doc_result(raw):
              for f in (raw.get("required_forms") or []) if str(f).strip()][:30]
     return {"line_items": items, "submission": text("submission"),
             "bid_security": text("bid_security"), "prebid": text("prebid"),
-            "required_forms": forms}
+            "questions_due": text("questions_due", 300), "required_forms": forms}
 
 
 def _ai_read_bid_document(text):
@@ -258,3 +259,242 @@ def bid_documents_read():
     except Exception:
         pass
     return jsonify({"ok": True, "cached": False, **result})
+
+
+# ── Filling in the bid form ─────────────────────────────────────────────────
+#
+# Many agencies post their bid form as a fillable PDF. Once the contractor has
+# priced the job in the app, typing the same company details and unit prices
+# into that form again is pure transcription. This fills it.
+#
+# The AI is only allowed to MATCH: it sees the form's field names and the
+# names of the values the contractor supplied ("company.name",
+# "line.3.unit_price", "total"), and returns which field takes which value
+# name. The values themselves are put in here, from what the contractor sent,
+# so nothing on the form can be invented. Signatures, notary blocks, tax IDs
+# and anything the contractor hasn't supplied are left blank for them, and
+# every filled field is listed back so they can check it.
+BID_FILL_MAX_PER_KEY_PER_DAY = int(os.environ.get("BID_FILL_MAX_PER_KEY_PER_DAY", "30"))
+_BID_FILL_RATE_KEY = "bidcaller:bid_fill_rate"
+BID_FILL_MAX_FIELDS = 400
+# Never filled, whatever the matcher says: these are the contractor's to sign
+# or swear to.
+_NEVER_FILL = re.compile(
+    r"sign|notar|seal|sworn|subscribed|commission\s*exp|ssn|social\s*sec|"
+    r"tax\s*id|\btin\b|\bein\b|fein|federal\s*id|witness|attest", re.I)
+
+_BID_FILL_PROMPT = (
+    "You match the fields of a construction bid form PDF to values a "
+    "contractor supplied. You do NOT write values. For each form field that "
+    "clearly asks for one of the supplied values, return the value's KEY. "
+    "Leave out any field you are not sure about, any field asking for "
+    "something not supplied, and every signature, notary, seal, witness or "
+    "tax-ID field.\n"
+    "Line keys are line.<n>.<part> where <n> is the line's position and its "
+    "item_no is shown; match a form row to the line with the same item number "
+    "or the same description.\n"
+    "Return ONE JSON object: {\"field name\": \"value key\", ...}. No markdown.\n\n"
+)
+
+_ONES = ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+         "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
+         "seventeen", "eighteen", "nineteen"]
+_TENS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"]
+
+
+def _words_under_1000(n):
+    out = []
+    if n >= 100:
+        out.append(_ONES[n // 100] + " hundred")
+        n %= 100
+    if n >= 20:
+        out.append(_TENS[n // 10] + ("-" + _ONES[n % 10] if n % 10 else ""))
+    elif n:
+        out.append(_ONES[n])
+    return " ".join(out)
+
+
+def _dollars_in_words(amount):
+    """"One hundred twenty thousand five hundred dollars and 25/100"."""
+    cents = int(round(amount * 100))
+    dollars, cents = divmod(cents, 100)
+    if dollars >= 10 ** 12:
+        return ""
+    parts = []
+    for size, name in ((10 ** 9, "billion"), (10 ** 6, "million"), (1000, "thousand"), (1, "")):
+        chunk = (dollars // size) % 1000
+        if chunk:
+            parts.append((_words_under_1000(chunk) + (" " + name if name else "")).strip())
+    words = " ".join(parts) or "zero"
+    return f"{words[0].upper()}{words[1:]} dollars and {cents:02d}/100"
+
+
+def _money(x):
+    return f"{x:,.2f}"
+
+
+def _fill_values(data):
+    """Flat {key: (label, text)} from what the app sent; nothing else exists."""
+    vals = {}
+
+    def put(key, label, v, n=200):
+        v = re.sub(r"\s+", " ", str(v if v is not None else "")).strip()[:n]
+        if v:
+            vals[key] = (label, v)
+
+    co = data.get("company") if isinstance(data.get("company"), dict) else {}
+    for k, label in (("name", "Company name"), ("contact", "Contact person"), ("title", "Title"),
+                     ("phone", "Phone"), ("email", "Email"), ("address", "Street address"),
+                     ("city_state_zip", "City, state, ZIP"), ("license", "License / registration"),
+                     ("years", "Years in business")):
+        put("company." + k, label, co.get(k))
+    bid = data.get("bid") if isinstance(data.get("bid"), dict) else {}
+    put("bid.number", "Bid / project number", bid.get("number"), 80)
+    put("bid.title", "Project", bid.get("title"))
+    put("bid.addenda", "Addenda acknowledged", bid.get("addenda"), 120)
+    put("date", "Date", bid.get("date"), 40)
+    try:
+        total = float(bid.get("total"))
+    except (TypeError, ValueError):
+        total = None
+    if total is not None and 0 < total < 1e10:
+        put("total", "Total bid", _money(total))
+        put("total_words", "Total bid in words", _dollars_in_words(total))
+    for i, ln in enumerate((data.get("lines") or [])[:200], start=1):
+        if not isinstance(ln, dict):
+            continue
+        tag = f"Line {i}" + (f" (item {str(ln.get('item_no'))[:20]})" if ln.get("item_no") else "")
+        put(f"line.{i}.item_no", f"{tag} item number", ln.get("item_no"), 20)
+        put(f"line.{i}.description", f"{tag} description", ln.get("description"))
+        for part, label in (("quantity", "quantity"), ("unit_price", "unit price"), ("amount", "amount")):
+            try:
+                x = float(ln.get(part))
+            except (TypeError, ValueError):
+                continue
+            if 0 <= x < 1e10:
+                put(f"line.{i}.{part}", f"{tag} {label}",
+                    _money(x) if part != "quantity" else (f"{x:,.2f}".rstrip("0").rstrip(".")))
+        put(f"line.{i}.unit", f"{tag} unit", ln.get("unit"), 20)
+    return vals
+
+
+def _form_text_fields(reader):
+    """[(name, tooltip)] of the PDF's fillable text fields."""
+    try:
+        fields = reader.get_fields() or {}
+    except Exception:
+        return []
+    out = []
+    for name, f in fields.items():
+        if not isinstance(f, dict) or f.get("/FT") != "/Tx":
+            continue
+        out.append((str(name), str(f.get("/TU") or "")[:120]))
+        if len(out) >= BID_FILL_MAX_FIELDS:
+            break
+    return out
+
+
+def _ai_match_fields(fields, vals):
+    """{field name: value key} from the model, or None if it couldn't run."""
+    if not OPENAI_API_KEY:
+        return None
+    form = "\n".join(f"- {n}" + (f"  (tooltip: {t})" if t else "") for n, t in fields)
+    keys = "\n".join(f"- {k}: {label}" for k, (label, _v) in vals.items())
+    body = json.dumps({
+        "model": OPENAI_MODEL,
+        "messages": [{"role": "user", "content":
+                      _BID_FILL_PROMPT + "FORM FIELDS:\n" + form + "\n\nVALUE KEYS:\n" + keys}],
+        "temperature": 0,
+        "response_format": {"type": "json_object"},
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.openai.com/v1/chat/completions", data=body,
+        headers={"Authorization": f"Bearer {OPENAI_API_KEY}",
+                 "Content-Type": "application/json"}, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=90) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        got = json.loads(data["choices"][0]["message"]["content"])
+        return got if isinstance(got, dict) else None
+    except Exception as ex:
+        print(f"[bid-fill] ai error: {ex}", flush=True)
+        return None
+
+
+def _resolve_fill(fields, vals, matched):
+    """Only real fields, only supplied values, never a signature-type field."""
+    names = {n: t for n, t in fields}
+    out = {}
+    for field, key in (matched or {}).items():
+        field, key = str(field), str(key)
+        if field not in names or key not in vals:
+            continue
+        if _NEVER_FILL.search(field) or _NEVER_FILL.search(names[field]):
+            continue
+        out[field] = key
+    return out
+
+
+def _filled_pdf(reader, values):
+    from pypdf import PdfWriter
+    writer = PdfWriter(clone_from=reader)
+    for page in writer.pages:
+        if page.get("/Annots"):
+            writer.update_page_form_field_values(page, values, auto_regenerate=False)
+    writer.set_need_appearances_writer(True)
+    buf = io.BytesIO()
+    writer.write(buf)
+    return buf.getvalue()
+
+
+@app.route("/bid-documents/fill", methods=["POST"])
+def bid_documents_fill():
+    data = request.get_json(force=True, silent=True) or {}
+    key = data.get("key", "")
+    device = data.get("device_id", "")
+    if not _license_is_active(key, device, data.get("supabase_token", "")):
+        return jsonify({"ok": False, "reason": "not_licensed"}), 403
+    url = str(data.get("url") or "").strip()
+    if not _public_http_url(url):
+        return jsonify({"ok": False, "reason": "bad_url"}), 400
+    vals = _fill_values(data)
+    if not vals:
+        return jsonify({"ok": False, "reason": "nothing_to_fill"}), 400
+    if not OPENAI_API_KEY:
+        return jsonify({"ok": False, "reason": "ai_unavailable"})
+    if not _ip_rate_ok(_BID_FILL_RATE_KEY, key or device or _client_ip(),
+                       BID_FILL_MAX_PER_KEY_PER_DAY):
+        return jsonify({"ok": False, "reason": "rate_limited"}), 429
+
+    raw, ctype, outcome = _fetch_document(url)
+    if outcome != "ok":
+        return jsonify({"ok": False, "reason": "fetch_failed", "detail": outcome})
+    if raw[:5] != b"%PDF-":
+        return jsonify({"ok": False, "reason": "not_fillable", "detail": "not_pdf"})
+    try:
+        from pypdf import PdfReader
+        reader = PdfReader(io.BytesIO(raw))
+        fields = _form_text_fields(reader)
+    except Exception:
+        return jsonify({"ok": False, "reason": "not_fillable", "detail": "unreadable"})
+    if not fields:
+        return jsonify({"ok": False, "reason": "not_fillable", "detail": "no_fields"})
+
+    matched = _ai_match_fields(fields, vals)
+    if matched is None:
+        return jsonify({"ok": False, "reason": "ai_error"}), 502
+    plan = _resolve_fill(fields, vals, matched)
+    if not plan:
+        return jsonify({"ok": False, "reason": "nothing_matched", "fields": len(fields)})
+    values = {field: vals[k][1] for field, k in plan.items()}
+    try:
+        pdf = _filled_pdf(reader, values)
+    except Exception as ex:
+        print(f"[bid-fill] write error: {ex}", flush=True)
+        return jsonify({"ok": False, "reason": "not_fillable", "detail": "write_failed"})
+    tips = dict(fields)
+    filled = [{"field": f, "label": tips.get(f) or f, "value": values[f], "key": k}
+              for f, k in plan.items()]
+    return jsonify({"ok": True, "fields": len(fields), "filled": filled,
+                    "left_blank": len(fields) - len(filled),
+                    "pdf_b64": base64.b64encode(pdf).decode("ascii")})
