@@ -163,6 +163,29 @@ REMOVE AND REPLACE SIDEWALK $742,816.50
         self.assertNotIn("3016.33", B.parse_ne([self.PAGE])[1])
 
 
+class DiscoveryTests(unittest.TestCase):
+    def test_a_web_page_where_a_pdf_should_be_is_not_posted_yet(self):
+        # MDT answers a year it hasn't posted with its home page and a 200.
+        import tempfile
+        from unittest.mock import patch
+        cache = tempfile.mkdtemp()
+
+        def fake(url, cache_dir, name):
+            path = os.path.join(cache_dir, name)
+            with open(path, "wb") as f:
+                f.write(b"<!DOCTYPE html><html>" if "2026" in name else b"%PDF-1.7 ...")
+            return path
+        with patch.object(B, "_download", side_effect=fake):
+            self.assertIsNone(B._try_download("https://x/2026.pdf", cache, "mt_avg_2026.pdf"))
+            self.assertFalse(os.path.exists(os.path.join(cache, "mt_avg_2026.pdf")))
+            self.assertTrue(B._try_download("https://x/2025.pdf", cache, "mt_avg_2025.pdf"))
+
+    def test_recent_years_end_this_year(self):
+        this = datetime.date.today().year
+        self.assertEqual(B._recent_years(2000), list(range(this - 4, this + 1)))
+        self.assertEqual(B._recent_years(this), [this])
+
+
 class StateCheckTests(unittest.TestCase):
     def state(self):
         s = B.State("ZZ", "Test", "src", "https://example.org", "awarded",

@@ -18,6 +18,10 @@
   call `_cron_beat` on success, or the watchdog pages forever about a job that
   can never report. There is a test for this. Adding a cron means: endpoint,
   heartbeat, `CRON_EXPECTED` entry, workflow.
+- **State going rates** — `rates/` and `results/` are rebuilt monthly by
+  `.github/workflows/state-data-refresh.yml` (`tools/refresh_state_data.py`),
+  which opens a PR. It runs on GitHub only, never touches the server, so it
+  is not in `CRON_EXPECTED`; a failed run is GitHub's failure email.
 
 # Never commit
 

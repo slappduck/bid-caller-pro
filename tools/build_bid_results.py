@@ -261,8 +261,8 @@ def build_or(cache):
     import zipfile
     import build_state_prices as P
     contracts = []
-    for y in P.OR_YEARS:
-        with zipfile.ZipFile(P._download(P.OR_ZIP.format(y=y), cache, f"or_bid_data_{y}.zip")) as z:
+    for y, path in P.or_zips(cache):
+        with zipfile.ZipFile(path) as z:
             name = next(n for n in z.namelist() if n.lower().endswith((".xlsx", ".xlsm")))
             got = parse_or_contracts(P._rows_xlsx(z.read(name), "BID DATA"))
         print(f"OR {y}: {len(got)} contracts with flatwork")
