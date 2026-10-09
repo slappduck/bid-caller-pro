@@ -4694,11 +4694,71 @@ function yourBidsVsState(d,district){
     <div class="rate-note">From bids you priced in Prepare bid and marked Won or Lost, per unit as ${ag} prices each item.</div>`;
 }
 
+// What a pricing line can be: the state DOT's own items (picking one fills in
+// its unit and going price), the other work most concrete bids carry, or
+// anything typed in. Lines read from a bid form keep the form's wording and
+// show as typed.
+const EXTRA_LINES=[
+  ["Mobilization","lump sum"],["Traffic control","lump sum"],["Remove existing concrete","sq yd"],
+  ["Saw cutting","ft"],["Excavation and grading","cu yd"],["Aggregate base","sq yd"],
+  ["ADA curb ramp","each"],["Detectable warning panel","each"],["Erosion control","lump sum"],
+  ["Restoration, sod or seeding","sq yd"],["Testing","lump sum"],["Bonds and insurance","lump sum"],
+];
+function lineChoice(l,d){
+  if(l.item&&d&&(l.st||"MO")===d.state&&d.items[l.item])return"s:"+l.item;
+  const x=EXTRA_LINES.find(([n])=>n===l.name);
+  if(x&&!l.item)return"x:"+x[0];
+  return String(l.name||"").trim()?"custom":"";
+}
+// The state's items, the plain ones a posting is matched to first, then
+// by how often they're bid.
+function pickableItems(d){
+  if(!d)return[];
+  const cats=new Set(Object.values(d.cats||{}));
+  const bids=c=>{const by=d.prices[c]&&d.prices[c].STATEWIDE;return by?by[Object.keys(by).sort().pop()][3]:0;};
+  return Object.keys(d.items).filter(c=>d.prices[c])
+    .sort((a,b)=>(cats.has(b)-cats.has(a))||(bids(b)-bids(a)));
+}
+function lineItemSelect(l,i,d){
+  const cur=lineChoice(l,d);
+  const opt=(v,label)=>`<option value="${esc(v)}"${cur===v?" selected":""}>${esc(label)}</option>`;
+  const items=pickableItems(d);
+  return`<select class="input pl-pick" data-pick="${i}" aria-label="Item">
+      <option value=""${cur===""?" selected":""}>Choose an item…</option>
+      ${items.length?`<optgroup label="${esc(agencyOf(d))} items">${items.map(c=>opt("s:"+c,`${d.items[c].name} (${d.items[c].unit})`)).join("")}</optgroup>`:""}
+      <optgroup label="Other work">${EXTRA_LINES.map(([n,u])=>opt("x:"+n,`${n} (${u})`)).join("")}</optgroup>
+      <option value="custom"${cur==="custom"?" selected":""}>Other (type it)</option>
+    </select>
+    ${cur==="custom"?`<input class="input pl-name" data-f="name" value="${esc(l.name||"")}" placeholder="Describe the item" aria-label="Item description">`:""}`;
+}
+function applyLineChoice(l,v,d){
+  delete l.note;
+  if(v.startsWith("s:")&&d){
+    const code=v.slice(2),meta=d.items[code];
+    if(!meta)return;
+    const district=priceDistrict(d),r=latestRate(d,code,district),w=r&&latestWin(d,code,district);
+    // A price already typed is the contractor's; only an empty one is filled.
+    const fill=!Number(l.price)||(l.ref&&Number(l.price)===Math.round(l.ref*100)/100);
+    Object.assign(l,{name:meta.name,unit:meta.unit,item:code,st:d.state,ref:r?r.avg:null});
+    if(fill&&r)l.price=Math.round((w?w.avg:r.avg)*100)/100;
+  }else if(v.startsWith("x:")){
+    const x=EXTRA_LINES.find(([n])=>n===v.slice(2));
+    delete l.item;delete l.st;l.ref=null;
+    if(x){l.name=x[0];l.unit=x[1];}
+  }else if(v==="custom"){
+    delete l.item;delete l.st;l.ref=null;
+    if(EXTRA_LINES.some(([n])=>n===l.name)||!l.name)l.name="";
+  }else{
+    delete l.item;delete l.st;l.ref=null;l.name="";
+  }
+}
+
 function renderPrepPricing(body,city,id,b){
   const p=prepFor(id);
   const hist=priceHistory(id);
+  const stRates=rateData[bidState(city,b)];
   const lineRow=(l,i)=>`<div class="prep-line" data-i="${i}">
-      <input class="input pl-name" data-f="name" value="${esc(l.name||"")}" placeholder="Item" aria-label="Item">
+      ${lineItemSelect(l,i,stRates)}
       <div class="pl-nums">
         <input class="input" data-f="qty" inputmode="decimal" value="${esc(String(l.qty??""))}" placeholder="Qty" aria-label="Quantity">
         <input class="input" data-f="unit" value="${esc(l.unit||"")}" placeholder="Unit" aria-label="Unit">
@@ -4750,6 +4810,12 @@ function renderPrepPricing(body,city,id,b){
     if(f==="qty"||f==="price")v=v.replace(/[^0-9.]/g,"");
     p.lines[i][f]=v;
     savePrep(id,city);refresh();
+  });
+  body.querySelectorAll("[data-pick]").forEach(sel=>sel.onchange=()=>{
+    const i=Number(sel.dataset.pick);
+    applyLineChoice(p.lines[i],sel.value,stRates);
+    savePrep(id,city);openPrep(city,id,"pricing");
+    if(sel.value==="custom")setTimeout(()=>{const inp=document.querySelector(`.prep-line[data-i="${i}"] .pl-name`);if(inp)inp.focus();},0);
   });
   body.querySelectorAll("[data-del]").forEach(x=>x.onclick=()=>{
     p.lines.splice(Number(x.dataset.del),1);

@@ -378,6 +378,8 @@ body{font-family:var(--ui);background:radial-gradient(ellipse 120% 60% at 50% -1
 .prep-add .btn-ghost{width:auto;margin:0;}
 .prep-line{padding:0.6rem 0;border-bottom:1px solid var(--border);}
 .prep-line .input{font-size:var(--fs-base);padding:0.5rem 0.6rem;}
+.prep-line .pl-pick{width:100%;color:var(--text);background:var(--bg);font-family:var(--ui);}
+.prep-line .pl-pick + .pl-name{margin-top:0.4rem;}
 .pl-nums{display:grid;grid-template-columns:1fr 0.8fr 1fr auto auto;gap:0.4rem;align-items:center;margin-top:0.4rem;}
 .pl-nums .prep-x{position:static;}
 .pl-total{color:var(--text);font-weight:700;white-space:nowrap;text-align:right;min-width:4.5rem;}

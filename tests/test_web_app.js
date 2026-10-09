@@ -1571,6 +1571,29 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
           swLine && Math.abs(swLine.qty - 666.7) < 0.1 && swLine.price === swAvg, JSON.stringify(swLine));
     check("the ramp count becomes a line for you to price, not a guess",
           rampLine && rampLine.qty === 4 && rampLine.unit === "each" && rampLine.price === "", JSON.stringify(rampLine));
+    // The item is a dropdown: the state's items, other common work, or typed.
+    const pick = await page.$$eval('.prep-line[data-i="0"] .pl-pick option', (os) => os.map((o) => o.textContent));
+    check("the item is a dropdown of the state's items and other work",
+          pick.some((t) => /Concrete sidewalk, 4 in\. \(sq yd\)/.test(t)) && pick.includes("Mobilization (lump sum)") && pick.includes("Other (type it)"));
+    check("...with the line's current item selected",
+          (await page.$eval('.prep-line[data-i="0"] .pl-pick', (s) => s.value)) === "s:6086004");
+    await page.click("#pl-add");
+    await page.waitForTimeout(300);
+    const newIdx = (await page.evaluate((i) => bidPrep[i].lines.length, id)) - 1;
+    await page.selectOption(`.prep-line[data-i="${newIdx}"] .pl-pick`, "s:6091052");
+    await page.waitForTimeout(300);
+    const picked = await page.evaluate(([i, n]) => bidPrep[i].lines[n], [id, newIdx]);
+    check("picking a state item fills its unit and going price",
+          picked.name === "Curb and gutter, type B" && picked.unit === "ft" && picked.item === "6091052" && picked.price === startPrice("6091052", "SW"),
+          JSON.stringify(picked));
+    await page.selectOption(`.prep-line[data-i="${newIdx}"] .pl-pick`, "custom");
+    await page.waitForTimeout(300);
+    await page.fill(`.prep-line[data-i="${newIdx}"] .pl-name`, "Tree root removal");
+    await page.waitForTimeout(200);
+    check("\"Other\" lets you type your own item",
+          await page.evaluate(([i, n]) => bidPrep[i].lines[n].name === "Tree root removal" && !bidPrep[i].lines[n].item, [id, newIdx]));
+    await page.click(`[data-del="${newIdx}"]`);
+    await page.waitForTimeout(300);
     const rampIdx = lines.indexOf(rampLine);
     await page.fill(`.prep-line[data-i="${rampIdx}"] input[data-f="price"]`, "2000");
     await page.fill("#pt-mk", "10");
