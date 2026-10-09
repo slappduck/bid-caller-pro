@@ -1298,7 +1298,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
   // numbers that would go stale when next year's book is added.
   console.log("\nGoing rates show MoDOT's real prices, with their range");
   {
-    const rates = JSON.parse(fs.readFileSync(path.join(ROOT, "mo_unit_prices.json"), "utf8"));
+    const rates = JSON.parse(fs.readFileSync(path.join(ROOT, "rates", "mo.json"), "utf8"));
     const latest = (item, d) => {
       const by = rates.prices[item][d]; const y = Object.keys(by).sort().pop(); return by[y];
     };
@@ -1361,11 +1361,14 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
       await page.waitForTimeout(400);
       return page.textContent("#detail-rates");
     };
-    const rampDetail = await detailFor("Aurora, MO", 0);
+    // The going-rates part only; "Who bids this work" below it quotes real
+    // contract descriptions, which can say anything.
+    const ratesPart = (t) => t.split("Who bids this work")[0];
+    const rampDetail = ratesPart(await detailFor("Aurora, MO", 0));
     check("an ADA ramp bid shows ramp and dome prices",
           rampDetail.includes("Concrete curb ramp") && rampDetail.includes("Truncated domes"), rampDetail.slice(0, 160));
     check("\"near the city hall entrance\" is not read as a driveway job", !rampDetail.includes("driveway"));
-    const curbDetail = await detailFor("Aurora, MO", 1);
+    const curbDetail = ratesPart(await detailFor("Aurora, MO", 1));
     check("a curb-and-gutter bid shows curb and gutter, not bare curb",
           curbDetail.includes("Curb and gutter") && !curbDetail.includes("Concrete curb, 6"), curbDetail.slice(0, 160));
     // ── Ballpark: stated quantity x the district's average, nothing guessed ──
@@ -1404,11 +1407,110 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── Other states: each bid priced with its own state's records ──
+  console.log("\nGoing rates follow the bid's state; winning bids where the records name them");
+  {
+    const load = (f) => JSON.parse(fs.readFileSync(path.join(ROOT, f), "utf8"));
+    const fl = load("rates/fl.json"), orr = load("rates/or.json");
+    const last = (by) => by[Object.keys(by).sort().pop()];
+    const money = (n) => "$" + (n >= 1000 ? Math.round(n).toLocaleString("en-US") : n.toFixed(2));
+    const flWalk = last(fl.prices[fl.cats.sidewalk].STATEWIDE);
+    const orWalk = last(orr.prices[orr.cats.sidewalk].STATEWIDE);
+    const orWin = last(orr.wins[orr.cats.sidewalk].STATEWIDE);
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const host = new URL(route.request().url()).hostname;
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") {
+        return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      }
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      localStorage.setItem("last_feed", JSON.stringify({
+        "Davie, FL": [{ title: "Davie Sidewalk Repairs", scope: "500 SY concrete sidewalk", deadline: "2099-01-01", status: "open", url: "https://e.gov/fl" }],
+        "Salem, OR": [{ title: "Salem Walks", scope: "2,000 SF sidewalk", deadline: "2099-01-01", status: "open", url: "https://e.gov/or" }],
+        "Springfield, MO": [{ title: "Springfield Sidewalk", scope: "800 SY sidewalk", deadline: "2099-01-01", status: "open", url: "https://e.gov/mo" }],
+      }));
+      localStorage.setItem("home_location", JSON.stringify("Davie, FL"));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(1200);
+
+    const home = await page.textContent("#home-rates");
+    check("Home shows the user's own state's rates", /Going rates in Florida/.test(home), home.slice(0, 120));
+    check("...Florida's statewide sidewalk average as FDOT printed it", home.includes(money(flWalk[0])));
+    check("...as winning prices, with no range FDOT never published",
+          /winning bids/.test(home) && !home.includes(`${money(flWalk[0])}–`));
+
+    await page.evaluate(() => switchScreen("feed"));
+    await page.waitForTimeout(1200);
+    const cards = await page.$$eval("#feed-list .bid", (els) => els.map((e) => e.textContent));
+    const k = (n) => n >= 1000000 ? "$" + (n / 1e6).toFixed(n % 1e6 ? 1 : 0) + "M"
+      : n >= 1000 ? "$" + (n / 1000).toFixed(n % 1000 ? 1 : 0) + "k" : "$" + Math.round(n);
+    const flCard = cards.find((t) => t.includes("Davie Sidewalk")) || "";
+    check("a Florida bid's ballpark uses Florida's price", flCard.includes(`≈ ${k(500 * flWalk[0])} ballpark`), flCard.slice(0, 200));
+    const orCard = cards.find((t) => t.includes("Salem Walks")) || "";
+    check("an Oregon bid's ballpark uses Oregon's price (per sq ft)", orCard.includes(`≈ ${k(2000 * orWalk[0])} ballpark`), orCard.slice(0, 200));
+
+    await page.evaluate(() => openDetail("Salem, OR", bidData["Salem, OR"][0]));
+    await page.waitForTimeout(800);
+    const orDetail = await page.textContent("#detail-rates");
+    check("Oregon's detail names ODOT and its source", /ODOT/.test(orDetail));
+    check("...and shows what the winning bids were",
+          orDetail.includes(`Winning bids ${money(orWin[1])}–${money(orWin[2])}`), orDetail.slice(0, 400));
+
+    const id = await page.evaluate(() => bidId("Salem, OR", bidData["Salem, OR"][0]));
+    await page.evaluate((i) => openPrep("Salem, OR", i, "pricing"), id);
+    await page.waitForTimeout(500);
+    const line = await page.evaluate((i) => bidPrep[i].lines[0], id);
+    check("Oregon pricing starts at the average winning bid",
+          line && line.st === "OR" && line.price === Math.round(orWin[0] * 100) / 100, JSON.stringify(line));
+    const sheet = await page.textContent("#prep-body");
+    check("the line says where that price sits", /Inside the winning range|winning/.test(sheet), sheet.slice(0, 300));
+    await page.fill('.prep-line[data-i="0"] input[data-f="price"]', String(Math.ceil(orWin[2] + 5)));
+    await page.waitForTimeout(300);
+    check("a price over every winning bid is called out as it's typed",
+          /Above every winning bid/.test(await page.textContent('[data-pc="0"]')));
+
+    const moId = await page.evaluate(() => { closeModal(); return bidId("Springfield, MO", bidData["Springfield, MO"][0]); });
+    await page.evaluate(() => openDetail("Springfield, MO", bidData["Springfield, MO"][0]));
+    await page.waitForTimeout(900);
+    const moDetail = await page.textContent("#detail-rates");
+    const resPath = path.join(ROOT, "results", "mo.json");
+    if (fs.existsSync(resPath)) {
+      const res = load("results/mo.json");
+      const walkJobs = res.contracts.filter((c) => c.items["6086004"]);
+      check("a Missouri bid shows who bids this work", /Who bids this work/.test(moDetail), moDetail.slice(-300));
+      check("...naming contractors from MoDOT's bid tabulations",
+            walkJobs.some((c) => moDetail.includes(c.bidders[0][0])));
+    }
+    check("prep for a Missouri bid is unaffected by the others", !!moId);
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
+  // Where a pricing line starts: the average winning bid where the state's
+  // records give one, else the average bid. Read from the committed files.
+  const startPrice = (item, district) => {
+    const rates = JSON.parse(fs.readFileSync(path.join(ROOT, "rates", "mo.json"), "utf8"));
+    const resPath = path.join(ROOT, "results", "mo.json");
+    const res = fs.existsSync(resPath) ? JSON.parse(fs.readFileSync(resPath, "utf8")) : {};
+    const last = (by) => by && by[Object.keys(by).sort().pop()];
+    const w = last(((res.wins || {})[item] || {})[district]);
+    return Math.round((w ? w[0] : last(rates.prices[item][district])[0]) * 100) / 100;
+  };
+
   // ── Prepare bid: checklist, pricing, summary ──
   console.log("\nPrepare bid keeps the whole bid in the app");
   {
-    const rates = JSON.parse(fs.readFileSync(path.join(ROOT, "mo_unit_prices.json"), "utf8"));
-    const swAvg = (() => { const by = rates.prices["6086004"].SW; return by[Object.keys(by).sort().pop()][0]; })();
+    const swAvg = startPrice("6086004", "SW");
     const ctx = await browser.newContext(MOBILE_VIEWPORT);
     const page = await ctx.newPage();
     const pageErrors = [];
@@ -1465,8 +1567,8 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     const lines = await page.evaluate((i) => bidPrep[i].lines, id);
     const swLine = lines.find((l) => /sidewalk/i.test(l.name));
     const rampLine = lines.find((l) => /ramp/i.test(l.name));
-    check("pricing starts from the ballpark: sidewalk at the SW average",
-          swLine && Math.abs(swLine.qty - 666.7) < 0.1 && swLine.price === Math.round(swAvg * 100) / 100, JSON.stringify(swLine));
+    check("pricing starts from the ballpark: sidewalk at the SW winning (else average) bid",
+          swLine && Math.abs(swLine.qty - 666.7) < 0.1 && swLine.price === swAvg, JSON.stringify(swLine));
     check("the ramp count becomes a line for you to price, not a guess",
           rampLine && rampLine.qty === 4 && rampLine.unit === "each" && rampLine.price === "", JSON.stringify(rampLine));
     const rampIdx = lines.indexOf(rampLine);
@@ -1506,8 +1608,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
   // ── Phase 2: read the bid form's schedule of items ──
   console.log("\nThe bid form's own items fill the pricing sheet, after review");
   {
-    const rates = JSON.parse(fs.readFileSync(path.join(ROOT, "mo_unit_prices.json"), "utf8"));
-    const swAvg = (() => { const by = rates.prices["6086004"].SW; return by[Object.keys(by).sort().pop()][0]; })();
+    const swAvg = startPrice("6086004", "SW");
     const ctx = await browser.newContext(MOBILE_VIEWPORT);
     const page = await ctx.newPage();
     const pageErrors = [];
@@ -1579,7 +1680,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     const lines = await page.evaluate((i) => bidPrep[i].lines, id);
     const sy = lines.find((l) => /^2\./.test(l.name)), ls = lines.find((l) => /^3\./.test(l.name));
     check("a sidewalk item in SY gets the SW sidewalk average",
-          sy && sy.qty === 1250 && sy.unit === "sq yd" && sy.price === Math.round(swAvg * 100) / 100, JSON.stringify(sy));
+          sy && sy.qty === 1250 && sy.unit === "sq yd" && sy.price === swAvg, JSON.stringify(sy));
     check("the same words in a lump-sum unit get no MoDOT price", ls && ls.unit === "lump sum" && ls.price === "", JSON.stringify(ls));
     check("mobilization comes through to be priced", lines.some((l) => /Mobilization/.test(l.name) && l.unit === "lump sum"));
 
@@ -1657,6 +1758,233 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     const rates = await page.textContent("#modal-content");
     check("the rates sheet compares your won and lost prices with MoDOT",
           /Your bids vs MoDOT/.test(rates) && /\$60\.00 \(1\)/.test(rates) && /\$75\.00 \(1\)/.test(rates));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
+  // ── Paperwork: fill the agency's form, then bond, concrete, dates ──
+  console.log("\nThe agency's form gets filled in, and the next steps write themselves");
+  {
+    const ctx = await browser.newContext({ ...MOBILE_VIEWPORT, acceptDownloads: true });
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    let fillBody = null;
+    await page.route("**/*", (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      if (u.endsWith("/bid-documents/fill")) {
+        fillBody = JSON.parse(route.request().postData() || "{}");
+        return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+          ok: true, fields: 9, left_blank: 7, pdf_b64: Buffer.from("%PDF-1.4 filled").toString("base64"),
+          filled: [{ field: "Bidder", label: "Name of bidder", value: "Test Concrete LLC", key: "company.name" },
+                   { field: "Total", label: "Total base bid", value: "75,000.00", key: "total" }] }) });
+      }
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") {
+        return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      }
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      const bid = { title: "Elm St Sidewalk", scope: "Sidewalk replacement", deadline: "2099-11-01", status: "open",
+        url: "https://e.gov/3", email: "clerk@e.gov", bid_number: "B-17",
+        documents: [{ name: "Bid form", url: "https://e.gov/form.pdf" }] };
+      localStorage.setItem("last_feed", JSON.stringify({ "Aurora, MO": [bid] }));
+      localStorage.setItem("company_profile", JSON.stringify({ name: "Test Concrete LLC", contact: "Pat Lee", phone: "417-555-0100",
+        bid_info: { title: "Owner", address: "1 Main St", bond_agent: "Sam Surety", bond_email: "sam@surety.example", supplier_email: "orders@mix.example" } }));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(800);
+    const id = await page.evaluate(() => bidId("Aurora, MO", bidData["Aurora, MO"][0]));
+    await page.evaluate((i) => {
+      const p = prepFor(i);
+      p.lines = [{ name: "2. 4 in. concrete sidewalk", qty: 1250, unit: "sq yd", price: 60 },
+                 { name: "3. Curb and gutter", qty: 300, unit: "ft", price: 0 }];
+      p.addenda = "#1";
+      p.docInfo = { source: "Bid form", bid_security: "5% bid bond", prebid: "Mandatory pre-bid meeting October 20, 2099 at 10 AM",
+                    questions_due: "Questions due by October 25, 2099", submission: "", required_forms: [] };
+      savePrep(i, "Aurora, MO");
+      openPrep("Aurora, MO", i, "summary");
+    }, id);
+    await page.waitForTimeout(400);
+
+    const bond = decodeURIComponent(await page.getAttribute("#ps-bond", "href"));
+    check("the bond request goes to the bonding agent", bond.startsWith("mailto:sam@surety.example"), bond.slice(0, 60));
+    check("...with the project, the bid and the bond the documents ask for",
+          /Hi Sam,/.test(bond) && /Bid due: 2099-11-01/.test(bond) && /Our bid: about \$75,000/.test(bond) && /Bond required: 5% bid bond/.test(bond));
+    const q = decodeURIComponent(await page.getAttribute("#ps-question", "href"));
+    check("a question to the agency is addressed to its contact", q.startsWith("mailto:clerk@e.gov") && /B-17/.test(q));
+    check("every date the documents give is offered for the calendar", /Add 3 dates/.test(await page.textContent("#ps-dates")));
+    const [ics] = await Promise.all([page.waitForEvent("download"), page.click("#ps-dates")]);
+    const icsText = fs.readFileSync(await ics.path(), "utf8");
+    check("...due date, mandatory pre-bid meeting and questions deadline",
+          /DTSTART;VALUE=DATE:20991101/.test(icsText) && /MANDATORY pre-bid meeting/.test(icsText) && /DTSTART;VALUE=DATE:20991025/.test(icsText));
+
+    await page.click("#ps-concrete");
+    await page.waitForTimeout(300);
+    const conc = await page.textContent("#prep-body");
+    check("concrete is worked out from area and thickness", conc.includes("138.9 CY"), conc.slice(0, 200));
+    check("...with waste added for the order", /146 CY/.test(conc));
+    check("...and curb is left to size from the plans, not guessed", /Not counted, size from the plans: 3\. Curb and gutter/.test(conc));
+    const quote = decodeURIComponent(await page.getAttribute("#cq-send", "href"));
+    check("the quote request goes to the supplier", quote.startsWith("mailto:orders@mix.example") && /about 146 CY/.test(quote));
+    await page.click("#cq-back");
+    await page.waitForTimeout(300);
+
+    await page.click("#ps-fill");
+    await page.waitForTimeout(300);
+    await page.click('[data-doc="0"]');
+    await page.waitForTimeout(600);
+    check("the form filler is sent the company, the prices and the total",
+          fillBody && fillBody.url === "https://e.gov/form.pdf" && fillBody.company.name === "Test Concrete LLC"
+            && fillBody.company.title === "Owner" && fillBody.bid.total === 75000 && fillBody.bid.addenda === "#1"
+            && fillBody.lines[0].item_no === "2" && fillBody.lines[0].unit_price === 60 && fillBody.lines[0].amount === 75000,
+          JSON.stringify(fillBody && fillBody.lines));
+    const filled = await page.textContent("#prep-body");
+    check("every filled box is listed for checking", /Name of bidder/.test(filled) && /75,000\.00/.test(filled) && /7 boxes left blank/.test(filled));
+    const [pdf] = await Promise.all([page.waitForEvent("download"), page.click("#ff-download")]);
+    check("the filled form downloads", fs.readFileSync(await pdf.path(), "utf8").startsWith("%PDF") && /filled\.pdf$/.test(pdf.suggestedFilename()));
+
+    await page.evaluate(() => { closeModal(); switchScreen("account"); });
+    await page.waitForTimeout(500);
+    check("Account shows how much of the bid paperwork is saved", /5 of 11 saved/.test(await page.textContent("#screen-account")));
+    await page.click("#bi-edit-btn");
+    await page.waitForTimeout(300);
+    await page.fill('.bi-field[data-k="license"]', "MO-12345");
+    await page.click("#bi-save");
+    await page.waitForTimeout(300);
+    check("bid details save with the company profile",
+          await page.evaluate(() => JSON.parse(localStorage.getItem("company_profile")).bid_info.license === "MO-12345"));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
+  // ── Win odds: should-I-bid, target price, addenda, did-you-win, fewest bidders ──
+  console.log("\nHelping customers win: competition, target price, addenda, outcomes");
+  {
+    const load = (f) => JSON.parse(fs.readFileSync(path.join(ROOT, f), "utf8"));
+    const orRes = load("results/or.json");
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    let watchCalls = 0, watchDocs = ["Bid Form"];
+    await page.route("**/*", (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      if (u.endsWith("/bid-watch/check")) {
+        watchCalls++;
+        const urls = JSON.parse(route.request().postData() || "{}").urls || [];
+        const results = {};
+        urls.forEach((x) => { results[x] = { ok: true, docs: watchDocs, addenda: watchDocs.length > 1 ? [1] : [], hash: "h" + watchDocs.length }; });
+        return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, results }) });
+      }
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") {
+        return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      }
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      if (sessionStorage.getItem("seeded")) return;
+      sessionStorage.setItem("seeded", "1");
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      localStorage.setItem("license_key", JSON.stringify("TEST-KEY"));
+      localStorage.setItem("last_feed", JSON.stringify({
+        "Salem, OR": [
+          { title: "Salem Walks", scope: "2,000 SF sidewalk", deadline: "2099-01-01", status: "open", url: "https://e.gov/or" },
+          { title: "Keizer Ramps", scope: "ADA ramps and sidewalk", deadline: "2099-01-01", status: "open", url: "https://e.gov/or2",
+            plan_holders: [{ company: "Other Co" }] },
+          { title: "Busy Job", scope: "sidewalk", deadline: "2099-01-01", status: "open", url: "https://e.gov/or3",
+            plan_holders: [1, 2, 3, 4, 5, 6, 7].map((i) => ({ company: "Co " + i })) },
+        ] }));
+      localStorage.setItem("saved", JSON.stringify({
+        oldjob: { title: "Oak St Walks", deadline: new Date(Date.now() - 20 * 864e5).toISOString().slice(0, 10),
+          url: "https://e.gov/old", _city: "Salem, OR" },
+        wonjob: { title: "Pine Ave Ramps", deadline: new Date(Date.now() - 10 * 864e5).toISOString().slice(0, 10),
+          url: "https://e.gov/won", _city: "Salem, OR" } }));
+      localStorage.setItem("bid_prep", JSON.stringify({
+        oldjob: { checks: {}, custom: [], markup: 0, addenda: "", updated: 5,
+          lines: [{ name: "Concrete walks", item: "0759-0128000J", st: "OR", unit: "sq ft", qty: 1000, price: 15 }] } }));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(1500);
+
+    // Should you bid this?
+    await page.evaluate(() => openDetail("Salem, OR", bidData["Salem, OR"][0]));
+    await page.waitForTimeout(900);
+    const odds = await page.textContent("#detail-rates");
+    const walkJobs = orRes.contracts.filter((c) => c.items["0759-0128000J"]);
+    check("the detail says how many usually bid this work", /Should you bid this\?/.test(odds) && /drew \d+(\.5)? bidders?/.test(odds), odds.slice(0, 300));
+    check("...and how close second place comes", /beat second place by a median \d+\.\d%/.test(odds));
+    check("...from Oregon's own records, labelled as state jobs", /ODOT bid tabulations/.test(odds) && walkJobs.length > 0);
+    await page.evaluate(() => { closeModal(); openDetail("Salem, OR", bidData["Salem, OR"][1]); });
+    await page.waitForTimeout(700);
+    check("a posting's own plan-holder list is used first", /1 other company<\/b>|1 other company has taken out plans/.test(await page.innerHTML("#detail-rates")));
+
+    // Fewest bidders sort and chips
+    await page.evaluate(() => { closeModal(); switchScreen("feed"); });
+    await page.waitForTimeout(600);
+    await page.selectOption("#feed-sort", "fewest");
+    await page.waitForTimeout(400);
+    const order = await page.$$eval("#feed-list .bid .bid-title", (els) => els.map((e) => e.textContent));
+    check("fewest bidders puts the one-holder job first and the crowded one last",
+          order[0] === "Keizer Ramps" && order[order.length - 1] === "Busy Job", order.join(" | "));
+    const cards = await page.$$eval("#feed-list .bid", (els) => els.map((e) => e.textContent));
+    check("the cards say few bidders / crowded", cards.find((t) => t.includes("Keizer"))?.includes("Few bidders")
+          && cards.find((t) => t.includes("Busy Job"))?.includes("Crowded"));
+
+    // Target price
+    const id = await page.evaluate(() => bidId("Salem, OR", bidData["Salem, OR"][0]));
+    await page.evaluate((i) => openPrep("Salem, OR", i, "pricing"), id);
+    await page.waitForTimeout(600);
+    const target = await page.textContent("#pt-target");
+    check("pricing shows the winning price for these lines", /Winning price for these lines\$[\d,]+–\$[\d,]+/.test(target), target.slice(0, 200));
+    await page.fill('.prep-line[data-i="0"] input[data-f="price"]', "200");
+    await page.waitForTimeout(300);
+    check("...and says when your price is above it, as you type", /You're above that range/.test(await page.textContent("#pt-target")));
+
+    // Addendum alerts
+    // Preparing the bid saved it, so it's one of the bids being watched.
+    await page.evaluate((i) => { closeModal(); delete bidWatch[i]; }, id);
+    await page.evaluate(() => checkSavedBids());
+    await page.waitForTimeout(500);
+    check("saved open bids are checked, the first time only recorded",
+          watchCalls >= 1 && await page.evaluate((i) => !!bidWatch[i] && !bidWatch[i].alert, id));
+    watchDocs = ["Bid Form", "Addendum 1"];
+    await page.evaluate((i) => { bidWatch[i].at = Date.now() - 7 * 3600e3; }, id);   // last checked 7 hours ago
+    await page.evaluate(() => checkSavedBids());
+    await page.waitForTimeout(500);
+    const card = (await page.$$eval("#feed-list .bid", (els) => els.map((e) => e.textContent))).find((t) => t.includes("Salem Walks")) || "";
+    check("a new addendum is flagged on the card", /Addendum 1 posted/.test(card), card.slice(0, 200));
+    await page.evaluate(() => openDetail("Salem, OR", bidData["Salem, OR"][0]));
+    await page.waitForTimeout(400);
+    check("...and in the detail, then marked seen", /Addendum 1 posted/.test(await page.textContent("#modal-content"))
+          && await page.evaluate((i) => bidWatch[i].seen === true, id));
+
+    // Did you win?
+    await page.evaluate(() => { closeModal(); switchScreen("home"); });
+    await page.waitForTimeout(500);
+    check("Home asks how a past-due bid went", /How did these go\?/.test(await page.textContent("#home-main")) && /Oak St Walks/.test(await page.textContent("#home-main")));
+    await page.click('.outcome[data-oid="oldjob"] [data-out="lost"]');
+    await page.waitForTimeout(200);
+    await page.fill(".outcome [data-win]", "13500");
+    await page.click(".outcome [data-save]");
+    await page.waitForTimeout(300);
+    check("a loss records the winning bid", await page.evaluate(() => pipeline.oldjob === "lost" && bidPrep.oldjob.result.winning_total === 13500));
+    await page.click('.outcome[data-oid="wonjob"] [data-out="won"]');
+    await page.waitForTimeout(200);
+    check("a win is recorded and asks for a review", await page.evaluate(() => pipeline.wonjob === "won")
+          && /Leave a review/.test(await page.textContent("#home-outcomes")));
+    await page.evaluate(() => openRates("OR"));
+    await page.waitForTimeout(500);
+    check("the rates sheet says how far above the winner you were", /you were a median 11\.1% above the winner/.test(await page.textContent("#modal-content")));
     check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
     await ctx.close();
   }

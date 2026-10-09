@@ -8,13 +8,14 @@ sidewalk, curb or ADA ramp job that is the best public benchmark there is,
 and nobody puts it in front of them: it sits in a 70-190 page PDF on the
 plans room's General Info page.
 
-This downloads those books, reads the concrete flatwork items out of them
-and writes curbcall_netlify_v4/mo_unit_prices.json for the app. Run it once
-a year, after MoDOT posts the new book, and add the new year to BOOKS.
+This reads the concrete flatwork items out of those books. The app's file,
+curbcall_netlify_v4/rates/mo.json, is written by tools/build_state_prices.py,
+which does every state the same way; this module is its Missouri parser.
+Run it once a year, after MoDOT posts the new book, with the new year added
+to BOOKS:
 
-    pip install pypdf
-    python3 tools/build_unit_prices.py
-    python3 tools/build_unit_prices.py --cache /tmp/modot   # keep the PDFs
+    pip install pypdf openpyxl
+    python3 tools/build_state_prices.py --states mo
 
 The PDFs are public records on a site with no robots.txt restriction; they
 are fetched once each with the same honest User-Agent as everything else.
@@ -23,16 +24,11 @@ printed. The build refuses to write if a year yields no flatwork rows or a
 row's average falls outside its own high-low range, either of which means
 the parse went wrong, not that prices changed.
 """
-import argparse
-import json
 import os
 import re
 import sys
-import tempfile
-import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT = os.path.join(ROOT, "curbcall_netlify_v4", "mo_unit_prices.json")
 SOURCE_PAGE = "https://modotweb.modot.mo.gov/BidLettingPlansRoom/GeneralInfo"
 BOOK_URL = ("https://modotweb.modot.mo.gov/BidLettingPlansRoom/Letting/"
             "ViewStream/{id}?type=general_info")
@@ -171,46 +167,11 @@ def build(rows, years):
     }
 
 
-def _download(year, cache):
-    path = os.path.join(cache, f"modot_unit_bid_prices_{year}.pdf")
-    if not os.path.exists(path):
-        req = urllib.request.Request(BOOK_URL.format(id=BOOKS[year]),
-                                     headers={"User-Agent": USER_AGENT})
-        with urllib.request.urlopen(req, timeout=120) as resp, open(path, "wb") as f:
-            f.write(resp.read())
-    return path
-
-
-def _pdf_text(path):
-    from pypdf import PdfReader
-    return "\n".join((p.extract_text() or "") for p in PdfReader(path).pages)
-
-
 def main():
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--out", default=OUT)
-    ap.add_argument("--cache", default=None, help="folder to keep the PDFs in")
-    args = ap.parse_args()
-
-    cache = args.cache or tempfile.mkdtemp(prefix="modot_ubp_")
-    os.makedirs(cache, exist_ok=True)
-    rows = []
-    for year in sorted(BOOKS):
-        got = [r for r in parse_text(_pdf_text(_download(year, cache)), year)
-               if is_flatwork(r)]
-        print(f"{year}: {len(got)} flatwork prices")
-        rows += got
-    problems = check(rows, BOOKS)
-    if problems:
-        print("Not written -- the parse looks wrong:", *problems[:20], sep="\n  ",
-              file=sys.stderr)
-        return 1
-    data = build(rows, BOOKS)
-    with open(args.out, "w", encoding="utf-8") as f:
-        json.dump(data, f, separators=(",", ":"), sort_keys=True)
-    print(f"wrote {args.out}: {len(data['items'])} items, {len(rows)} prices")
-    return 0
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import build_state_prices
+    sys.argv = [sys.argv[0], "--states", "mo"] + sys.argv[1:]
+    return build_state_prices.main()
 
 
 if __name__ == "__main__":

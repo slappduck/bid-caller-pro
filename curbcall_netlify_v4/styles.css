@@ -307,6 +307,49 @@ body{font-family:var(--ui);background:radial-gradient(ellipse 120% 60% at 50% -1
 .rate-trend b{color:var(--text2);font-weight:700;}
 .rate-note{color:var(--text3);font-size:var(--fs-xs);line-height:1.5;margin-top:0.6rem;}
 .rate-note a{color:var(--text2);}
+.rate-win{color:var(--green);}
+/* Should you bid this? */
+.chip.odds-few{color:var(--green);border:1px solid rgba(34,197,94,0.35);}
+.chip.odds-many{color:var(--text3);}
+.chip.watch-alert{color:var(--red);border:1px solid rgba(239,68,68,0.4);font-weight:700;}
+.odds-v{margin-left:0.4rem;font-size:var(--fs-xs);font-weight:700;letter-spacing:0;text-transform:none;color:var(--text2);}
+.odds-v.odds-few{color:var(--green);}
+.odds-v.odds-many{color:var(--accent);}
+.odds-list{margin:0.3rem 0 0;padding-left:1.1rem;color:var(--text2);font-size:var(--fs-sm);line-height:1.5;}
+.odds-list li{margin:0.25rem 0;}
+.odds-list b{color:var(--text);}
+.watch-note{margin:0.2rem 0 0.6rem;}
+/* Target price on the pricing sheet */
+.target-box{border:1px solid var(--border);border-radius:var(--r);padding:0.6rem 0.75rem;margin-top:0.8rem;background:var(--bg);}
+.target-box > div:not(.rate-note){display:flex;justify-content:space-between;gap:0.6rem;font-size:var(--fs-sm);color:var(--text2);padding:0.15rem 0;}
+.target-box b{color:var(--text);}
+.target-v{display:block!important;}
+.target-box b.pc-ok{color:var(--green);}
+.target-box b.pc-hi{color:var(--red);}
+.target-box b.pc-lo{color:var(--accent);}
+.target-v .pc{margin-left:0;}
+/* Did you win? */
+.outcome{padding:0.6rem 0;border-top:1px solid var(--border);}
+.outcome-t b{display:block;color:var(--text);}
+.outcome-t small{display:block;color:var(--text3);font-size:var(--fs-xs);margin-top:0.1rem;line-height:1.4;}
+.outcome-b{display:flex;gap:0.4rem;margin-top:0.45rem;}
+.outcome-b .btn-ghost{margin-top:0;padding:0.5rem;font-size:var(--fs-sm);}
+.outcome-b .input{flex:1;min-width:0;}
+/* Prepare bid: next steps after pricing */
+.ps-steps{display:grid;gap:0.5rem;}
+.ps-steps .btn-ghost{margin-top:0;display:block;box-sizing:border-box;text-align:center;text-decoration:none;}
+/* Price check on a pricing line: where this price sits against what wins. */
+.pc{display:inline-block;margin-left:0.25rem;font-weight:700;}
+.pc-ok{color:var(--green);}
+.pc-hi{color:var(--red);}
+.pc-lo{color:var(--accent);}
+/* Who bids this work */
+.comp-table td:first-child{max-width:11rem;overflow-wrap:anywhere;}
+.comp-table th small{font-weight:500;color:var(--text3);}
+.comp-recent{margin-top:0.5rem;}
+.comp-job{padding:0.45rem 0;border-bottom:1px solid var(--border);color:var(--text2);font-size:var(--fs-sm);}
+.comp-job:last-child{border-bottom:none;}
+.comp-job small{display:block;color:var(--text3);font-size:var(--fs-xs);margin-top:0.1rem;line-height:1.4;}
 
 .chip.est{color:var(--accent);border:1px solid rgba(245,158,11,0.35);background:rgba(245,158,11,0.08);font-weight:700;}
 .est-total{border-top:1px solid var(--border-strong,var(--border));}

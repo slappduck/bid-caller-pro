@@ -126,6 +126,12 @@ alter table user_feeds add column if not exists dismissed jsonb default '{}'::js
 -- workspace on the device until it exists, so running this late loses nothing.
 alter table saved_bids add column if not exists prep jsonb;
 
+-- Bid paperwork details (address, license numbers, bonding agent, ready-mix
+-- supplier) entered once in Account and used to fill agencies' bid forms.
+-- Until this exists the app keeps them on the device and syncs the rest of
+-- the company profile without them.
+alter table company_profiles add column if not exists bid_info jsonb default '{}'::jsonb;
+
 -- Customer reviews, shown as testimonials on the marketing page.
 --
 -- Nothing appears publicly until approved is flipped to true by hand

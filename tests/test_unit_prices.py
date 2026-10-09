@@ -100,7 +100,7 @@ class CommittedDataTests(unittest.TestCase):
     """The file the app actually loads."""
 
     def setUp(self):
-        with open(os.path.join(ROOT, "curbcall_netlify_v4", "mo_unit_prices.json"), encoding="utf-8") as f:
+        with open(os.path.join(ROOT, "curbcall_netlify_v4", "rates", "mo.json"), encoding="utf-8") as f:
             self.d = json.load(f)
 
     def test_every_price_is_internally_consistent(self):
