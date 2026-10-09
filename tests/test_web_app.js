@@ -1863,6 +1863,132 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── Win odds: should-I-bid, target price, addenda, did-you-win, fewest bidders ──
+  console.log("\nHelping customers win: competition, target price, addenda, outcomes");
+  {
+    const load = (f) => JSON.parse(fs.readFileSync(path.join(ROOT, f), "utf8"));
+    const orRes = load("results/or.json");
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    let watchCalls = 0, watchDocs = ["Bid Form"];
+    await page.route("**/*", (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      if (u.endsWith("/bid-watch/check")) {
+        watchCalls++;
+        const urls = JSON.parse(route.request().postData() || "{}").urls || [];
+        const results = {};
+        urls.forEach((x) => { results[x] = { ok: true, docs: watchDocs, addenda: watchDocs.length > 1 ? [1] : [], hash: "h" + watchDocs.length }; });
+        return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, results }) });
+      }
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") {
+        return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      }
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      if (sessionStorage.getItem("seeded")) return;
+      sessionStorage.setItem("seeded", "1");
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      localStorage.setItem("license_key", JSON.stringify("TEST-KEY"));
+      localStorage.setItem("last_feed", JSON.stringify({
+        "Salem, OR": [
+          { title: "Salem Walks", scope: "2,000 SF sidewalk", deadline: "2099-01-01", status: "open", url: "https://e.gov/or" },
+          { title: "Keizer Ramps", scope: "ADA ramps and sidewalk", deadline: "2099-01-01", status: "open", url: "https://e.gov/or2",
+            plan_holders: [{ company: "Other Co" }] },
+          { title: "Busy Job", scope: "sidewalk", deadline: "2099-01-01", status: "open", url: "https://e.gov/or3",
+            plan_holders: [1, 2, 3, 4, 5, 6, 7].map((i) => ({ company: "Co " + i })) },
+        ] }));
+      localStorage.setItem("saved", JSON.stringify({
+        oldjob: { title: "Oak St Walks", deadline: new Date(Date.now() - 20 * 864e5).toISOString().slice(0, 10),
+          url: "https://e.gov/old", _city: "Salem, OR" },
+        wonjob: { title: "Pine Ave Ramps", deadline: new Date(Date.now() - 10 * 864e5).toISOString().slice(0, 10),
+          url: "https://e.gov/won", _city: "Salem, OR" } }));
+      localStorage.setItem("bid_prep", JSON.stringify({
+        oldjob: { checks: {}, custom: [], markup: 0, addenda: "", updated: 5,
+          lines: [{ name: "Concrete walks", item: "0759-0128000J", st: "OR", unit: "sq ft", qty: 1000, price: 15 }] } }));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(1500);
+
+    // Should you bid this?
+    await page.evaluate(() => openDetail("Salem, OR", bidData["Salem, OR"][0]));
+    await page.waitForTimeout(900);
+    const odds = await page.textContent("#detail-rates");
+    const walkJobs = orRes.contracts.filter((c) => c.items["0759-0128000J"]);
+    check("the detail says how many usually bid this work", /Should you bid this\?/.test(odds) && /drew \d+(\.5)? bidders?/.test(odds), odds.slice(0, 300));
+    check("...and how close second place comes", /beat second place by a median \d+\.\d%/.test(odds));
+    check("...from Oregon's own records, labelled as state jobs", /ODOT bid tabulations/.test(odds) && walkJobs.length > 0);
+    await page.evaluate(() => { closeModal(); openDetail("Salem, OR", bidData["Salem, OR"][1]); });
+    await page.waitForTimeout(700);
+    check("a posting's own plan-holder list is used first", /1 other company<\/b>|1 other company has taken out plans/.test(await page.innerHTML("#detail-rates")));
+
+    // Fewest bidders sort and chips
+    await page.evaluate(() => { closeModal(); switchScreen("feed"); });
+    await page.waitForTimeout(600);
+    await page.selectOption("#feed-sort", "fewest");
+    await page.waitForTimeout(400);
+    const order = await page.$$eval("#feed-list .bid .bid-title", (els) => els.map((e) => e.textContent));
+    check("fewest bidders puts the one-holder job first and the crowded one last",
+          order[0] === "Keizer Ramps" && order[order.length - 1] === "Busy Job", order.join(" | "));
+    const cards = await page.$$eval("#feed-list .bid", (els) => els.map((e) => e.textContent));
+    check("the cards say few bidders / crowded", cards.find((t) => t.includes("Keizer"))?.includes("Few bidders")
+          && cards.find((t) => t.includes("Busy Job"))?.includes("Crowded"));
+
+    // Target price
+    const id = await page.evaluate(() => bidId("Salem, OR", bidData["Salem, OR"][0]));
+    await page.evaluate((i) => openPrep("Salem, OR", i, "pricing"), id);
+    await page.waitForTimeout(600);
+    const target = await page.textContent("#pt-target");
+    check("pricing shows the winning price for these lines", /Winning price for these lines\$[\d,]+–\$[\d,]+/.test(target), target.slice(0, 200));
+    await page.fill('.prep-line[data-i="0"] input[data-f="price"]', "200");
+    await page.waitForTimeout(300);
+    check("...and says when your price is above it, as you type", /You're above that range/.test(await page.textContent("#pt-target")));
+
+    // Addendum alerts
+    // Preparing the bid saved it, so it's one of the bids being watched.
+    await page.evaluate((i) => { closeModal(); delete bidWatch[i]; }, id);
+    await page.evaluate(() => checkSavedBids());
+    await page.waitForTimeout(500);
+    check("saved open bids are checked, the first time only recorded",
+          watchCalls >= 1 && await page.evaluate((i) => !!bidWatch[i] && !bidWatch[i].alert, id));
+    watchDocs = ["Bid Form", "Addendum 1"];
+    await page.evaluate((i) => { bidWatch[i].at = Date.now() - 7 * 3600e3; }, id);   // last checked 7 hours ago
+    await page.evaluate(() => checkSavedBids());
+    await page.waitForTimeout(500);
+    const card = (await page.$$eval("#feed-list .bid", (els) => els.map((e) => e.textContent))).find((t) => t.includes("Salem Walks")) || "";
+    check("a new addendum is flagged on the card", /Addendum 1 posted/.test(card), card.slice(0, 200));
+    await page.evaluate(() => openDetail("Salem, OR", bidData["Salem, OR"][0]));
+    await page.waitForTimeout(400);
+    check("...and in the detail, then marked seen", /Addendum 1 posted/.test(await page.textContent("#modal-content"))
+          && await page.evaluate((i) => bidWatch[i].seen === true, id));
+
+    // Did you win?
+    await page.evaluate(() => { closeModal(); switchScreen("home"); });
+    await page.waitForTimeout(500);
+    check("Home asks how a past-due bid went", /How did these go\?/.test(await page.textContent("#home-main")) && /Oak St Walks/.test(await page.textContent("#home-main")));
+    await page.click('.outcome[data-oid="oldjob"] [data-out="lost"]');
+    await page.waitForTimeout(200);
+    await page.fill(".outcome [data-win]", "13500");
+    await page.click(".outcome [data-save]");
+    await page.waitForTimeout(300);
+    check("a loss records the winning bid", await page.evaluate(() => pipeline.oldjob === "lost" && bidPrep.oldjob.result.winning_total === 13500));
+    await page.click('.outcome[data-oid="wonjob"] [data-out="won"]');
+    await page.waitForTimeout(200);
+    check("a win is recorded and asks for a review", await page.evaluate(() => pipeline.wonjob === "won")
+          && /Leave a review/.test(await page.textContent("#home-outcomes")));
+    await page.evaluate(() => openRates("OR"));
+    await page.waitForTimeout(500);
+    check("the rates sheet says how far above the winner you were", /you were a median 11\.1% above the winner/.test(await page.textContent("#modal-content")));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   await browser.close();
   server.close();
   console.log(failures ? `\n${failures} check(s) FAILED` : "\nAll checks passed");

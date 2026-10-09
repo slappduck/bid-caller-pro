@@ -112,8 +112,33 @@ class ParseTests(unittest.TestCase):
 class WinsTests(unittest.TestCase):
     def test_rank_one_prices_by_district_and_statewide(self):
         w = R.wins(R.parse_tabs(TABS))
-        self.assertEqual(w["6081010"]["KC"]["2026"], [281.0, 281.0, 281.0, 1])
+        self.assertEqual(w["6081010"]["KC"]["2026"], [281.0, 281.0, 281.0, 1, 281.0, 281.0])
         self.assertIn("STATEWIDE", w["6081010"])
+
+    def test_the_middle_half_of_winning_prices(self):
+        self.assertEqual(R.quartiles([10.0, 20.0, 30.0, 40.0, 50.0]), (20.0, 40.0))
+
+
+class OregonContractTests(unittest.TestCase):
+    def row(self, cid, code, desc, qty, price, rank, unit="SQFT"):
+        import datetime
+        return (None, datetime.datetime(2025, 2, 27), 2025, "Q1", cid, "1", "MAY ST", code, desc,
+                unit, qty, price, qty * price, rank)
+
+    def test_bidders_totals_and_flatwork_prices_by_rank(self):
+        rows = [self.row("15589", "0759-0128000J", "CONCRETE WALKS", 100, 12.0, 1),
+                self.row("15589", "0759-0128000J", "CONCRETE WALKS", 100, 15.0, 2),
+                self.row("15589", "0222-0102000J", "TEMPORARY SIGNS", 10, 30.0, 1),
+                self.row("15589", "0222-0102000J", "TEMPORARY SIGNS", 10, 20.0, 2)]
+        c = R.parse_or_contracts(rows)[0]
+        self.assertEqual(c["bidders"], [[None, 1500.0], [None, 1700.0]])
+        self.assertEqual(c["items"], {"0759-0128000J": [100.0, [12.0, 15.0]]})
+        self.assertEqual(c["district"], "1")
+
+    def test_a_contract_missing_a_rank_is_dropped(self):
+        rows = [self.row("1", "0759-0128000J", "CONCRETE WALKS", 100, 12.0, 1),
+                self.row("1", "0759-0128000J", "CONCRETE WALKS", 100, 15.0, 3)]
+        self.assertEqual(R.parse_or_contracts(rows), [])
 
 
 class CommittedResultsTests(unittest.TestCase):
@@ -137,12 +162,25 @@ class CommittedResultsTests(unittest.TestCase):
     def test_wins_are_rank_one_prices(self):
         for code, by_d in self.d["wins"].items():
             for by_y in by_d.values():
-                for avg, low, high, n in by_y.values():
+                for avg, low, high, n, p25, p75 in by_y.values():
                     self.assertTrue(low <= avg <= high)
+                    self.assertTrue(low <= p25 <= p75 <= high)
                     self.assertGreaterEqual(n, 1)
 
-    def test_the_index_says_missouri_has_results(self):
+    def test_the_index_says_missouri_and_oregon_have_results(self):
         self.assertTrue(self.index["MO"].get("results"))
+        self.assertTrue(self.index["OR"].get("results"))
+
+    def test_oregon_contracts_line_up(self):
+        with open(os.path.join(ROOT, "curbcall_netlify_v4", "results", "or.json"), encoding="utf-8") as f:
+            d = json.load(f)
+        self.assertFalse(d["named"])
+        self.assertGreater(len(d["contracts"]), 50)
+        for c in d["contracts"]:
+            totals = [b[1] for b in c["bidders"]]
+            self.assertTrue(all(t > 0 for t in totals))
+            for code, (qty, prices) in c["items"].items():
+                self.assertEqual(len(prices), len(totals))
 
 
 if __name__ == "__main__":

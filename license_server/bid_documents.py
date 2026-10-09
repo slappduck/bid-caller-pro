@@ -498,3 +498,75 @@ def bid_documents_fill():
     return jsonify({"ok": True, "fields": len(fields), "filled": filled,
                     "left_blank": len(fields) - len(filled),
                     "pdf_b64": base64.b64encode(pdf).decode("ascii")})
+
+
+# ── Watching saved bids for addenda ─────────────────────────────────────────
+#
+# A contractor who misses an addendum can have the whole bid thrown out. The
+# app sends the postings of its open saved bids here a few times a day; each
+# comes back as what a change would show up in: the documents linked from
+# it, the addendum numbers its text mentions, and a hash of its text. The
+# app compares with its last answer. Same safe fetch as the reader, and each
+# posting is fetched at most once every few hours however many users save it.
+BID_WATCH_MAX_URLS = 25
+BID_WATCH_MAX_PER_KEY_PER_DAY = int(os.environ.get("BID_WATCH_MAX_PER_KEY_PER_DAY", "300"))
+BID_WATCH_CACHE_HOURS = 4
+_BID_WATCH_RATE_KEY = "bidcaller:bid_watch_rate"
+_BID_WATCH_CACHE_PREFIX = "bidcaller:bid_watch:"
+_ADDENDUM_RE = re.compile(r"\baddend(?:um|a)\s*(?:no\.?|number|#)?\s*(\d{1,2})\b", re.I)
+
+
+def _watch_fingerprint(url, data, ctype):
+    """{docs, addenda, hash} for one fetched posting."""
+    if data[:5] == b"%PDF-" or "pdf" in ctype:
+        return {"docs": [], "addenda": [], "hash": hashlib.sha256(data).hexdigest()[:16]}
+    html = data.decode("utf-8", "ignore")
+    text = _html_to_text(html)
+    docs = [d["name"] for d in bid_sources.detail_documents(html, url, limit=40)]
+    addenda = sorted({int(n) for n in _ADDENDUM_RE.findall(text) if 0 < int(n) < 100})
+    norm = re.sub(r"\s+", " ", text).strip().lower()
+    return {"docs": docs, "addenda": addenda,
+            "hash": hashlib.sha256(norm.encode("utf-8")).hexdigest()[:16]}
+
+
+@app.route("/bid-watch/check", methods=["POST"])
+def bid_watch_check():
+    data = request.get_json(force=True, silent=True) or {}
+    key = data.get("key", "")
+    device = data.get("device_id", "")
+    if not _license_is_active(key, device, data.get("supabase_token", "")):
+        return jsonify({"ok": False, "reason": "not_licensed"}), 403
+    urls = data.get("urls")
+    if not isinstance(urls, list):
+        return jsonify({"ok": False, "reason": "bad_request"}), 400
+    urls = [str(u).strip() for u in urls[:BID_WATCH_MAX_URLS] if isinstance(u, str)]
+    results, fetched = {}, 0
+    for url in urls:
+        if not _public_http_url(url):
+            results[url] = {"ok": False, "reason": "bad_url"}
+            continue
+        cache_key = _BID_WATCH_CACHE_PREFIX + hashlib.sha256(url.encode()).hexdigest()[:32]
+        try:
+            hit = kv_backend.get(cache_key, None)
+        except Exception:
+            hit = None
+        if isinstance(hit, dict) and time.time() - float(hit.get("at") or 0) < BID_WATCH_CACHE_HOURS * 3600:
+            results[url] = {"ok": True, **hit["fp"]}
+            continue
+        # Counted per fresh fetch, like the reader: a cached answer is free.
+        if not _ip_rate_ok(_BID_WATCH_RATE_KEY, key or device or _client_ip(),
+                           BID_WATCH_MAX_PER_KEY_PER_DAY):
+            results[url] = {"ok": False, "reason": "rate_limited"}
+            continue
+        raw, ctype, outcome = _fetch_document(url)
+        fetched += 1
+        if outcome != "ok":
+            results[url] = {"ok": False, "reason": outcome}
+            continue
+        fp = _watch_fingerprint(url, raw, ctype)
+        try:
+            kv_backend.set(cache_key, {"at": time.time(), "fp": fp})
+        except Exception:
+            pass
+        results[url] = {"ok": True, **fp}
+    return jsonify({"ok": True, "results": results, "fetched": fetched})

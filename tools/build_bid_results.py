@@ -181,8 +181,17 @@ def parse_tabs(text):
     return out
 
 
+def quartiles(p):
+    """(p25, p75) of a list: the middle half of winning prices."""
+    if len(p) < 2:
+        return p[0], p[0]
+    q = statistics.quantiles(sorted(p), n=4, method="inclusive")
+    return q[0], q[2]
+
+
 def wins(contracts):
-    """Rank-1 unit prices per item, district and year (plus STATEWIDE)."""
+    """Rank-1 unit prices per item, district and year (plus STATEWIDE):
+    [avg, low, high, n, p25, p75]."""
     g = collections.defaultdict(list)
     for c in contracts:
         y = c["date"][:4]
@@ -191,9 +200,74 @@ def wins(contracts):
                 g[(code, d, y)].append(prices[0])
     out = {}
     for (code, d, y), p in g.items():
+        q1, q3 = quartiles(p)
         out.setdefault(code, {}).setdefault(d, {})[y] = [
-            round(statistics.mean(p), 2), round(min(p), 2), round(max(p), 2), len(p)]
+            round(statistics.mean(p), 2), round(min(p), 2), round(max(p), 2), len(p),
+            round(q1, 2), round(q3, 2)]
     return out
+
+
+# ── Oregon ──────────────────────────────────────────────────────────────────
+# ODOT's annual bid data lists every bidder's unit price on every item of
+# every contract, by rank but without names. That still gives what the app
+# needs for "how many usually bid, how close is second place": bidder counts,
+# totals (summed over all items per rank) and flatwork unit prices by rank.
+OR_DISTRICTS = ("1", "2", "3", "4", "5")
+
+
+def parse_or_contracts(rows):
+    """Contracts from one year's BID DATA sheet, flatwork items kept."""
+    import build_state_prices as P
+    flat = {code: desc for code, (_n, _c, desc) in P.OR_ITEMS.items()}
+    cs = {}
+    for r in rows:
+        if len(r) < 14 or not isinstance(r[1], datetime.datetime):
+            continue
+        try:
+            rank, qty, price = int(r[13]), float(r[10]), float(r[11])
+            amount = float(r[12]) if r[12] is not None else qty * price
+        except (TypeError, ValueError):
+            continue
+        cid = str(r[4]).strip()
+        c = cs.setdefault(cid, {"id": cid, "date": r[1].date().isoformat(),
+                                "district": str(r[5]).strip() if str(r[5]).strip() in OR_DISTRICTS else "",
+                                "desc": str(r[6] or "").strip(), "totals": {}, "items": {}})
+        c["totals"][rank] = c["totals"].get(rank, 0.0) + amount
+        code = str(r[7] or "").strip()
+        desc = re.sub(r"\s+", " ", str(r[8] or "")).strip()
+        if flat.get(code) == desc and qty > 0 and price > 0:
+            item = c["items"].setdefault(code, [qty, {}])
+            item[1][rank] = price
+    out = []
+    for c in cs.values():
+        ranks = sorted(c["totals"])
+        if not ranks or ranks != list(range(1, len(ranks) + 1)):
+            continue
+        n = len(ranks)
+        items = {code: [qty, [p[r] for r in ranks]] for code, (qty, p) in c["items"].items()
+                 if sorted(p) == ranks}
+        if not items:
+            continue
+        out.append({"id": c["id"], "date": c["date"], "desc": c["desc"], "counties": "",
+                    "district": c["district"], "bidders": [[None, round(c["totals"][r], 2)] for r in ranks],
+                    "items": items})
+    return out
+
+
+def build_or(cache):
+    import zipfile
+    import build_state_prices as P
+    contracts = []
+    for y in P.OR_YEARS:
+        with zipfile.ZipFile(P._download(P.OR_ZIP.format(y=y), cache, f"or_bid_data_{y}.zip")) as z:
+            name = next(n for n in z.namelist() if n.lower().endswith((".xlsx", ".xlsm")))
+            got = parse_or_contracts(P._rows_xlsx(z.read(name), "BID DATA"))
+        print(f"OR {y}: {len(got)} contracts with flatwork")
+        contracts += got
+    contracts.sort(key=lambda c: (c["date"], c["id"]))
+    return {"state": "OR", "source": "ODOT bid tabulations", "source_url": P.OR_PAGE,
+            "lettings": sorted({c["date"] for c in contracts}), "contracts": contracts,
+            "wins": wins(contracts), "named": False}
 
 
 def check(contracts, lettings):
@@ -201,7 +275,7 @@ def check(contracts, lettings):
     if not contracts:
         problems.append("no contracts read")
     for c in contracts:
-        if any(b[1] <= 0 for b in c["bidders"]):
+        if any(b[1] is None or b[1] <= 0 for b in c["bidders"]):
             problems.append(f"{c['id']}: a bidder with no total")
         for code, (qty, prices) in c["items"].items():
             if qty <= 0 or any(p < 0 for p in prices):
@@ -250,14 +324,29 @@ class Room:
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--states", default="mo,or")
     ap.add_argument("--out", default=OUT)
     ap.add_argument("--months", type=int, default=24)
     ap.add_argument("--cache", default=None, help="folder to keep the PDFs in")
     args = ap.parse_args()
-    from pypdf import PdfReader
-
-    cache = args.cache or tempfile.mkdtemp(prefix="modot_tabs_")
+    cache = args.cache or tempfile.mkdtemp(prefix="bid_results_")
     os.makedirs(cache, exist_ok=True)
+    states = [x.strip().lower() for x in args.states.split(",") if x.strip()]
+    if "or" in states:
+        data = build_or(cache)
+        bad = check(data["contracts"], data["lettings"])
+        if bad:
+            print("OR not written:", *bad[:20], sep="\n  ", file=sys.stderr)
+            return 1
+        path = os.path.join(os.path.dirname(args.out), "or.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, separators=(",", ":"), sort_keys=True)
+        print(f"wrote {path}: {len(data['contracts'])} contracts")
+    if "mo" not in states:
+        import build_state_prices
+        build_state_prices.write_index()
+        return 0
+    from pypdf import PdfReader
     room = Room()
     token, lettings = room.lettings()
     today = datetime.date.today()
@@ -285,7 +374,7 @@ def main():
         return 1
     contracts.sort(key=lambda c: (c["date"], c["id"]))
     data = {"state": "MO", "source": "MoDOT bid tabulations", "source_url": BASE,
-            "lettings": used, "contracts": contracts, "wins": wins(contracts)}
+            "lettings": used, "contracts": contracts, "wins": wins(contracts), "named": True}
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as f:
         json.dump(data, f, separators=(",", ":"), sort_keys=True)

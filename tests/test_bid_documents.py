@@ -290,6 +290,58 @@ class FillEndpointTests(unittest.TestCase):
         self.assertEqual(self.post(url="http://10.0.0.1/f.pdf").status_code, 400)
 
 
+class BidWatchTests(unittest.TestCase):
+    URL = "https://93.184.216.34/bids/elm-st"
+    PAGE = (b"<html><body><h1>Elm St Sidewalk</h1><p>Addendum No. 1 issued 9/30. See Addendum #2.</p>"
+            b'<a href="/docs/bid-form.pdf">Bid Form</a><a href="/docs/addendum-2.pdf">Addendum 2</a></body></html>')
+
+    def setUp(self):
+        self.client = ls.app.test_client()
+        self.store, self.fetches = {}, []
+        self._p = [
+            patch.object(ls, "_license_is_active", return_value=True),
+            patch.object(ls, "_ip_rate_ok", return_value=True),
+            patch.object(kv_backend, "get", side_effect=lambda k, d=None: self.store.get(k, d)),
+            patch.object(kv_backend, "set", side_effect=lambda k, v: self.store.__setitem__(k, v)),
+            patch.object(ls, "_fetch_document",
+                         side_effect=lambda u: (self.fetches.append(u), (self.PAGE, "text/html", "ok"))[1]),
+        ]
+        for p in self._p:
+            p.start()
+
+    def tearDown(self):
+        for p in self._p:
+            p.stop()
+
+    def post(self, urls):
+        return self.client.post("/bid-watch/check", json={"key": "k", "device_id": "d", "urls": urls})
+
+    def test_documents_and_addendum_numbers_come_back(self):
+        r = self.post([self.URL]).get_json()["results"][self.URL]
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["addenda"], [1, 2])
+        self.assertIn("Addendum 2", r["docs"])
+        self.assertTrue(r["hash"])
+
+    def test_a_posting_is_fetched_once_while_cached(self):
+        self.post([self.URL])
+        self.post([self.URL])
+        self.assertEqual(len(self.fetches), 1)
+
+    def test_private_addresses_are_never_fetched(self):
+        r = self.post(["http://169.254.169.254/latest/"]).get_json()["results"]
+        self.assertFalse(r["http://169.254.169.254/latest/"]["ok"])
+        self.assertEqual(self.fetches, [])
+
+    def test_a_batch_is_capped(self):
+        urls = [f"https://93.184.216.34/b/{i}" for i in range(40)]
+        self.assertEqual(len(self.post(urls).get_json()["results"]), ls.BID_WATCH_MAX_URLS)
+
+    def test_an_unlicensed_caller_is_refused(self):
+        with patch.object(ls, "_license_is_active", return_value=False):
+            self.assertEqual(self.post([self.URL]).status_code, 403)
+
+
 if __name__ == "__main__":
     unittest.main()
 

@@ -41,7 +41,7 @@ Per-state file (the app reads these):
   fields ["avg","low","high","n","avg_qty"],
   items {code: {name, unit, cat?}},
   prices {code: {district: {year: [avg, low|null, high|null, n, avg_qty]}}},
-  wins? {code: {district: {year: [avg, low, high, n]}}}   (winning bids)
+  wins? {code: {district: {year: [avg, low, high, n, p25, p75]}}}  (winning bids)
   cats {category: code}, headline [code]
 Categories are what the app matches a posting's words to: sidewalk,
 sidewalk6, ramp, domes, curb_gutter, curb, driveway, gutter, median,
@@ -115,9 +115,10 @@ class State:
         self.prices.setdefault(code, {}).setdefault(district, {})[str(year)] = [
             _r2(avg), _r2(low), _r2(high), int(n), round(float(avg_qty or 0), 1)]
 
-    def add_win(self, code, district, year, avg, low, high, n):
+    def add_win(self, code, district, year, avg, low, high, n, p25=None, p75=None):
         self.wins.setdefault(code, {}).setdefault(district, {})[str(year)] = [
-            _r2(avg), _r2(low), _r2(high), int(n)]
+            _r2(avg), _r2(low), _r2(high), int(n), _r2(p25 if p25 is not None else low),
+            _r2(p75 if p75 is not None else high)]
 
     def problems(self):
         out = []
@@ -381,7 +382,8 @@ def build_or(cache):
         s.add(code, d, y, statistics.mean(prices), min(prices), max(prices), len(g), qty)
         wins = [b["price"] for b in g if b["rank"] == 1]
         if wins:
-            s.add_win(code, d, y, statistics.mean(wins), min(wins), max(wins), len(wins))
+            q = statistics.quantiles(sorted(wins), n=4, method="inclusive") if len(wins) > 1 else [wins[0]] * 3
+            s.add_win(code, d, y, statistics.mean(wins), min(wins), max(wins), len(wins), q[0], q[2])
     s.bids = bids
     return s
 
