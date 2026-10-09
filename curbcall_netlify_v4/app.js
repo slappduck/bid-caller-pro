@@ -5539,6 +5539,99 @@ function docRow(b){
     <div class="detail-val">${links}</div></div>`;
 }
 
+// ── Sub quotes to the primes ──
+// On a job too big (or a state job needing prequalification) for a concrete
+// crew to bid as prime, the way in is pricing the concrete for the
+// contractors who pulled plans. This writes that quote from the
+// contractor's own Prepare-bid prices -- one email per prime, sent from
+// their own mail app -- and remembers who has been sent one. For Missouri,
+// each prime's record on state flatwork jobs comes from MoDOT's tabulations.
+function companyKey(name){
+  return String(name||"").toLowerCase().replace(/&/g," and ")
+    .replace(/\b(inc|llc|l\.l\.c|co|corp|corporation|company|ltd|the)\b\.?/g," ")
+    .replace(/[^a-z0-9]+/g," ").trim();
+}
+// {bids, wins} on state flatwork jobs for a company, from named bid results.
+function primeRecord(name,st){
+  const res=bidResults[st];
+  if(!res||res.named===false)return null;
+  const k=companyKey(name);
+  if(!k)return null;
+  let bids=0,wins=0;
+  res.contracts.forEach(c=>c.bidders.forEach(([n],r)=>{if(companyKey(n)===k){bids++;if(r===0)wins++;}}));
+  return bids?{bids,wins}:null;
+}
+const SUB_QUOTE_TERMS="Includes labor, material and equipment for the items listed. Excludes traffic control, bonds, permits and testing unless listed. Quantities per the plans; unit prices apply to final measured quantities. Good for 30 days.";
+function subQuoteLines(p){
+  const k=1+(Number(p.markup)||0)/100;
+  return (p.lines||[]).filter(l=>(l.name||"").trim()&&Number(l.price)>0)
+    .map(l=>({name:l.name,qty:Number(l.qty)||0,unit:l.unit||"",price:Math.round(Number(l.price)*k*100)/100}));
+}
+function subQuoteText(b,p,city,to){
+  const c=companyProfile||{},lines=subQuoteLines(p);
+  const total=lines.reduce((s,l)=>s+l.qty*l.price,0);
+  const first=String((to&&to.contact)||"").trim().split(/\s+/)[0];
+  return[`${first?`Hi ${first},`:"Hello,"}`,"",
+    `${c.name||"We"} would like to quote the concrete flatwork on ${b.title||"this job"}${b.bid_number?` (${b.bid_number})`:""}${city?`, ${city}`:""}${b.deadline?`, bids due ${b.deadline}`:""}.`,"",
+    ...lines.map(l=>`- ${l.name}: ${l.qty?`${l.qty.toLocaleString()} ${l.unit} at `:""}${money2(l.price)}${l.unit?`/${l.unit}`:""}${l.qty?` = ${money2(l.qty*l.price)}`:""}`),
+    "",total?`Total for the items listed: ${money2(total)}`:"","",
+    p.subTerms||SUB_QUOTE_TERMS,"","Happy to adjust to your item list. Thanks,",signOff()]
+    .filter((x,j,a)=>x!==""||a[j-1]!=="").join("\n");
+}
+function renderSubQuote(city,id){
+  const b=findBid(id)||saved[id];
+  if(!b)return;
+  // Read without creating: looking at this screen doesn't start a workspace.
+  const p=bidPrep[id]||{lines:[]},st=bidState(city,b);
+  const lines=subQuoteLines(p);
+  const holders=otherHolders(b);
+  const mc=document.getElementById("modal-content");
+  const sent=p.quotes||{};
+  const rows=holders.map((h,i)=>({h,i,rec:primeRecord(h.company,st)}))
+    .sort((a,b)=>((b.rec&&b.rec.wins)||0)-((a.rec&&a.rec.wins)||0));
+  mc.innerHTML=`<div class="sheet-head"><h2>Quote the primes</h2>
+      <div class="sheet-sub"><span class="chip">${esc(b.title||"Untitled")}</span>${b.deadline?`<span class="chip">Due ${esc(b.deadline)}</span>`:""}</div></div>
+    <a href="#" class="prep-back" id="sq-back">← Bid details</a>
+    ${lines.length?`<div class="workspace-title">Your quote</div>
+      <table class="ps-table"><thead><tr><th>Item</th><th>Qty</th><th>Unit price</th></tr></thead><tbody>
+      ${lines.map(l=>`<tr><td>${esc(l.name)}</td><td>${l.qty?`${esc(l.qty.toLocaleString())} ${esc(l.unit)}`:"—"}</td><td>${money2(l.price)}</td></tr>`).join("")}</tbody></table>
+      <div class="rate-note">From your Prepare-bid prices${Number(p.markup)?`, with your ${esc(String(p.markup))}% markup`:""}. <a href="#" id="sq-edit">Change prices</a></div>
+      <div class="detail-label" style="margin-top:0.8rem;">Terms</div>
+      <textarea class="input" id="sq-terms" rows="3" style="resize:vertical;">${esc(p.subTerms||SUB_QUOTE_TERMS)}</textarea>`
+      :`<div class="alert alert-amber"><span>Price your items first: the quote is built from your Prepare-bid prices.</span></div>
+      <button class="btn-primary" id="sq-edit">Price this job</button>`}
+    ${lines.length?`<div class="workspace-title" style="margin-top:1rem;">Send it to the primes</div>
+      ${rows.map(({h,i,rec})=>{
+        const k=companyKey(h.company),mail=h.email?safeUrl(mailtoUrl(h.email,`Concrete flatwork quote: ${b.title||""}`,subQuoteText(b,p,city,h))):"";
+        const tel=h.phone?safeUrl("tel:"+String(h.phone).replace(/[^\d+]/g,"")):"";
+        return`<div class="sq-prime">
+          <div><b>${esc(h.company||"Plan holder")}</b>${h.contact?`<small>${esc(h.contact)}</small>`:""}
+            ${rec?`<small class="sq-rec">${rec.wins} win${rec.wins===1?"":"s"} in ${plural(rec.bids,"state flatwork bid")} (MoDOT)</small>`:""}
+            ${sent[k]?`<small class="sq-sent">Quote sent ${esc(new Date(sent[k]).toLocaleDateString([],{month:"short",day:"numeric"}))}</small>`:""}</div>
+          <div class="sq-ways">${mail?`<a class="btn-ghost" data-sq="${i}" href="${esc(mail)}">${sent[k]?"Email again":"Email quote"}</a>`:""}
+            ${tel?`<a class="btn-ghost" href="${esc(tel)}">Call</a>`:""}</div></div>`;}).join("")
+        ||`<div class="account-status">No plan holders are listed for this bid yet. Copy the quote and send it to whoever is bidding.</div>`}
+      <div class="act-primary"><button class="ma-ghost" id="sq-copy">Copy quote</button></div>
+      <div class="rate-note">Each email opens in your own mail app for you to read and send. Plan holders are from the agency's list for this job.</div>`:""}`;
+  document.getElementById("sq-back").onclick=(e)=>{e.preventDefault();openDetail(city,b);};
+  const ed=document.getElementById("sq-edit");
+  if(ed)ed.onclick=(e)=>{e.preventDefault();openPrep(city,id,"pricing");};
+  const terms=document.getElementById("sq-terms");
+  if(terms)terms.onchange=()=>{prepFor(id).subTerms=terms.value.trim().slice(0,800);savePrep(id,city);renderSubQuote(city,id);};
+  mc.querySelectorAll("[data-sq]").forEach(a=>a.addEventListener("click",()=>{
+    const h=holders[Number(a.dataset.sq)];
+    const w=prepFor(id);
+    w.quotes=w.quotes||{};w.quotes[companyKey(h.company)]=Date.now();
+    savePrep(id,city);
+    setTimeout(()=>renderSubQuote(city,id),300);
+  }));
+  const cp=document.getElementById("sq-copy");
+  if(cp)cp.onclick=async()=>{
+    try{await navigator.clipboard.writeText(subQuoteText(b,p,city,null));toast("Quote copied");}
+    catch(e){toast("Couldn't copy on this device");}
+  };
+}
+
 function holderBlock(b){
   const hs=(b&&b.plan_holders)||[];
   if(!hs.length)return"";
@@ -5556,8 +5649,9 @@ function holderBlock(b){
   return `<div class="holders">
     <div class="holders-h">Bidding this job &mdash; ${hs.length} contractor${hs.length===1?"":"s"}</div>
     ${rows}
-    <div class="who" style="margin-top:0.1rem;">Pulled from the state's plan holder list. These are the primes;
+    <div class="who" style="margin-top:0.1rem;">Pulled from the agency's plan holder list. These are the primes;
     they need someone to price the concrete.</div>
+    ${otherHolders(b).length?`<button class="btn-primary" id="sub-quote-open" style="margin-top:0.6rem;">Send my sub quote to the primes</button>`:""}
   </div>`;
 }
 
@@ -5695,6 +5789,8 @@ function openDetail(city,b){
   // values sidesteps quoting entirely. (encodeURIComponent was not protection
   // here: it leaves apostrophes untouched.)
   document.getElementById("prep-open").onclick=()=>openPrep(city,id);
+  const sq=document.getElementById("sub-quote-open");
+  if(sq)sq.onclick=async()=>{await Promise.all([loadRates(bidState(city,b)),loadBidResults(bidState(city,b))]);renderSubQuote(city,id);};
   mc.querySelectorAll("[data-pstatus]").forEach(btn=>{
     btn.onclick=()=>{setPipelineStatus(id,btn.dataset.pstatus);refreshAfterPipeline(city,id);};
   });

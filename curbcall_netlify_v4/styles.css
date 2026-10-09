@@ -335,6 +335,14 @@ body{font-family:var(--ui);background:radial-gradient(ellipse 120% 60% at 50% -1
 .outcome-b{display:flex;gap:0.4rem;margin-top:0.45rem;}
 .outcome-b .btn-ghost{margin-top:0;padding:0.5rem;font-size:var(--fs-sm);}
 .outcome-b .input{flex:1;min-width:0;}
+/* Sub quotes to primes */
+.sq-prime{display:flex;justify-content:space-between;align-items:flex-start;gap:0.6rem;padding:0.6rem 0;border-bottom:1px solid var(--border);}
+.sq-prime b{color:var(--text);display:block;}
+.sq-prime small{display:block;color:var(--text3);font-size:var(--fs-xs);margin-top:0.1rem;}
+.sq-prime small.sq-rec{color:var(--text2);}
+.sq-prime small.sq-sent{color:var(--green);font-weight:700;}
+.sq-ways{display:flex;gap:0.4rem;flex-shrink:0;}
+.sq-ways .btn-ghost{margin-top:0;width:auto;padding:0.5rem 0.7rem;font-size:var(--fs-sm);text-decoration:none;white-space:nowrap;}
 /* Prepare bid: next steps after pricing */
 .ps-steps{display:grid;gap:0.5rem;}
 .ps-steps .btn-ghost{margin-top:0;display:block;box-sizing:border-box;text-align:center;text-decoration:none;}

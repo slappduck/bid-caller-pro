@@ -2072,6 +2072,76 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── Sub quotes to the primes ──
+  console.log("\nA sub quote goes to each prime, built from your own prices");
+  {
+    const res = JSON.parse(fs.readFileSync(path.join(ROOT, "results", "mo.json"), "utf8"));
+    const wins = {};
+    res.contracts.forEach((c) => { wins[c.bidders[0][0]] = (wins[c.bidders[0][0]] || 0) + 1; });
+    const winner = Object.keys(wins).sort((a, b) => wins[b] - wins[a])[0];
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const host = new URL(route.request().url()).hostname;
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") {
+        return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      }
+      return route.abort();
+    });
+    await page.addInitScript((winnerName) => {
+      if (sessionStorage.getItem("seeded")) return;
+      sessionStorage.setItem("seeded", "1");
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      localStorage.setItem("company_profile", JSON.stringify({ name: "Test Concrete LLC", contact: "Pat Lee", phone: "417-555-0100" }));
+      localStorage.setItem("last_feed", JSON.stringify({ "Springfield, MO": [{
+        title: "Route 13 Pavement and ADA", scope: "ADA ramps and sidewalk", deadline: "2099-01-01", status: "open",
+        url: "https://e.gov/mo", source: "state_dot", bid_number: "J8P3601",
+        plan_holders: [
+          { company: "Small Paving Co", contact: "Ann Roe", email: "ann@small.example" },
+          { company: winnerName, contact: "Bo Diaz", email: "bo@big.example", phone: "417-555-0199" },
+          { company: "Test Concrete LLC", email: "me@test.example" } ] }] }));
+    }, winner);
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(800);
+    const id = await page.evaluate(() => bidId("Springfield, MO", bidData["Springfield, MO"][0]));
+    await page.evaluate(() => openDetail("Springfield, MO", bidData["Springfield, MO"][0]));
+    await page.waitForTimeout(400);
+    await page.click("#sub-quote-open");
+    await page.waitForTimeout(500);
+    check("with nothing priced yet, it sends you to price the job first",
+          /Price your items first/.test(await page.textContent("#modal-content")));
+    await page.evaluate((i) => {
+      const p = prepFor(i);
+      p.lines = [{ name: "Concrete sidewalk, 4 in.", item: "6086004", st: "MO", unit: "sq yd", qty: 500, price: 70 },
+                 { name: "Concrete curb ramp (ADA)", item: "6081010", st: "MO", unit: "sq yd", qty: 40, price: 200 }];
+      p.markup = 10;
+      savePrep(i, "Springfield, MO");
+      renderSubQuote("Springfield, MO", i);
+    }, id);
+    await page.waitForTimeout(400);
+    const sheet = await page.textContent("#modal-content");
+    check("the quote carries your prices with your markup", /\$77\.00/.test(sheet) && /\$220\.00/.test(sheet));
+    const primes = await page.$$eval(".sq-prime b", (els) => els.map((e) => e.textContent));
+    check("you aren't listed as your own prime", !primes.includes("Test Concrete LLC") && primes.length === 2, primes.join(" | "));
+    check("the prime who wins most state flatwork is listed first, with its record",
+          primes[0] === winner && new RegExp(`${wins[winner]} wins? in`).test(sheet), primes[0]);
+    const mail = decodeURIComponent(await page.getAttribute('.sq-prime [data-sq="1"]', "href"));
+    check("each prime's email is addressed to them, with the items and total",
+          mail.startsWith("mailto:bo@big.example") && /Hi Bo,/.test(mail) && /500 sq yd at \$77\.00\/sq yd = \$38,500\.00/.test(mail)
+            && /Total for the items listed: \$47,300\.00/.test(mail) && /J8P3601/.test(mail), mail.slice(0, 300));
+    await page.evaluate(() => { document.querySelector('.sq-prime [data-sq="1"]').addEventListener("click", (e) => e.preventDefault()); });
+    await page.click('.sq-prime [data-sq="1"]');
+    await page.waitForTimeout(600);
+    check("a sent quote is remembered on that prime", /Quote sent/.test(await page.textContent("#modal-content")));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   await browser.close();
   server.close();
   console.log(failures ? `\n${failures} check(s) FAILED` : "\nAll checks passed");
