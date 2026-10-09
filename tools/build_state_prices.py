@@ -112,8 +112,11 @@ class State:
         self.periods = {}
 
     def add(self, code, district, year, avg, low, high, n, avg_qty):
+        # n is None where the state doesn't say how many contracts lie behind
+        # its average (TN); the app then shows the price without a count.
         self.prices.setdefault(code, {}).setdefault(district, {})[str(year)] = [
-            _r2(avg), _r2(low), _r2(high), int(n), round(float(avg_qty or 0), 1)]
+            _r2(avg), _r2(low), _r2(high), None if n is None else int(n),
+            None if avg_qty is None else round(float(avg_qty or 0), 1)]
 
     def add_win(self, code, district, year, avg, low, high, n, p25=None, p75=None):
         self.wins.setdefault(code, {}).setdefault(district, {})[str(year)] = [
@@ -135,7 +138,7 @@ class State:
                         out.append(f"{self.st} {code}: unknown district {d}")
                     for y, row in by_y.items():
                         avg, low, high, n = row[0], row[1], row[2], row[3]
-                        if not (avg and avg > 0) or n < 1:
+                        if not (avg and avg > 0) or (n is not None and n < 1):
                             out.append(f"{self.st} {code} {d} {y}: empty {label}")
                         if low is not None and high is not None and not (
                                 low - 0.01 <= avg <= high + 0.01):
@@ -537,7 +540,68 @@ def build_ok(cache, report=None):
     return s
 
 
-BUILDERS = {"mo": build_mo, "fl": build_fl, "or": build_or, "mn": build_mn, "ok": build_ok}
+# ── Tennessee ───────────────────────────────────────────────────────────────
+TN_PAGE = "https://www.tn.gov/tdot/tdot-construction-division/previous-lettings.html"
+TN_PDF = "https://www.tn.gov/content/dam/tn/tdot/construction/previous_lettings/Const_aup{y}.pdf"
+TN_YEARS = (2023, 2024, 2025)
+TN_REGIONS = {"STATEWIDE": "All of Tennessee", "1": "Region 1 (Knoxville)", "2": "Region 2 (Chattanooga)",
+              "3": "Region 3 (Nashville)", "4": "Region 4 (Memphis)"}
+TN_ITEMS = {
+    "701-01.01": ('Concrete sidewalk, 4 in.', "sidewalk", "S.F."),
+    "701-01.02": ('Concrete sidewalk, 6 in.', "sidewalk6", "S.F."),
+    "701-02": ("Concrete driveway", "driveway", "S.F."),
+    "701-02.02": ('Concrete driveway, 8 in.', None, "S.F."),
+    "701-02.01": ("Concrete curb ramp, retrofit (ADA)", "ramp", "S.F."),
+    "701-02.03": ("Concrete curb ramp (ADA)", None, "S.F."),
+    "701-02.06": ("Detectable warning surface (ADA)", "domes", "S.F."),
+    "702-01.02": ("Concrete curb", "curb", "L.F."),
+    "702-03": ("Combined curb and gutter (per cu yd)", None, "C.Y."),
+    "202-03": ("Remove rigid pavement, sidewalk", "removal", "S.Y."),
+}
+TN_UNITS = {"S.F.": "sq ft", "S.Y.": "sq yd", "L.F.": "ft", "EACH": "each", "C.Y.": "cu yd"}
+_TN_ITEM = re.compile(r"^\s*(\d{3}-\d{2}(?:\.\d{2})?)\s+(.+?)\s{2,}(\S+)\s+(\d|STATE)\s+\$([\d,]+\.\d{2})\s+"
+                      r"\$([\d,]+\.\d{2})\s+([\d,]+\.\d+)\s*$")
+_TN_MORE = re.compile(r"^\s+(\d|STATE)\s+\$([\d,]+\.\d{2})\s+\$([\d,]+\.\d{2})\s+([\d,]+\.\d+)\s*$")
+
+
+def parse_tn(text):
+    """{(code, region): (avg, total quantity, unit)} for the listed items."""
+    out, code, unit = {}, None, None
+    for line in text.splitlines():
+        m = _TN_ITEM.match(line)
+        if m:
+            code, unit = m.group(1), m.group(3)
+            region, avg, qty = m.group(4), _f(m.group(5)), _f(m.group(7))
+        else:
+            m = _TN_MORE.match(line)
+            if not m or not code:
+                if line.strip() and not line.startswith(" " * 20):
+                    code = None if _TN_ITEM.match(line) is None and re.match(r"^\s*\d{3}-", line) else code
+                continue
+            region, avg, qty = m.group(1), _f(m.group(2)), _f(m.group(4))
+        if code in TN_ITEMS and unit == TN_ITEMS[code][2]:
+            out[(code, "STATEWIDE" if region == "STATE" else region)] = (avg, qty, TN_UNITS[unit])
+    return out
+
+
+def build_tn(cache):
+    items = {c: {"name": n, "unit": TN_UNITS[u], **({"cat": cat} if cat else {})}
+             for c, (n, cat, u) in TN_ITEMS.items()}
+    s = State("TN", "Tennessee", "TDOT Average Unit Prices, awarded contracts", TN_PAGE,
+              "awarded", items=items, districts=TN_REGIONS,
+              cats={cat: c for c, (_n, cat, _u) in TN_ITEMS.items() if cat},
+              headline=["701-01.01", "701-02.01", "702-01.02", "701-02"])
+    for y in TN_YEARS:
+        got = parse_tn(_pdf_text(_download(TN_PDF.format(y=y), cache, f"tn_aup_{y}.pdf")))
+        print(f"  TN {y}: {len(got)} item-region prices")
+        for (code, region), (avg, qty, _u) in got.items():
+            if region in TN_REGIONS:
+                s.add(code, region, y, avg, None, None, None, None)
+    return s
+
+
+BUILDERS = {"mo": build_mo, "fl": build_fl, "or": build_or, "mn": build_mn, "ok": build_ok,
+            "tn": build_tn}
 
 
 def write_state(s, out_dir=OUT_DIR):

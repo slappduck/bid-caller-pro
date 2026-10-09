@@ -15,8 +15,8 @@
 //
 // API calls (Render backend, Supabase REST) and map tiles are still never
 // cached — bid data, auth, and the map must never be served stale.
-const SHELL_CACHE = "curbcall-shell-v92";
-const ASSET_CACHE = "curbcall-assets-v92";
+const SHELL_CACHE = "curbcall-shell-v93";
+const ASSET_CACHE = "curbcall-assets-v93";
 const KEEP = [SHELL_CACHE, ASSET_CACHE];
 
 // The published Terms and Privacy Policy, which must never be served stale.
@@ -43,17 +43,16 @@ const SHELL_FILES = [
   "favicon.ico",
   "icon-192.png",
   "icon-512.png",
-  // Going rates and bid results: read on a job site as often as anywhere,
-  // so kept offline. One small file per state.
-  "rates/index.json",
-  "rates/mo.json",
-  "rates/fl.json",
-  "rates/or.json",
-  "rates/mn.json",
-  "rates/ok.json",
-  "results/mo.json",
-  "results/or.json"
+  "rates/index.json"
 ];
+
+// Going rates and bid results, one file per state (rates/<st>.json,
+// results/<st>.json). Too many states to download every one up front, so
+// each is cached the first time the app asks for it -- the user's own
+// state, in practice -- and kept for use on a job site with no signal.
+function isStateData(url) {
+  return /\/(rates|results)\/[a-z]{2}\.json$/.test(url.pathname);
+}
 
 // Must stay in sync with the <script>/<link> tags in app.html. Version-pinned
 // so a cached copy is always the right copy.
@@ -200,8 +199,8 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // ── Our own shell: stale-while-revalidate ──
-  const isShellFile = here && matches(SHELL_FILES);
+  // ── Our own shell, and state price files: stale-while-revalidate ──
+  const isShellFile = here && (matches(SHELL_FILES) || isStateData(url));
   if (!isShellFile) return; // API calls and map tiles hit the network normally
 
   event.respondWith(

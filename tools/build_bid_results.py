@@ -363,36 +363,43 @@ def parse_nc_tabs(rows):
 
 
 def _nc_lettings(room, months, cache):
-    """[(date, xls path)] for central lettings in the last `months` months."""
-    found = []
+    """[(date, xls path)] for central lettings in the last `months` months.
+
+    Each letting's page is fetched by date; NCDOT's pages are slow (~9 s),
+    so a few are asked for at once. Answers are kept in the cache, so a
+    rerun only asks about new dates."""
+    from concurrent.futures import ThreadPoolExecutor
     index_path = os.path.join(cache, "nc_lettings.json")
     known = json.load(open(index_path)) if os.path.exists(index_path) else {}
     today = datetime.date.today()
-    day = today - datetime.timedelta(days=months * 31)
+    days, day = [], today - datetime.timedelta(days=months * 31)
     while day <= today:
-        if day.weekday() in (1, 3):   # Tuesday, Thursday
-            key = day.isoformat()
-            if key not in known:
-                try:
-                    html = room.get(NC_DETAIL.format(d=key), timeout=60).decode("utf-8", "replace")
-                except Exception:
-                    html = ""
-                m = re.search(r'href="([^"]+\.xls)"', html, re.I)
-                known[key] = m.group(1) if m else ""
-                json.dump(known, open(index_path, "w"))
-                time.sleep(0.3)
-            if known[key]:
-                found.append((day, known[key]))
+        if day.weekday() in (1, 3) and day.isoformat() not in known:   # Tuesday, Thursday
+            days.append(day.isoformat())
         day += datetime.timedelta(days=1)
+
+    def probe(key):
+        try:
+            html = room.get(NC_DETAIL.format(d=key), timeout=90).decode("utf-8", "replace")
+        except Exception:
+            return key, None          # unknown: asked again next run
+        m = re.search(r'href="([^"]+\.xls)"', html, re.I)
+        return key, (m.group(1) if m else "")
+
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        for key, href in pool.map(probe, days):
+            if href is not None:
+                known[key] = href
+    json.dump(known, open(index_path, "w"))
+    cutoff = (today - datetime.timedelta(days=months * 31)).isoformat()
     out = []
-    for d, href in found:
-        path = os.path.join(cache, f"nc_tabs_{d.isoformat()}.xls")
+    for key in sorted(k for k, v in known.items() if v and k >= cutoff):
+        path = os.path.join(cache, f"nc_tabs_{key}.xls")
         if not os.path.exists(path):
-            url = urllib.parse.quote(href, safe=":/%")
-            data = room.get(url, timeout=300)
+            data = room.get(urllib.parse.quote(known[key], safe=":/%"), timeout=300)
             with open(path, "wb") as f:
                 f.write(data)
-        out.append((d, path))
+        out.append((datetime.date.fromisoformat(key), path))
     return out
 
 
@@ -432,6 +439,121 @@ def nc_rates(results):
               statistics.mean(q for q, _ps in rows))
         q1, q3 = quartiles(win)
         s.add_win(code, "STATEWIDE", y, statistics.mean(win), min(win), max(win), len(win), q1, q3)
+    return s
+
+
+# ── Texas ───────────────────────────────────────────────────────────────────
+# TxDOT publishes every bid on every item of its lettings as an open dataset
+# (data.texas.gov "Bid Tabulations"): bidder, rank, unit price, the bidder's
+# total, district and county. Only the flatwork items are asked for.
+TX_DATASET = "https://data.texas.gov/resource/de7b-7dna.json"
+TX_PAGE = "https://data.texas.gov/dataset/Bid-Tabulations/de7b-7dna"
+TX_ITEMS = {
+    "531-7001": ('Concrete sidewalk, 4 in.', "sidewalk", "sq yd"),
+    "531-7002": ('Concrete sidewalk, 5 in.', None, "sq yd"),
+    "531-7003": ('Concrete sidewalk, 6 in.', "sidewalk6", "sq yd"),
+    "529-7009": ("Curb and gutter, type II", "curb_gutter", "ft"),
+    "529-7008": ("Curb and gutter, type I", None, "ft"),
+    "529-7002": ("Concrete curb, type II", "curb", "ft"),
+    "530-7006": ("Concrete driveway", "driveway", "sq yd"),
+    "531-7005": ("Curb ramp, type 1 (ADA)", "ramp", "each"),
+    "531-7006": ("Curb ramp, type 2 (ADA)", None, "each"),
+    "531-7010": ("Curb ramp, type 7 (ADA)", None, "each"),
+}
+TX_UNITS = {"SY": "sq yd", "LF": "ft", "EA": "each", "SF": "sq ft"}
+
+
+def _tx_rows(since):
+    codes = ",".join(f"'{c}'" for c in TX_ITEMS)
+    out, offset = [], 0
+    while True:
+        q = urllib.parse.urlencode({
+            "$select": "project_id,project_actual_let_date,project_name,county,district_division,"
+                       "bid_code,bid_item_quantity,measurement_unit,bid_item_unit_price_amount,"
+                       "bid_rank_sequence_number,vendor_name,bid_total_amount,alternative_bid_code",
+            "$where": f"bid_code in({codes}) AND project_actual_let_date >= '{since}'",
+            "$order": "project_id,bid_code", "$limit": 50000, "$offset": offset})
+        req = urllib.request.Request(f"{TX_DATASET}?{q}", headers={"User-Agent": USER_AGENT})
+        with urllib.request.urlopen(req, timeout=300) as r:
+            page = json.loads(r.read().decode("utf-8"))
+        out += page
+        if len(page) < 50000:
+            return out
+        offset += 50000
+
+
+def parse_tx(rows):
+    cs = {}
+    for r in rows:
+        if r.get("alternative_bid_code") or r.get("bid_code") not in TX_ITEMS:
+            continue
+        try:
+            rank = int(float(r["bid_rank_sequence_number"]))
+            qty, price = float(r["bid_item_quantity"]), float(r["bid_item_unit_price_amount"])
+            total = float(r["bid_total_amount"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if TX_UNITS.get(str(r.get("measurement_unit")).strip()) != TX_ITEMS[r["bid_code"]][2]:
+            continue
+        c = cs.setdefault(r["project_id"], {"id": r["project_id"], "date": str(r.get("project_actual_let_date", ""))[:10],
+                                            "desc": str(r.get("project_name") or "")[:120],
+                                            "counties": str(r.get("county") or ""),
+                                            "district": str(r.get("district_division") or ""),
+                                            "bidders": {}, "items": {}})
+        c["bidders"][rank] = [re.sub(r"\s+", " ", str(r.get("vendor_name") or "")).strip(), round(total, 2)]
+        if qty > 0 and price > 0:
+            q, amt = c["items"].setdefault(r["bid_code"], {}).setdefault(rank, [0.0, 0.0])
+            c["items"][r["bid_code"]][rank] = [q + qty, amt + qty * price]
+    out = []
+    for c in cs.values():
+        ranks = sorted(c["bidders"])
+        if ranks != list(range(1, len(ranks) + 1)):
+            continue
+        items = {}
+        for code, by_rank in c["items"].items():
+            if sorted(by_rank) != ranks:
+                continue
+            qty = by_rank[1][0]
+            items[code] = [round(qty, 2), [round(by_rank[k][1] / by_rank[k][0], 2) for k in ranks]]
+        if items and all(c["bidders"][k][1] > 0 for k in ranks):
+            out.append({**c, "bidders": [c["bidders"][k] for k in ranks], "items": items})
+    return out
+
+
+def build_tx(months):
+    since = (datetime.date.today() - datetime.timedelta(days=months * 31)).isoformat()
+    contracts = parse_tx(_tx_rows(since))
+    contracts.sort(key=lambda c: (c["date"], c["id"]))
+    print(f"TX: {len(contracts)} contracts with flatwork since {since}")
+    return {"state": "TX", "source": "TxDOT bid tabulations (data.texas.gov)", "source_url": TX_PAGE,
+            "lettings": sorted({c["date"] for c in contracts}), "contracts": contracts,
+            "wins": wins(contracts), "named": True}
+
+
+def rates_from_results(results, st, name, items_def, page, headline):
+    """rates/<st>.json from bid results: every bid's average, range and count
+    per item, district and year (plus statewide); winning prices from rank 1."""
+    import build_state_prices as P
+    items = {c: {"name": n, "unit": u, **({"cat": cat} if cat else {})}
+             for c, (n, cat, *rest) in items_def.items() for u in [rest[-1]]}
+    districts = {"STATEWIDE": f"All of {name}"}
+    for c in results["contracts"]:
+        if c["district"]:
+            districts[c["district"]] = c["district"]
+    s = P.State(st, name, results["source"], page, "all_bids", items=items, districts=districts,
+                cats={cat: c for c, (n, cat, *_r) in items_def.items() if cat}, headline=headline)
+    g = collections.defaultdict(list)
+    for c in results["contracts"]:
+        for code, (qty, prices) in c["items"].items():
+            for d in filter(None, (c["district"], "STATEWIDE")):
+                g[(code, d, c["date"][:4])].append((qty, prices))
+    for (code, d, y), rows in g.items():
+        allp = [p for _q, ps in rows for p in ps]
+        win = [ps[0] for _q, ps in rows]
+        s.add(code, d, y, statistics.mean(allp), min(allp), max(allp), len(allp),
+              statistics.mean(q for q, _ps in rows))
+        q1, q3 = quartiles(win)
+        s.add_win(code, d, y, statistics.mean(win), min(win), max(win), len(win), q1, q3)
     return s
 
 
@@ -489,7 +611,7 @@ class Room:
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--states", default="mo,or,nc")
+    ap.add_argument("--states", default="mo,or,nc,tx")
     ap.add_argument("--out", default=OUT)
     ap.add_argument("--months", type=int, default=24)
     ap.add_argument("--cache", default=None, help="folder to keep the PDFs in")
@@ -519,6 +641,19 @@ def main():
         print(f"wrote {path}: {len(data['contracts'])} contracts from {len(data['lettings'])} lettings")
         import build_state_prices
         print("wrote", build_state_prices.write_state(nc_rates(data)))
+    if "tx" in states:
+        data = build_tx(args.months)
+        bad = check(data["contracts"], data["lettings"])
+        if bad:
+            print("TX not written:", *bad[:20], sep="\n  ", file=sys.stderr)
+            return 1
+        path = os.path.join(os.path.dirname(args.out), "tx.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, separators=(",", ":"), sort_keys=True)
+        print(f"wrote {path}: {len(data['contracts'])} contracts")
+        import build_state_prices
+        print("wrote", build_state_prices.write_state(rates_from_results(
+            data, "TX", "Texas", TX_ITEMS, TX_PAGE, ["531-7001", "531-7005", "529-7009", "530-7006"])))
     if "mo" not in states:
         import build_state_prices
         build_state_prices.write_index()

@@ -3620,7 +3620,7 @@ function renderScanSummary(){
 // winning range is shown too -- the number a contractor pricing to win needs.
 const PRICE_DISTRICT_KEY="price_district";
 const RATE_THIN_BIDS=5;
-const AGENCY={MO:"MoDOT",FL:"FDOT",OR:"ODOT",MN:"MnDOT",OK:"ODOT",NC:"NCDOT"};
+const AGENCY={MO:"MoDOT",FL:"FDOT",OR:"ODOT",MN:"MnDOT",OK:"ODOT",NC:"NCDOT",TX:"TxDOT",TN:"TDOT"};
 let rateIndex=null,rateIndexLoading=null;
 const rateData={},rateLoading={},rateRerenderQueued={};
 function agencyOf(d){return (d&&AGENCY[d.state])||`${(d&&d.state_name)||"State"} DOT`;}
@@ -3706,17 +3706,19 @@ function rateRow(d,item,district,withTrend){
   const meta=d.items[item];
   // Non-breaking, so "sq yd" never splits across two lines.
   const unit=meta.unit.replace(/ /g," ");
-  const thin=r.bids<RATE_THIN_BIDS;
+  // A state that doesn't publish how many bids lie behind a price (TN) gets
+  // no count and no "few bids" flag rather than a made-up one.
+  const thin=r.bids!=null&&r.bids<RATE_THIN_BIDS;
   const win=d.basis==="awarded"?null:latestWin(d,item,district);
   const years=withTrend?Object.keys(d.prices[item][district]).sort():[];
   const spread=r.low!=null&&r.high!=null
     ?`${fmtRate(r.low)}–${fmtRate(r.high)} · ${plural(r.bids,"bid")}`
-    :`winning bids · ${plural(r.bids,"contract")}`;
+    :`winning bids${r.bids!=null?` · ${plural(r.bids,"contract")}`:""}`;
   return`<div class="rate-row">
     <div class="rate-main">
       <div class="rate-name">${esc(meta.name)}</div>
-      <div class="rate-sub">${spread}
-        · typical job ~${Math.round(r.qty).toLocaleString()} ${esc(unit)}${thin?` <span class="rate-thin">few bids — rough guide</span>`:""}</div>
+      <div class="rate-sub">${spread}${r.qty?`
+        · typical job ~${Math.round(r.qty).toLocaleString()}\u00a0${esc(unit)}`:""}${thin?` <span class="rate-thin">few bids — rough guide</span>`:""}</div>
       ${win?`<div class="rate-sub rate-win">Winning bids ${win.n>1?`${fmtRate(win.low)}–${fmtRate(win.high)}, avg ${fmtRate(win.avg)}`:fmtRate(win.avg)} (${plural(win.n,"job")}, ${esc(win.year)})</div>`:""}
       ${years.length>1?`<div class="rate-trend">${years.map(y=>`<span>${esc(y)} <b>${fmtRate(d.prices[item][district][y][0])}</b></span>`).join("")}</div>`:""}
     </div>
@@ -3775,7 +3777,7 @@ async function openRates(st){
   // Most-bid items first: the ones with the most behind their number.
   const items=Object.keys(d.items)
     .map(i=>[i,latestRate(d,i,district)]).filter(([,r])=>r)
-    .sort((a,b)=>b[1].bids-a[1].bids).map(([i])=>i);
+    .sort((a,b)=>(b[1].bids||0)-(a[1].bids||0)).map(([i])=>i);
   const states=Object.keys(ix||{}).sort();
   mc.innerHTML=`<div class="sheet-head"><h2>Going rates</h2>
       <div class="sheet-sub"><span class="chip">${esc(agencyOf(d))} ${d.basis==="awarded"?"winning":"bid"} prices, ${

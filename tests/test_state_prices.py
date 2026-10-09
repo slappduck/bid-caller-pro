@@ -147,14 +147,15 @@ class CommittedRatesTests(unittest.TestCase):
             for table in ("prices", "wins"):
                 for item, by_d in d.get(table, {}).items():
                     self.assertIn(item, d["items"], (st, item))
-                    self.assertIn(d["items"][item]["unit"], ("sq yd", "sq ft", "ft", "each"))
+                    self.assertIn(d["items"][item]["unit"], ("sq yd", "sq ft", "ft", "each", "cu yd"))
                     for district, by_y in by_d.items():
                         self.assertIn(district, d["districts"], (st, item, district))
                         for year, row in by_y.items():
                             self.assertIn(int(year), d["years"])
                             avg, low, high, n = row[:4]
                             self.assertGreater(avg, 0)
-                            self.assertGreaterEqual(n, 1)
+                            if n is not None:   # TN doesn't publish a count
+                                self.assertGreaterEqual(n, 1)
                             if low is not None:
                                 self.assertTrue(low <= avg <= high, (st, item, district, year))
 
