@@ -600,8 +600,133 @@ def build_tn(cache):
     return s
 
 
+# ── Indiana ─────────────────────────────────────────────────────────────────
+# INDOT's yearly Unit Price Summary: low, high and weighted average of the
+# unit prices bid on every pay item of its awarded projects.
+IN_PAGE = ("https://www.in.gov/indot/doing-business-with-indot/home/contracts/standards/"
+           "indot-pay-items-listunit-price-summaries")
+IN_YEARS = (2023, 2024, 2025)
+IN_ITEMS = {
+    "604-06070": ("Concrete sidewalk", "sidewalk", "SYS"),
+    "604-08086": ("Concrete curb ramp (ADA)", "ramp", "SYS"),
+    "604-12083": ("Detectable warning surface (ADA)", "domes", "SYS"),
+    "605-06120": ("Concrete curb", "curb", "LFT"),
+    "605-06140": ("Concrete curb and gutter", "curb_gutter", "LFT"),
+    "202-52710": ("Remove concrete sidewalk", "removal", "SYS"),
+}
+IN_UNITS = {"SYS": "sq yd", "LFT": "ft", "EACH": "each", "SFT": "sq ft"}
+
+
+def build_in(cache):
+    req = urllib.request.Request(IN_PAGE, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        html = r.read().decode("utf-8", "replace")
+    items = {c: {"name": n, "unit": IN_UNITS[u], **({"cat": cat} if cat else {})}
+             for c, (n, cat, u) in IN_ITEMS.items()}
+    s = State("IN", "Indiana", "INDOT Unit Price Summary", IN_PAGE, "all_bids", items=items,
+              districts={"STATEWIDE": "All of Indiana"},
+              cats={cat: c for c, (_n, cat, _u) in IN_ITEMS.items() if cat},
+              headline=["604-06070", "604-08086", "605-06140", "605-06120"])
+    for y in IN_YEARS:
+        m = re.search(r'href="([^"]*CY%s[ %%20-]*Unit[ %%20-]*Price[ %%20-]*Summary[^"]*\.xlsx[^"]*)"' % y, html, re.I)
+        if not m:
+            raise ValueError(f"IN: no {y} summary linked")
+        url = urllib.parse.urljoin(IN_PAGE, m.group(1).replace(" ", "%20"))
+        with open(_download(url, cache, f"in_ups_{y}.xlsx"), "rb") as f:
+            rows = list(_rows_xlsx(f.read()))
+        got = 0
+        for r in rows:
+            if len(r) < 10 or not r[2]:
+                continue
+            code, unit = str(r[2]).strip(), str(r[4] or "").strip()
+            if code not in IN_ITEMS or unit != IN_ITEMS[code][2]:
+                continue
+            try:
+                low, high, avg, qty = float(r[5]), float(r[6]), float(r[7]), float(r[8])
+            except (TypeError, ValueError):
+                continue
+            s.add(code, "STATEWIDE", y, avg, low, high, None, None)
+            got += 1
+        print(f"  IN {y}: {got} items")
+    return s
+
+
+# ── Montana ─────────────────────────────────────────────────────────────────
+MT_PAGE = "https://mdt.mt.gov/business/contracting/"
+MT_PDF = "https://mdt.mt.gov/other/webdata/external/contractplans/contract/Archives/Average_prices/{y}.pdf"
+MT_YEARS = (2023, 2024, 2025)
+MT_ITEMS = {
+    "608010020": ('Concrete sidewalk, 4 in.', "sidewalk", "SQYD"),
+    "608010050": ('Concrete sidewalk, 6 in.', "sidewalk6", "SQYD"),
+    "609010200": ("Concrete curb and gutter", "curb_gutter", "LNFT"),
+    "609010010": ("Concrete curb", "curb", "LNFT"),
+    "608010067": ("Remove sidewalk", "removal", "SQYD"),
+}
+MT_UNITS = {"SQYD": "sq yd", "LNFT": "ft", "EACH": "each", "SQFT": "sq ft"}
+_MT_ROW = re.compile(r"^(\d{9})\s+\d+\s+(.+?)\s+(SQYD|LNFT|EACH|SQFT)\s+([\d,]+(?:\.\d+)?)\s+\$([\d,]+\.\d{2})\s*$")
+
+
+def build_mt(cache):
+    items = {c: {"name": n, "unit": MT_UNITS[u], **({"cat": cat} if cat else {})}
+             for c, (n, cat, u) in MT_ITEMS.items()}
+    s = State("MT", "Montana", "MDT Weighted Average Prices", MT_PAGE, "awarded", items=items,
+              districts={"STATEWIDE": "All of Montana"},
+              cats={cat: c for c, (_n, cat, _u) in MT_ITEMS.items() if cat},
+              headline=["608010020", "609010200", "609010010", "608010050"])
+    for y in MT_YEARS:
+        text = _pdf_text(_download(MT_PDF.format(y=y), cache, f"mt_avg_{y}.pdf"))
+        got = 0
+        for line in text.splitlines():
+            m = _MT_ROW.match(line.strip())
+            if m and m.group(1) in MT_ITEMS and m.group(3) == MT_ITEMS[m.group(1)][2]:
+                s.add(m.group(1), "STATEWIDE", y, _f(m.group(5)), None, None, None, None)
+                got += 1
+        print(f"  MT {y}: {got} items")
+    return s
+
+
+# ── South Dakota ────────────────────────────────────────────────────────────
+SD_PAGE = "https://dot.sd.gov/doing-business/contractors/bid-letting"
+SD_PDFS = {2022: "https://dot.sd.gov/media/06b0f2e4/2022%20Bid%20Item%20Price%20Report.pdf",
+           2023: "https://dot.sd.gov/media/5695ecdf/2023BidItemPriceReport.pdf",
+           2024: "https://dot.sd.gov/media/qqhgg24h/2024-bid-item-price-report.pdf"}
+SD_ITEMS = {
+    "651E0040": ('Concrete sidewalk, 4 in.', "sidewalk", "SqFt"),
+    "651E0060": ('Concrete sidewalk, 6 in.', "sidewalk6", "SqFt"),
+    "650E0060": ("Curb and gutter, type B66", "curb_gutter", "Ft"),
+    "650E0080": ("Curb and gutter, type B68", None, "Ft"),
+    "380E3020": ('PCC driveway pavement, 6 in.', "driveway", "SqYd"),
+    "110E1140": ("Remove concrete sidewalk", "removal", "SqYd"),
+}
+SD_UNITS = {"SqFt": "sq ft", "SqYd": "sq yd", "Ft": "ft", "Each": "each"}
+# code, description, unit, quantity, total low-bid cost, average low bid,
+# average of the low three, occurrences
+_SD_ROW = re.compile(r"^(\d{3}E\d{4})\s+(.+?)\s+(SqFt|SqYd|Ft|Each)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+"
+                     r"([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+(\d+)\s*$")
+
+
+def build_sd(cache):
+    items = {c: {"name": n, "unit": SD_UNITS[u], **({"cat": cat} if cat else {})}
+             for c, (n, cat, u) in SD_ITEMS.items()}
+    s = State("SD", "South Dakota", "SDDOT Bid Item Price Report", SD_PAGE, "awarded", items=items,
+              districts={"STATEWIDE": "All of South Dakota"},
+              cats={cat: c for c, (_n, cat, _u) in SD_ITEMS.items() if cat},
+              headline=["651E0040", "650E0060", "380E3020", "651E0060"])
+    for y, url in sorted(SD_PDFS.items()):
+        text = _pdf_text(_download(url, cache, f"sd_bipr_{y}.pdf"))
+        got = 0
+        for line in text.splitlines():
+            m = _SD_ROW.match(line.strip())
+            if m and m.group(1) in SD_ITEMS and m.group(3) == SD_ITEMS[m.group(1)][2]:
+                n = int(m.group(8))
+                s.add(m.group(1), "STATEWIDE", y, _f(m.group(6)), None, None, n, _f(m.group(4)) / n)
+                got += 1
+        print(f"  SD {y}: {got} items")
+    return s
+
+
 BUILDERS = {"mo": build_mo, "fl": build_fl, "or": build_or, "mn": build_mn, "ok": build_ok,
-            "tn": build_tn}
+            "tn": build_tn, "in": build_in, "mt": build_mt, "sd": build_sd}
 
 
 def write_state(s, out_dir=OUT_DIR):

@@ -3620,7 +3620,7 @@ function renderScanSummary(){
 // winning range is shown too -- the number a contractor pricing to win needs.
 const PRICE_DISTRICT_KEY="price_district";
 const RATE_THIN_BIDS=5;
-const AGENCY={MO:"MoDOT",FL:"FDOT",OR:"ODOT",MN:"MnDOT",OK:"ODOT",NC:"NCDOT",TX:"TxDOT",TN:"TDOT"};
+const AGENCY={MO:"MoDOT",FL:"FDOT",OR:"ODOT",MN:"MnDOT",OK:"ODOT",NC:"NCDOT",TX:"TxDOT",TN:"TDOT",IN:"INDOT",MT:"MDT",SD:"SDDOT"};
 let rateIndex=null,rateIndexLoading=null;
 const rateData={},rateLoading={},rateRerenderQueued={};
 function agencyOf(d){return (d&&AGENCY[d.state])||`${(d&&d.state_name)||"State"} DOT`;}
@@ -3712,7 +3712,7 @@ function rateRow(d,item,district,withTrend){
   const win=d.basis==="awarded"?null:latestWin(d,item,district);
   const years=withTrend?Object.keys(d.prices[item][district]).sort():[];
   const spread=r.low!=null&&r.high!=null
-    ?`${fmtRate(r.low)}–${fmtRate(r.high)} · ${plural(r.bids,"bid")}`
+    ?`${fmtRate(r.low)}–${fmtRate(r.high)}${r.bids!=null?` · ${plural(r.bids,"bid")}`:""}`
     :`winning bids${r.bids!=null?` · ${plural(r.bids,"contract")}`:""}`;
   return`<div class="rate-row">
     <div class="rate-main">
