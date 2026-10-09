@@ -170,6 +170,33 @@ class NorthCarolinaTests(unittest.TestCase):
         self.assertEqual(R.parse_nc_tabs(rows), [])
 
 
+class KentuckyTests(unittest.TestCase):
+    TEXT = """Call: 101
+GRADE & DRAIN US 60
+Number of Bidders 3
+0570 SIDEWALK-4 IN CONCRETE 7,760.000 SQYD A A 73.00 57.00 70.21
+0580 DGA BASE 100.000 TON A A 39.00 45.35 50.00
+0590 DETECTABLE WARNINGS 120.000 SQFT A A 40.00 45.00
+1 00563 LOUISVILLE PAVING COMPANY INC 20,325,703.42
+2 00568 MAC CONSTRUCTION & EXCAVATING INC 20,988,000.00
+3 02233 CLEARY CONSTRUCTION INC 23,525,000.00
+Contid: 26-1519
+County: JEFFERSON COUNTY District: 05 Date Let: 9/24/26 Contid: 26-1519 SYP: 05-00481.00
+0600 SIDEWALK-4 IN CONCRETE 240.000 SQYD A A 80.00 60.00 75.00
+"""
+
+    def test_a_contract_with_its_ranked_bidders_and_flatwork(self):
+        c = R.parse_ky(self.TEXT)[0]
+        self.assertEqual((c["id"], c["date"], c["counties"], c["district"]), ("26-1519", "2026-09-24", "Jefferson", "5"))
+        self.assertEqual(c["bidders"][0], ["LOUISVILLE PAVING COMPANY INC", 20325703.42])
+        qty, prices = c["items"]["SIDEWALK-4 IN CONCRETE"]
+        self.assertEqual(qty, 8000.0)   # both rows, either side of a page break
+        self.assertEqual(prices[0], round((7760 * 73 + 240 * 80) / 8000, 2))
+
+    def test_a_row_short_of_its_bidders_is_dropped(self):
+        self.assertNotIn("DETECTABLE WARNINGS", R.parse_ky(self.TEXT)[0]["items"])
+
+
 class CommittedResultsTests(unittest.TestCase):
     def setUp(self):
         with open(os.path.join(ROOT, "curbcall_netlify_v4", "results", "mo.json"), encoding="utf-8") as f:

@@ -530,6 +530,90 @@ def build_tx(months):
             "wins": wins(contracts), "named": True}
 
 
+# ── Kentucky ────────────────────────────────────────────────────────────────
+# KYTC's "Bid Tabs of Awarded Projects" for each letting: per contract
+# ("Call: 100" to the next call), every item with each bidder's unit price
+# in rank order, the ranked bidder list with totals, county and district.
+# Items carry no codes in these tabs, so they're matched on description.
+KY_PAGE = "https://transportation.ky.gov/Construction-Procurement/Pages/Unit-Bid-Tabulations.aspx"
+KY_ITEMS = {
+    "SIDEWALK-4 IN CONCRETE": ('Concrete sidewalk, 4 in.', "sidewalk", "sq yd"),
+    "SIDEWALK-6 IN CONCRETE": ('Concrete sidewalk, 6 in.', "sidewalk6", "sq yd"),
+    "DETECTABLE WARNINGS": ("Detectable warnings (ADA)", "domes", "sq ft"),
+    "STANDARD CURB AND GUTTER": ("Standard curb and gutter", "curb_gutter", "ft"),
+    "STANDARD HEADER CURB": ("Standard header curb", "curb", "ft"),
+    "REMOVE CONCRETE SIDEWALK": ("Remove concrete sidewalk", "removal", "sq yd"),
+}
+KY_UNITS = {"SQYD": "sq yd", "SQFT": "sq ft", "LF": "ft", "EACH": "each"}
+_KY_ITEM = re.compile(r"^\d{4} (.+?) ([\d,]+\.\d{3}) ([A-Z]+) A A ((?:[\d,]*\.\d{2}\s*)+)$")
+_KY_BIDDER = re.compile(r"^(\d+) \d{5} (.+?) ([\d,]+\.\d{2})\s*$")
+_KY_WHERE = re.compile(r"^County: (.+?) COUNTY District: (\d+) Date Let: (\d+/\d+/\d+) Contid: (\S+)")
+
+
+def parse_ky(text):
+    out = []
+    for block in re.split(r"(?m)^Call: ", text)[1:]:
+        bidders, where, items = {}, None, {}
+        for line in block.splitlines():
+            line = line.strip()
+            m = _KY_BIDDER.match(line)
+            if m:
+                bidders[int(m.group(1))] = [re.sub(r"\s+", " ", m.group(2)).strip(), _num(m.group(3))]
+                continue
+            m = _KY_WHERE.match(line)
+            if m:
+                where = m
+                continue
+            m = _KY_ITEM.match(line)
+            if m and m.group(1).strip() in KY_ITEMS and KY_UNITS.get(m.group(3)) == KY_ITEMS[m.group(1).strip()][2]:
+                code = m.group(1).strip()
+                prices = [_num(x) for x in m.group(4).split()]
+                q, ps = items.setdefault(code, [0.0, []])
+                items[code] = [q + _num(m.group(2)), ps + [(_num(m.group(2)), prices)]]
+        ranks = sorted(bidders)
+        if not where or not ranks or ranks != list(range(1, len(ranks) + 1)):
+            continue
+        n = len(ranks)
+        clean = {}
+        for code, (qty, occs) in items.items():
+            if qty <= 0 or any(len(p) != n for _q, p in occs):
+                continue   # a row short of its bidders: dropped, not guessed
+            clean[code] = [round(qty, 2), [round(sum(q * p[i] for q, p in occs) / qty, 2) for i in range(n)]]
+        if not clean:
+            continue
+        mo, d, y = where.group(3).split("/")
+        out.append({"id": where.group(4), "date": f"20{y[-2:]}-{int(mo):02d}-{int(d):02d}",
+                    "desc": block.splitlines()[1].strip()[:120] if len(block.splitlines()) > 1 else "",
+                    "counties": where.group(1).title(), "district": str(int(where.group(2))),
+                    "bidders": [bidders[k] for k in ranks], "items": clean})
+    return out
+
+
+def build_ky(cache, months):
+    from pypdf import PdfReader
+    room = Room()
+    html = room.get(KY_PAGE, timeout=60).decode("utf-8", "replace")
+    cutoff = (datetime.date.today() - datetime.timedelta(days=months * 31)).isoformat()
+    dates = sorted({d for d in re.findall(r"Publications/(\d{4}-\d{2}-\d{2})/Unit Bid Tabulations\.pdf", html)
+                    if d >= cutoff})
+    contracts, used = [], []
+    for d in dates:
+        path = os.path.join(cache, f"ky_tabs_{d}.pdf")
+        if not os.path.exists(path):
+            data = room.get(f"https://transportation.ky.gov/Construction-Procurement/Publications/{d}/"
+                            "Unit%20Bid%20Tabulations.pdf", timeout=300)
+            with open(path, "wb") as f:
+                f.write(data)
+        text = "\n".join((p.extract_text() or "") for p in PdfReader(path).pages)
+        got = parse_ky(text)
+        print(f"KY {d}: {len(got)} contracts with flatwork")
+        contracts += got
+        used.append(d)
+    contracts.sort(key=lambda c: (c["date"], c["id"]))
+    return {"state": "KY", "source": "KYTC bid tabs of awarded projects", "source_url": KY_PAGE,
+            "lettings": used, "contracts": contracts, "wins": wins(contracts), "named": True}
+
+
 def rates_from_results(results, st, name, items_def, page, headline):
     """rates/<st>.json from bid results: every bid's average, range and count
     per item, district and year (plus statewide); winning prices from rank 1."""
@@ -611,7 +695,7 @@ class Room:
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--states", default="mo,or,nc,tx")
+    ap.add_argument("--states", default="mo,or,nc,tx,ky")
     ap.add_argument("--out", default=OUT)
     ap.add_argument("--months", type=int, default=24)
     ap.add_argument("--cache", default=None, help="folder to keep the PDFs in")
@@ -654,6 +738,23 @@ def main():
         import build_state_prices
         print("wrote", build_state_prices.write_state(rates_from_results(
             data, "TX", "Texas", TX_ITEMS, TX_PAGE, ["531-7001", "531-7005", "529-7009", "530-7006"])))
+    if "ky" in states:
+        data = build_ky(cache, args.months)
+        bad = check(data["contracts"], data["lettings"])
+        if bad:
+            print("KY not written:", *bad[:20], sep="\n  ", file=sys.stderr)
+            return 1
+        path = os.path.join(os.path.dirname(args.out), "ky.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, separators=(",", ":"), sort_keys=True)
+        print(f"wrote {path}: {len(data['contracts'])} contracts")
+        import build_state_prices
+        s = rates_from_results(data, "KY", "Kentucky", KY_ITEMS, KY_PAGE,
+                               ["SIDEWALK-4 IN CONCRETE", "STANDARD CURB AND GUTTER", "DETECTABLE WARNINGS",
+                                "STANDARD HEADER CURB"])
+        s.districts = {"STATEWIDE": "All of Kentucky",
+                       **{k: f"District {k}" for k in s.districts if k != "STATEWIDE"}}
+        print("wrote", build_state_prices.write_state(s))
     if "mo" not in states:
         import build_state_prices
         build_state_prices.write_index()
