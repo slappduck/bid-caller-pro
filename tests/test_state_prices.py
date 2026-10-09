@@ -133,6 +133,36 @@ FROM 6/25/2025 TO 6/24/2026
         self.assertNotIn("633 CONCRETE WALKS (TY. SPECIAL)", B.parse_ar(self.TEXT)[1])
 
 
+class NebraskaTests(unittest.TestCase):
+    # NDOT AUP summary, January-December 2025, one page as pypdf extracts
+    # it: code rows first, then description rows in another order.
+    PAGE = """06/18/2026
+10:19 AMEnglish Average Unit Price for Lettings
+January 1, 2025 to December 31, 2025
+3014.11 267 LF $124.00
+3016.21 8,942 SY $69.32
+3016.33 8,065 SY $92.10
+3016.39 3,413 SF $39.49
+CONCRETE CLASS 47B-3000 SIDEWALK 5" $14,506.00
+CONCRETE CLASS 47B-3000 SIDEWALKS $619,890.74
+DETECTABLE WARNING PANEL $134,778.37
+COMBINATION CONCRETE CLASS 47B-3500 CURB AND GUTTER $33,108.00
+REMOVE AND REPLACE SIDEWALK $742,816.50
+"""
+
+    def test_codes_find_their_description_by_total(self):
+        period, got = B.parse_ne([self.PAGE])
+        self.assertEqual(period, "January 1, 2025 – December 31, 2025")
+        self.assertEqual(got["3016.21"], (69.32, 8942.0))
+        self.assertEqual(got["3016.39"][0], 39.49)
+        self.assertEqual(got["3014.11"][0], 124.0)
+
+    def test_a_total_that_names_another_item_is_not_taken(self):
+        # 8,065 x $92.10 lands within rounding of another item's total; its
+        # name isn't this item's, so the price isn't read as this item's.
+        self.assertNotIn("3016.33", B.parse_ne([self.PAGE])[1])
+
+
 class StateCheckTests(unittest.TestCase):
     def state(self):
         s = B.State("ZZ", "Test", "src", "https://example.org", "awarded",

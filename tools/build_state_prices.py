@@ -810,8 +810,77 @@ def build_ar(cache):
     return s
 
 
+# ── Nebraska ────────────────────────────────────────────────────────────────
+# NDOT's Average Unit Price summaries, by calendar year and by July-June.
+# pypdf gives each page's code/quantity/average rows and its description/
+# total rows as two runs, not in the same order; a code is matched to the
+# one description on its page whose total is its quantity times average.
+NE_PAGE = "https://dot.nebraska.gov/business-center/hwy-bridge-lp/item-history/"
+NE_FILES = {2022: "yv5bn0pv/aup-jan-2022-dec-2022.pdf", 2023: "k2eh1k20/aup-january-2023-december-2023.pdf",
+            2024: "m2rdvuuc/aup-january-2024-december-2024.pdf",
+            2025: "xqvdpg0p/aup-january-2025-december-2025.pdf",
+            2026: "53hgujhu/aup-july-2025-june-2026.pdf"}
+NE_ITEMS = {
+    "3016.21": ("Concrete sidewalk (47B-3000)", "sidewalk", "CONCRETE CLASS 47B-3000 SIDEWALKS", "SY"),
+    "3016.33": ("Concrete sidewalk (47B-3500)", None, "CONCRETE CLASS 47B-3500 SIDEWALK", "SY"),
+    "3016.23": ('Concrete sidewalk, 6 in. (47B-3000)', "sidewalk6", '6" CONCRETE CLASS 47B-3000 SIDEWALKS', "SY"),
+    "3016.39": ("Detectable warning panel", "domes", "DETECTABLE WARNING PANEL", "SF"),
+    "3989.02": ("PCC curb ramp", "ramp", "CONSTRUCT PCC CURB RAMP", "SF"),
+    "3014.11": ("Combination curb and gutter", "curb_gutter",
+                "COMBINATION CONCRETE CLASS 47B-3500 CURB AND GUTTER", "LF"),
+    "3011.25": ("Concrete curb, type II", "curb", "CONCRETE CLASS 47B-3500 CURB, TYPE II", "LF"),
+    "3020.24": ("Concrete driveway", "driveway", "CONCRETE CLASS 47B-3500 DRIVEWAY", "SY"),
+    "3017.60": ('Concrete median surfacing, 6 in.', "median", '6" CONCRETE CLASS 47B-3500 MEDIAN SURFACING', "SY"),
+    "1107.00": ("Remove walk", "removal", "REMOVE WALK", "SY"),
+    "1109.00": ("Remove curb", None, "REMOVE CURB", "LF"),
+}
+NE_UNITS = {"SY": "sq yd", "SF": "sq ft", "LF": "ft", "EACH": "each"}
+_NE_NUM = re.compile(r"(\d{4}\.\d{2}) ([\d,]+(?:\.\d+)?) ([A-Z]+) \$([\d,]+\.\d{2})")
+_NE_DESC = re.compile(r"(?m)^(.+?) \$([\d,]+\.\d{2})\s*$")
+_NE_PERIOD = re.compile(r"([A-Z][a-z]+ \d{1,2}, \d{4}) to ([A-Z][a-z]+ \d{1,2}, \d{4})")
+
+
+def parse_ne(pages):
+    """(period, {code: (avg, qty)}) for listed items whose description,
+    found by total, is the one expected."""
+    period, out = None, {}
+    for t in pages:
+        m = _NE_PERIOD.search(t)
+        if m and not period:
+            period = f"{m.group(1)} – {m.group(2)}"
+        descs = [(d.strip(), _f(x)) for d, x in _NE_DESC.findall(_NE_NUM.sub("\n", t))]
+        for code, q, unit, avg in _NE_NUM.findall(t):
+            if code not in NE_ITEMS or unit != NE_ITEMS[code][3]:
+                continue
+            q, avg = _f(q), _f(avg)
+            hits = [d for d, total in descs if abs(q * avg - total) <= max(0.6, 0.0005 * total)]
+            if len(hits) == 1 and hits[0] == NE_ITEMS[code][2]:
+                out[code] = (avg, q)
+    return period, out
+
+
+def build_ne(cache):
+    from pypdf import PdfReader
+    items = {c: {"name": n, "unit": NE_UNITS[u], **({"cat": cat} if cat else {})}
+             for c, (n, cat, _d, u) in NE_ITEMS.items()}
+    s = State("NE", "Nebraska", "NDOT Average Unit Price Summaries", NE_PAGE, "awarded", items=items,
+              districts={"STATEWIDE": "All of Nebraska"},
+              cats={cat: c for c, (_n, cat, _d, _u) in NE_ITEMS.items() if cat},
+              headline=["3016.21", "3014.11", "3016.39", "3020.24"])
+    for y, name in sorted(NE_FILES.items()):
+        path = _download("https://dot.nebraska.gov/media/" + name, cache, "ne_" + name.split("/")[1])
+        period, got = parse_ne([(p.extract_text() or "") for p in PdfReader(path).pages])
+        for code, (avg, _q) in got.items():
+            s.add(code, "STATEWIDE", y, avg, None, None, None, None)
+        if period:
+            s.periods[str(y)] = period
+        print(f"  NE {y}: {len(got)} items ({period})")
+    return s
+
+
 BUILDERS = {"mo": build_mo, "fl": build_fl, "or": build_or, "mn": build_mn, "ok": build_ok,
-            "tn": build_tn, "in": build_in, "mt": build_mt, "sd": build_sd, "ar": build_ar}
+            "tn": build_tn, "in": build_in, "mt": build_mt, "sd": build_sd, "ar": build_ar,
+            "ne": build_ne}
 
 
 def write_state(s, out_dir=OUT_DIR):
