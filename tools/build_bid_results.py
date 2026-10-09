@@ -35,6 +35,7 @@ import re
 import statistics
 import sys
 import tempfile
+import time
 import urllib.parse
 import urllib.request
 
@@ -270,6 +271,170 @@ def build_or(cache):
             "wins": wins(contracts), "named": False}
 
 
+# ── North Carolina ──────────────────────────────────────────────────────────
+# NCDOT posts each central letting's bid tabs as a spreadsheet: one row per
+# item, three bidders per row (name, city, unit price, amount), and more
+# rows, on the next "page" numbers, for bidders four and up -- low bid
+# first. Past lettings stay reachable by date, so they're found by trying
+# each Tuesday and Thursday (the days lettings fall on).
+NC_PAGE = "https://connect.ncdot.gov/letting/Pages/default.aspx"
+NC_DETAIL = ("https://connect.ncdot.gov/letting/Pages/Central-Letting-Details.aspx"
+             "?let_type=Central&let_date={d}")
+# code -> (name, category, the description NCDOT prints for it, unit)
+NC_ITEMS = {
+    "2591000000-E": ('Concrete sidewalk, 4 in.', "sidewalk", '4" CONCRETE SIDEWALK', "sq yd"),
+    "2605000000-N": ("Concrete curb ramp (ADA)", "ramp", "CONCRETE CURB RAMPS", "each"),
+    "2549000000-E": ("Curb and gutter, 2 ft 6 in.", "curb_gutter", '2\'-6" CONC CURB & GUTTER', "ft"),
+    "2542000000-E": ("Curb and gutter, 1 ft 6 in.", None, '1\'-6" CONC CURB & GUTTER', "ft"),
+    "2612000000-E": ('Concrete driveway, 6 in.', "driveway", '6" CONCRETE DRIVEWAY', "sq yd"),
+    "2647000000-E": ('Monolithic concrete island, 5 in.', "median", '5" MONO CONC ISLANDS (SURF MTD)', "sq yd"),
+    "2556000000-E": ("Shoulder berm gutter", "gutter", "SHOULDER BERM GUTTER", "ft"),
+    "2612500000-N": ("Remove and replace curb ramp", None, "REM & REP CONC CURB RAMP", "each"),
+}
+NC_UNITS = {"SY": "sq yd", "SF": "sq ft", "LF": "ft", "EA": "each"}
+
+
+def parse_nc_tabs(rows):
+    """Contracts with bidders in rank order and flatwork unit prices."""
+    cs = {}
+    for v in rows:
+        if len(v) < 39 or not str(v[5]).startswith("C"):
+            continue
+        try:
+            page = int(float(v[1]))
+        except (TypeError, ValueError):
+            continue
+        cid = str(v[5]).strip()
+        c = cs.setdefault(cid, {"pages": {}, "items": {}, "date": str(v[2]), "county": str(v[9]).strip(),
+                                "desc": str(v[12]).strip()})
+        occ = (str(v[17]), str(v[16]), str(v[14]))
+        for k in range(3):
+            name = str(v[24 + 5 * k] or "").strip()
+            if not name:
+                continue
+            c["pages"].setdefault(page, {})[k] = name
+            try:
+                price, amount = float(v[26 + 5 * k] or 0), float(v[27 + 5 * k] or 0)
+            except (TypeError, ValueError):
+                continue
+            c.setdefault("amounts", {}).setdefault((page, k), 0.0)
+            c["amounts"][(page, k)] += amount
+            code = str(v[14]).strip()
+            desc = re.sub(r"\s+", " ", f"{v[19]} {v[20]}").strip()
+            if code in NC_ITEMS and desc == NC_ITEMS[code][2]:
+                try:
+                    qty = float(v[21])
+                except (TypeError, ValueError):
+                    continue
+                unit = NC_UNITS.get(str(v[22]).strip())
+                if unit == NC_ITEMS[code][3] and qty > 0 and price > 0:
+                    it = c["items"].setdefault(occ, {"code": code, "qty": qty, "unit": unit, "p": {}})
+                    it["p"][(page, k)] = price
+    out = []
+    for cid, c in cs.items():
+        if not c["pages"]:
+            continue
+        p0 = min(c["pages"])
+        slots = [(pg, k) for pg in sorted(c["pages"]) for k in sorted(c["pages"][pg])]
+        names = [c["pages"][pg][k] for pg, k in slots]
+        if len(set(names)) != len(names) or slots[0][0] != p0:
+            continue
+        totals = [round(c.get("amounts", {}).get(sl, 0.0), 2) for sl in slots]
+        n = len(slots)
+        combined = {}
+        for it in c["items"].values():
+            if sorted(it["p"]) != sorted(slots):
+                continue
+            q, amt = combined.setdefault(it["code"], [0.0, [0.0] * n])
+            combined[it["code"]][0] = q + it["qty"]
+            for i, sl in enumerate(slots):
+                amt[i] += it["qty"] * it["p"][sl]
+        items = {code: [round(q, 2), [round(a / q, 2) for a in amt]] for code, (q, amt) in combined.items()}
+        if not items or any(t <= 0 for t in totals):
+            continue
+        try:
+            date = datetime.datetime.strptime(c["date"], "%m/%d/%Y").date().isoformat()
+        except ValueError:
+            continue
+        out.append({"id": cid, "date": date, "desc": c["desc"], "counties": c["county"],
+                    "district": "", "bidders": [[nm, t] for nm, t in zip(names, totals)],
+                    "items": items})
+    return out
+
+
+def _nc_lettings(room, months, cache):
+    """[(date, xls path)] for central lettings in the last `months` months."""
+    found = []
+    index_path = os.path.join(cache, "nc_lettings.json")
+    known = json.load(open(index_path)) if os.path.exists(index_path) else {}
+    today = datetime.date.today()
+    day = today - datetime.timedelta(days=months * 31)
+    while day <= today:
+        if day.weekday() in (1, 3):   # Tuesday, Thursday
+            key = day.isoformat()
+            if key not in known:
+                try:
+                    html = room.get(NC_DETAIL.format(d=key), timeout=60).decode("utf-8", "replace")
+                except Exception:
+                    html = ""
+                m = re.search(r'href="([^"]+\.xls)"', html, re.I)
+                known[key] = m.group(1) if m else ""
+                json.dump(known, open(index_path, "w"))
+                time.sleep(0.3)
+            if known[key]:
+                found.append((day, known[key]))
+        day += datetime.timedelta(days=1)
+    out = []
+    for d, href in found:
+        path = os.path.join(cache, f"nc_tabs_{d.isoformat()}.xls")
+        if not os.path.exists(path):
+            url = urllib.parse.quote(href, safe=":/%")
+            data = room.get(url, timeout=300)
+            with open(path, "wb") as f:
+                f.write(data)
+        out.append((d, path))
+    return out
+
+
+def build_nc(cache, months):
+    import xlrd
+    room = Room()
+    contracts, used = [], []
+    for d, path in _nc_lettings(room, months, cache):
+        s = xlrd.open_workbook(path).sheet_by_index(0)
+        got = parse_nc_tabs(s.row_values(r) for r in range(s.nrows))
+        print(f"NC {d}: {len(got)} contracts with flatwork")
+        contracts += got
+        used.append(d.isoformat())
+    contracts.sort(key=lambda c: (c["date"], c["id"]))
+    return {"state": "NC", "source": "NCDOT central letting bid tabs", "source_url": NC_PAGE,
+            "lettings": used, "contracts": contracts, "wins": wins(contracts), "named": True}
+
+
+def nc_rates(results):
+    """rates/nc.json from the same bids: every bid's average, range and count,
+    per item and year, statewide; winning prices from rank 1."""
+    import build_state_prices as P
+    items = {c: {"name": n, "unit": u, **({"cat": cat} if cat else {})}
+             for c, (n, cat, _d, u) in NC_ITEMS.items()}
+    s = P.State("NC", "North Carolina", "NCDOT central letting bid tabs", NC_PAGE, "all_bids",
+                items=items, districts={"STATEWIDE": "All of North Carolina"},
+                cats={cat: c for c, (_n, cat, _d, _u) in NC_ITEMS.items() if cat},
+                headline=["2591000000-E", "2605000000-N", "2549000000-E", "2612000000-E"])
+    g = collections.defaultdict(list)
+    for c in results["contracts"]:
+        for code, (qty, prices) in c["items"].items():
+            g[(code, c["date"][:4])].append((qty, prices))
+    for (code, y), rows in g.items():
+        allp = [p for _q, ps in rows for p in ps]
+        win = [ps[0] for _q, ps in rows]
+        s.add(code, "STATEWIDE", y, statistics.mean(allp), min(allp), max(allp), len(allp),
+              statistics.mean(q for q, _ps in rows))
+        q1, q3 = quartiles(win)
+        s.add_win(code, "STATEWIDE", y, statistics.mean(win), min(win), max(win), len(win), q1, q3)
+    return s
+
+
 def check(contracts, lettings):
     problems = []
     if not contracts:
@@ -324,7 +489,7 @@ class Room:
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--states", default="mo,or")
+    ap.add_argument("--states", default="mo,or,nc")
     ap.add_argument("--out", default=OUT)
     ap.add_argument("--months", type=int, default=24)
     ap.add_argument("--cache", default=None, help="folder to keep the PDFs in")
@@ -342,6 +507,18 @@ def main():
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, separators=(",", ":"), sort_keys=True)
         print(f"wrote {path}: {len(data['contracts'])} contracts")
+    if "nc" in states:
+        data = build_nc(cache, args.months)
+        bad = check(data["contracts"], data["lettings"])
+        if bad:
+            print("NC not written:", *bad[:20], sep="\n  ", file=sys.stderr)
+            return 1
+        path = os.path.join(os.path.dirname(args.out), "nc.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, separators=(",", ":"), sort_keys=True)
+        print(f"wrote {path}: {len(data['contracts'])} contracts from {len(data['lettings'])} lettings")
+        import build_state_prices
+        print("wrote", build_state_prices.write_state(nc_rates(data)))
     if "mo" not in states:
         import build_state_prices
         build_state_prices.write_index()

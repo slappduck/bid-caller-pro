@@ -141,6 +141,35 @@ class OregonContractTests(unittest.TestCase):
         self.assertEqual(R.parse_or_contracts(rows), [])
 
 
+class NorthCarolinaTests(unittest.TestCase):
+    """NCDOT's spreadsheet: three bidders a row, more on later page numbers."""
+
+    def row(self, page, item, desc, qty, unit, bidders):
+        v = ["L250617", float(page), "06/17/2025", "2:00 PM", 1.0, "C204798", "", "", "", "GUILFORD", 0, "E",
+             "RESURFACING", "", item, "848", 59.0, 1.0, "ROADWAY ITEMS", desc, "", qty, unit, ""]
+        for name, price in bidders:
+            v += [name, "TOWN, NC", str(price), str(price * qty), ""]
+        while len(v) < 39:
+            v += ["", "", "", "", ""]
+        return v[:39] + [46000.0]
+
+    def test_bidders_across_pages_keep_their_rank(self):
+        rows = [self.row(1, "2591000000-E", '4" CONCRETE SIDEWALK', 100, "SY", [("A CO", 50), ("B CO", 55), ("C CO", 60)]),
+                self.row(2, "2591000000-E", '4" CONCRETE SIDEWALK', 100, "SY", [("D CO", 70)]),
+                self.row(1, "0000100000-N", "MOBILIZATION", 1, "LS", [("A CO", 1000), ("B CO", 2000), ("C CO", 2500)]),
+                self.row(2, "0000100000-N", "MOBILIZATION", 1, "LS", [("D CO", 3000)])]
+        c = R.parse_nc_tabs(rows)[0]
+        self.assertEqual([b[0] for b in c["bidders"]], ["A CO", "B CO", "C CO", "D CO"])
+        self.assertEqual([b[1] for b in c["bidders"]], [6000.0, 7500.0, 8500.0, 10000.0])
+        self.assertEqual(c["items"]["2591000000-E"], [100.0, [50.0, 55.0, 60.0, 70.0]])
+        self.assertEqual(c["date"], "2025-06-17")
+
+    def test_a_row_missing_a_bidders_price_drops_the_item(self):
+        rows = [self.row(1, "2591000000-E", '4" CONCRETE SIDEWALK', 100, "SY", [("A CO", 50), ("B CO", 55)]),
+                self.row(1, "0000100000-N", "MOBILIZATION", 1, "LS", [("A CO", 1000), ("B CO", 2000), ("C CO", 2500)])]
+        self.assertEqual(R.parse_nc_tabs(rows), [])
+
+
 class CommittedResultsTests(unittest.TestCase):
     def setUp(self):
         with open(os.path.join(ROOT, "curbcall_netlify_v4", "results", "mo.json"), encoding="utf-8") as f:
