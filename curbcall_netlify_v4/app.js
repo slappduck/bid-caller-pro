@@ -1394,6 +1394,8 @@ function showApp(){
     // MoDOT's own results answer "did you win?" for state jobs.
     loadBidResults(homeState()).then(d=>{if(d&&document.getElementById("screen-home")?.classList.contains("active"))renderHome();});
     setTimeout(checkSavedBids,8000);
+    // Push subscriptions can be rotated by the browser; re-register quietly.
+    setTimeout(()=>{if("Notification"in window&&Notification.permission==="granted"&&store.get("push_on",false))subscribePush();},12000);
     setInterval(checkSavedBids,BID_WATCH_EVERY_MS/6);
   }
   // The map only ever got created inside detectLocation()'s geolocation
@@ -1669,30 +1671,66 @@ function showFeedBadge(show){
   if(b)b.style.display=show?"block":"none";
 }
 // ── Bid alert notifications ──
-// NOTE: this in-browser notification fires only while the app/tab is open
-// (or backgrounded but still loaded) — it piggybacks on checkSavedSearches,
-// which itself only runs when the app is opened. For the "app is fully
-// closed" case, the server has its own independent path: /run-saved-search-
-// alerts (license_server.py), triggered daily by a GitHub Actions cron
-// workflow, emails users directly. That's a separate, real notification path
-// — this browser-notification code doesn't need to (and can't) cover it.
+// Two paths. While the app is open it notifies directly (saved searches,
+// saved-bid addenda). With it closed, the server sends real push
+// notifications (license_server/push.py): an addendum or new document on a
+// saved bid, a bid due tomorrow, new bids for a saved search. Turning alerts
+// on here asks the browser for permission and registers this device for
+// push in push_subscriptions. On iPhone, push only works once the app has
+// been added to the Home Screen.
+function pushSupported(){return "serviceWorker"in navigator&&"PushManager"in window&&"Notification"in window;}
+function isIOSBrowserTab(){
+  const ios=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+  const standalone=window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches||navigator.standalone;
+  return ios&&!standalone;
+}
 function notifPermissionLabel(){
+  if(isIOSBrowserTab())return"On iPhone: tap Share, then Add to Home Screen, and open CurbCall from there to turn on alerts";
   if(!("Notification"in window))return"Not supported in this browser";
-  if(Notification.permission==="granted")return"Enabled — you'll be notified when a saved search finds new bids (while CurbCall Pro is open)";
+  if(Notification.permission==="granted")return store.get("push_on",false)
+    ?"On: addenda and due-tomorrow reminders for saved bids, and new bids for saved searches, even with the app closed"
+    :"On while the app is open. Tap to also get them with the app closed";
   if(Notification.permission==="denied")return"Blocked — turn back on in your browser's site settings";
-  return"Tap to enable — get notified when a saved search finds new bids";
+  return"Tap to turn on: addenda on saved bids, due-tomorrow reminders and new bids, even with the app closed";
+}
+function b64uToBytes(s){
+  const pad="=".repeat((4-s.length%4)%4),raw=atob((s+pad).replace(/-/g,"+").replace(/_/g,"/"));
+  const out=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)out[i]=raw.charCodeAt(i);return out;
+}
+// Registers this device for push. Never throws; returns true when the
+// server can now reach it.
+async function subscribePush(){
+  if(!pushSupported()||!sb||!currentUser)return false;
+  try{
+    const reg=await navigator.serviceWorker.ready;
+    let sub=await reg.pushManager.getSubscription();
+    if(!sub){
+      const r=await fetchWithTimeout(SERVER+"/push/vapid-public-key",{},15000);
+      const d=await r.json();
+      if(!d||!d.ok||!d.key)return false;
+      sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64uToBytes(d.key)});
+    }
+    const j=sub.toJSON();
+    if(!j.endpoint||!j.keys)return false;
+    const{error}=await sb.from("push_subscriptions").upsert(
+      {user_id:currentUser.id,endpoint:j.endpoint,p256dh:j.keys.p256dh,auth:j.keys.auth},{onConflict:"user_id,endpoint"});
+    if(error){console.warn("[curbcall] push subscription not saved:",error);return false;}
+    store.set("push_on",true);
+    return true;
+  }catch(e){console.warn("[curbcall] push subscribe failed:",e);return false;}
 }
 async function toggleNotifPermission(){
+  if(isIOSBrowserTab()){toast("Add CurbCall to your Home Screen first (Share, then Add to Home Screen), then turn alerts on from there.");return;}
   if(!("Notification"in window)){toast("Notifications aren't supported in this browser.");return;}
   if(Notification.permission==="denied"){toast("Blocked in browser settings — enable there to turn back on.");return;}
-  if(Notification.permission==="granted"){toast("Already enabled.");return;}
-  const perm=await Notification.requestPermission();
+  const perm=Notification.permission==="granted"?"granted":await Notification.requestPermission();
   const el=document.getElementById("notif-status");
-  if(el)el.textContent=notifPermissionLabel();
   if(perm==="granted"){
-    toast("Bid alerts enabled!");
-    fireNotification("CurbCall Pro","You'll be notified here when a saved search finds new bids.");
-  }
+    const pushed=await subscribePush();
+    if(el)el.textContent=notifPermissionLabel();
+    toast(pushed?"Alerts on, even with the app closed":"Alerts on while the app is open");
+    fireNotification("CurbCall Pro","Alerts are on. You'll hear about addenda, due dates and new bids here.");
+  }else if(el)el.textContent=notifPermissionLabel();
 }
 async function fireNotification(title,body){
   if(!("Notification"in window)||Notification.permission!=="granted")return;

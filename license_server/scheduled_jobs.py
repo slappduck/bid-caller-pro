@@ -192,6 +192,7 @@ CRON_EXPECTED = {
     "trial-reminders": 36,
     "weekly-digest": 192,        # weekly; its absence is the outer alarm
     "purge-expired-consent": 960,  # monthly
+    "bid-watch": 14,             # every 6 hours: addenda and due-tomorrow alerts
 }
 
 

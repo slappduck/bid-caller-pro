@@ -143,6 +143,14 @@ def _run_saved_search_alerts():
             if email:
                 _send_alert_email(email, outcome.get("location", location), radius, new_bids)
                 emails_sent += 1
+            # And to their phone, if they turned on alerts (license_server/push.py).
+            try:
+                first = new_bids[0][1].get("title") or "Untitled"
+                _notify_user(user_id, f"{len(new_bids)} new bid{'s' if len(new_bids) != 1 else ''} near "
+                             f"{outcome.get('location', location)}",
+                             first + (f" and {len(new_bids) - 1} more" if len(new_bids) > 1 else ""))
+            except Exception as ex:
+                print(f"[alerts] push failed for {user_id}: {ex}", flush=True)
 
     cdb["alert_seen"] = seen_store
     _save_cache(cdb)

@@ -2012,6 +2012,66 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── Phone alerts with the app closed ──
+  console.log("\nTurning on alerts registers this device for push");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    let keyAsked = 0;
+    await page.route("**/*", (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      if (u.endsWith("/push/vapid-public-key")) {
+        keyAsked++;
+        return route.fulfill({ status: 200, contentType: "application/json",
+          body: JSON.stringify({ ok: true, key: "BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4" }) });
+      }
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") {
+        return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      }
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      // The headless test browser always blocks notifications; stand in a
+      // user who said yes.
+      window.Notification = class { static get permission() { return "granted"; } static async requestPermission() { return "granted"; } };
+      // A stand-in push service: real ones need Google/Apple/Mozilla servers.
+      window.__subscribedWith = null;
+      const reg = { pushManager: { getSubscription: async () => null,
+        subscribe: async (opts) => { window.__subscribedWith = opts; return { toJSON: () => ({ endpoint: "https://fcm.googleapis.com/fcm/send/abc", keys: { p256dh: "pk", auth: "au" } }) }; } },
+        showNotification: () => {} };
+      Object.defineProperty(navigator, "serviceWorker", { configurable: true, value: {
+        ready: Promise.resolve(reg), register: async () => reg, getRegistration: async () => reg, addEventListener: () => {} } });
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(600);
+    const saved = await page.evaluate(async () => {
+      currentUser = { id: "user-1" };
+      let row = null;
+      const orig = sb.from;
+      sb.from = (t) => t === "push_subscriptions"
+        ? { upsert: async (r) => { row = r; return { error: null }; } } : orig.call(sb, t);
+      await toggleNotifPermission();
+      sb.from = orig;
+      return { row, key: window.__subscribedWith && window.__subscribedWith.applicationServerKey.length,
+               visible: window.__subscribedWith && window.__subscribedWith.userVisibleOnly };
+    });
+    check("the server's public key is used to subscribe", keyAsked === 1 && saved.key === 65 && saved.visible === true);
+    check("this device is stored for the server to push to",
+          saved.row && saved.row.endpoint === "https://fcm.googleapis.com/fcm/send/abc" && saved.row.p256dh === "pk" && saved.row.user_id === "user-1",
+          JSON.stringify(saved.row));
+    check("the alerts card says they work with the app closed",
+          /even with the app closed/.test(await page.evaluate(() => notifPermissionLabel())));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   await browser.close();
   server.close();
   console.log(failures ? `\n${failures} check(s) FAILED` : "\nAll checks passed");
