@@ -1322,7 +1322,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
         { title: "Elm St Sidewalk", scope: "1,200 LF sidewalk, 4 ADA ramps", value: "$120k", deadline: "2099-01-01", status: "open", url: "https://e.gov/3" },
       ];
       localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
-      localStorage.setItem("last_feed", JSON.stringify({ "Aurora, MO": bids, "Topeka, KS": [bids[0]] }));
+      localStorage.setItem("last_feed", JSON.stringify({ "Aurora, MO": bids, "Honolulu, HI": [bids[0]] }));
       localStorage.setItem("price_district", JSON.stringify("SW"));
     });
     await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
@@ -1383,7 +1383,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     const cards = await page.$$eval("#feed-list .bid", (els) => els.map((e) => e.textContent));
     const cgCard = cards.find((t) => t.includes("Main St Curb and Gutter")) || "";
     check("the bid card carries the ballpark", cgCard.includes(`\u2248 ${k(800 * cg)} ballpark`), cgCard.slice(0, 200));
-    const rampCard = cards.find((t) => t.includes("City Hall ADA Ramp") && !t.includes("Topeka")) || "";
+    const rampCard = cards.find((t) => t.includes("City Hall ADA Ramp") && !t.includes("Honolulu")) || "";
     check("a bid with no quantities gets no ballpark", !/ballpark/.test(rampCard));
 
     const swDetail = await detailFor("Aurora, MO", 2);
@@ -1401,8 +1401,8 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await page.dispatchEvent("#est-width", "change");
     await page.waitForTimeout(200);
 
-    const ksDetail = await detailFor("Topeka, KS", 0);
-    check("a bid outside Missouri shows no Missouri prices", ksDetail.trim() === "");
+    const hiDetail = await detailFor("Honolulu, HI", 0);
+    check("a bid in a state with no published rates shows none, not Missouri's", hiDetail.trim() === "");
     check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
     await ctx.close();
   }

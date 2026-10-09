@@ -96,6 +96,43 @@ class OklahomaTests(unittest.TestCase):
         self.assertEqual(len(B.parse_ok(self.TEXT)), 4)
 
 
+class ArkansasTests(unittest.TestCase):
+    # ARDOT Weighted Average Unit Prices, 12 months to June 24, 2026, as
+    # pypdf extracts it.
+    TEXT = """ITEM ITEM DESCRIPTION UNIT QUANTITY HIGH LOW
+FROM 6/25/2025 TO 6/24/2026
+202 R&D OF CONCRETE WALKS SQYD 6.00 824.69 824.69 824.69 *
+202 R&D OF WALKS SQYD 4,379.00 249.67 8.00 20.86
+633 CONCRETE WALKS SQYD 30,775.00 225.00 76.00 92.90
+633 CONCRETE WALKS (TY. SPECIAL) SQYD 2,090.00 1,035.00 83.00 923.97
+634 CC CURB & GUTTER-A (1'6") LF  84,431.00 100.00 22.50 31.25
+634 CONCRETE CURB (TYPE B) LF  500.00 43.00 43.00 43.00 *
+641 WHEELCHAIR RAMPS (TYPE 3) SQYD 1,343.00 1,313.48 128.00 346.83
+641 WHEELCHAIR RAMPS(TYPE 3) SQYD 10.00 1,680.42 812.61 1,159.73
+641 WHEELCHAIR RAMPS (TYPE SPECIAL) SQYD 70.00 410.00 410.00 410.00 *
+"""
+
+    def test_period_and_plain_rows(self):
+        period, got = B.parse_ar(self.TEXT)
+        self.assertEqual(period, "Jun 25, 2025 – Jun 24, 2026")
+        self.assertEqual(got["633 CONCRETE WALKS"], (92.90, 76.0, 225.0, None, 30775.0))
+        self.assertEqual(got["634 CC CURB & GUTTER-A (1'6\")"][:3], (31.25, 22.5, 100.0))
+
+    def test_one_job_only_means_one_contract(self):
+        self.assertEqual(B.parse_ar(self.TEXT)[1]["634 CONCRETE CURB (TYPE B)"][3], 1)
+
+    def test_names_for_one_item_are_pooled_by_quantity(self):
+        got = B.parse_ar(self.TEXT)[1]
+        avg, low, high, n, qty = got["641 WHEELCHAIR RAMPS"]
+        self.assertEqual(qty, 1353.0)   # TYPE SPECIAL isn't a numbered ramp
+        self.assertAlmostEqual(avg, (1343 * 346.83 + 10 * 1159.73) / 1353)
+        self.assertEqual((low, high, n), (128.0, 1680.42, None))
+        self.assertEqual(got["202 R&D OF WALKS"][4], 4385.0)
+
+    def test_variants_are_left_out(self):
+        self.assertNotIn("633 CONCRETE WALKS (TY. SPECIAL)", B.parse_ar(self.TEXT)[1])
+
+
 class StateCheckTests(unittest.TestCase):
     def state(self):
         s = B.State("ZZ", "Test", "src", "https://example.org", "awarded",
@@ -167,9 +204,10 @@ class CommittedRatesTests(unittest.TestCase):
 
     def test_awarded_states_never_claim_a_bid_range(self):
         # FL, MN and OK publish averages of winning prices only; the app
-        # must not show a low-high range nobody printed.
+        # must not show a low-high range nobody printed. ARDOT prints the
+        # high and low winning contract price, and the app labels it so.
         for st, d in self.data.items():
-            if d["basis"] == "awarded":
+            if d["basis"] == "awarded" and st not in ("AR",):
                 for by_d in d["prices"].values():
                     for by_y in by_d.values():
                         for row in by_y.values():

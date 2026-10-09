@@ -725,8 +725,93 @@ def build_sd(cache):
     return s
 
 
+# ── Arkansas ────────────────────────────────────────────────────────────────
+# ARDOT's own site refuses scripted requests; the reports themselves sit on
+# the state's media host. One file per year to early November, then rolling
+# 12-month files after each letting.
+AR_SOURCE = "https://www.ardot.gov/divisions/program-management/"
+AR_MEDIA = "https://media.ark.org/ardot/"
+AR_FILES = {2022: "2022-Weighted-Average-Prices.pdf", 2023: "2023-Weighted-Average-Prices.pdf",
+            2024: "2024-Weighted-Average-Prices.pdf", 2025: "2025-Weighted-Average-Prices.pdf",
+            2026: "June-24-2026-Weighted-Averages-Prices.pdf"}
+# Items are keyed by section and description: ARDOT prints only the spec
+# section, which many items share.
+AR_ITEMS = {
+    "633 CONCRETE WALKS": ("Concrete walks", "sidewalk", "SQYD"),
+    "641 WHEELCHAIR RAMPS": ("Wheelchair ramps (all types)", "ramp", "SQYD"),
+    "641 SURFACE-APPLIED DETECT. WARNING PANELS": ("Detectable warning panels", "domes", "SQFT"),
+    "634 CC CURB & GUTTER-A (1'6\")": ("Curb and gutter, type A (1 ft 6 in.)", "curb_gutter", "LF"),
+    "634 CONCRETE CURB (TYPE B)": ("Concrete curb, type B", "curb", "LF"),
+    "505 P.C.CONCRETE DRIVEWAY": ("Concrete driveway", "driveway", "SQYD"),
+    "202 R&D OF WALKS": ("Remove walks", "removal", "SQYD"),
+    "202 R&D OF CURB AND GUTTER": ("Remove curb and gutter", None, "LF"),
+}
+AR_UNITS = {"SQYD": "sq yd", "SQFT": "sq ft", "LF": "ft", "EACH": "each"}
+_AR_ROW = re.compile(r"^(\d{3}) (.+?) (SQYD|SQFT|LF|EACH)\s+([\d,]+\.\d+) ([\d,]+\.\d+) ([\d,]+\.\d+) "
+                     r"([\d,]+\.\d+)( \*)?$")
+_AR_PERIOD = re.compile(r"FROM (\d+/\d+/\d{4}) TO (\d+/\d+/\d{4})")
+# One item under several printed names, pooled by quantity.
+_AR_POOL = [(re.compile(r"^WHEELCHAIR RAMPS ?\(TYPE \d\)$"), "WHEELCHAIR RAMPS"),
+            (re.compile(r"^R&D OF (CONCRETE WALKS|SIDEWALKS|WALKS)$"), "R&D OF WALKS")]
+
+
+def _ar_date(s):
+    return datetime.datetime.strptime(s, "%m/%d/%Y").strftime("%b %-d, %Y")
+
+
+def parse_ar(text):
+    """(period label, {code: (avg, low, high, n, qty)}). Every ramp type, and
+    each name for removing walks, is pooled into one quantity-weighted row; n is 1 where ARDOT marks an item
+    as seen on one job only, otherwise not printed."""
+    period, rows = None, {}
+    for line in text.splitlines():
+        line = re.sub(r"\s+", " ", line).strip()
+        m = _AR_PERIOD.search(line)
+        if m and not period:
+            period = f"{_ar_date(m.group(1))} – {_ar_date(m.group(2))}"
+        m = _AR_ROW.match(line)
+        if not m:
+            continue
+        desc = m.group(2)
+        for pat, name in _AR_POOL:
+            if pat.match(desc):
+                desc = name
+        code = f"{m.group(1)} {desc}"
+        if code not in AR_ITEMS or m.group(3) != AR_ITEMS[code][2]:
+            continue
+        qty, high, low, avg = (_f(m.group(i)) for i in (4, 5, 6, 7))
+        rows.setdefault(code, []).append((qty, high, low, avg, 1 if m.group(8) else None))
+    out = {}
+    for code, rs in rows.items():
+        qty = sum(r[0] for r in rs)
+        if qty <= 0:
+            continue
+        n = 1 if len(rs) == 1 and rs[0][4] == 1 else None
+        out[code] = (sum(r[0] * r[3] for r in rs) / qty, min(r[2] for r in rs), max(r[1] for r in rs), n, qty)
+    return period, out
+
+
+def build_ar(cache):
+    items = {c: {"name": n, "unit": AR_UNITS[u], **({"cat": cat} if cat else {})}
+             for c, (n, cat, u) in AR_ITEMS.items()}
+    s = State("AR", "Arkansas", "ARDOT Weighted Average Unit Prices", AR_SOURCE, "awarded", items=items,
+              districts={"STATEWIDE": "All of Arkansas"},
+              cats={cat: c for c, (_n, cat, _u) in AR_ITEMS.items() if cat},
+              headline=["633 CONCRETE WALKS", "641 WHEELCHAIR RAMPS", "634 CC CURB & GUTTER-A (1'6\")",
+                        "505 P.C.CONCRETE DRIVEWAY"])
+    for y, name in sorted(AR_FILES.items()):
+        period, got = parse_ar(_pdf_text(_download(AR_MEDIA + name, cache, f"ar_{name}")))
+        for code, (avg, low, high, n, qty) in got.items():
+            # A total quantity across the year, not per job; per-job size isn't printed.
+            s.add(code, "STATEWIDE", y, avg, low, high, n, None)
+        if period:
+            s.periods[str(y)] = period
+        print(f"  AR {y}: {len(got)} items ({period})")
+    return s
+
+
 BUILDERS = {"mo": build_mo, "fl": build_fl, "or": build_or, "mn": build_mn, "ok": build_ok,
-            "tn": build_tn, "in": build_in, "mt": build_mt, "sd": build_sd}
+            "tn": build_tn, "in": build_in, "mt": build_mt, "sd": build_sd, "ar": build_ar}
 
 
 def write_state(s, out_dir=OUT_DIR):
