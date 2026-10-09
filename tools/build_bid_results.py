@@ -697,6 +697,120 @@ def build_ks(cache, months):
             "lettings": sorted(used), "contracts": contracts, "wins": wins(contracts), "named": True}
 
 
+# ── Iowa ────────────────────────────────────────────────────────────────────
+# Iowa DOT posts one PDF per letting: a ranking page per contract (every
+# bidder and total), then the tabulation, three bidders to a page, each page
+# headed by the ranks it shows. A line's item description is on the line
+# under it, so a variant ("6 IN. STAMPED") doesn't match the plain item.
+IA_PAGE = "https://iowadot.gov/consultants-contractors/contracts/historical-completed-lettings/bid-tabulations"
+IA_ITEMS = {
+    "2511-7526004": ("Sidewalk, PCC, 4 in.", "sidewalk", "SIDEWALK, P.C. CONCRETE, 4 IN.", "sq yd"),
+    "2511-7526005": ("Sidewalk, PCC, 5 in.", None, "SIDEWALK, P.C. CONCRETE, 5 IN.", "sq yd"),
+    "2511-7526006": ("Sidewalk, PCC, 6 in.", "sidewalk6", "SIDEWALK, P.C. CONCRETE, 6 IN.", "sq yd"),
+    "2511-7528101": ("Detectable warnings", "domes", "DETECTABLE WARNINGS", "sq ft"),
+    "2512-1725206": ("Curb and gutter, PCC, 2.0 ft", None, "CURB AND GUTTER, P.C. CONCRETE, 2.0 FT.", "ft"),
+    "2512-1725256": ("Curb and gutter, PCC, 2.5 ft", "curb_gutter", "CURB AND GUTTER, P.C. CONCRETE, 2.5 FT.", "ft"),
+    "2512-1725306": ("Curb and gutter, PCC, 3.0 ft", None, "CURB AND GUTTER, P.C. CONCRETE, 3.0 FT.", "ft"),
+    "2515-2475006": ("Driveway, PCC, 6 in.", "driveway", "DRIVEWAY, P.C. CONCRETE, 6 IN.", "sq yd"),
+    "2515-2475008": ("Driveway, PCC, 8 in.", None, "DRIVEWAY, P.C. CONCRETE, 8 IN.", "sq yd"),
+    "2301-4875006": ("Median, PCC, 6 in.", "median", "MEDIAN, P.C. CONCRETE, 6 IN.", "sq yd"),
+    "2511-6745900": ("Removal of sidewalk", "removal", "REMOVAL OF SIDEWALK", "sq yd"),
+    "2515-6745600": ("Removal of paved driveway", None, "REMOVAL OF PAVED DRIVEWAY", "sq yd"),
+}
+IA_UNITS = {"sq yd": "SY", "sq ft": "SF", "ft": "LF"}
+# rank, vendor ID, name (a long one wraps before its total), total
+_IA_RANK = re.compile(r"(?m)^(\d{1,2}) [A-Z0-9.]{4,6} ([^$\n][^$]*?)\s*\$([\d,]+\.\d{2}) \d+\.\d{2}%")
+_IA_LINE = re.compile(r"^\d{4} (\d{4}-\d{7}) ([\d,]+\.\d{3}) (\S+) ((?:[\d,]+\.\d{5} [\d,]+\.\d{2} ?)+)$")
+_IA_FOOT = re.compile(r"^([A-Z][a-z]+ \d{1,2}, \d{4})\n(\S+) Primary County: (.+)$", re.M)
+_IA_HEAD = re.compile(r"(?m)^(\d{2}-[A-Z0-9-]+)\n([A-Z][a-z]+ \d{1,2}, \d{4}) \d")
+
+
+def parse_ia(pages):
+    cs = {}
+
+    def contract(cid):
+        return cs.setdefault(cid, {"bidders": {}, "items": {}, "date": None, "county": "", "desc": ""})
+    for t in pages:
+        if "Project(s) and Vendor Ranking" in t:
+            m = _IA_HEAD.search(t)
+            if not m:
+                continue
+            c = contract(m.group(1))
+            c["date"] = datetime.datetime.strptime(m.group(2), "%B %d, %Y").date().isoformat()
+            w = re.search(r"Location:\n\S+ (.+)\n(.+)\nRoute: .*\n(.+)", t)
+            if w and not c["desc"]:
+                c["desc"] = f"{w.group(1).strip().title()}, {w.group(3).strip()}"
+                c["county"] = c["county"] or w.group(2).strip().title()
+            for r in _IA_RANK.finditer(t):
+                c["bidders"][int(r.group(1))] = (re.sub(r"\s+", " ", r.group(2)).strip(), _num(r.group(3)))
+            continue
+        foot = _IA_FOOT.search(t)
+        if not foot or "Tabulation of Construction" not in t:
+            continue
+        c = contract(foot.group(2))
+        c["county"] = foot.group(3).strip().title()
+        lines = t.splitlines()
+        # Ranks heading the columns; two short names can share a line.
+        head = t[t.find("Item Description"):t.find("Alt Set / Alt Member")]
+        cols = [int(x) for x in re.findall(r"(?:^|\s)\((\d+)\) ", head)]
+        for i, line in enumerate(lines[:-1]):
+            m = _IA_LINE.match(line.strip())
+            if not m or m.group(1) not in IA_ITEMS:
+                continue
+            _n, _cat, desc, unit = IA_ITEMS[m.group(1)]
+            if lines[i + 1].strip() != desc or m.group(3) != IA_UNITS[unit]:
+                continue
+            nums = [_num(x) for x in m.group(4).split()]
+            prices = nums[0::2]
+            if len(prices) != len(cols):
+                continue
+            qty = _num(m.group(2))
+            it = c["items"].setdefault(m.group(1), {})
+            for rank, p in zip(cols, prices):
+                q, a = it.get(rank, (0.0, 0.0))
+                it[rank] = (q + qty, a + qty * p)
+    out = []
+    for cid, c in cs.items():
+        ranks = sorted(c["bidders"])
+        if not ranks or ranks != list(range(1, len(ranks) + 1)) or not c["date"]:
+            continue
+        items = {}
+        for code, by_r in c["items"].items():
+            if sorted(by_r) != ranks or by_r[1][0] <= 0:
+                continue
+            items[code] = [round(by_r[1][0], 2), [round(by_r[r][1] / by_r[r][0], 2) for r in ranks]]
+        if items:
+            out.append({"id": cid, "date": c["date"], "desc": c["desc"], "counties": c["county"],
+                        "district": "", "bidders": [list(c["bidders"][r]) for r in ranks], "items": items})
+    return out
+
+
+def build_ia(cache, months):
+    from pypdf import PdfReader
+    room = Room()
+    html = room.get(IA_PAGE, timeout=60).decode("utf-8", "replace")
+    cutoff = datetime.date.today() - datetime.timedelta(days=months * 31)
+    found = []
+    for mid, label in re.findall(r'href="/media/(\d+)/download[^"]*"[^>]*>(?:\s*<[^>]+>)*\s*(\d{1,2}/\d{1,2}/\d{2})\s', html):
+        day = datetime.datetime.strptime(label, "%m/%d/%y").date()
+        if day >= cutoff:
+            found.append((day, mid))
+    contracts, used = [], []
+    for day, mid in sorted(set(found)):
+        path = os.path.join(cache, f"ia_tabs_{day}.pdf")
+        if not os.path.exists(path):
+            data = room.get(f"https://iowadot.gov/media/{mid}/download?inline", timeout=300)
+            with open(path, "wb") as f:
+                f.write(data)
+        got = parse_ia([(p.extract_text() or "") for p in PdfReader(path).pages])
+        print(f"IA {day}: {len(got)} contracts with flatwork")
+        contracts += got
+        used.append(day.isoformat())
+    contracts.sort(key=lambda c: (c["date"], c["id"]))
+    return {"state": "IA", "source": "Iowa DOT letting bid tabulations", "source_url": IA_PAGE,
+            "lettings": used, "contracts": contracts, "wins": wins(contracts), "named": True}
+
+
 def rates_from_results(results, st, name, items_def, page, headline):
     """rates/<st>.json from bid results: every bid's average, range and count
     per item, district and year (plus statewide); winning prices from rank 1."""
@@ -778,7 +892,7 @@ class Room:
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--states", default="mo,or,nc,tx,ky,ks")
+    ap.add_argument("--states", default="mo,or,nc,tx,ky,ks,ia")
     ap.add_argument("--out", default=OUT)
     ap.add_argument("--months", type=int, default=24)
     ap.add_argument("--cache", default=None, help="folder to keep the PDFs in")
@@ -851,6 +965,19 @@ def main():
         import build_state_prices
         print("wrote", build_state_prices.write_state(rates_from_results(
             data, "KS", "Kansas", KS_ITEMS, KS_PAGE, ["025026", "061597", "022625", "025041"])))
+    if "ia" in states:
+        data = build_ia(cache, args.months)
+        bad = check(data["contracts"], data["lettings"])
+        if bad:
+            print("IA not written:", *bad[:20], sep="\n  ", file=sys.stderr)
+            return 1
+        path = os.path.join(os.path.dirname(args.out), "ia.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, separators=(",", ":"), sort_keys=True)
+        print(f"wrote {path}: {len(data['contracts'])} contracts")
+        import build_state_prices
+        print("wrote", build_state_prices.write_state(rates_from_results(
+            data, "IA", "Iowa", IA_ITEMS, IA_PAGE, ["2511-7526004", "2512-1725256", "2515-2475006", "2511-7526006"])))
     if "mo" not in states:
         import build_state_prices
         build_state_prices.write_index()

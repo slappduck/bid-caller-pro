@@ -222,6 +222,83 @@ class KansasTests(unittest.TestCase):
         self.assertNotIn("061597", R.parse_ks_csv(self.csv(), "2026-09")[0]["items"])
 
 
+class IowaTests(unittest.TestCase):
+    # Iowa DOT letting tabulation as pypdf extracts it: a ranking page (a
+    # long name wraps before its total), then bidders three to a page.
+    RANKING = """Project Information:
+Project: WorkType:
+County:
+Location:
+STP-U-4252(606)--70-82 PCC PAVEMENT - GRADE & REPLACE
+SCOTT
+Route: WISCONSIN ST
+In the city of Le Claire, Reconstruction of WISCONSIN ST
+Prj Awd Amt: $8,634,205.55
+Page 1 of 2
+Contract ID:
+Letting Date:
+Completion Date: 03/31/27
+82-4252-606
+January 21, 2026 10:00 A.M.
+SCOTTCall Order:  107 Primary County:
+Letting Status: SIGNED CONTRACT Awarded Vendor: MCCARTHY IMPROVEMENT COMPANY
+Project(s) and Vendor Ranking
+BidRank Vendor ID Vendor Name Total Bid
+1 MC061 MCCARTHY IMPROVEMENT CO. & AFFIL DBA MCCARTHY
+IMPROVEMENT CO
+$8,634,205.55 100.00%
+2 R.163 RP CONSTRUCTORS, LLC. $8,826,236.32 102.22%
+3 BR101 BRANDT CONSTRUCTION CO. $9,424,792.97 109.15%
+4 RE300 REILLY CONSTRUCTION CO., INC. $11,424,792.97 132.32%
+"""
+    TAB1 = """Line No / Item Number
+Item Description
+(1) MCCARTHY IMPROVEMENT
+CO.
+(2) RP CONSTRUCTORS, LLC. (3) BRANDT CONSTRUCTION CO.
+Alt Set / Alt Member Quantity and Units Unit Price Ext Amount Unit Price Ext Amount Unit Price Ext Amount
+0350 2511-7526004 661.700 SY 60.00000 39,702.00 62.00000 41,025.40 110.00000 72,787.00
+SIDEWALK, P.C. CONCRETE, 4 IN.
+0360 2511-7526006 31.400 SY 193.00000 6,060.20 99.00000 3,108.60 180.00000 5,652.00
+SIDEWALK, P.C. CONCRETE, 6 IN. STAMPED
+0370 2511-7528101 48.900 SF 52.00000 2,542.80 48.50000 2,371.65 55.00000 2,689.50
+DETECTABLE WARNINGS
+Page 1 of 6
+Contract ID:107
+Tabulation of Construction and Material Bids
+January 21, 2026
+82-4252-606 Primary County: SCOTT
+"""
+    TAB2 = """Line No / Item Number
+Item Description
+(4) REILLY CONSTRUCTION
+CO., INC.
+Alt Set / Alt Member Quantity and Units Unit Price Ext Amount
+0350 2511-7526004 661.700 SY 80.00000 52,936.00
+SIDEWALK, P.C. CONCRETE, 4 IN.
+Page 2 of 6
+Contract ID:107
+Tabulation of Construction and Material Bids
+January 21, 2026
+82-4252-606 Primary County: SCOTT
+"""
+
+    def parse(self):
+        return R.parse_ia([self.RANKING, self.TAB1, self.TAB2])
+
+    def test_a_contract_with_every_bidder_across_pages(self):
+        c = self.parse()[0]
+        self.assertEqual((c["id"], c["date"], c["counties"]), ("82-4252-606", "2026-01-21", "Scott"))
+        self.assertEqual(c["bidders"][0], ["MCCARTHY IMPROVEMENT CO. & AFFIL DBA MCCARTHY IMPROVEMENT CO", 8634205.55])
+        self.assertEqual(c["bidders"][1][0], "RP CONSTRUCTORS, LLC.")
+        self.assertEqual(c["items"]["2511-7526004"], [661.7, [60.0, 62.0, 110.0, 80.0]])
+
+    def test_a_variant_and_an_item_one_bidder_left_off_are_dropped(self):
+        items = self.parse()[0]["items"]
+        self.assertNotIn("2511-7526006", items)   # "6 IN. STAMPED"
+        self.assertNotIn("2511-7528101", items)   # bidder 4's page has no row for it
+
+
 class CommittedResultsTests(unittest.TestCase):
     def setUp(self):
         with open(os.path.join(ROOT, "curbcall_netlify_v4", "results", "mo.json"), encoding="utf-8") as f:
