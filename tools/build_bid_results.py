@@ -39,6 +39,7 @@ import tempfile
 import time
 import urllib.parse
 import urllib.request
+import zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "curbcall_netlify_v4", "results", "mo.json")
@@ -811,6 +812,144 @@ def build_ia(cache, months):
             "lettings": used, "contracts": contracts, "wins": wins(contracts), "named": True}
 
 
+# ── Illinois ────────────────────────────────────────────────────────────────
+# IDOT posts a "Unit Price Tabulation of Bids" for each past letting once its
+# contracts are executed: a zip of one fixed-width text file per contract,
+# every bidder's unit price on every pay item. Past lettings are listed on
+# the bulletin home page.
+IL_HOME = "https://webapps.dot.illinois.gov/WCTB/LbHome"
+IL_BASE = "https://webapps.dot.illinois.gov"
+IL_ITEMS = {
+    "42400100": ("PC concrete sidewalk, 4 in.", None, "PC CONC SIDEWALK 4", "sq ft"),
+    "42400200": ("PC concrete sidewalk, 5 in.", "sidewalk", "PC CONC SIDEWALK 5", "sq ft"),
+    "42400300": ("PC concrete sidewalk, 6 in.", "sidewalk6", "PC CONC SIDEWALK 6", "sq ft"),
+    "42400800": ("Detectable warnings", "domes", "DETECTABLE WARNINGS", "sq ft"),
+    "60603800": ("Combination curb and gutter, B-6.12", "curb_gutter", "COMB CC&G TB6.12", "ft"),
+    "60605000": ("Combination curb and gutter, B-6.24", None, "COMB CC&G TY B-6.24", "ft"),
+    "60600605": ("Concrete curb, type B", "curb", "CONC CURB TB", "ft"),
+    "42300200": ("PCC driveway pavement, 6 in.", "driveway", "PCC DRIVEWAY PAVT 6", "sq yd"),
+    "42300400": ("PCC driveway pavement, 8 in.", None, "PCC DRIVEWAY PAVT 8", "sq yd"),
+    "60618300": ("Concrete median surface, 4 in.", "median", "CONC MEDIAN SURF 4", "sq ft"),
+    "44000600": ("Sidewalk removal", "removal", "SIDEWALK REM", "sq ft"),
+    "44000500": ("Combination curb and gutter removal", None, "COMB CURB GUTTER REM", "ft"),
+}
+IL_DISTRICTS = {"1": "District 1 (Chicago area)", "2": "District 2 (Dixon, Rockford)", "3": "District 3 (Ottawa)",
+                "4": "District 4 (Peoria)", "5": "District 5 (Paris, Champaign)", "6": "District 6 (Springfield)",
+                "7": "District 7 (Effingham)", "8": "District 8 (Metro East)", "9": "District 9 (Carbondale)"}
+IL_UNITS = {"sq ft": "SQ FT", "sq yd": "SQ YD", "ft": "FOOT"}
+_IL_PAGE_HEAD = re.compile(r"ILLINOIS DEPARTMENT OF TRANSPORTATION|U N I T  P R I C E|^\s*LETTING DATE:|"
+                           r"^\s*RESPONSIBLE DISTRICT:|^\s*SECTION:|^\s*STATE JOB NUMBER:|^\s*PROJECT NUMBER:|"
+                           r"ITEM NBR  ITEM DESCRIPTION|BIDR NBR  BIDDER NAME|^\s*-{6,}\s*$")
+_IL_ITEM = re.compile(r"^    (\w{8})  (.+?)\s{2,}([\d,]+\.\d{3})\s+(SQ FT|SQ YD|FOOT|EACH|\S+(?: \S+)?)\s*$")
+_IL_BIDDER = re.compile(r"^ (\d{4})\s{2,}(\S.*)$")
+
+
+def parse_il(text):
+    """One contract's file -> a contract, or None when it has alternates
+    (bidders priced different item groups) or nothing we price."""
+    head = lambda pat: (re.search(pat, text) or [None, ""])[1].strip()
+    cid, letting = head(r"CONTRACT NUMBER: (\w+)"), head(r"LETTING DATE: (\d\d/\d\d/\d{4})")
+    if not cid or not letting:
+        return None
+    summary, _, detail = text.partition("DETAIL CONTRACTOR BIDS")
+    groups = set(re.findall(r"(?m)^\s{20,}(\S.*?)\s{3,}[\d,]+\.\d{2}", summary))
+    if groups != {"NO ALT"}:
+        return None
+    # Summary: a bidder's number and name (which can wrap), then its total.
+    names, totals, cur = {}, {}, None
+    for line in summary.splitlines():
+        m = _IL_BIDDER.match(line)
+        if m:
+            cur = m.group(1)
+            names[cur] = m.group(2).strip()
+            continue
+        t = re.match(r"^\s{20,}NO ALT\s+([\d,]+\.\d{2})", line)
+        if t and cur:
+            totals[cur] = _num(t.group(1))
+            cur = None
+        elif cur and line.strip():
+            names[cur] += " " + line.strip()
+    if not totals or set(totals) != set(names):
+        return None
+    # Detail: an item line, then one record per bidder (the name can wrap
+    # onto the price line); page headers are dropped first.
+    lines = [x for x in detail.splitlines() if not _IL_PAGE_HEAD.search(x)]
+    items, code, rec = {}, None, None
+
+    def flush():
+        if code and rec:
+            p = re.search(r"\s(\d[\d,]*\.\d{4})\s", rec[1] + " ")
+            if p:
+                items[code][1][rec[0]] = _num(p.group(1))
+    for line in lines:
+        m = _IL_ITEM.match(line)
+        if m:
+            flush()
+            rec = None
+            c = m.group(1)
+            ok = (c in IL_ITEMS and re.sub(r"\s+", " ", m.group(2)).strip() == IL_ITEMS[c][2]
+                  and m.group(4) == IL_UNITS[IL_ITEMS[c][3]])
+            code = c if ok else None
+            if code:
+                items.setdefault(code, [0.0, {}])[0] += _num(m.group(3))
+            continue
+        b = _IL_BIDDER.match(line)
+        if b:
+            flush()
+            rec = (b.group(1), line)
+        elif rec and line.strip():
+            rec = (rec[0], rec[1] + " " + line)
+    flush()
+    order = sorted(totals, key=lambda k: totals[k])
+    priced = {c: [round(q, 2), [round(by[k], 2) for k in order]]
+              for c, (q, by) in items.items() if q > 0 and set(by) == set(order)}
+    if not priced:
+        return None
+    m, d, y = letting.split("/")
+    district = head(r"RESPONSIBLE DISTRICT: (\d+)").lstrip("0")
+    county = head(r"COUNTY: (.+?)(?:\s{2,}|$)").title()
+    place = head(r"MUNICIPALITY: (.+?)(?:\s{2,}|$)").title()
+    return {"id": cid, "date": f"{y}-{m}-{d}", "desc": head(r"SECTION: (.+?)(?:\s{2,}|$)"),
+            "counties": ", ".join(filter(None, (place, county))), "district": district,
+            "bidders": [[names[k], totals[k]] for k in order], "items": priced}
+
+
+def build_il(cache, months):
+    room = Room()
+    home = room.get(IL_HOME, timeout=60).decode("utf-8", "replace")
+    cutoff = datetime.date.today() - datetime.timedelta(days=months * 31)
+    contracts, used = [], []
+    for gid, label in re.findall(r'<option value="/WCTB/LbLettingDetail/Index/([0-9a-f-]{36})">([^<]+)</option>', home):
+        day = datetime.datetime.strptime(label.strip(), "%B %d, %Y").date()
+        if day < cutoff:
+            continue
+        path = os.path.join(cache, f"il_tabs_{day}.zip")
+        # A tabulation grows as each contract is executed, for months after
+        # the letting; re-fetch until it has had time to settle.
+        if not os.path.exists(path) or (datetime.date.today() - day).days < 150:
+            page = room.get(f"{IL_BASE}/WCTB/LbLettingDetail/Index/{gid}", timeout=60).decode("utf-8", "replace")
+            doc = re.search(r'href="(/WCTB/LettingDateDocument/ViewDocument/[0-9a-f-]{36})"[^>]*>\s*'
+                            r'Unit Price Tabulation of Bids', page)
+            if not doc:
+                print(f"IL {day}: no unit price tabulation yet")
+                continue
+            data = room.get(IL_BASE + doc.group(1), timeout=300)
+            with open(path, "wb") as f:
+                f.write(data)
+        got = []
+        with zipfile.ZipFile(path) as z:
+            for n in sorted(z.namelist()):
+                c = parse_il(z.read(n).decode("latin-1"))
+                if c:
+                    got.append(c)
+        print(f"IL {day}: {len(got)} contracts with flatwork")
+        contracts += got
+        used.append(day.isoformat())
+    contracts.sort(key=lambda c: (c["date"], c["id"]))
+    return {"state": "IL", "source": "IDOT unit price tabulations of bids", "source_url": IL_HOME,
+            "lettings": sorted(used), "contracts": contracts, "wins": wins(contracts), "named": True}
+
+
 def rates_from_results(results, st, name, items_def, page, headline):
     """rates/<st>.json from bid results: every bid's average, range and count
     per item, district and year (plus statewide); winning prices from rank 1."""
@@ -892,7 +1031,7 @@ class Room:
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--states", default="mo,or,nc,tx,ky,ks,ia")
+    ap.add_argument("--states", default="mo,or,nc,tx,ky,ks,ia,il")
     ap.add_argument("--out", default=OUT)
     ap.add_argument("--months", type=int, default=24)
     ap.add_argument("--cache", default=None, help="folder to keep the PDFs in")
@@ -978,6 +1117,23 @@ def main():
         import build_state_prices
         print("wrote", build_state_prices.write_state(rates_from_results(
             data, "IA", "Iowa", IA_ITEMS, IA_PAGE, ["2511-7526004", "2512-1725256", "2515-2475006", "2511-7526006"])))
+    if "il" in states:
+        data = build_il(cache, args.months)
+        bad = check(data["contracts"], data["lettings"])
+        if bad:
+            print("IL not written:", *bad[:20], sep="\n  ", file=sys.stderr)
+            return 1
+        path = os.path.join(os.path.dirname(args.out), "il.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, separators=(",", ":"), sort_keys=True)
+        print(f"wrote {path}: {len(data['contracts'])} contracts")
+        import build_state_prices
+        s = rates_from_results(data, "IL", "Illinois", IL_ITEMS, IL_HOME,
+                               ["42400200", "60603800", "42400800", "42300200"])
+        s.districts = {"STATEWIDE": "All of Illinois",
+                       **{k: IL_DISTRICTS.get(k, f"District {k}")
+                          for k in sorted(s.districts, key=lambda k: (len(k), k)) if k != "STATEWIDE"}}
+        print("wrote", build_state_prices.write_state(s))
     if "mo" not in states:
         import build_state_prices
         build_state_prices.write_index()

@@ -299,6 +299,77 @@ January 21, 2026
         self.assertNotIn("2511-7528101", items)   # bidder 4's page has no row for it
 
 
+class IllinoisTests(unittest.TestCase):
+    # IDOT unit price tabulation, contract 61L30 of the June 12, 2026
+    # letting, trimmed; one bidder's name wraps and a page break falls
+    # inside an item.
+    TEXT = """                                               ILLINOIS DEPARTMENT OF TRANSPORTATION                                      PAGE:    1
+ 08/31/26  15:30:27                   U N I T  P R I C E   T A B U L A T I O N   O F   B I D S
+ LETTING DATE: 06/12/2026  LETTING TYPE: SCHEDULED                                 CONTRACT NUMBER: 61L30  LETTING ITEM NUMBER: 038
+ RESPONSIBLE DISTRICT: 01                                                                                  BIDS LOCKED: Y
+ SECTION: 24-00012-00-FP                           COUNTY: KANE                                            ESTIMATE:
+ STATE JOB NUMBER:   C-91-273-24                   MUNICIPALITY: CAMPTON HILLS
+                                                      SUMMARY OF CONTRACTOR BIDS
+
+ 1305  Curran Contracting Company
+                          NO ALT                            3,758,911.22     3,758,911.22   3,758,911.22
+
+ 2030  Geneva Construction Company LLC. d/b/a Geneva
+       Paving
+                          NO ALT                            2,899,450.67     2,899,450.67   2,899,450.67
+
+ 2341  Builders Paving, LLC
+                          NO ALT                            2,893,888.00 *   2,893,888.00   2,893,888.00    *
+
+ **** TOTAL GROUP NO ALT PAY ITEMS FOR THIS CONTRACT =      42
+                                                       ----------------------
+                                                       DETAIL CONTRACTOR BIDS
+                                                       ----------------------
+
+    ITEM NBR  ITEM DESCRIPTION                                    UNIT OF     UNIT        BIDDER         CALCULATED  BIDR CALC
+ BIDR NBR  BIDDER NAME                                  QUANTITY  MEASURE     PRICE       EXTENSION      EXTENSION   EXTENSION DIFF
+
+    42400200  PC CONC SIDEWALK 5                         147.000    SQ FT
+ 2341      Builders Paving, LLC                                            62.0000        9,114.00        9,114.00
+ 1305      Curran Contracting Company                                      62.0000        9,114.00        9,114.00
+                                               ILLINOIS DEPARTMENT OF TRANSPORTATION                                      PAGE:    2
+ 08/31/26  15:30:27                   U N I T  P R I C E   T A B U L A T I O N   O F   B I D S
+ LETTING DATE: 06/12/2026  LETTING TYPE: SCHEDULED                                 CONTRACT NUMBER: 61L30  LETTING ITEM NUMBER: 038
+ 2030      Geneva Construction Company LLC. d/b/a Geneva
+           Paving                                                          16.0000        2,352.00        2,352.00
+
+    42400300  PC CONC SIDEWALK 6 SPL                     200.000    SQ FT
+ 2341      Builders Paving, LLC                                            20.0000        4,000.00        4,000.00
+ 1305      Curran Contracting Company                                      21.0000        4,200.00        4,200.00
+ 2030      Geneva Construction Company LLC. d/b/a Geneva
+           Paving                                                          22.0000        4,400.00        4,400.00
+
+    44000600  SIDEWALK REM                               147.000    SQ FT
+ 2341      Builders Paving, LLC                                            10.0000        1,470.00        1,470.00
+ 1305      Curran Contracting Company                                      10.0000        1,470.00        1,470.00
+"""
+
+    def test_a_contract_with_ranked_bidders_across_a_page_break(self):
+        c = R.parse_il(self.TEXT)
+        self.assertEqual((c["id"], c["date"], c["district"], c["counties"]),
+                         ("61L30", "2026-06-12", "1", "Campton Hills, Kane"))
+        self.assertEqual([b[0] for b in c["bidders"]],
+                         ["Builders Paving, LLC", "Geneva Construction Company LLC. d/b/a Geneva Paving",
+                          "Curran Contracting Company"])
+        self.assertEqual(c["bidders"][0][1], 2893888.0)
+        self.assertEqual(c["items"]["42400200"], [147.0, [62.0, 16.0, 62.0]])
+
+    def test_a_variant_and_an_item_one_bidder_left_off_are_dropped(self):
+        items = R.parse_il(self.TEXT)["items"]
+        self.assertNotIn("42400300", items)   # "6 SPL" is not plain 6 in. sidewalk
+        self.assertNotIn("44000600", items)   # Geneva has no price for it
+
+    def test_a_contract_with_alternates_is_skipped(self):
+        alt = self.TEXT.replace("NO ALT                            3,758,911.22",
+                                "1&A                               3,758,911.22")
+        self.assertIsNone(R.parse_il(alt))
+
+
 class CommittedResultsTests(unittest.TestCase):
     def setUp(self):
         with open(os.path.join(ROOT, "curbcall_netlify_v4", "results", "mo.json"), encoding="utf-8") as f:
