@@ -29,6 +29,7 @@ import argparse
 import collections
 import datetime
 import http.cookiejar
+import io
 import json
 import os
 import re
@@ -614,6 +615,88 @@ def build_ky(cache, months):
             "lettings": used, "contracts": contracts, "wins": wins(contracts), "named": True}
 
 
+# ── Kansas ──────────────────────────────────────────────────────────────────
+# KDOT posts each month's lettings as a CSV: one row per bidder per item,
+# with the bidder's unit price and extended amount. Bidders are ranked here
+# by their total over all items of the proposal, which is how the low bid is
+# decided. The CSV gives the month, not the day, of the letting.
+KS_PAGE = "https://kdotapp.ksdot.org/HistoricalBidTabs/"
+KS_CSV = "https://kdotapp.ksdot.org/burconsmain/bidtabs/CSV/{y}/{yymm}.CSV"
+KS_ITEMS = {
+    "025026": ('Concrete sidewalk, 4 in.', "sidewalk", "sq yd"),
+    "025041": ('Concrete sidewalk, 6 in.', "sidewalk6", "sq yd"),
+    "061597": ("Combined curb and gutter", "curb_gutter", "ft"),
+    "022625": ("Sidewalk ramp (ADA)", "ramp", "sq yd"),
+    "061176": ('Edge curb, 6 in.', "curb", "ft"),
+}
+KS_UNITS = {"SQYD": "sq yd", "LNFT": "ft", "EACH": "each", "SQFT": "sq ft"}
+
+
+def parse_ks_csv(text, month):
+    import csv as _csv
+    cs = {}
+    for r in _csv.DictReader(io.StringIO(text)):
+        pid = (r.get("PROPOSAL_NM") or "").strip()
+        vendor = re.sub(r"\s+", " ", (r.get("VENDORNAME") or "")).strip()
+        if not pid or not vendor:
+            continue
+        try:
+            qty, price, ext = float(r["QTY"] or 0), float(r["BIDPRICE"] or 0), float(r["EXTENDEDAMOUNT"] or 0)
+        except (KeyError, ValueError):
+            continue
+        c = cs.setdefault(pid, {"county": (r.get("DESCR") or "").strip().title(),
+                                "desc": (r.get("PROJECT_NM") or "").strip(), "totals": {}, "items": {}})
+        c["totals"][vendor] = c["totals"].get(vendor, 0.0) + ext
+        code, unit = (r.get("REFITEM_NM") or "").strip(), KS_UNITS.get((r.get("UNIT") or "").strip())
+        if code in KS_ITEMS and unit == KS_ITEMS[code][2] and qty > 0 and price > 0:
+            it = c["items"].setdefault(code, {})
+            q, a = it.get(vendor, (0.0, 0.0))
+            it[vendor] = (q + qty, a + qty * price)
+    out = []
+    for pid, c in cs.items():
+        order = sorted(c["totals"], key=lambda v: c["totals"][v])
+        if not order or any(c["totals"][v] <= 0 for v in order):
+            continue
+        items = {}
+        for code, by_v in c["items"].items():
+            if set(by_v) != set(order):
+                continue
+            qty = by_v[order[0]][0]
+            items[code] = [round(qty, 2), [round(by_v[v][1] / by_v[v][0], 2) for v in order]]
+        if items:
+            out.append({"id": pid, "date": f"{month}-01", "desc": c["desc"], "counties": c["county"],
+                        "district": "", "bidders": [[v, round(c["totals"][v], 2)] for v in order],
+                        "items": items})
+    return out
+
+
+def build_ks(cache, months):
+    room = Room()
+    today = datetime.date.today()
+    contracts, used = [], []
+    y, m = today.year, today.month
+    for _ in range(months):
+        yymm = f"{y % 100:02d}{m:02d}"
+        path = os.path.join(cache, f"ks_{yymm}.csv")
+        if not os.path.exists(path):
+            try:
+                data = room.get(KS_CSV.format(y=y, yymm=yymm), timeout=120)
+            except Exception:
+                data = b""
+            with open(path, "wb") as f:
+                f.write(data)
+        text = open(path, encoding="utf-8", errors="replace").read()
+        if text.startswith('"PROPOSAL_NM"'):
+            got = parse_ks_csv(text, f"{y}-{m:02d}")
+            print(f"KS {y}-{m:02d}: {len(got)} contracts with flatwork")
+            contracts += got
+            used.append(f"{y}-{m:02d}-01")
+        y, m = (y, m - 1) if m > 1 else (y - 1, 12)
+    contracts.sort(key=lambda c: (c["date"], c["id"]))
+    return {"state": "KS", "source": "KDOT monthly bid tabs (CSV)", "source_url": KS_PAGE,
+            "lettings": sorted(used), "contracts": contracts, "wins": wins(contracts), "named": True}
+
+
 def rates_from_results(results, st, name, items_def, page, headline):
     """rates/<st>.json from bid results: every bid's average, range and count
     per item, district and year (plus statewide); winning prices from rank 1."""
@@ -695,7 +778,7 @@ class Room:
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--states", default="mo,or,nc,tx,ky")
+    ap.add_argument("--states", default="mo,or,nc,tx,ky,ks")
     ap.add_argument("--out", default=OUT)
     ap.add_argument("--months", type=int, default=24)
     ap.add_argument("--cache", default=None, help="folder to keep the PDFs in")
@@ -755,6 +838,19 @@ def main():
         s.districts = {"STATEWIDE": "All of Kentucky",
                        **{k: f"District {k}" for k in s.districts if k != "STATEWIDE"}}
         print("wrote", build_state_prices.write_state(s))
+    if "ks" in states:
+        data = build_ks(cache, args.months)
+        bad = check(data["contracts"], data["lettings"])
+        if bad:
+            print("KS not written:", *bad[:20], sep="\n  ", file=sys.stderr)
+            return 1
+        path = os.path.join(os.path.dirname(args.out), "ks.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, separators=(",", ":"), sort_keys=True)
+        print(f"wrote {path}: {len(data['contracts'])} contracts")
+        import build_state_prices
+        print("wrote", build_state_prices.write_state(rates_from_results(
+            data, "KS", "Kansas", KS_ITEMS, KS_PAGE, ["025026", "061597", "022625", "025041"])))
     if "mo" not in states:
         import build_state_prices
         build_state_prices.write_index()

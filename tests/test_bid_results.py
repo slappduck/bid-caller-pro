@@ -197,6 +197,31 @@ County: JEFFERSON COUNTY District: 05 Date Let: 9/24/26 Contid: 26-1519 SYP: 05-
         self.assertNotIn("DETECTABLE WARNINGS", R.parse_ky(self.TEXT)[0]["items"])
 
 
+class KansasTests(unittest.TestCase):
+    # KDOT monthly bid-tab CSV: one row per item per bidder.
+    HEAD = "PROPOSAL_NM,PROJECT_NM,DESCR,VENDORNAME,REFITEM_NM,UNIT,QTY,BIDPRICE,EXTENDEDAMOUNT\n"
+    ROWS = [
+        ("226091234", "K-10 SIDEWALK", "JOHNSON", "AMINO BROTHERS CO INC", "025026", "SQYD", "500", "60.00", "30000.00"),
+        ("226091234", "K-10 SIDEWALK", "JOHNSON", "AMINO BROTHERS CO INC", "061597", "LNFT", "200", "40.00", "8000.00"),
+        ("226091234", "K-10 SIDEWALK", "JOHNSON", "MILLER  PAVING", "025026", "SQYD", "500", "70.00", "35000.00"),
+        ("226091234", "K-10 SIDEWALK", "JOHNSON", "MILLER  PAVING", "061597", "LNFT", "200", "45.00", "9000.00"),
+        ("226091234", "K-10 SIDEWALK", "JOHNSON", "SLOW CO", "025026", "SQYD", "500", "65.00", "32500.00"),
+        ("226091234", "K-10 SIDEWALK", "JOHNSON", "SLOW CO", "999999", "LS", "1", "20000.00", "20000.00"),
+    ]
+
+    def csv(self):
+        return self.HEAD + "".join(",".join(r) + "\n" for r in self.ROWS)
+
+    def test_bidders_rank_by_their_summed_totals(self):
+        c = R.parse_ks_csv(self.csv(), "2026-09")[0]
+        self.assertEqual((c["id"], c["date"], c["counties"]), ("226091234", "2026-09-01", "Johnson"))
+        self.assertEqual([b[0] for b in c["bidders"]], ["AMINO BROTHERS CO INC", "MILLER PAVING", "SLOW CO"])
+        self.assertEqual(c["items"]["025026"], [500.0, [60.0, 70.0, 65.0]])
+
+    def test_an_item_not_every_bidder_priced_is_dropped(self):
+        self.assertNotIn("061597", R.parse_ks_csv(self.csv(), "2026-09")[0]["items"])
+
+
 class CommittedResultsTests(unittest.TestCase):
     def setUp(self):
         with open(os.path.join(ROOT, "curbcall_netlify_v4", "results", "mo.json"), encoding="utf-8") as f:
