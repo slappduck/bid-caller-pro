@@ -875,3 +875,13 @@ body{font-family:var(--ui);background:radial-gradient(ellipse 120% 60% at 50% -1
   .home-grid{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:1.5rem;align-items:start;}
   .home-side{margin-top:0;}
 }
+
+/* iOS Safari zooms the page in when a field under 16px gets focus, and
+   leaves it zoomed after typing. .input is 16px, but denser spots shrink
+   theirs (pricing lines, markup, sidewalk width, waste %, the district
+   picker). On touch screens every text field is held at 16px or more, so
+   nothing zooms -- without blocking pinch-zoom, which stays available. */
+@media (pointer:coarse){
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+  select,textarea{font-size:max(16px,1em)!important;}
+}
