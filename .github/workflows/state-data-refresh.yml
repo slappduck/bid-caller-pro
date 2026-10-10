@@ -77,8 +77,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if git diff --quiet -- curbcall_netlify_v4/rates curbcall_netlify_v4/results \
-             && [ -z "$(git ls-files --others --exclude-standard curbcall_netlify_v4/rates curbcall_netlify_v4/results)" ]; then
+          DATA="curbcall_netlify_v4/rates curbcall_netlify_v4/results curbcall_netlify_v4/concrete-cost curbcall_netlify_v4/sitemap.xml"
+          if git diff --quiet -- $DATA \
+             && [ -z "$(git ls-files --others --exclude-standard $DATA)" ]; then
             echo "Nothing changed this month."
             exit 0
           fi
@@ -86,7 +87,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -B "$BRANCH"
-          git add curbcall_netlify_v4/rates curbcall_netlify_v4/results
+          git add $DATA
           git commit -q -m "Refresh state going rates and bid results ($month)"
           # The branch is rebuilt from main each month, so an unmerged
           # refresh is replaced by the newer one rather than stacked on.

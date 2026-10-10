@@ -175,7 +175,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
 
     await page.route("**/*", (route) => {
       const host = new URL(route.request().url()).hostname;
-      if (host.endsWith("supabase.co") || host.endsWith("onrender.com")) return route.abort();
+      if (host.endsWith("supabase.co") || host.endsWith("onrender.com") || host === "cdn.jsdelivr.net") return route.abort();
       return route.continue();
     });
     await page.addInitScript(seedSignedIn, { city: SEED_CITY, bid: SEED_BID });
@@ -243,7 +243,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     page.on("pageerror", (e) => pageErrors.push(e.message));
     await page.route("**/*", (route) => {
       const host = new URL(route.request().url()).hostname;
-      if (host.endsWith("supabase.co") || host.endsWith("onrender.com")) return route.abort();
+      if (host.endsWith("supabase.co") || host.endsWith("onrender.com") || host === "cdn.jsdelivr.net") return route.abort();
       return route.continue();
     });
 
@@ -320,7 +320,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     page.on("pageerror", (e) => pageErrors.push(e.message));
     await page.route("**/*", (route) => {
       const host = new URL(route.request().url()).hostname;
-      if (host.endsWith("supabase.co") || host.endsWith("onrender.com")) return route.abort();
+      if (host.endsWith("supabase.co") || host.endsWith("onrender.com") || host === "cdn.jsdelivr.net") return route.abort();
       return route.continue();
     });
 
@@ -388,7 +388,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     page.on("pageerror", (e) => pageErrors.push(e.message));
     await page.route("**/*", (route) => {
       const host = new URL(route.request().url()).hostname;
-      if (host.endsWith("supabase.co") || host.endsWith("onrender.com")) return route.abort();
+      if (host.endsWith("supabase.co") || host.endsWith("onrender.com") || host === "cdn.jsdelivr.net") return route.abort();
       return route.continue();
     });
     await page.addInitScript(() =>
@@ -534,7 +534,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
         return route.fulfill({ status: 200, contentType: "application/javascript",
                                body: SB_STUB });
       }
-      if (host.endsWith("supabase.co") || host.endsWith("onrender.com")) return route.abort();
+      if (host.endsWith("supabase.co") || host.endsWith("onrender.com") || host === "cdn.jsdelivr.net") return route.abort();
       return route.continue();
     });
     await page.addInitScript(seedSignedIn, {});
@@ -601,7 +601,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
       if (host === "cdn.jsdelivr.net") {
         return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
       }
-      if (host.endsWith("supabase.co") || host.endsWith("onrender.com")) return route.abort();
+      if (host.endsWith("supabase.co") || host.endsWith("onrender.com") || host === "cdn.jsdelivr.net") return route.abort();
       return route.continue();
     });
     await page.addInitScript(seedSignedIn, {});
@@ -643,7 +643,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
         if (host === "cdn.jsdelivr.net") {
           return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
         }
-        if (host.endsWith("supabase.co") || host.endsWith("onrender.com")) return route.abort();
+        if (host.endsWith("supabase.co") || host.endsWith("onrender.com") || host === "cdn.jsdelivr.net") return route.abort();
         return route.continue();
       });
       await page.addInitScript(seedSignedIn,
@@ -677,7 +677,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     page.on("pageerror", (e) => pageErrors.push(e.message));
     await page.route("**/*", (route) => {
       const host = new URL(route.request().url()).hostname;
-      if (host.endsWith("supabase.co") || host.endsWith("onrender.com")) return route.abort();
+      if (host.endsWith("supabase.co") || host.endsWith("onrender.com") || host === "cdn.jsdelivr.net") return route.abort();
       return route.continue();
     });
 
@@ -738,7 +738,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     page.on("pageerror", (e) => pageErrors.push(e.message));
     await page.route("**/*", (route) => {
       const host = new URL(route.request().url()).hostname;
-      if (host.endsWith("supabase.co") || host.endsWith("onrender.com")) return route.abort();
+      if (host.endsWith("supabase.co") || host.endsWith("onrender.com") || host === "cdn.jsdelivr.net") return route.abort();
       return route.continue();
     });
     await page.addInitScript(seedSignedIn, { city: SEED_CITY, bid: SEED_BID });
@@ -798,7 +798,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     page.on("pageerror", (e) => pageErrors.push(e.message));
     await page.route("**/*", (route) => {
       const host = new URL(route.request().url()).hostname;
-      if (host.endsWith("supabase.co") || host.endsWith("onrender.com")) return route.abort();
+      if (host.endsWith("supabase.co") || host.endsWith("onrender.com") || host === "cdn.jsdelivr.net") return route.abort();
       return route.continue();
     });
     await page.addInitScript(seedSignedIn, { city: SEED_CITY, bid: SEED_BID });

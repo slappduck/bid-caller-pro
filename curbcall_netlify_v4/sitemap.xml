@@ -28,4 +28,24 @@
   <url><loc>https://curbcallpro.com/legal/index.html</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
   <url><loc>https://curbcallpro.com/legal/terms-2026-09-09.html</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
   <url><loc>https://curbcallpro.com/legal/privacy-2026-09-09.html</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
+  <!-- concrete-cost pages: written by tools/build_cost_pages.py -->
+  <url><loc>https://curbcallpro.com/concrete-cost/index.html</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-cost/arkansas.html</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-cost/florida.html</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-cost/illinois.html</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-cost/indiana.html</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-cost/iowa.html</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-cost/kansas.html</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-cost/kentucky.html</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-cost/minnesota.html</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-cost/missouri.html</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-cost/montana.html</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-cost/nebraska.html</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-cost/north-carolina.html</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-cost/oklahoma.html</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-cost/oregon.html</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-cost/south-dakota.html</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-cost/tennessee.html</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-cost/texas.html</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <!-- /concrete-cost pages -->
 </urlset>
