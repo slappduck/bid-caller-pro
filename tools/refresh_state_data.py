@@ -158,6 +158,9 @@ def main():
             notes.append(f"last line: `{tail[0][:160]}`")
         rows.append((name, "; ".join(dict.fromkeys(notes))))
     build_state_prices.write_index()
+    # The public price pages are built from the same files, so they follow them.
+    import build_cost_pages
+    build_cost_pages.main()
     lines = ["| Source | This month |", "|---|---|"] + [f"| {n} | {t} |" for n, t in rows]
     if kept:
         lines += ["", "**Kept last month's data** (look at these; the source may have changed):", ""]
