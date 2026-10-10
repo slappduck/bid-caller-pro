@@ -56,6 +56,9 @@ class ProcessorsAreDisclosedTests(unittest.TestCase):
         "tavily": "Tavily", "brave": "Brave", "duckduckgo": "DuckDuckGo",
         "zippopotam": "Zippopotam", "nominatim": "Nominatim",
         "bigdatacloud": "BigDataCloud", "resend": "Resend",
+        "overpass": "OpenStreetMap", "web.push.apple": "Apple",
+        "fcm.googleapis": "Google", "push.services.mozilla": "Mozilla",
+        "notify.windows": "Microsoft",
     }
 
     def setUp(self):

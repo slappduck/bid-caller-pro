@@ -5305,7 +5305,8 @@ function suppliersHTML(d,b,p,city,waste){
     ${web.length?`<div class="rate-note" style="margin-top:0.5rem;">${plants.length?"Also found online":"Found online"}:</div>
       ${web.map(w=>safeUrl(w.url)?`<div class="sup-row"><a href="${esc(safeUrl(w.url))}" target="_blank" rel="noopener noreferrer">${esc(w.site)}</a>
         ${w.snippet?`<div class="rate-note">${esc(w.snippet)}</div>`:""}</div>`:"").join("")}`:""}
-    <div class="rate-note">Plants within ${d.radius_mi} miles. Some may be missing. Call to make sure they deliver to your job.</div>`;
+    <div class="rate-note">Plants within ${d.radius_mi} miles. Some may be missing. Call to make sure they deliver to your job.</div>
+    ${plants.length?`<div class="rate-note">Plant data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a></div>`:""}`;
 }
 // A quote is saved with the bid (and its plant) every time; it's also sent,
 // anonymously, toward the area's prices unless the contractor says not to.

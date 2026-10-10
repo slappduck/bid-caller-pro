@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>CurbCall Pro — Find Sidewalk, ADA &amp; Curb Bids Near You</title>
-<meta name="description" content="CurbCall Pro scans municipal and government sites near you and uses AI to surface live sidewalk, ADA ramp, and curb &amp; gutter bids — so concrete contractors bid work instead of hunting for it." />
+<meta name="description" content="CurbCall Pro finds live sidewalk, ADA ramp and curb &amp; gutter bids near you, then helps you win them: what the state paid for the same work, a target price, bid forms filled in, addendum alerts on your phone and ready-mix plants near the job." />
 <meta name="theme-color" content="#0b0d14" />
 <link rel="canonical" href="https://curbcallpro.com/" />
 
@@ -198,6 +198,8 @@ section{padding:4rem 0;}
 .fcard .ic .icon-svg{width:1.15rem;height:1.15rem;stroke-width:2;}
 .fcard h3{font-size:1rem;margin:0.7rem 0 0.3rem;}
 .fcard p{color:var(--text2);font-size:0.86rem;}
+.win-free{color:var(--text2);text-align:center;margin-top:1.4rem;font-size:0.95rem;}
+.win-free a{color:var(--amber);font-weight:600;}
 
 /* pricing */
 .prices{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;align-items:stretch;}
@@ -351,6 +353,10 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
     <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3l2.6 5.6 6.1.6-4.6 4.1 1.3 6-5.4-3.1-5.4 3.1 1.3-6L3.3 9.2l6.1-.6z"/></symbol>
     <symbol id="i-mail" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M3 6l9 7 9-7"/></symbol>
     <symbol id="i-landmark" viewBox="0 0 24 24"><path d="M3 10 12 3l9 7"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="7" y1="10" x2="7" y2="19"/><line x1="12" y1="10" x2="12" y2="19"/><line x1="17" y1="10" x2="17" y2="19"/><line x1="3" y1="19" x2="21" y2="19"/><line x1="3" y1="22" x2="21" y2="22"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10.3 20a1.9 1.9 0 0 0 3.4 0"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></symbol>
+    <symbol id="i-truck" viewBox="0 0 24 24"><path d="M2 6h11v10H2z"/><path d="M13 9h4l4 4v3h-8"/><circle cx="6" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></symbol>
+    <symbol id="i-scale" viewBox="0 0 24 24"><line x1="12" y1="3" x2="12" y2="21"/><line x1="7" y1="21" x2="17" y2="21"/><path d="M4 7h16"/><path d="M4 7l-2.5 6a3 3 0 0 0 5 0z"/><path d="M20 7l-2.5 6a3 3 0 0 0 5 0z"/></symbol>
     <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v13"/><path d="M7 11l5 5 5-5"/><path d="M4 21h16"/></symbol>
   </defs>
 </svg>
@@ -362,6 +368,7 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
     <div class="nav-links" id="navLinks">
       <a href="#how">How it works</a>
       <a href="#features">Features</a>
+      <a href="#win">Pricing tools</a>
       <a href="#pricing">Pricing</a>
       <a class="btn btn-amber nav-cta" href="/app.html">Launch App</a>
     </div>
@@ -429,7 +436,7 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
       <div class="step"><div class="num">01</div><h3>Set your area</h3><p>Enter a ZIP or let the app detect your location, then pick a radius from 10 to 125 miles.</p></div>
       <div class="step"><div class="num">02</div><h3>Scan nearby towns</h3><p>It finds municipal and government bid pages across your radius and reads them automatically.</p></div>
       <div class="step"><div class="num">03</div><h3>AI pulls the concrete jobs</h3><p>The AI surfaces real flatwork — sidewalk, ADA ramp, and curb &amp; gutter bids — with scope, deadline, and contact.</p></div>
-      <div class="step"><div class="num">04</div><h3>Bid and win</h3><p>Browse clean bid cards, tap to email or open the posting, and star the jobs worth chasing.</p></div>
+      <div class="step"><div class="num">04</div><h3>Price it and bid</h3><p>See what the same work went for, get a target price, and let the app fill in the bid form. You check it, sign it and send it.</p></div>
     </div>
   </div>
 </section>
@@ -451,6 +458,28 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
       <div class="fcard"><div class="ic"><svg class="icon-svg"><use href="#i-mail"/></svg></div><h3>One-tap contact</h3><p>Email the bid contact or open the original posting straight from the card. No copying, no hunting.</p></div>
       <div class="fcard"><div class="ic"><svg class="icon-svg"><use href="#i-landmark"/></svg></div><h3>Federal + local</h3><p>Pulls SAM.gov federal solicitations alongside local municipal bids, all filtered to your radius.</p></div>
     </div>
+  </div>
+</section>
+
+<!-- Everything after "found it". Each card names where its numbers come
+     from, because a contractor deciding whether to trust a price wants to
+     know that first. Keep the state count in step with rates/*.json. -->
+<section id="win">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Then it helps you win it</span>
+      <h2>Price it right, file it right, never miss a change</h2>
+      <p>Finding the bid is half the job. The rest is the number, the paperwork and the addendum nobody told you about.</p>
+    </div>
+    <div class="feat">
+      <div class="fcard"><div class="ic"><svg class="icon-svg"><use href="#i-dollar"/></svg></div><h3>What the work actually goes for</h3><p>What sidewalk, ramps and curb and gutter went for, per square yard or foot, from the state's own bid results in 17 states. Updated every month.</p></div>
+      <div class="fcard"><div class="ic"><svg class="icon-svg"><use href="#i-scale"/></svg></div><h3>Should you bid it, and at what price</h3><p>How many contractors usually bid this kind of job there, who keeps winning it, and a target price from what won, at your job's quantities.</p></div>
+      <div class="fcard"><div class="ic"><svg class="icon-svg"><use href="#i-file"/></svg></div><h3>Bid forms filled in for you</h3><p>Enter your license, bonding and supplier details once. The app fills in the agency's bid form and lists what the bid asks for. You sign and submit it yourself.</p></div>
+      <div class="fcard"><div class="ic"><svg class="icon-svg"><use href="#i-bell"/></svg></div><h3>Addendum alerts on your phone</h3><p>Every saved bid is re-checked every six hours. An addendum or new document sends an alert, and you get a reminder the day before it's due.</p></div>
+      <div class="fcard"><div class="ic"><svg class="icon-svg"><use href="#i-mail"/></svg></div><h3>Quotes to prime contractors</h3><p>Not bidding as the prime? See who took plans and send each one your concrete quote, written from your own prices, in a tap.</p></div>
+      <div class="fcard"><div class="ic"><svg class="icon-svg"><use href="#i-truck"/></svg></div><h3>Ready-mix near the job</h3><p>Plants close to the job, how many trucks it takes and what the concrete should cost, plus real quotes from other contractors nearby once there are enough.</p></div>
+    </div>
+    <p class="win-free">Want a feel for prices first? <a href="/concrete-cost/index.html">See concrete prices by state</a>, free, no sign-up.</p>
   </div>
 </section>
 
@@ -540,13 +569,13 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
       <div class="price">
         <span class="tag">Free trial</span>
         <div class="amt">$0<span> / 7 days</span></div>
-        <ul><li>Full location-based scanning</li><li>AI bid extraction</li><li>Save &amp; track leads</li><li>No credit card required</li></ul>
+        <ul><li>Full location-based scanning</li><li>AI bid extraction</li><li>Going rates &amp; target prices</li><li>Save &amp; track leads</li><li>No credit card required</li></ul>
         <a class="btn btn-line" href="/app.html">Start free trial</a>
       </div>
       <div class="price feat">
         <span class="tag">Most popular</span>
         <div class="amt">$49<span> / mo</span></div>
-        <ul><li>Unlimited nationwide scans</li><li>AI bid extraction</li><li>Save unlimited leads</li><li>Federal + local bids</li><li>Cancel anytime</li></ul>
+        <ul><li>Unlimited nationwide scans</li><li>AI bid extraction</li><li>Going rates &amp; target prices</li><li>Bid forms filled in</li><li>Addendum &amp; due-date alerts</li><li>Ready-mix plants &amp; concrete cost</li><li>Federal + local bids</li><li>Cancel anytime</li></ul>
         <a class="btn btn-amber" href="https://buy.stripe.com/aFa00idzefwuayK6DRejK05">Subscribe monthly</a>
         <!-- Automatic renewal has to be said before the buyer pays, not only in
              the Terms. "Cancel anytime" is a benefit; it is not a disclosure
@@ -571,6 +600,8 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
     <div class="sec-head"><span class="eyebrow">FAQ</span><h2>Common questions</h2></div>
     <div class="faq">
       <details><summary>What exactly does CurbCall Pro do?</summary><p>It scans government and municipal sites near you, reads their bid pages, and uses AI to pull out live sidewalk, ADA ramp, and curb &amp; gutter bids — the title, scope, deadline, and who to contact. Instead of checking dozens of city sites by hand, you get a clean feed of concrete jobs near you.</p></details>
+      <details><summary>Where do the prices come from?</summary><p>From the state transportation departments' own bid results: what contractors bid, and what won, on sidewalk, ramp and curb work. We cover 17 states today and rebuild the numbers every month. Each price in the app says which state and year it comes from. <a href="/concrete-cost/index.html">The concrete price pages</a> show the same numbers, free.</p></details>
+      <details><summary>Does it submit bids for me?</summary><p>No. It fills in the agency's form with the details you've saved and lists what the bid asks for, so you're not starting from a blank page. You check it, sign it and submit it. It never signs, notarizes or sends a bid for you.</p></details>
       <details><summary>Do I have to install anything?</summary><p>No — CurbCall Pro runs right in your browser on phone or desktop. Add it to your home screen and it works like an app on your phone.</p></details>
       <details><summary>Do I need to know the city websites?</summary><p>No. Just enter your ZIP or let the app detect your location, pick a radius, and it finds the sites for you.</p></details>
       <details><summary>How does the free trial work?</summary><p>You get 7 days of full access with no credit card required. Find real bids first, then decide. When the trial ends, subscribe to keep going.</p></details>
