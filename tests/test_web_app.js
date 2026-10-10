@@ -1875,31 +1875,62 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await page.waitForTimeout(500);
     const est = await page.textContent("#rm-est");
     check("the concrete is priced for the order's yards, as an estimate",
-          /146 CY at \$110\.00–\$175\.00\/CY/.test(est) && /\$16,060–\$25,550/.test(est) && /15 trucks/.test(est) && /national 2026 estimate/.test(est), est.slice(0, 300));
+          /146 CY at \$110\.00–\$175\.00\/CY/.test(est) && /\$16,060–\$25,550/.test(est) && /15 trucks of 10 CY/.test(est) && /national 2026 estimate/.test(est), est.slice(0, 300));
     check("...with how many quotes are logged nearby so far", /1 quote logged near here/.test(est));
+    const share = await page.textContent("#rm-share");
+    check("each line shows what its concrete costs per unit and what share of the price that is",
+          /2\. 4 in\. concrete sidewalk/.test(share) && /\$12\.83–\$20\.42\/sq yd/.test(share) && /28% of \$60\.00/.test(share), share.slice(0, 300));
     check("plants are asked for near the bid's town", nearbyBody && nearbyBody.city === "Aurora" && nearbyBody.state === "MO");
     const sup = await page.textContent("#rm-sup");
     check("nearby plants are listed with distance and a phone number", /Ozark Ready Mix/.test(sup) && /4\.2 mi/.test(sup) && /417-555-0199/.test(sup));
     check("...and web finds the map didn't have", /citymix\.example/.test(sup));
     const plantMail = decodeURIComponent(await page.getAttribute("#rm-sup a[href^='mailto:']", "href"));
     check("a plant with an email gets the same quote request", plantMail.startsWith("mailto:sales@ozarkmix.example") && /about 146 CY/.test(plantMail));
+    await page.selectOption("#cq-psi", "4000");
+    await page.waitForTimeout(150);
+    check("the mix picked goes into the quote request",
+          /Mix: 4000 PSI, otherwise per the project specs/.test(decodeURIComponent(await page.getAttribute("#cq-send", "href"))));
+    await page.selectOption("#rm-truck", "8");
+    await page.waitForTimeout(150);
+    check("a smaller truck means more trucks", /19 trucks of 8 CY/.test(await page.textContent("#rm-est")));
+    await page.selectOption("#rm-truck", "10");
+    await page.selectOption("#rm-pick", "custom");
     await page.fill("#rm-yards", "6");
     await page.waitForTimeout(150);
     const small = await page.textContent("#rm-est");
     check("a small order shows the short-load charge", /Short load: 4 CY under a full truck/.test(small) && /\$160–\$400/.test(small), small.slice(0, 300));
+    await page.selectOption('#rm-sup .sup-status[data-plant="0"]', "Quoted");
+    await page.waitForTimeout(200);
+    check("marking a plant quoted opens the quote form for that plant",
+          await page.evaluate(() => document.getElementById("rm-log").open && document.querySelector('#rm-form [name="supplier"]').value === "Ozark Ready Mix"));
     await page.evaluate(() => { window.getSupabaseToken = async () => "tok"; });
-    await page.click(".rm-log summary");
     await page.fill('#rm-form [name="price"]', "142.50");
     await page.fill('#rm-form [name="yards"]', "30");
     await page.fill('#rm-form [name="delivery"]', "95");
     await page.click('#rm-form button[type="submit"]');
-    await page.waitForTimeout(600);
-    check("a logged quote is sent with the town, price and yards",
+    await page.waitForTimeout(700);
+    check("a logged quote is sent with the town, price, yards and mix, not the supplier",
           quoteBody && quoteBody.city === "Aurora" && quoteBody.price_per_cy === 142.5 && quoteBody.yards === 30
-            && quoteBody.delivery_fee === 95 && quoteBody.short_load_fee === null && quoteBody.supabase_token === "tok", JSON.stringify(quoteBody));
-    const after2 = await page.textContent("#rm-est");
-    check("once the area has enough quotes, the range is the local one",
-          /\$128\.00–\$151\.00\/CY/.test(after2) && /4 quotes contractors logged within 75 miles/.test(after2), after2.slice(0, 300));
+            && quoteBody.delivery_fee === 95 && quoteBody.short_load_fee === null && quoteBody.psi === 4000
+            && quoteBody.supabase_token === "tok" && !JSON.stringify(quoteBody).includes("Ozark"), JSON.stringify(quoteBody));
+    const mine = await page.textContent("#rm-est");
+    check("the bid is then priced with that quote and its delivery fee",
+          /6 CY at \$142\.50\/CY/.test(mine) && /as quoted/.test(mine) && /Priced with the quote you logged/.test(mine), mine.slice(0, 300));
+    check("...and the plant shows the quote", /Quoted \$142\.50\/CY for 30 CY/.test(await page.textContent("#rm-sup")));
+    const bases = await page.$$eval("#rm-basis option", (os) => os.map((o) => o.textContent));
+    check("the price basis offers your quote, local quotes and the estimate",
+          bases.length === 3 && /Your quote, Ozark Ready Mix/.test(bases[0]) && /Local quotes: \$128\.00–\$151\.00/.test(bases[1]) && /National estimate/.test(bases[2]), bases.join(" | "));
+    await page.selectOption("#rm-basis", "area");
+    await page.waitForTimeout(150);
+    const local = await page.textContent("#rm-est");
+    check("switching to local quotes prices with the area's range",
+          /\$128\.00–\$151\.00\/CY/.test(local) && /4 quotes contractors logged within 75 miles/.test(local), local.slice(0, 300));
+    await page.selectOption('#rm-sup .sup-status[data-plant="0"]', "Doesn't deliver here");
+    await page.waitForTimeout(150);
+    check("a plant that doesn't deliver here is dimmed", (await page.$$("#rm-sup .sup-out")).length === 1);
+    check("the concrete choices are kept with the bid",
+          await page.evaluate((i) => { const c = prepFor(i).concrete; return c.psi === 4000 && c.pick === "custom" && c.custom === 6
+            && c.basis === "area" && c.plants["Ozark Ready Mix"].price === 142.5; }, id));
     await page.click("#cq-back");
     await page.waitForTimeout(300);
 

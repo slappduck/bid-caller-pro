@@ -907,3 +907,15 @@ body{font-family:var(--ui);background:radial-gradient(ellipse 120% 60% at 50% -1
 .rm-form input{width:7.5rem;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);padding:0.35rem 0.5rem;font-family:var(--ui);}
 .sup-row a{color:var(--accent);text-decoration:none;font-weight:600;font-size:var(--fs-base);}
 .sup-row a:hover,.sup-row a:focus-visible{text-decoration:underline;}
+/* Dropdowns in the concrete panel: two to a row on a phone, labels above */
+.cq-grid{display:grid;grid-template-columns:1fr 1fr;gap:0.5rem 0.75rem;margin:0.6rem 0;}
+.cq-grid label{display:flex;flex-direction:column;gap:0.25rem;font-size:var(--fs-sm);color:var(--text2);}
+.cq-grid select,.cq-grid input,.rm-form select,.sup-status{width:100%;min-height:44px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:var(--r-sm);padding:0.35rem 0.5rem;font-family:var(--ui);}
+.rm-form select{width:9.5rem;}
+.sup-head{display:flex;justify-content:space-between;align-items:center;gap:0.75rem;}
+.sup-head .sup-status{width:auto;max-width:11rem;flex-shrink:0;font-size:var(--fs-sm);}
+.sup-quote{color:var(--green);font-size:var(--fs-sm);font-weight:600;margin-top:0.2rem;}
+.sup-out{opacity:0.55;}
+.rm-form .rm-share{justify-content:flex-start;gap:0.5rem;}
+.rm-form .rm-share input{width:auto;min-height:0;}
+.cq-grid .cq-wide{grid-column:1/-1;}
