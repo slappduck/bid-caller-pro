@@ -141,6 +141,235 @@ class OregonContractTests(unittest.TestCase):
         self.assertEqual(R.parse_or_contracts(rows), [])
 
 
+class NorthCarolinaTests(unittest.TestCase):
+    """NCDOT's spreadsheet: three bidders a row, more on later page numbers."""
+
+    def row(self, page, item, desc, qty, unit, bidders):
+        v = ["L250617", float(page), "06/17/2025", "2:00 PM", 1.0, "C204798", "", "", "", "GUILFORD", 0, "E",
+             "RESURFACING", "", item, "848", 59.0, 1.0, "ROADWAY ITEMS", desc, "", qty, unit, ""]
+        for name, price in bidders:
+            v += [name, "TOWN, NC", str(price), str(price * qty), ""]
+        while len(v) < 39:
+            v += ["", "", "", "", ""]
+        return v[:39] + [46000.0]
+
+    def test_bidders_across_pages_keep_their_rank(self):
+        rows = [self.row(1, "2591000000-E", '4" CONCRETE SIDEWALK', 100, "SY", [("A CO", 50), ("B CO", 55), ("C CO", 60)]),
+                self.row(2, "2591000000-E", '4" CONCRETE SIDEWALK', 100, "SY", [("D CO", 70)]),
+                self.row(1, "0000100000-N", "MOBILIZATION", 1, "LS", [("A CO", 1000), ("B CO", 2000), ("C CO", 2500)]),
+                self.row(2, "0000100000-N", "MOBILIZATION", 1, "LS", [("D CO", 3000)])]
+        c = R.parse_nc_tabs(rows)[0]
+        self.assertEqual([b[0] for b in c["bidders"]], ["A CO", "B CO", "C CO", "D CO"])
+        self.assertEqual([b[1] for b in c["bidders"]], [6000.0, 7500.0, 8500.0, 10000.0])
+        self.assertEqual(c["items"]["2591000000-E"], [100.0, [50.0, 55.0, 60.0, 70.0]])
+        self.assertEqual(c["date"], "2025-06-17")
+
+    def test_a_row_missing_a_bidders_price_drops_the_item(self):
+        rows = [self.row(1, "2591000000-E", '4" CONCRETE SIDEWALK', 100, "SY", [("A CO", 50), ("B CO", 55)]),
+                self.row(1, "0000100000-N", "MOBILIZATION", 1, "LS", [("A CO", 1000), ("B CO", 2000), ("C CO", 2500)])]
+        self.assertEqual(R.parse_nc_tabs(rows), [])
+
+
+class KentuckyTests(unittest.TestCase):
+    TEXT = """Call: 101
+GRADE & DRAIN US 60
+Number of Bidders 3
+0570 SIDEWALK-4 IN CONCRETE 7,760.000 SQYD A A 73.00 57.00 70.21
+0580 DGA BASE 100.000 TON A A 39.00 45.35 50.00
+0590 DETECTABLE WARNINGS 120.000 SQFT A A 40.00 45.00
+1 00563 LOUISVILLE PAVING COMPANY INC 20,325,703.42
+2 00568 MAC CONSTRUCTION & EXCAVATING INC 20,988,000.00
+3 02233 CLEARY CONSTRUCTION INC 23,525,000.00
+Contid: 26-1519
+County: JEFFERSON COUNTY District: 05 Date Let: 9/24/26 Contid: 26-1519 SYP: 05-00481.00
+0600 SIDEWALK-4 IN CONCRETE 240.000 SQYD A A 80.00 60.00 75.00
+"""
+
+    def test_a_contract_with_its_ranked_bidders_and_flatwork(self):
+        c = R.parse_ky(self.TEXT)[0]
+        self.assertEqual((c["id"], c["date"], c["counties"], c["district"]), ("26-1519", "2026-09-24", "Jefferson", "5"))
+        self.assertEqual(c["bidders"][0], ["LOUISVILLE PAVING COMPANY INC", 20325703.42])
+        qty, prices = c["items"]["SIDEWALK-4 IN CONCRETE"]
+        self.assertEqual(qty, 8000.0)   # both rows, either side of a page break
+        self.assertEqual(prices[0], round((7760 * 73 + 240 * 80) / 8000, 2))
+
+    def test_a_row_short_of_its_bidders_is_dropped(self):
+        self.assertNotIn("DETECTABLE WARNINGS", R.parse_ky(self.TEXT)[0]["items"])
+
+
+class KansasTests(unittest.TestCase):
+    # KDOT monthly bid-tab CSV: one row per item per bidder.
+    HEAD = "PROPOSAL_NM,PROJECT_NM,DESCR,VENDORNAME,REFITEM_NM,UNIT,QTY,BIDPRICE,EXTENDEDAMOUNT\n"
+    ROWS = [
+        ("226091234", "K-10 SIDEWALK", "JOHNSON", "AMINO BROTHERS CO INC", "025026", "SQYD", "500", "60.00", "30000.00"),
+        ("226091234", "K-10 SIDEWALK", "JOHNSON", "AMINO BROTHERS CO INC", "061597", "LNFT", "200", "40.00", "8000.00"),
+        ("226091234", "K-10 SIDEWALK", "JOHNSON", "MILLER  PAVING", "025026", "SQYD", "500", "70.00", "35000.00"),
+        ("226091234", "K-10 SIDEWALK", "JOHNSON", "MILLER  PAVING", "061597", "LNFT", "200", "45.00", "9000.00"),
+        ("226091234", "K-10 SIDEWALK", "JOHNSON", "SLOW CO", "025026", "SQYD", "500", "65.00", "32500.00"),
+        ("226091234", "K-10 SIDEWALK", "JOHNSON", "SLOW CO", "999999", "LS", "1", "20000.00", "20000.00"),
+    ]
+
+    def csv(self):
+        return self.HEAD + "".join(",".join(r) + "\n" for r in self.ROWS)
+
+    def test_bidders_rank_by_their_summed_totals(self):
+        c = R.parse_ks_csv(self.csv(), "2026-09")[0]
+        self.assertEqual((c["id"], c["date"], c["counties"]), ("226091234", "2026-09-01", "Johnson"))
+        self.assertEqual([b[0] for b in c["bidders"]], ["AMINO BROTHERS CO INC", "MILLER PAVING", "SLOW CO"])
+        self.assertEqual(c["items"]["025026"], [500.0, [60.0, 70.0, 65.0]])
+
+    def test_an_item_not_every_bidder_priced_is_dropped(self):
+        self.assertNotIn("061597", R.parse_ks_csv(self.csv(), "2026-09")[0]["items"])
+
+
+class IowaTests(unittest.TestCase):
+    # Iowa DOT letting tabulation as pypdf extracts it: a ranking page (a
+    # long name wraps before its total), then bidders three to a page.
+    RANKING = """Project Information:
+Project: WorkType:
+County:
+Location:
+STP-U-4252(606)--70-82 PCC PAVEMENT - GRADE & REPLACE
+SCOTT
+Route: WISCONSIN ST
+In the city of Le Claire, Reconstruction of WISCONSIN ST
+Prj Awd Amt: $8,634,205.55
+Page 1 of 2
+Contract ID:
+Letting Date:
+Completion Date: 03/31/27
+82-4252-606
+January 21, 2026 10:00 A.M.
+SCOTTCall Order:  107 Primary County:
+Letting Status: SIGNED CONTRACT Awarded Vendor: MCCARTHY IMPROVEMENT COMPANY
+Project(s) and Vendor Ranking
+BidRank Vendor ID Vendor Name Total Bid
+1 MC061 MCCARTHY IMPROVEMENT CO. & AFFIL DBA MCCARTHY
+IMPROVEMENT CO
+$8,634,205.55 100.00%
+2 R.163 RP CONSTRUCTORS, LLC. $8,826,236.32 102.22%
+3 BR101 BRANDT CONSTRUCTION CO. $9,424,792.97 109.15%
+4 RE300 REILLY CONSTRUCTION CO., INC. $11,424,792.97 132.32%
+"""
+    TAB1 = """Line No / Item Number
+Item Description
+(1) MCCARTHY IMPROVEMENT
+CO.
+(2) RP CONSTRUCTORS, LLC. (3) BRANDT CONSTRUCTION CO.
+Alt Set / Alt Member Quantity and Units Unit Price Ext Amount Unit Price Ext Amount Unit Price Ext Amount
+0350 2511-7526004 661.700 SY 60.00000 39,702.00 62.00000 41,025.40 110.00000 72,787.00
+SIDEWALK, P.C. CONCRETE, 4 IN.
+0360 2511-7526006 31.400 SY 193.00000 6,060.20 99.00000 3,108.60 180.00000 5,652.00
+SIDEWALK, P.C. CONCRETE, 6 IN. STAMPED
+0370 2511-7528101 48.900 SF 52.00000 2,542.80 48.50000 2,371.65 55.00000 2,689.50
+DETECTABLE WARNINGS
+Page 1 of 6
+Contract ID:107
+Tabulation of Construction and Material Bids
+January 21, 2026
+82-4252-606 Primary County: SCOTT
+"""
+    TAB2 = """Line No / Item Number
+Item Description
+(4) REILLY CONSTRUCTION
+CO., INC.
+Alt Set / Alt Member Quantity and Units Unit Price Ext Amount
+0350 2511-7526004 661.700 SY 80.00000 52,936.00
+SIDEWALK, P.C. CONCRETE, 4 IN.
+Page 2 of 6
+Contract ID:107
+Tabulation of Construction and Material Bids
+January 21, 2026
+82-4252-606 Primary County: SCOTT
+"""
+
+    def parse(self):
+        return R.parse_ia([self.RANKING, self.TAB1, self.TAB2])
+
+    def test_a_contract_with_every_bidder_across_pages(self):
+        c = self.parse()[0]
+        self.assertEqual((c["id"], c["date"], c["counties"]), ("82-4252-606", "2026-01-21", "Scott"))
+        self.assertEqual(c["bidders"][0], ["MCCARTHY IMPROVEMENT CO. & AFFIL DBA MCCARTHY IMPROVEMENT CO", 8634205.55])
+        self.assertEqual(c["bidders"][1][0], "RP CONSTRUCTORS, LLC.")
+        self.assertEqual(c["items"]["2511-7526004"], [661.7, [60.0, 62.0, 110.0, 80.0]])
+
+    def test_a_variant_and_an_item_one_bidder_left_off_are_dropped(self):
+        items = self.parse()[0]["items"]
+        self.assertNotIn("2511-7526006", items)   # "6 IN. STAMPED"
+        self.assertNotIn("2511-7528101", items)   # bidder 4's page has no row for it
+
+
+class IllinoisTests(unittest.TestCase):
+    # IDOT unit price tabulation, contract 61L30 of the June 12, 2026
+    # letting, trimmed; one bidder's name wraps and a page break falls
+    # inside an item.
+    TEXT = """                                               ILLINOIS DEPARTMENT OF TRANSPORTATION                                      PAGE:    1
+ 08/31/26  15:30:27                   U N I T  P R I C E   T A B U L A T I O N   O F   B I D S
+ LETTING DATE: 06/12/2026  LETTING TYPE: SCHEDULED                                 CONTRACT NUMBER: 61L30  LETTING ITEM NUMBER: 038
+ RESPONSIBLE DISTRICT: 01                                                                                  BIDS LOCKED: Y
+ SECTION: 24-00012-00-FP                           COUNTY: KANE                                            ESTIMATE:
+ STATE JOB NUMBER:   C-91-273-24                   MUNICIPALITY: CAMPTON HILLS
+                                                      SUMMARY OF CONTRACTOR BIDS
+
+ 1305  Curran Contracting Company
+                          NO ALT                            3,758,911.22     3,758,911.22   3,758,911.22
+
+ 2030  Geneva Construction Company LLC. d/b/a Geneva
+       Paving
+                          NO ALT                            2,899,450.67     2,899,450.67   2,899,450.67
+
+ 2341  Builders Paving, LLC
+                          NO ALT                            2,893,888.00 *   2,893,888.00   2,893,888.00    *
+
+ **** TOTAL GROUP NO ALT PAY ITEMS FOR THIS CONTRACT =      42
+                                                       ----------------------
+                                                       DETAIL CONTRACTOR BIDS
+                                                       ----------------------
+
+    ITEM NBR  ITEM DESCRIPTION                                    UNIT OF     UNIT        BIDDER         CALCULATED  BIDR CALC
+ BIDR NBR  BIDDER NAME                                  QUANTITY  MEASURE     PRICE       EXTENSION      EXTENSION   EXTENSION DIFF
+
+    42400200  PC CONC SIDEWALK 5                         147.000    SQ FT
+ 2341      Builders Paving, LLC                                            62.0000        9,114.00        9,114.00
+ 1305      Curran Contracting Company                                      62.0000        9,114.00        9,114.00
+                                               ILLINOIS DEPARTMENT OF TRANSPORTATION                                      PAGE:    2
+ 08/31/26  15:30:27                   U N I T  P R I C E   T A B U L A T I O N   O F   B I D S
+ LETTING DATE: 06/12/2026  LETTING TYPE: SCHEDULED                                 CONTRACT NUMBER: 61L30  LETTING ITEM NUMBER: 038
+ 2030      Geneva Construction Company LLC. d/b/a Geneva
+           Paving                                                          16.0000        2,352.00        2,352.00
+
+    42400300  PC CONC SIDEWALK 6 SPL                     200.000    SQ FT
+ 2341      Builders Paving, LLC                                            20.0000        4,000.00        4,000.00
+ 1305      Curran Contracting Company                                      21.0000        4,200.00        4,200.00
+ 2030      Geneva Construction Company LLC. d/b/a Geneva
+           Paving                                                          22.0000        4,400.00        4,400.00
+
+    44000600  SIDEWALK REM                               147.000    SQ FT
+ 2341      Builders Paving, LLC                                            10.0000        1,470.00        1,470.00
+ 1305      Curran Contracting Company                                      10.0000        1,470.00        1,470.00
+"""
+
+    def test_a_contract_with_ranked_bidders_across_a_page_break(self):
+        c = R.parse_il(self.TEXT)
+        self.assertEqual((c["id"], c["date"], c["district"], c["counties"]),
+                         ("61L30", "2026-06-12", "1", "Campton Hills, Kane"))
+        self.assertEqual([b[0] for b in c["bidders"]],
+                         ["Builders Paving, LLC", "Geneva Construction Company LLC. d/b/a Geneva Paving",
+                          "Curran Contracting Company"])
+        self.assertEqual(c["bidders"][0][1], 2893888.0)
+        self.assertEqual(c["items"]["42400200"], [147.0, [62.0, 16.0, 62.0]])
+
+    def test_a_variant_and_an_item_one_bidder_left_off_are_dropped(self):
+        items = R.parse_il(self.TEXT)["items"]
+        self.assertNotIn("42400300", items)   # "6 SPL" is not plain 6 in. sidewalk
+        self.assertNotIn("44000600", items)   # Geneva has no price for it
+
+    def test_a_contract_with_alternates_is_skipped(self):
+        alt = self.TEXT.replace("NO ALT                            3,758,911.22",
+                                "1&A                               3,758,911.22")
+        self.assertIsNone(R.parse_il(alt))
+
+
 class CommittedResultsTests(unittest.TestCase):
     def setUp(self):
         with open(os.path.join(ROOT, "curbcall_netlify_v4", "results", "mo.json"), encoding="utf-8") as f:

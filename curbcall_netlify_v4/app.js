@@ -1394,6 +1394,8 @@ function showApp(){
     // MoDOT's own results answer "did you win?" for state jobs.
     loadBidResults(homeState()).then(d=>{if(d&&document.getElementById("screen-home")?.classList.contains("active"))renderHome();});
     setTimeout(checkSavedBids,8000);
+    // Push subscriptions can be rotated by the browser; re-register quietly.
+    setTimeout(()=>{if("Notification"in window&&Notification.permission==="granted"&&store.get("push_on",false))subscribePush();},12000);
     setInterval(checkSavedBids,BID_WATCH_EVERY_MS/6);
   }
   // The map only ever got created inside detectLocation()'s geolocation
@@ -1669,30 +1671,66 @@ function showFeedBadge(show){
   if(b)b.style.display=show?"block":"none";
 }
 // ── Bid alert notifications ──
-// NOTE: this in-browser notification fires only while the app/tab is open
-// (or backgrounded but still loaded) — it piggybacks on checkSavedSearches,
-// which itself only runs when the app is opened. For the "app is fully
-// closed" case, the server has its own independent path: /run-saved-search-
-// alerts (license_server.py), triggered daily by a GitHub Actions cron
-// workflow, emails users directly. That's a separate, real notification path
-// — this browser-notification code doesn't need to (and can't) cover it.
+// Two paths. While the app is open it notifies directly (saved searches,
+// saved-bid addenda). With it closed, the server sends real push
+// notifications (license_server/push.py): an addendum or new document on a
+// saved bid, a bid due tomorrow, new bids for a saved search. Turning alerts
+// on here asks the browser for permission and registers this device for
+// push in push_subscriptions. On iPhone, push only works once the app has
+// been added to the Home Screen.
+function pushSupported(){return "serviceWorker"in navigator&&"PushManager"in window&&"Notification"in window;}
+function isIOSBrowserTab(){
+  const ios=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+  const standalone=window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches||navigator.standalone;
+  return ios&&!standalone;
+}
 function notifPermissionLabel(){
+  if(isIOSBrowserTab())return"On iPhone: tap Share, then Add to Home Screen, and open CurbCall from there to turn on alerts";
   if(!("Notification"in window))return"Not supported in this browser";
-  if(Notification.permission==="granted")return"Enabled — you'll be notified when a saved search finds new bids (while CurbCall Pro is open)";
+  if(Notification.permission==="granted")return store.get("push_on",false)
+    ?"On: addenda and due-tomorrow reminders for saved bids, and new bids for saved searches, even with the app closed"
+    :"On while the app is open. Tap to also get them with the app closed";
   if(Notification.permission==="denied")return"Blocked — turn back on in your browser's site settings";
-  return"Tap to enable — get notified when a saved search finds new bids";
+  return"Tap to turn on: addenda on saved bids, due-tomorrow reminders and new bids, even with the app closed";
+}
+function b64uToBytes(s){
+  const pad="=".repeat((4-s.length%4)%4),raw=atob((s+pad).replace(/-/g,"+").replace(/_/g,"/"));
+  const out=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)out[i]=raw.charCodeAt(i);return out;
+}
+// Registers this device for push. Never throws; returns true when the
+// server can now reach it.
+async function subscribePush(){
+  if(!pushSupported()||!sb||!currentUser)return false;
+  try{
+    const reg=await navigator.serviceWorker.ready;
+    let sub=await reg.pushManager.getSubscription();
+    if(!sub){
+      const r=await fetchWithTimeout(SERVER+"/push/vapid-public-key",{},15000);
+      const d=await r.json();
+      if(!d||!d.ok||!d.key)return false;
+      sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64uToBytes(d.key)});
+    }
+    const j=sub.toJSON();
+    if(!j.endpoint||!j.keys)return false;
+    const{error}=await sb.from("push_subscriptions").upsert(
+      {user_id:currentUser.id,endpoint:j.endpoint,p256dh:j.keys.p256dh,auth:j.keys.auth},{onConflict:"user_id,endpoint"});
+    if(error){console.warn("[curbcall] push subscription not saved:",error);return false;}
+    store.set("push_on",true);
+    return true;
+  }catch(e){console.warn("[curbcall] push subscribe failed:",e);return false;}
 }
 async function toggleNotifPermission(){
+  if(isIOSBrowserTab()){toast("Add CurbCall to your Home Screen first (Share, then Add to Home Screen), then turn alerts on from there.");return;}
   if(!("Notification"in window)){toast("Notifications aren't supported in this browser.");return;}
   if(Notification.permission==="denied"){toast("Blocked in browser settings — enable there to turn back on.");return;}
-  if(Notification.permission==="granted"){toast("Already enabled.");return;}
-  const perm=await Notification.requestPermission();
+  const perm=Notification.permission==="granted"?"granted":await Notification.requestPermission();
   const el=document.getElementById("notif-status");
-  if(el)el.textContent=notifPermissionLabel();
   if(perm==="granted"){
-    toast("Bid alerts enabled!");
-    fireNotification("CurbCall Pro","You'll be notified here when a saved search finds new bids.");
-  }
+    const pushed=await subscribePush();
+    if(el)el.textContent=notifPermissionLabel();
+    toast(pushed?"Alerts on, even with the app closed":"Alerts on while the app is open");
+    fireNotification("CurbCall Pro","Alerts are on. You'll hear about addenda, due dates and new bids here.");
+  }else if(el)el.textContent=notifPermissionLabel();
 }
 async function fireNotification(title,body){
   if(!("Notification"in window)||Notification.permission!=="granted")return;
@@ -3582,7 +3620,7 @@ function renderScanSummary(){
 // winning range is shown too -- the number a contractor pricing to win needs.
 const PRICE_DISTRICT_KEY="price_district";
 const RATE_THIN_BIDS=5;
-const AGENCY={MO:"MoDOT",FL:"FDOT",OR:"ODOT",MN:"MnDOT",OK:"ODOT"};
+const AGENCY={MO:"MoDOT",FL:"FDOT",OR:"ODOT",MN:"MnDOT",OK:"ODOT",NC:"NCDOT",TX:"TxDOT",TN:"TDOT",IN:"INDOT",MT:"MDT",SD:"SDDOT",KY:"KYTC",KS:"KDOT",AR:"ARDOT",IA:"Iowa DOT",IL:"IDOT",NE:"NDOT"};
 let rateIndex=null,rateIndexLoading=null;
 const rateData={},rateLoading={},rateRerenderQueued={};
 function agencyOf(d){return (d&&AGENCY[d.state])||`${(d&&d.state_name)||"State"} DOT`;}
@@ -3668,17 +3706,22 @@ function rateRow(d,item,district,withTrend){
   const meta=d.items[item];
   // Non-breaking, so "sq yd" never splits across two lines.
   const unit=meta.unit.replace(/ /g," ");
-  const thin=r.bids<RATE_THIN_BIDS;
+  // A state that doesn't publish how many bids lie behind a price (TN) gets
+  // no count and no "few bids" flag rather than a made-up one.
+  const thin=r.bids!=null&&r.bids<RATE_THIN_BIDS;
   const win=d.basis==="awarded"?null:latestWin(d,item,district);
   const years=withTrend?Object.keys(d.prices[item][district]).sort():[];
+  // An awarded-only state that prints a range (AR) prints it across winning
+  // contract prices, so say so rather than let it read as every bid.
+  const awarded=d.basis==="awarded";
   const spread=r.low!=null&&r.high!=null
-    ?`${fmtRate(r.low)}–${fmtRate(r.high)} · ${plural(r.bids,"bid")}`
-    :`winning bids · ${plural(r.bids,"contract")}`;
+    ?`${awarded?"winning bids ":""}${fmtRate(r.low)}–${fmtRate(r.high)}${r.bids!=null?` · ${plural(r.bids,awarded?"contract":"bid")}`:""}`
+    :`winning bids${r.bids!=null?` · ${plural(r.bids,"contract")}`:""}`;
   return`<div class="rate-row">
     <div class="rate-main">
       <div class="rate-name">${esc(meta.name)}</div>
-      <div class="rate-sub">${spread}
-        · typical job ~${Math.round(r.qty).toLocaleString()} ${esc(unit)}${thin?` <span class="rate-thin">few bids — rough guide</span>`:""}</div>
+      <div class="rate-sub">${spread}${r.qty?`
+        · typical job ~${Math.round(r.qty).toLocaleString()}\u00a0${esc(unit)}`:""}${thin?` <span class="rate-thin">few bids — rough guide</span>`:""}</div>
       ${win?`<div class="rate-sub rate-win">Winning bids ${win.n>1?`${fmtRate(win.low)}–${fmtRate(win.high)}, avg ${fmtRate(win.avg)}`:fmtRate(win.avg)} (${plural(win.n,"job")}, ${esc(win.year)})</div>`:""}
       ${years.length>1?`<div class="rate-trend">${years.map(y=>`<span>${esc(y)} <b>${fmtRate(d.prices[item][district][y][0])}</b></span>`).join("")}</div>`:""}
     </div>
@@ -3737,7 +3780,7 @@ async function openRates(st){
   // Most-bid items first: the ones with the most behind their number.
   const items=Object.keys(d.items)
     .map(i=>[i,latestRate(d,i,district)]).filter(([,r])=>r)
-    .sort((a,b)=>b[1].bids-a[1].bids).map(([i])=>i);
+    .sort((a,b)=>(b[1].bids||0)-(a[1].bids||0)).map(([i])=>i);
   const states=Object.keys(ix||{}).sort();
   mc.innerHTML=`<div class="sheet-head"><h2>Going rates</h2>
       <div class="sheet-sub"><span class="chip">${esc(agencyOf(d))} ${d.basis==="awarded"?"winning":"bid"} prices, ${
@@ -4694,11 +4737,71 @@ function yourBidsVsState(d,district){
     <div class="rate-note">From bids you priced in Prepare bid and marked Won or Lost, per unit as ${ag} prices each item.</div>`;
 }
 
+// What a pricing line can be: the state DOT's own items (picking one fills in
+// its unit and going price), the other work most concrete bids carry, or
+// anything typed in. Lines read from a bid form keep the form's wording and
+// show as typed.
+const EXTRA_LINES=[
+  ["Mobilization","lump sum"],["Traffic control","lump sum"],["Remove existing concrete","sq yd"],
+  ["Saw cutting","ft"],["Excavation and grading","cu yd"],["Aggregate base","sq yd"],
+  ["ADA curb ramp","each"],["Detectable warning panel","each"],["Erosion control","lump sum"],
+  ["Restoration, sod or seeding","sq yd"],["Testing","lump sum"],["Bonds and insurance","lump sum"],
+];
+function lineChoice(l,d){
+  if(l.item&&d&&(l.st||"MO")===d.state&&d.items[l.item])return"s:"+l.item;
+  const x=EXTRA_LINES.find(([n])=>n===l.name);
+  if(x&&!l.item)return"x:"+x[0];
+  return String(l.name||"").trim()?"custom":"";
+}
+// The state's items, the plain ones a posting is matched to first, then
+// by how often they're bid.
+function pickableItems(d){
+  if(!d)return[];
+  const cats=new Set(Object.values(d.cats||{}));
+  const bids=c=>{const by=d.prices[c]&&d.prices[c].STATEWIDE;return by?by[Object.keys(by).sort().pop()][3]:0;};
+  return Object.keys(d.items).filter(c=>d.prices[c])
+    .sort((a,b)=>(cats.has(b)-cats.has(a))||(bids(b)-bids(a)));
+}
+function lineItemSelect(l,i,d){
+  const cur=lineChoice(l,d);
+  const opt=(v,label)=>`<option value="${esc(v)}"${cur===v?" selected":""}>${esc(label)}</option>`;
+  const items=pickableItems(d);
+  return`<select class="input pl-pick" data-pick="${i}" aria-label="Item">
+      <option value=""${cur===""?" selected":""}>Choose an item…</option>
+      ${items.length?`<optgroup label="${esc(agencyOf(d))} items">${items.map(c=>opt("s:"+c,`${d.items[c].name} (${d.items[c].unit})`)).join("")}</optgroup>`:""}
+      <optgroup label="Other work">${EXTRA_LINES.map(([n,u])=>opt("x:"+n,`${n} (${u})`)).join("")}</optgroup>
+      <option value="custom"${cur==="custom"?" selected":""}>Other (type it)</option>
+    </select>
+    ${cur==="custom"?`<input class="input pl-name" data-f="name" value="${esc(l.name||"")}" placeholder="Describe the item" aria-label="Item description">`:""}`;
+}
+function applyLineChoice(l,v,d){
+  delete l.note;
+  if(v.startsWith("s:")&&d){
+    const code=v.slice(2),meta=d.items[code];
+    if(!meta)return;
+    const district=priceDistrict(d),r=latestRate(d,code,district),w=r&&latestWin(d,code,district);
+    // A price already typed is the contractor's; only an empty one is filled.
+    const fill=!Number(l.price)||(l.ref&&Number(l.price)===Math.round(l.ref*100)/100);
+    Object.assign(l,{name:meta.name,unit:meta.unit,item:code,st:d.state,ref:r?r.avg:null});
+    if(fill&&r)l.price=Math.round((w?w.avg:r.avg)*100)/100;
+  }else if(v.startsWith("x:")){
+    const x=EXTRA_LINES.find(([n])=>n===v.slice(2));
+    delete l.item;delete l.st;l.ref=null;
+    if(x){l.name=x[0];l.unit=x[1];}
+  }else if(v==="custom"){
+    delete l.item;delete l.st;l.ref=null;
+    if(EXTRA_LINES.some(([n])=>n===l.name)||!l.name)l.name="";
+  }else{
+    delete l.item;delete l.st;l.ref=null;l.name="";
+  }
+}
+
 function renderPrepPricing(body,city,id,b){
   const p=prepFor(id);
   const hist=priceHistory(id);
+  const stRates=rateData[bidState(city,b)];
   const lineRow=(l,i)=>`<div class="prep-line" data-i="${i}">
-      <input class="input pl-name" data-f="name" value="${esc(l.name||"")}" placeholder="Item" aria-label="Item">
+      ${lineItemSelect(l,i,stRates)}
       <div class="pl-nums">
         <input class="input" data-f="qty" inputmode="decimal" value="${esc(String(l.qty??""))}" placeholder="Qty" aria-label="Quantity">
         <input class="input" data-f="unit" value="${esc(l.unit||"")}" placeholder="Unit" aria-label="Unit">
@@ -4750,6 +4853,12 @@ function renderPrepPricing(body,city,id,b){
     if(f==="qty"||f==="price")v=v.replace(/[^0-9.]/g,"");
     p.lines[i][f]=v;
     savePrep(id,city);refresh();
+  });
+  body.querySelectorAll("[data-pick]").forEach(sel=>sel.onchange=()=>{
+    const i=Number(sel.dataset.pick);
+    applyLineChoice(p.lines[i],sel.value,stRates);
+    savePrep(id,city);openPrep(city,id,"pricing");
+    if(sel.value==="custom")setTimeout(()=>{const inp=document.querySelector(`.prep-line[data-i="${i}"] .pl-name`);if(inp)inp.focus();},0);
   });
   body.querySelectorAll("[data-del]").forEach(x=>x.onclick=()=>{
     p.lines.splice(Number(x.dataset.del),1);
@@ -5435,6 +5544,99 @@ function docRow(b){
     <div class="detail-val">${links}</div></div>`;
 }
 
+// ── Sub quotes to the primes ──
+// On a job too big (or a state job needing prequalification) for a concrete
+// crew to bid as prime, the way in is pricing the concrete for the
+// contractors who pulled plans. This writes that quote from the
+// contractor's own Prepare-bid prices -- one email per prime, sent from
+// their own mail app -- and remembers who has been sent one. For Missouri,
+// each prime's record on state flatwork jobs comes from MoDOT's tabulations.
+function companyKey(name){
+  return String(name||"").toLowerCase().replace(/&/g," and ")
+    .replace(/\b(inc|llc|l\.l\.c|co|corp|corporation|company|ltd|the)\b\.?/g," ")
+    .replace(/[^a-z0-9]+/g," ").trim();
+}
+// {bids, wins} on state flatwork jobs for a company, from named bid results.
+function primeRecord(name,st){
+  const res=bidResults[st];
+  if(!res||res.named===false)return null;
+  const k=companyKey(name);
+  if(!k)return null;
+  let bids=0,wins=0;
+  res.contracts.forEach(c=>c.bidders.forEach(([n],r)=>{if(companyKey(n)===k){bids++;if(r===0)wins++;}}));
+  return bids?{bids,wins}:null;
+}
+const SUB_QUOTE_TERMS="Includes labor, material and equipment for the items listed. Excludes traffic control, bonds, permits and testing unless listed. Quantities per the plans; unit prices apply to final measured quantities. Good for 30 days.";
+function subQuoteLines(p){
+  const k=1+(Number(p.markup)||0)/100;
+  return (p.lines||[]).filter(l=>(l.name||"").trim()&&Number(l.price)>0)
+    .map(l=>({name:l.name,qty:Number(l.qty)||0,unit:l.unit||"",price:Math.round(Number(l.price)*k*100)/100}));
+}
+function subQuoteText(b,p,city,to){
+  const c=companyProfile||{},lines=subQuoteLines(p);
+  const total=lines.reduce((s,l)=>s+l.qty*l.price,0);
+  const first=String((to&&to.contact)||"").trim().split(/\s+/)[0];
+  return[`${first?`Hi ${first},`:"Hello,"}`,"",
+    `${c.name||"We"} would like to quote the concrete flatwork on ${b.title||"this job"}${b.bid_number?` (${b.bid_number})`:""}${city?`, ${city}`:""}${b.deadline?`, bids due ${b.deadline}`:""}.`,"",
+    ...lines.map(l=>`- ${l.name}: ${l.qty?`${l.qty.toLocaleString()} ${l.unit} at `:""}${money2(l.price)}${l.unit?`/${l.unit}`:""}${l.qty?` = ${money2(l.qty*l.price)}`:""}`),
+    "",total?`Total for the items listed: ${money2(total)}`:"","",
+    p.subTerms||SUB_QUOTE_TERMS,"","Happy to adjust to your item list. Thanks,",signOff()]
+    .filter((x,j,a)=>x!==""||a[j-1]!=="").join("\n");
+}
+function renderSubQuote(city,id){
+  const b=findBid(id)||saved[id];
+  if(!b)return;
+  // Read without creating: looking at this screen doesn't start a workspace.
+  const p=bidPrep[id]||{lines:[]},st=bidState(city,b);
+  const lines=subQuoteLines(p);
+  const holders=otherHolders(b);
+  const mc=document.getElementById("modal-content");
+  const sent=p.quotes||{};
+  const rows=holders.map((h,i)=>({h,i,rec:primeRecord(h.company,st)}))
+    .sort((a,b)=>((b.rec&&b.rec.wins)||0)-((a.rec&&a.rec.wins)||0));
+  mc.innerHTML=`<div class="sheet-head"><h2>Quote the primes</h2>
+      <div class="sheet-sub"><span class="chip">${esc(b.title||"Untitled")}</span>${b.deadline?`<span class="chip">Due ${esc(b.deadline)}</span>`:""}</div></div>
+    <a href="#" class="prep-back" id="sq-back">← Bid details</a>
+    ${lines.length?`<div class="workspace-title">Your quote</div>
+      <table class="ps-table"><thead><tr><th>Item</th><th>Qty</th><th>Unit price</th></tr></thead><tbody>
+      ${lines.map(l=>`<tr><td>${esc(l.name)}</td><td>${l.qty?`${esc(l.qty.toLocaleString())} ${esc(l.unit)}`:"—"}</td><td>${money2(l.price)}</td></tr>`).join("")}</tbody></table>
+      <div class="rate-note">From your Prepare-bid prices${Number(p.markup)?`, with your ${esc(String(p.markup))}% markup`:""}. <a href="#" id="sq-edit">Change prices</a></div>
+      <div class="detail-label" style="margin-top:0.8rem;">Terms</div>
+      <textarea class="input" id="sq-terms" rows="3" style="resize:vertical;">${esc(p.subTerms||SUB_QUOTE_TERMS)}</textarea>`
+      :`<div class="alert alert-amber"><span>Price your items first: the quote is built from your Prepare-bid prices.</span></div>
+      <button class="btn-primary" id="sq-edit">Price this job</button>`}
+    ${lines.length?`<div class="workspace-title" style="margin-top:1rem;">Send it to the primes</div>
+      ${rows.map(({h,i,rec})=>{
+        const k=companyKey(h.company),mail=h.email?safeUrl(mailtoUrl(h.email,`Concrete flatwork quote: ${b.title||""}`,subQuoteText(b,p,city,h))):"";
+        const tel=h.phone?safeUrl("tel:"+String(h.phone).replace(/[^\d+]/g,"")):"";
+        return`<div class="sq-prime">
+          <div><b>${esc(h.company||"Plan holder")}</b>${h.contact?`<small>${esc(h.contact)}</small>`:""}
+            ${rec?`<small class="sq-rec">${rec.wins} win${rec.wins===1?"":"s"} in ${plural(rec.bids,"state flatwork bid")} (MoDOT)</small>`:""}
+            ${sent[k]?`<small class="sq-sent">Quote sent ${esc(new Date(sent[k]).toLocaleDateString([],{month:"short",day:"numeric"}))}</small>`:""}</div>
+          <div class="sq-ways">${mail?`<a class="btn-ghost" data-sq="${i}" href="${esc(mail)}">${sent[k]?"Email again":"Email quote"}</a>`:""}
+            ${tel?`<a class="btn-ghost" href="${esc(tel)}">Call</a>`:""}</div></div>`;}).join("")
+        ||`<div class="account-status">No plan holders are listed for this bid yet. Copy the quote and send it to whoever is bidding.</div>`}
+      <div class="act-primary"><button class="ma-ghost" id="sq-copy">Copy quote</button></div>
+      <div class="rate-note">Each email opens in your own mail app for you to read and send. Plan holders are from the agency's list for this job.</div>`:""}`;
+  document.getElementById("sq-back").onclick=(e)=>{e.preventDefault();openDetail(city,b);};
+  const ed=document.getElementById("sq-edit");
+  if(ed)ed.onclick=(e)=>{e.preventDefault();openPrep(city,id,"pricing");};
+  const terms=document.getElementById("sq-terms");
+  if(terms)terms.onchange=()=>{prepFor(id).subTerms=terms.value.trim().slice(0,800);savePrep(id,city);renderSubQuote(city,id);};
+  mc.querySelectorAll("[data-sq]").forEach(a=>a.addEventListener("click",()=>{
+    const h=holders[Number(a.dataset.sq)];
+    const w=prepFor(id);
+    w.quotes=w.quotes||{};w.quotes[companyKey(h.company)]=Date.now();
+    savePrep(id,city);
+    setTimeout(()=>renderSubQuote(city,id),300);
+  }));
+  const cp=document.getElementById("sq-copy");
+  if(cp)cp.onclick=async()=>{
+    try{await navigator.clipboard.writeText(subQuoteText(b,p,city,null));toast("Quote copied");}
+    catch(e){toast("Couldn't copy on this device");}
+  };
+}
+
 function holderBlock(b){
   const hs=(b&&b.plan_holders)||[];
   if(!hs.length)return"";
@@ -5452,8 +5654,9 @@ function holderBlock(b){
   return `<div class="holders">
     <div class="holders-h">Bidding this job &mdash; ${hs.length} contractor${hs.length===1?"":"s"}</div>
     ${rows}
-    <div class="who" style="margin-top:0.1rem;">Pulled from the state's plan holder list. These are the primes;
+    <div class="who" style="margin-top:0.1rem;">Pulled from the agency's plan holder list. These are the primes;
     they need someone to price the concrete.</div>
+    ${otherHolders(b).length?`<button class="btn-primary" id="sub-quote-open" style="margin-top:0.6rem;">Send my sub quote to the primes</button>`:""}
   </div>`;
 }
 
@@ -5591,6 +5794,8 @@ function openDetail(city,b){
   // values sidesteps quoting entirely. (encodeURIComponent was not protection
   // here: it leaves apostrophes untouched.)
   document.getElementById("prep-open").onclick=()=>openPrep(city,id);
+  const sq=document.getElementById("sub-quote-open");
+  if(sq)sq.onclick=async()=>{await Promise.all([loadRates(bidState(city,b)),loadBidResults(bidState(city,b))]);renderSubQuote(city,id);};
   mc.querySelectorAll("[data-pstatus]").forEach(btn=>{
     btn.onclick=()=>{setPipelineStatus(id,btn.dataset.pstatus);refreshAfterPipeline(city,id);};
   });

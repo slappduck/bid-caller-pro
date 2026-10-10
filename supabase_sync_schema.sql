@@ -132,6 +132,23 @@ alter table saved_bids add column if not exists prep jsonb;
 -- the company profile without them.
 alter table company_profiles add column if not exists bid_info jsonb default '{}'::jsonb;
 
+-- Phone alerts (Web Push). One row per device that turned alerts on; the
+-- server reads them with the service-role key to send addendum, due-tomorrow
+-- and new-bid alerts while the app is closed, and deletes endpoints the push
+-- service says are gone.
+create table if not exists push_subscriptions (
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  endpoint text not null,
+  p256dh text not null,
+  auth text not null,
+  created_at timestamptz default now(),
+  primary key (user_id, endpoint)
+);
+alter table push_subscriptions enable row level security;
+drop policy if exists "Users manage their own push subscriptions" on push_subscriptions;
+create policy "Users manage their own push subscriptions" on push_subscriptions
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
 -- Customer reviews, shown as testimonials on the marketing page.
 --
 -- Nothing appears publicly until approved is flipped to true by hand

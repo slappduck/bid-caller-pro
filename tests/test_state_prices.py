@@ -96,6 +96,96 @@ class OklahomaTests(unittest.TestCase):
         self.assertEqual(len(B.parse_ok(self.TEXT)), 4)
 
 
+class ArkansasTests(unittest.TestCase):
+    # ARDOT Weighted Average Unit Prices, 12 months to June 24, 2026, as
+    # pypdf extracts it.
+    TEXT = """ITEM ITEM DESCRIPTION UNIT QUANTITY HIGH LOW
+FROM 6/25/2025 TO 6/24/2026
+202 R&D OF CONCRETE WALKS SQYD 6.00 824.69 824.69 824.69 *
+202 R&D OF WALKS SQYD 4,379.00 249.67 8.00 20.86
+633 CONCRETE WALKS SQYD 30,775.00 225.00 76.00 92.90
+633 CONCRETE WALKS (TY. SPECIAL) SQYD 2,090.00 1,035.00 83.00 923.97
+634 CC CURB & GUTTER-A (1'6") LF  84,431.00 100.00 22.50 31.25
+634 CONCRETE CURB (TYPE B) LF  500.00 43.00 43.00 43.00 *
+641 WHEELCHAIR RAMPS (TYPE 3) SQYD 1,343.00 1,313.48 128.00 346.83
+641 WHEELCHAIR RAMPS(TYPE 3) SQYD 10.00 1,680.42 812.61 1,159.73
+641 WHEELCHAIR RAMPS (TYPE SPECIAL) SQYD 70.00 410.00 410.00 410.00 *
+"""
+
+    def test_period_and_plain_rows(self):
+        period, got = B.parse_ar(self.TEXT)
+        self.assertEqual(period, "Jun 25, 2025 – Jun 24, 2026")
+        self.assertEqual(got["633 CONCRETE WALKS"], (92.90, 76.0, 225.0, None, 30775.0))
+        self.assertEqual(got["634 CC CURB & GUTTER-A (1'6\")"][:3], (31.25, 22.5, 100.0))
+
+    def test_one_job_only_means_one_contract(self):
+        self.assertEqual(B.parse_ar(self.TEXT)[1]["634 CONCRETE CURB (TYPE B)"][3], 1)
+
+    def test_names_for_one_item_are_pooled_by_quantity(self):
+        got = B.parse_ar(self.TEXT)[1]
+        avg, low, high, n, qty = got["641 WHEELCHAIR RAMPS"]
+        self.assertEqual(qty, 1353.0)   # TYPE SPECIAL isn't a numbered ramp
+        self.assertAlmostEqual(avg, (1343 * 346.83 + 10 * 1159.73) / 1353)
+        self.assertEqual((low, high, n), (128.0, 1680.42, None))
+        self.assertEqual(got["202 R&D OF WALKS"][4], 4385.0)
+
+    def test_variants_are_left_out(self):
+        self.assertNotIn("633 CONCRETE WALKS (TY. SPECIAL)", B.parse_ar(self.TEXT)[1])
+
+
+class NebraskaTests(unittest.TestCase):
+    # NDOT AUP summary, January-December 2025, one page as pypdf extracts
+    # it: code rows first, then description rows in another order.
+    PAGE = """06/18/2026
+10:19 AMEnglish Average Unit Price for Lettings
+January 1, 2025 to December 31, 2025
+3014.11 267 LF $124.00
+3016.21 8,942 SY $69.32
+3016.33 8,065 SY $92.10
+3016.39 3,413 SF $39.49
+CONCRETE CLASS 47B-3000 SIDEWALK 5" $14,506.00
+CONCRETE CLASS 47B-3000 SIDEWALKS $619,890.74
+DETECTABLE WARNING PANEL $134,778.37
+COMBINATION CONCRETE CLASS 47B-3500 CURB AND GUTTER $33,108.00
+REMOVE AND REPLACE SIDEWALK $742,816.50
+"""
+
+    def test_codes_find_their_description_by_total(self):
+        period, got = B.parse_ne([self.PAGE])
+        self.assertEqual(period, "January 1, 2025 – December 31, 2025")
+        self.assertEqual(got["3016.21"], (69.32, 8942.0))
+        self.assertEqual(got["3016.39"][0], 39.49)
+        self.assertEqual(got["3014.11"][0], 124.0)
+
+    def test_a_total_that_names_another_item_is_not_taken(self):
+        # 8,065 x $92.10 lands within rounding of another item's total; its
+        # name isn't this item's, so the price isn't read as this item's.
+        self.assertNotIn("3016.33", B.parse_ne([self.PAGE])[1])
+
+
+class DiscoveryTests(unittest.TestCase):
+    def test_a_web_page_where_a_pdf_should_be_is_not_posted_yet(self):
+        # MDT answers a year it hasn't posted with its home page and a 200.
+        import tempfile
+        from unittest.mock import patch
+        cache = tempfile.mkdtemp()
+
+        def fake(url, cache_dir, name):
+            path = os.path.join(cache_dir, name)
+            with open(path, "wb") as f:
+                f.write(b"<!DOCTYPE html><html>" if "2026" in name else b"%PDF-1.7 ...")
+            return path
+        with patch.object(B, "_download", side_effect=fake):
+            self.assertIsNone(B._try_download("https://x/2026.pdf", cache, "mt_avg_2026.pdf"))
+            self.assertFalse(os.path.exists(os.path.join(cache, "mt_avg_2026.pdf")))
+            self.assertTrue(B._try_download("https://x/2025.pdf", cache, "mt_avg_2025.pdf"))
+
+    def test_recent_years_end_this_year(self):
+        this = datetime.date.today().year
+        self.assertEqual(B._recent_years(2000), list(range(this - 4, this + 1)))
+        self.assertEqual(B._recent_years(this), [this])
+
+
 class StateCheckTests(unittest.TestCase):
     def state(self):
         s = B.State("ZZ", "Test", "src", "https://example.org", "awarded",
@@ -147,14 +237,15 @@ class CommittedRatesTests(unittest.TestCase):
             for table in ("prices", "wins"):
                 for item, by_d in d.get(table, {}).items():
                     self.assertIn(item, d["items"], (st, item))
-                    self.assertIn(d["items"][item]["unit"], ("sq yd", "sq ft", "ft", "each"))
+                    self.assertIn(d["items"][item]["unit"], ("sq yd", "sq ft", "ft", "each", "cu yd"))
                     for district, by_y in by_d.items():
                         self.assertIn(district, d["districts"], (st, item, district))
                         for year, row in by_y.items():
                             self.assertIn(int(year), d["years"])
                             avg, low, high, n = row[:4]
                             self.assertGreater(avg, 0)
-                            self.assertGreaterEqual(n, 1)
+                            if n is not None:   # TN doesn't publish a count
+                                self.assertGreaterEqual(n, 1)
                             if low is not None:
                                 self.assertTrue(low <= avg <= high, (st, item, district, year))
 
@@ -166,9 +257,10 @@ class CommittedRatesTests(unittest.TestCase):
 
     def test_awarded_states_never_claim_a_bid_range(self):
         # FL, MN and OK publish averages of winning prices only; the app
-        # must not show a low-high range nobody printed.
+        # must not show a low-high range nobody printed. ARDOT prints the
+        # high and low winning contract price, and the app labels it so.
         for st, d in self.data.items():
-            if d["basis"] == "awarded":
+            if d["basis"] == "awarded" and st not in ("AR",):
                 for by_d in d["prices"].values():
                     for by_y in by_d.values():
                         for row in by_y.values():

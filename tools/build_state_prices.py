@@ -57,6 +57,8 @@ import re
 import statistics
 import sys
 import tempfile
+import urllib.error
+import urllib.parse
 import urllib.request
 import zipfile
 
@@ -76,6 +78,42 @@ def _download(url, cache, name):
         with urllib.request.urlopen(req, timeout=300) as resp, open(path, "wb") as f:
             f.write(resp.read())
     return path
+
+
+_MAGIC = {".pdf": b"%PDF", ".zip": b"PK", ".xlsx": b"PK"}
+
+
+def _try_download(url, cache, name):
+    """_download, or None where the file isn't posted (yet): how a year
+    that hasn't been published is told apart from one that has. Some sites
+    answer a missing file with a web page and a 200 (MDT does), so a file
+    that doesn't start the way its type does counts as missing too."""
+    try:
+        path = _download(url, cache, name)
+    except urllib.error.HTTPError as e:
+        if e.code in (403, 404, 410):
+            return None
+        raise
+    magic = _MAGIC.get(os.path.splitext(name)[1].lower())
+    with open(path, "rb") as f:
+        if magic and not f.read(len(magic)) == magic:
+            f.close()
+            os.remove(path)
+            return None
+    return path
+
+
+def _recent_years(first, keep=5):
+    """The years worth asking for: the last few, never before `first`, up
+    to this one, so a new year is picked up the month it's posted."""
+    this = datetime.date.today().year
+    return list(range(max(first, this - keep + 1), this + 1))
+
+
+def _get_html(url):
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return r.read().decode("utf-8", "replace")
 
 
 def _pdf_text(path):
@@ -112,8 +150,11 @@ class State:
         self.periods = {}
 
     def add(self, code, district, year, avg, low, high, n, avg_qty):
+        # n is None where the state doesn't say how many contracts lie behind
+        # its average (TN); the app then shows the price without a count.
         self.prices.setdefault(code, {}).setdefault(district, {})[str(year)] = [
-            _r2(avg), _r2(low), _r2(high), int(n), round(float(avg_qty or 0), 1)]
+            _r2(avg), _r2(low), _r2(high), None if n is None else int(n),
+            None if avg_qty is None else round(float(avg_qty or 0), 1)]
 
     def add_win(self, code, district, year, avg, low, high, n, p25=None, p75=None):
         self.wins.setdefault(code, {}).setdefault(district, {})[str(year)] = [
@@ -135,7 +176,7 @@ class State:
                         out.append(f"{self.st} {code}: unknown district {d}")
                     for y, row in by_y.items():
                         avg, low, high, n = row[0], row[1], row[2], row[3]
-                        if not (avg and avg > 0) or n < 1:
+                        if not (avg and avg > 0) or (n is not None and n < 1):
                             out.append(f"{self.st} {code} {d} {y}: empty {label}")
                         if low is not None and high is not None and not (
                                 low - 0.01 <= avg <= high + 0.01):
@@ -174,20 +215,35 @@ class State:
 
 
 # ── Missouri ────────────────────────────────────────────────────────────────
+def mo_books():
+    """Year -> document id of each "Unit Bid Price List" MoDOT links, the
+    last five years; the known ids if the page can't be read."""
+    import build_unit_prices as mo
+    books = dict(mo.BOOKS)
+    try:
+        html = _get_html(mo.SOURCE_PAGE)
+        for doc, year in re.findall(r'ViewStream/(\d+)\?type=general_info"[^>]*>\s*(\d{4}) Unit Bid Price List', html):
+            books[int(year)] = int(doc)
+    except OSError as e:
+        print(f"  MO: price list page not read ({e}); using the known books")
+    return {y: books[y] for y in sorted(books)[-5:]}
+
+
 def build_mo(cache):
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import build_unit_prices as mo
+    books = mo_books()
     rows = []
-    for year in sorted(mo.BOOKS):
-        path = _download(mo.BOOK_URL.format(id=mo.BOOKS[year]), cache,
+    for year in sorted(books):
+        path = _download(mo.BOOK_URL.format(id=books[year]), cache,
                          f"modot_unit_bid_prices_{year}.pdf")
         got = [r for r in mo.parse_text(_pdf_text(path), year) if mo.is_flatwork(r)]
         print(f"  MO {year}: {len(got)} flatwork prices")
         rows += got
-    bad = mo.check(rows, mo.BOOKS)
+    bad = mo.check(rows, books)
     if bad:
         raise ValueError("; ".join(bad[:10]))
-    old = mo.build(rows, mo.BOOKS)
+    old = mo.build(rows, books)
     s = State("MO", "Missouri", old["source"], old["source_url"], "all_bids",
               items=old["items"], districts=old["districts"],
               cats={"ramp": "6081010", "domes": "6081012", "sidewalk": "6086004",
@@ -303,7 +359,7 @@ def build_fl(cache):
 # ── Oregon ──────────────────────────────────────────────────────────────────
 OR_PAGE = "https://www.oregon.gov/odot/Business/Pages/average_bid_item_prices.aspx"
 OR_ZIP = "https://www.oregon.gov/odot/Business/Estimating/{y}%20BID%20DATA%20PROGRAM.zip"
-OR_YEARS = (2021, 2022, 2023, 2024, 2025, 2026)
+OR_FIRST_YEAR = 2021
 OR_REGIONS = {"STATEWIDE": "All of Oregon", "1": "Region 1 (Portland metro)",
               "2": "Region 2 (Willamette Valley, North Coast)",
               "3": "Region 3 (Southwest)", "4": "Region 4 (Central)",
@@ -355,6 +411,13 @@ def parse_or(rows):
     return out
 
 
+def or_zips(cache):
+    """(year, path) of each year's bid data ODOT has posted, recent years."""
+    found = [(y, _try_download(OR_ZIP.format(y=y), cache, f"or_bid_data_{y}.zip"))
+             for y in _recent_years(OR_FIRST_YEAR, keep=6)]
+    return [(y, p) for y, p in found if p]
+
+
 def build_or(cache):
     items = {c: {"name": n, "unit": None, **({"cat": cat} if cat else {})}
              for c, (n, cat, _) in OR_ITEMS.items()}
@@ -363,8 +426,8 @@ def build_or(cache):
               cats={cat: c for c, (_, cat, _) in OR_ITEMS.items() if cat},
               headline=["0759-0128000J", "0759-0103000F", "0759-0126000J", "0759-0510000J"])
     bids = []
-    for y in OR_YEARS:
-        with zipfile.ZipFile(_download(OR_ZIP.format(y=y), cache, f"or_bid_data_{y}.zip")) as z:
+    for y, path in or_zips(cache):
+        with zipfile.ZipFile(path) as z:
             name = next(n for n in z.namelist() if n.lower().endswith((".xlsx", ".xlsm")))
             got = parse_or(_rows_xlsx(z.read(name), "BID DATA"))
         print(f"  OR {y}: {len(got)} flatwork bids")
@@ -393,6 +456,8 @@ MN_PAGE = "https://dot.state.mn.us/pre-letting/cost-estimating/index.html"
 MN_DOC = "https://edocs-public.dot.state.mn.us/edocs_public/DMResultSet/download?docId={id}"
 # The "Average Bid Prices <year>" Excel file in MnDOT's eDocs folder.
 MN_DOCS = {2025: 39047465, 2024: 38747531, 2023: 38580317, 2022: 28526646, 2021: 28521508}
+MN_FOLDER = ("https://edocs-public.dot.state.mn.us/edocs_public/DMResultSet/Urlsearch"
+             "?columns=docnumber,docname,app_id&folderid=28521650")
 MN_ITEMS = {
     "2521518/00040": ('Concrete walk, 4 in.', "sidewalk"),
     "2521518/00060": ('Concrete walk, 6 in.', "sidewalk6"),
@@ -431,6 +496,25 @@ def parse_mn(rows):
     return out
 
 
+def mn_docs():
+    """Year -> eDocs id of each "Average Bid Prices" spreadsheet in MnDOT's
+    folder (each year is also posted as a PDF, which isn't used)."""
+    docs = dict(MN_DOCS)
+    try:
+        html = _get_html(MN_FOLDER)
+        rows = collections.defaultdict(list)
+        for doc, text in re.findall(r"docId=(\d+)[^>]*>(.*?)</a>", html, re.S):
+            rows[doc].append(re.sub(r"<[^>]+>|\s+", " ", text).strip())
+        for doc, texts in rows.items():
+            name = next((t for t in texts if t.startswith("Average Bid Prices")), "")
+            m = re.fullmatch(r"Average Bid Prices (\d{4})", name)
+            if m and "MS EXCEL" in texts:
+                docs[int(m.group(1))] = int(doc)
+    except OSError as e:
+        print(f"  MN: eDocs folder not read ({e}); using the known documents")
+    return {y: docs[y] for y in sorted(docs)[-5:]}
+
+
 def build_mn(cache):
     items = {c: {"name": n, "unit": None, **({"cat": cat} if cat else {})}
              for c, (n, cat) in MN_ITEMS.items()}
@@ -439,7 +523,7 @@ def build_mn(cache):
               districts={"STATEWIDE": "All of Minnesota"},
               cats={cat: c for c, (_, cat) in MN_ITEMS.items() if cat},
               headline=["2521518/00040", "2521618/00400", "2531503/02320", "2531618/00010"])
-    for y, doc in sorted(MN_DOCS.items()):
+    for y, doc in sorted(mn_docs().items()):
         with open(_download(MN_DOC.format(id=doc), cache, f"mn_avg_bid_prices_{y}.xlsx"), "rb") as f:
             got = parse_mn(_rows_xlsx(f.read()))
         print(f"  MN {y}: {len(got)} items")
@@ -537,7 +621,418 @@ def build_ok(cache, report=None):
     return s
 
 
-BUILDERS = {"mo": build_mo, "fl": build_fl, "or": build_or, "mn": build_mn, "ok": build_ok}
+# ── Tennessee ───────────────────────────────────────────────────────────────
+TN_PAGE = "https://www.tn.gov/tdot/tdot-construction-division/previous-lettings.html"
+TN_PDF = "https://www.tn.gov/content/dam/tn/tdot/construction/previous_lettings/Const_aup{y}.pdf"
+TN_FIRST_YEAR = 2023
+TN_REGIONS = {"STATEWIDE": "All of Tennessee", "1": "Region 1 (Knoxville)", "2": "Region 2 (Chattanooga)",
+              "3": "Region 3 (Nashville)", "4": "Region 4 (Memphis)"}
+TN_ITEMS = {
+    "701-01.01": ('Concrete sidewalk, 4 in.', "sidewalk", "S.F."),
+    "701-01.02": ('Concrete sidewalk, 6 in.', "sidewalk6", "S.F."),
+    "701-02": ("Concrete driveway", "driveway", "S.F."),
+    "701-02.02": ('Concrete driveway, 8 in.', None, "S.F."),
+    "701-02.01": ("Concrete curb ramp, retrofit (ADA)", "ramp", "S.F."),
+    "701-02.03": ("Concrete curb ramp (ADA)", None, "S.F."),
+    "701-02.06": ("Detectable warning surface (ADA)", "domes", "S.F."),
+    "702-01.02": ("Concrete curb", "curb", "L.F."),
+    "702-03": ("Combined curb and gutter (per cu yd)", None, "C.Y."),
+    "202-03": ("Remove rigid pavement, sidewalk", "removal", "S.Y."),
+}
+TN_UNITS = {"S.F.": "sq ft", "S.Y.": "sq yd", "L.F.": "ft", "EACH": "each", "C.Y.": "cu yd"}
+_TN_ITEM = re.compile(r"^\s*(\d{3}-\d{2}(?:\.\d{2})?)\s+(.+?)\s{2,}(\S+)\s+(\d|STATE)\s+\$([\d,]+\.\d{2})\s+"
+                      r"\$([\d,]+\.\d{2})\s+([\d,]+\.\d+)\s*$")
+_TN_MORE = re.compile(r"^\s+(\d|STATE)\s+\$([\d,]+\.\d{2})\s+\$([\d,]+\.\d{2})\s+([\d,]+\.\d+)\s*$")
+
+
+def parse_tn(text):
+    """{(code, region): (avg, total quantity, unit)} for the listed items."""
+    out, code, unit = {}, None, None
+    for line in text.splitlines():
+        m = _TN_ITEM.match(line)
+        if m:
+            code, unit = m.group(1), m.group(3)
+            region, avg, qty = m.group(4), _f(m.group(5)), _f(m.group(7))
+        else:
+            m = _TN_MORE.match(line)
+            if not m or not code:
+                if line.strip() and not line.startswith(" " * 20):
+                    code = None if _TN_ITEM.match(line) is None and re.match(r"^\s*\d{3}-", line) else code
+                continue
+            region, avg, qty = m.group(1), _f(m.group(2)), _f(m.group(4))
+        if code in TN_ITEMS and unit == TN_ITEMS[code][2]:
+            out[(code, "STATEWIDE" if region == "STATE" else region)] = (avg, qty, TN_UNITS[unit])
+    return out
+
+
+def build_tn(cache):
+    items = {c: {"name": n, "unit": TN_UNITS[u], **({"cat": cat} if cat else {})}
+             for c, (n, cat, u) in TN_ITEMS.items()}
+    s = State("TN", "Tennessee", "TDOT Average Unit Prices, awarded contracts", TN_PAGE,
+              "awarded", items=items, districts=TN_REGIONS,
+              cats={cat: c for c, (_n, cat, _u) in TN_ITEMS.items() if cat},
+              headline=["701-01.01", "701-02.01", "702-01.02", "701-02"])
+    for y in _recent_years(TN_FIRST_YEAR):
+        path = _try_download(TN_PDF.format(y=y), cache, f"tn_aup_{y}.pdf")
+        if not path:
+            continue
+        got = parse_tn(_pdf_text(path))
+        print(f"  TN {y}: {len(got)} item-region prices")
+        for (code, region), (avg, qty, _u) in got.items():
+            if region in TN_REGIONS:
+                s.add(code, region, y, avg, None, None, None, None)
+    return s
+
+
+# ── Indiana ─────────────────────────────────────────────────────────────────
+# INDOT's yearly Unit Price Summary: low, high and weighted average of the
+# unit prices bid on every pay item of its awarded projects.
+IN_PAGE = ("https://www.in.gov/indot/doing-business-with-indot/home/contracts/standards/"
+           "indot-pay-items-listunit-price-summaries")
+IN_FIRST_YEAR = 2023
+IN_ITEMS = {
+    "604-06070": ("Concrete sidewalk", "sidewalk", "SYS"),
+    "604-08086": ("Concrete curb ramp (ADA)", "ramp", "SYS"),
+    "604-12083": ("Detectable warning surface (ADA)", "domes", "SYS"),
+    "605-06120": ("Concrete curb", "curb", "LFT"),
+    "605-06140": ("Concrete curb and gutter", "curb_gutter", "LFT"),
+    "202-52710": ("Remove concrete sidewalk", "removal", "SYS"),
+}
+IN_UNITS = {"SYS": "sq yd", "LFT": "ft", "EACH": "each", "SFT": "sq ft"}
+
+
+def build_in(cache):
+    req = urllib.request.Request(IN_PAGE, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        html = r.read().decode("utf-8", "replace")
+    items = {c: {"name": n, "unit": IN_UNITS[u], **({"cat": cat} if cat else {})}
+             for c, (n, cat, u) in IN_ITEMS.items()}
+    s = State("IN", "Indiana", "INDOT Unit Price Summary", IN_PAGE, "all_bids", items=items,
+              districts={"STATEWIDE": "All of Indiana"},
+              cats={cat: c for c, (_n, cat, _u) in IN_ITEMS.items() if cat},
+              headline=["604-06070", "604-08086", "605-06140", "605-06120"])
+    years = sorted({int(y) for y in re.findall(r'CY(\d{4})[ %20-]*Unit[ %20-]*Price[ %20-]*Summary', html, re.I)
+                    if int(y) >= IN_FIRST_YEAR})[-4:]
+    if not years:
+        raise ValueError("IN: no unit price summaries linked")
+    for y in years:
+        m = re.search(r'href="([^"]*CY%s[ %%20-]*Unit[ %%20-]*Price[ %%20-]*Summary[^"]*\.xlsx[^"]*)"' % y, html, re.I)
+        if not m:
+            continue
+        url = urllib.parse.urljoin(IN_PAGE, m.group(1).replace(" ", "%20"))
+        with open(_download(url, cache, f"in_ups_{y}.xlsx"), "rb") as f:
+            rows = list(_rows_xlsx(f.read()))
+        got = 0
+        for r in rows:
+            if len(r) < 10 or not r[2]:
+                continue
+            code, unit = str(r[2]).strip(), str(r[4] or "").strip()
+            if code not in IN_ITEMS or unit != IN_ITEMS[code][2]:
+                continue
+            try:
+                low, high, avg, qty = float(r[5]), float(r[6]), float(r[7]), float(r[8])
+            except (TypeError, ValueError):
+                continue
+            s.add(code, "STATEWIDE", y, avg, low, high, None, None)
+            got += 1
+        print(f"  IN {y}: {got} items")
+    return s
+
+
+# ── Montana ─────────────────────────────────────────────────────────────────
+MT_PAGE = "https://mdt.mt.gov/business/contracting/"
+MT_PDF = "https://mdt.mt.gov/other/webdata/external/contractplans/contract/Archives/Average_prices/{y}.pdf"
+MT_FIRST_YEAR = 2023
+MT_ITEMS = {
+    "608010020": ('Concrete sidewalk, 4 in.', "sidewalk", "SQYD"),
+    "608010050": ('Concrete sidewalk, 6 in.', "sidewalk6", "SQYD"),
+    "609010200": ("Concrete curb and gutter", "curb_gutter", "LNFT"),
+    "609010010": ("Concrete curb", "curb", "LNFT"),
+    "608010067": ("Remove sidewalk", "removal", "SQYD"),
+}
+MT_UNITS = {"SQYD": "sq yd", "LNFT": "ft", "EACH": "each", "SQFT": "sq ft"}
+_MT_ROW = re.compile(r"^(\d{9})\s+\d+\s+(.+?)\s+(SQYD|LNFT|EACH|SQFT)\s+([\d,]+(?:\.\d+)?)\s+\$([\d,]+\.\d{2})\s*$")
+
+
+def build_mt(cache):
+    items = {c: {"name": n, "unit": MT_UNITS[u], **({"cat": cat} if cat else {})}
+             for c, (n, cat, u) in MT_ITEMS.items()}
+    s = State("MT", "Montana", "MDT Weighted Average Prices", MT_PAGE, "awarded", items=items,
+              districts={"STATEWIDE": "All of Montana"},
+              cats={cat: c for c, (_n, cat, _u) in MT_ITEMS.items() if cat},
+              headline=["608010020", "609010200", "609010010", "608010050"])
+    for y in _recent_years(MT_FIRST_YEAR):
+        path = _try_download(MT_PDF.format(y=y), cache, f"mt_avg_{y}.pdf")
+        if not path:
+            continue
+        text = _pdf_text(path)
+        got = 0
+        for line in text.splitlines():
+            m = _MT_ROW.match(line.strip())
+            if m and m.group(1) in MT_ITEMS and m.group(3) == MT_ITEMS[m.group(1)][2]:
+                s.add(m.group(1), "STATEWIDE", y, _f(m.group(5)), None, None, None, None)
+                got += 1
+        print(f"  MT {y}: {got} items")
+    return s
+
+
+# ── South Dakota ────────────────────────────────────────────────────────────
+SD_PAGE = "https://dot.sd.gov/doing-business/contractors/bid-letting"
+SD_PDFS = {2022: "https://dot.sd.gov/media/06b0f2e4/2022%20Bid%20Item%20Price%20Report.pdf",
+           2023: "https://dot.sd.gov/media/5695ecdf/2023BidItemPriceReport.pdf",
+           2024: "https://dot.sd.gov/media/qqhgg24h/2024-bid-item-price-report.pdf"}
+SD_ITEMS = {
+    "651E0040": ('Concrete sidewalk, 4 in.', "sidewalk", "SqFt"),
+    "651E0060": ('Concrete sidewalk, 6 in.', "sidewalk6", "SqFt"),
+    "650E0060": ("Curb and gutter, type B66", "curb_gutter", "Ft"),
+    "650E0080": ("Curb and gutter, type B68", None, "Ft"),
+    "380E3020": ('PCC driveway pavement, 6 in.', "driveway", "SqYd"),
+    "110E1140": ("Remove concrete sidewalk", "removal", "SqYd"),
+}
+SD_UNITS = {"SqFt": "sq ft", "SqYd": "sq yd", "Ft": "ft", "Each": "each"}
+# code, description, unit, quantity, total low-bid cost, average low bid,
+# average of the low three, occurrences
+_SD_ROW = re.compile(r"^(\d{3}E\d{4})\s+(.+?)\s+(SqFt|SqYd|Ft|Each)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+"
+                     r"([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+(\d+)\s*$")
+
+
+def build_sd(cache):
+    items = {c: {"name": n, "unit": SD_UNITS[u], **({"cat": cat} if cat else {})}
+             for c, (n, cat, u) in SD_ITEMS.items()}
+    s = State("SD", "South Dakota", "SDDOT Bid Item Price Report", SD_PAGE, "awarded", items=items,
+              districts={"STATEWIDE": "All of South Dakota"},
+              cats={cat: c for c, (_n, cat, _u) in SD_ITEMS.items() if cat},
+              headline=["651E0040", "650E0060", "380E3020", "651E0060"])
+    for y, url in sorted(SD_PDFS.items()):
+        text = _pdf_text(_download(url, cache, f"sd_bipr_{y}.pdf"))
+        got = 0
+        for line in text.splitlines():
+            m = _SD_ROW.match(line.strip())
+            if m and m.group(1) in SD_ITEMS and m.group(3) == SD_ITEMS[m.group(1)][2]:
+                n = int(m.group(8))
+                s.add(m.group(1), "STATEWIDE", y, _f(m.group(6)), None, None, n, _f(m.group(4)) / n)
+                got += 1
+        print(f"  SD {y}: {got} items")
+    return s
+
+
+# ── Arkansas ────────────────────────────────────────────────────────────────
+# ARDOT's own site refuses scripted requests; the reports themselves sit on
+# the state's media host. One file per year to early November, then rolling
+# 12-month files after each letting.
+AR_SOURCE = "https://www.ardot.gov/divisions/program-management/"
+AR_MEDIA = "https://media.ark.org/ardot/"
+AR_FIRST_YEAR = 2022
+AR_ANNUAL = "{y}-Weighted-Average-Prices.pdf"
+# The newest rolling report known; later ones are looked for by date, under
+# the names ARDOT has used.
+AR_ROLLING = (datetime.date(2026, 6, 24), "June-24-2026-Weighted-Averages-Prices.pdf")
+AR_ROLLING_NAMES = ("{m}-{d}-{y}-Weighted-Averages-Prices.pdf", "{m}-{d}-{y}-Weighted-Average-Report.pdf",
+                    "{m}-{d}-{y}-Weighted-Average-Prices.pdf", "{m}-{d}-{y}-Weighted-Averages-Report.pdf")
+# Items are keyed by section and description: ARDOT prints only the spec
+# section, which many items share.
+AR_ITEMS = {
+    "633 CONCRETE WALKS": ("Concrete walks", "sidewalk", "SQYD"),
+    "641 WHEELCHAIR RAMPS": ("Wheelchair ramps (all types)", "ramp", "SQYD"),
+    "641 SURFACE-APPLIED DETECT. WARNING PANELS": ("Detectable warning panels", "domes", "SQFT"),
+    "634 CC CURB & GUTTER-A (1'6\")": ("Curb and gutter, type A (1 ft 6 in.)", "curb_gutter", "LF"),
+    "634 CONCRETE CURB (TYPE B)": ("Concrete curb, type B", "curb", "LF"),
+    "505 P.C.CONCRETE DRIVEWAY": ("Concrete driveway", "driveway", "SQYD"),
+    "202 R&D OF WALKS": ("Remove walks", "removal", "SQYD"),
+    "202 R&D OF CURB AND GUTTER": ("Remove curb and gutter", None, "LF"),
+}
+AR_UNITS = {"SQYD": "sq yd", "SQFT": "sq ft", "LF": "ft", "EACH": "each"}
+_AR_ROW = re.compile(r"^(\d{3}) (.+?) (SQYD|SQFT|LF|EACH)\s+([\d,]+\.\d+) ([\d,]+\.\d+) ([\d,]+\.\d+) "
+                     r"([\d,]+\.\d+)( \*)?$")
+_AR_PERIOD = re.compile(r"FROM (\d+/\d+/\d{4}) TO (\d+/\d+/\d{4})")
+# One item under several printed names, pooled by quantity.
+_AR_POOL = [(re.compile(r"^WHEELCHAIR RAMPS ?\(TYPE \d\)$"), "WHEELCHAIR RAMPS"),
+            (re.compile(r"^R&D OF (CONCRETE WALKS|SIDEWALKS|WALKS)$"), "R&D OF WALKS")]
+
+
+def _ar_date(s):
+    return datetime.datetime.strptime(s, "%m/%d/%Y").strftime("%b %-d, %Y")
+
+
+def parse_ar(text):
+    """(period label, {code: (avg, low, high, n, qty)}). Every ramp type, and
+    each name for removing walks, is pooled into one quantity-weighted row; n is 1 where ARDOT marks an item
+    as seen on one job only, otherwise not printed."""
+    period, rows = None, {}
+    for line in text.splitlines():
+        line = re.sub(r"\s+", " ", line).strip()
+        m = _AR_PERIOD.search(line)
+        if m and not period:
+            period = f"{_ar_date(m.group(1))} – {_ar_date(m.group(2))}"
+        m = _AR_ROW.match(line)
+        if not m:
+            continue
+        desc = m.group(2)
+        for pat, name in _AR_POOL:
+            if pat.match(desc):
+                desc = name
+        code = f"{m.group(1)} {desc}"
+        if code not in AR_ITEMS or m.group(3) != AR_ITEMS[code][2]:
+            continue
+        qty, high, low, avg = (_f(m.group(i)) for i in (4, 5, 6, 7))
+        rows.setdefault(code, []).append((qty, high, low, avg, 1 if m.group(8) else None))
+    out = {}
+    for code, rs in rows.items():
+        qty = sum(r[0] for r in rs)
+        if qty <= 0:
+            continue
+        n = 1 if len(rs) == 1 and rs[0][4] == 1 else None
+        out[code] = (sum(r[0] * r[3] for r in rs) / qty, min(r[2] for r in rs), max(r[1] for r in rs), n, qty)
+    return period, out
+
+
+def _ar_posted(name):
+    req = urllib.request.Request(AR_MEDIA + name, method="HEAD", headers={"User-Agent": USER_AGENT})
+    try:
+        with urllib.request.urlopen(req, timeout=30):
+            return True
+    except (urllib.error.HTTPError, urllib.error.URLError, OSError):
+        return False   # S3 answers 403 for a file that isn't there
+
+
+def ar_files():
+    """Year -> report file. Each year's annual report (posted in November,
+    to early November); for the newest year, the latest rolling 12-month
+    report, found by trying letting days (Tue-Thu) since the last one known."""
+    from concurrent.futures import ThreadPoolExecutor
+    files = {y: AR_ANNUAL.format(y=y) for y in _recent_years(AR_FIRST_YEAR)}
+    with ThreadPoolExecutor(8) as ex:
+        posted = dict(zip(files, ex.map(_ar_posted, files.values())))
+    files = {y: f for y, f in files.items() if posted[y]}
+    day, newest = AR_ROLLING
+    tries, d = [], day + datetime.timedelta(days=1)
+    while d <= datetime.date.today():
+        if d.weekday() in (1, 2, 3):
+            tries += [(d, n.format(m=f"{d:%B}", d=d.day, y=d.year)) for n in AR_ROLLING_NAMES]
+        d += datetime.timedelta(days=1)
+    with ThreadPoolExecutor(8) as ex:
+        for (d, name), ok in zip(tries, ex.map(lambda t: _ar_posted(t[1]), tries)):
+            if ok and d > day:
+                day, newest = d, name
+    if day.year not in files:
+        files[day.year] = newest
+    return files
+
+
+def build_ar(cache):
+    items = {c: {"name": n, "unit": AR_UNITS[u], **({"cat": cat} if cat else {})}
+             for c, (n, cat, u) in AR_ITEMS.items()}
+    s = State("AR", "Arkansas", "ARDOT Weighted Average Unit Prices", AR_SOURCE, "awarded", items=items,
+              districts={"STATEWIDE": "All of Arkansas"},
+              cats={cat: c for c, (_n, cat, _u) in AR_ITEMS.items() if cat},
+              headline=["633 CONCRETE WALKS", "641 WHEELCHAIR RAMPS", "634 CC CURB & GUTTER-A (1'6\")",
+                        "505 P.C.CONCRETE DRIVEWAY"])
+    for y, name in sorted(ar_files().items()):
+        period, got = parse_ar(_pdf_text(_download(AR_MEDIA + name, cache, f"ar_{name}")))
+        for code, (avg, low, high, n, qty) in got.items():
+            # A total quantity across the year, not per job; per-job size isn't printed.
+            s.add(code, "STATEWIDE", y, avg, low, high, n, None)
+        if period:
+            s.periods[str(y)] = period
+        print(f"  AR {y}: {len(got)} items ({period})")
+    return s
+
+
+# ── Nebraska ────────────────────────────────────────────────────────────────
+# NDOT's Average Unit Price summaries, by calendar year and by July-June.
+# pypdf gives each page's code/quantity/average rows and its description/
+# total rows as two runs, not in the same order; a code is matched to the
+# one description on its page whose total is its quantity times average.
+NE_PAGE = "https://dot.nebraska.gov/business-center/hwy-bridge-lp/item-history/"
+NE_FILES = {2022: "/media/yv5bn0pv/aup-jan-2022-dec-2022.pdf",
+            2023: "/media/k2eh1k20/aup-january-2023-december-2023.pdf",
+            2024: "/media/m2rdvuuc/aup-january-2024-december-2024.pdf",
+            2025: "/media/xqvdpg0p/aup-january-2025-december-2025.pdf",
+            2026: "/media/53hgujhu/aup-july-2025-june-2026.pdf"}
+NE_ITEMS = {
+    "3016.21": ("Concrete sidewalk (47B-3000)", "sidewalk", "CONCRETE CLASS 47B-3000 SIDEWALKS", "SY"),
+    "3016.33": ("Concrete sidewalk (47B-3500)", None, "CONCRETE CLASS 47B-3500 SIDEWALK", "SY"),
+    "3016.23": ('Concrete sidewalk, 6 in. (47B-3000)', "sidewalk6", '6" CONCRETE CLASS 47B-3000 SIDEWALKS', "SY"),
+    "3016.39": ("Detectable warning panel", "domes", "DETECTABLE WARNING PANEL", "SF"),
+    "3989.02": ("PCC curb ramp", "ramp", "CONSTRUCT PCC CURB RAMP", "SF"),
+    "3014.11": ("Combination curb and gutter", "curb_gutter",
+                "COMBINATION CONCRETE CLASS 47B-3500 CURB AND GUTTER", "LF"),
+    "3011.25": ("Concrete curb, type II", "curb", "CONCRETE CLASS 47B-3500 CURB, TYPE II", "LF"),
+    "3020.24": ("Concrete driveway", "driveway", "CONCRETE CLASS 47B-3500 DRIVEWAY", "SY"),
+    "3017.60": ('Concrete median surfacing, 6 in.', "median", '6" CONCRETE CLASS 47B-3500 MEDIAN SURFACING', "SY"),
+    "1107.00": ("Remove walk", "removal", "REMOVE WALK", "SY"),
+    "1109.00": ("Remove curb", None, "REMOVE CURB", "LF"),
+}
+NE_UNITS = {"SY": "sq yd", "SF": "sq ft", "LF": "ft", "EACH": "each"}
+_NE_NUM = re.compile(r"(\d{4}\.\d{2}) ([\d,]+(?:\.\d+)?) ([A-Z]+) \$([\d,]+\.\d{2})")
+_NE_DESC = re.compile(r"(?m)^(.+?) \$([\d,]+\.\d{2})\s*$")
+_NE_PERIOD = re.compile(r"([A-Z][a-z]+ \d{1,2}, \d{4}) to ([A-Z][a-z]+ \d{1,2}, \d{4})")
+
+
+def parse_ne(pages):
+    """(period, {code: (avg, qty)}) for listed items whose description,
+    found by total, is the one expected."""
+    period, out = None, {}
+    for t in pages:
+        m = _NE_PERIOD.search(t)
+        if m and not period:
+            period = f"{m.group(1)} – {m.group(2)}"
+        descs = [(d.strip(), _f(x)) for d, x in _NE_DESC.findall(_NE_NUM.sub("\n", t))]
+        for code, q, unit, avg in _NE_NUM.findall(t):
+            if code not in NE_ITEMS or unit != NE_ITEMS[code][3]:
+                continue
+            q, avg = _f(q), _f(avg)
+            hits = [d for d, total in descs if abs(q * avg - total) <= max(0.6, 0.0005 * total)]
+            if len(hits) == 1 and hits[0] == NE_ITEMS[code][2]:
+                out[code] = (avg, q)
+    return period, out
+
+
+def ne_files():
+    """Year -> summary linked from NDOT's page: each calendar year, and for
+    a year with no calendar summary yet, its July-June one."""
+    files, halves = {}, {}
+    try:
+        html = _get_html(NE_PAGE)
+    except OSError as e:
+        print(f"  NE: summary page not read ({e}); using the known files")
+        return dict(NE_FILES)
+    for href, label in re.findall(r'href="(/media/[^"]+\.pdf)"[^>]*>\s*English AUP Summary ([^<]+)<', html):
+        m = re.match(r"January (\d{4}) - December (?:31, )?(\d{4})", label.strip())
+        if m and m.group(1) == m.group(2):
+            files[int(m.group(1))] = href
+        m = re.match(r"July (\d{4}) - June (\d{4})", label.strip())
+        if m:
+            halves[int(m.group(2))] = href
+    for y, href in halves.items():
+        files.setdefault(y, href)
+    if not files:
+        return dict(NE_FILES)
+    return {y: files[y] for y in sorted(files) if y >= _recent_years(2022)[0]}
+
+
+def build_ne(cache):
+    from pypdf import PdfReader
+    items = {c: {"name": n, "unit": NE_UNITS[u], **({"cat": cat} if cat else {})}
+             for c, (n, cat, _d, u) in NE_ITEMS.items()}
+    s = State("NE", "Nebraska", "NDOT Average Unit Price Summaries", NE_PAGE, "awarded", items=items,
+              districts={"STATEWIDE": "All of Nebraska"},
+              cats={cat: c for c, (_n, cat, _d, _u) in NE_ITEMS.items() if cat},
+              headline=["3016.21", "3014.11", "3016.39", "3020.24"])
+    for y, href in sorted(ne_files().items()):
+        path = _download("https://dot.nebraska.gov" + href, cache, "ne_" + href.rsplit("/", 1)[1])
+        period, got = parse_ne([(p.extract_text() or "") for p in PdfReader(path).pages])
+        for code, (avg, _q) in got.items():
+            s.add(code, "STATEWIDE", y, avg, None, None, None, None)
+        if period:
+            s.periods[str(y)] = period
+        print(f"  NE {y}: {len(got)} items ({period})")
+    return s
+
+
+BUILDERS = {"mo": build_mo, "fl": build_fl, "or": build_or, "mn": build_mn, "ok": build_ok,
+            "tn": build_tn, "in": build_in, "mt": build_mt, "sd": build_sd, "ar": build_ar,
+            "ne": build_ne}
 
 
 def write_state(s, out_dir=OUT_DIR):

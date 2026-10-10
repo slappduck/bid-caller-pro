@@ -1,0 +1,34 @@
+name: Watch saved bids (addenda, due tomorrow)
+
+# Every six hours the server re-reads the posting of every saved, still-open
+# bid and pushes a phone alert (or emails, if the user has no phone alerts on)
+# when an addendum or new document appears, plus a reminder the day before a
+# bid is due. Without this the app only noticed while it was open.
+#
+# Same two repo secrets as the other jobs: BIDCALLER_SERVER_URL and
+# CRON_SECRET. Without them the endpoint replies 403 and nothing happens.
+#
+# Run it any time: Actions tab -> this workflow -> Run workflow.
+
+on:
+  schedule:
+    - cron: "20 */6 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger the saved-bid watch
+        run: |
+          resp=$(curl -sS -X POST "${BIDCALLER_SERVER_URL}/run-bid-watch" \
+            -H "Content-Type: application/json" \
+            -H "X-Cron-Secret: ${CRON_SECRET}" \
+            --max-time 280 \
+            -w "\nHTTP_STATUS:%{http_code}")
+          echo "$resp"
+          status=$(echo "$resp" | grep -o 'HTTP_STATUS:[0-9]*' | cut -d: -f2)
+          if [ "$status" -ge 400 ]; then exit 1; fi
+        env:
+          BIDCALLER_SERVER_URL: ${{ secrets.BIDCALLER_SERVER_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}

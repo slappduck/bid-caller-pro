@@ -15,8 +15,8 @@
 //
 // API calls (Render backend, Supabase REST) and map tiles are still never
 // cached — bid data, auth, and the map must never be served stale.
-const SHELL_CACHE = "curbcall-shell-v88";
-const ASSET_CACHE = "curbcall-assets-v88";
+const SHELL_CACHE = "curbcall-shell-v97";
+const ASSET_CACHE = "curbcall-assets-v97";
 const KEEP = [SHELL_CACHE, ASSET_CACHE];
 
 // The published Terms and Privacy Policy, which must never be served stale.
@@ -43,17 +43,16 @@ const SHELL_FILES = [
   "favicon.ico",
   "icon-192.png",
   "icon-512.png",
-  // Going rates and bid results: read on a job site as often as anywhere,
-  // so kept offline. One small file per state.
-  "rates/index.json",
-  "rates/mo.json",
-  "rates/fl.json",
-  "rates/or.json",
-  "rates/mn.json",
-  "rates/ok.json",
-  "results/mo.json",
-  "results/or.json"
+  "rates/index.json"
 ];
+
+// Going rates and bid results, one file per state (rates/<st>.json,
+// results/<st>.json). Too many states to download every one up front, so
+// each is cached the first time the app asks for it -- the user's own
+// state, in practice -- and kept for use on a job site with no signal.
+function isStateData(url) {
+  return /\/(rates|results)\/[a-z]{2}\.json$/.test(url.pathname);
+}
 
 // Must stay in sync with the <script>/<link> tags in app.html. Version-pinned
 // so a cached copy is always the right copy.
@@ -104,14 +103,32 @@ self.addEventListener("activate", (event) => {
 // Clicking a bid-alert notification should bring an already-open tab to the
 // front, or open one if none exists — otherwise the notification is a dead
 // end on some platforms.
+// A push from the server (license_server/push.py): an addendum on a saved
+// bid, a bid due tomorrow, new bids for a saved search. The payload is
+// {title, body, url}; anything unreadable still shows something rather
+// than nothing, because a push that shows no notification gets the site's
+// push permission revoked by some browsers.
+self.addEventListener("push", (event) => {
+  let msg = {};
+  try { msg = event.data ? event.data.json() : {}; } catch (e) { msg = {}; }
+  const url = typeof msg.url === "string" && /^[a-z0-9_.\-\/#?=&]*$/i.test(msg.url) ? msg.url : "app.html";
+  event.waitUntil(self.registration.showNotification(msg.title || "CurbCall Pro", {
+    body: msg.body || "There's an update on your bids.",
+    icon: "icon-192.png",
+    badge: "icon-192.png",
+    data: { url },
+  }));
+});
+
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
+  const target = (event.notification.data && event.notification.data.url) || "app.html";
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
       for (const client of clients) {
         if (client.url.includes("app.html") && "focus" in client) return client.focus();
       }
-      if (self.clients.openWindow) return self.clients.openWindow("app.html");
+      if (self.clients.openWindow) return self.clients.openWindow(target);
     })
   );
 });
@@ -182,8 +199,8 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // ── Our own shell: stale-while-revalidate ──
-  const isShellFile = here && matches(SHELL_FILES);
+  // ── Our own shell, and state price files: stale-while-revalidate ──
+  const isShellFile = here && (matches(SHELL_FILES) || isStateData(url));
   if (!isShellFile) return; // API calls and map tiles hit the network normally
 
   event.respondWith(

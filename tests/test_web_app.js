@@ -1322,7 +1322,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
         { title: "Elm St Sidewalk", scope: "1,200 LF sidewalk, 4 ADA ramps", value: "$120k", deadline: "2099-01-01", status: "open", url: "https://e.gov/3" },
       ];
       localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
-      localStorage.setItem("last_feed", JSON.stringify({ "Aurora, MO": bids, "Topeka, KS": [bids[0]] }));
+      localStorage.setItem("last_feed", JSON.stringify({ "Aurora, MO": bids, "Honolulu, HI": [bids[0]] }));
       localStorage.setItem("price_district", JSON.stringify("SW"));
     });
     await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
@@ -1383,7 +1383,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     const cards = await page.$$eval("#feed-list .bid", (els) => els.map((e) => e.textContent));
     const cgCard = cards.find((t) => t.includes("Main St Curb and Gutter")) || "";
     check("the bid card carries the ballpark", cgCard.includes(`\u2248 ${k(800 * cg)} ballpark`), cgCard.slice(0, 200));
-    const rampCard = cards.find((t) => t.includes("City Hall ADA Ramp") && !t.includes("Topeka")) || "";
+    const rampCard = cards.find((t) => t.includes("City Hall ADA Ramp") && !t.includes("Honolulu")) || "";
     check("a bid with no quantities gets no ballpark", !/ballpark/.test(rampCard));
 
     const swDetail = await detailFor("Aurora, MO", 2);
@@ -1401,8 +1401,8 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await page.dispatchEvent("#est-width", "change");
     await page.waitForTimeout(200);
 
-    const ksDetail = await detailFor("Topeka, KS", 0);
-    check("a bid outside Missouri shows no Missouri prices", ksDetail.trim() === "");
+    const hiDetail = await detailFor("Honolulu, HI", 0);
+    check("a bid in a state with no published rates shows none, not Missouri's", hiDetail.trim() === "");
     check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
     await ctx.close();
   }
@@ -1571,6 +1571,29 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
           swLine && Math.abs(swLine.qty - 666.7) < 0.1 && swLine.price === swAvg, JSON.stringify(swLine));
     check("the ramp count becomes a line for you to price, not a guess",
           rampLine && rampLine.qty === 4 && rampLine.unit === "each" && rampLine.price === "", JSON.stringify(rampLine));
+    // The item is a dropdown: the state's items, other common work, or typed.
+    const pick = await page.$$eval('.prep-line[data-i="0"] .pl-pick option', (os) => os.map((o) => o.textContent));
+    check("the item is a dropdown of the state's items and other work",
+          pick.some((t) => /Concrete sidewalk, 4 in\. \(sq yd\)/.test(t)) && pick.includes("Mobilization (lump sum)") && pick.includes("Other (type it)"));
+    check("...with the line's current item selected",
+          (await page.$eval('.prep-line[data-i="0"] .pl-pick', (s) => s.value)) === "s:6086004");
+    await page.click("#pl-add");
+    await page.waitForTimeout(300);
+    const newIdx = (await page.evaluate((i) => bidPrep[i].lines.length, id)) - 1;
+    await page.selectOption(`.prep-line[data-i="${newIdx}"] .pl-pick`, "s:6091052");
+    await page.waitForTimeout(300);
+    const picked = await page.evaluate(([i, n]) => bidPrep[i].lines[n], [id, newIdx]);
+    check("picking a state item fills its unit and going price",
+          picked.name === "Curb and gutter, type B" && picked.unit === "ft" && picked.item === "6091052" && picked.price === startPrice("6091052", "SW"),
+          JSON.stringify(picked));
+    await page.selectOption(`.prep-line[data-i="${newIdx}"] .pl-pick`, "custom");
+    await page.waitForTimeout(300);
+    await page.fill(`.prep-line[data-i="${newIdx}"] .pl-name`, "Tree root removal");
+    await page.waitForTimeout(200);
+    check("\"Other\" lets you type your own item",
+          await page.evaluate(([i, n]) => bidPrep[i].lines[n].name === "Tree root removal" && !bidPrep[i].lines[n].item, [id, newIdx]));
+    await page.click(`[data-del="${newIdx}"]`);
+    await page.waitForTimeout(300);
     const rampIdx = lines.indexOf(rampLine);
     await page.fill(`.prep-line[data-i="${rampIdx}"] input[data-f="price"]`, "2000");
     await page.fill("#pt-mk", "10");
@@ -1985,6 +2008,136 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await page.evaluate(() => openRates("OR"));
     await page.waitForTimeout(500);
     check("the rates sheet says how far above the winner you were", /you were a median 11\.1% above the winner/.test(await page.textContent("#modal-content")));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
+  // ── Phone alerts with the app closed ──
+  console.log("\nTurning on alerts registers this device for push");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    let keyAsked = 0;
+    await page.route("**/*", (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      if (u.endsWith("/push/vapid-public-key")) {
+        keyAsked++;
+        return route.fulfill({ status: 200, contentType: "application/json",
+          body: JSON.stringify({ ok: true, key: "BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4" }) });
+      }
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") {
+        return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      }
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      // The headless test browser always blocks notifications; stand in a
+      // user who said yes.
+      window.Notification = class { static get permission() { return "granted"; } static async requestPermission() { return "granted"; } };
+      // A stand-in push service: real ones need Google/Apple/Mozilla servers.
+      window.__subscribedWith = null;
+      const reg = { pushManager: { getSubscription: async () => null,
+        subscribe: async (opts) => { window.__subscribedWith = opts; return { toJSON: () => ({ endpoint: "https://fcm.googleapis.com/fcm/send/abc", keys: { p256dh: "pk", auth: "au" } }) }; } },
+        showNotification: () => {} };
+      Object.defineProperty(navigator, "serviceWorker", { configurable: true, value: {
+        ready: Promise.resolve(reg), register: async () => reg, getRegistration: async () => reg, addEventListener: () => {} } });
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(600);
+    const saved = await page.evaluate(async () => {
+      currentUser = { id: "user-1" };
+      let row = null;
+      const orig = sb.from;
+      sb.from = (t) => t === "push_subscriptions"
+        ? { upsert: async (r) => { row = r; return { error: null }; } } : orig.call(sb, t);
+      await toggleNotifPermission();
+      sb.from = orig;
+      return { row, key: window.__subscribedWith && window.__subscribedWith.applicationServerKey.length,
+               visible: window.__subscribedWith && window.__subscribedWith.userVisibleOnly };
+    });
+    check("the server's public key is used to subscribe", keyAsked === 1 && saved.key === 65 && saved.visible === true);
+    check("this device is stored for the server to push to",
+          saved.row && saved.row.endpoint === "https://fcm.googleapis.com/fcm/send/abc" && saved.row.p256dh === "pk" && saved.row.user_id === "user-1",
+          JSON.stringify(saved.row));
+    check("the alerts card says they work with the app closed",
+          /even with the app closed/.test(await page.evaluate(() => notifPermissionLabel())));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
+  // ── Sub quotes to the primes ──
+  console.log("\nA sub quote goes to each prime, built from your own prices");
+  {
+    const res = JSON.parse(fs.readFileSync(path.join(ROOT, "results", "mo.json"), "utf8"));
+    const wins = {};
+    res.contracts.forEach((c) => { wins[c.bidders[0][0]] = (wins[c.bidders[0][0]] || 0) + 1; });
+    const winner = Object.keys(wins).sort((a, b) => wins[b] - wins[a])[0];
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const host = new URL(route.request().url()).hostname;
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") {
+        return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      }
+      return route.abort();
+    });
+    await page.addInitScript((winnerName) => {
+      if (sessionStorage.getItem("seeded")) return;
+      sessionStorage.setItem("seeded", "1");
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      localStorage.setItem("company_profile", JSON.stringify({ name: "Test Concrete LLC", contact: "Pat Lee", phone: "417-555-0100" }));
+      localStorage.setItem("last_feed", JSON.stringify({ "Springfield, MO": [{
+        title: "Route 13 Pavement and ADA", scope: "ADA ramps and sidewalk", deadline: "2099-01-01", status: "open",
+        url: "https://e.gov/mo", source: "state_dot", bid_number: "J8P3601",
+        plan_holders: [
+          { company: "Small Paving Co", contact: "Ann Roe", email: "ann@small.example" },
+          { company: winnerName, contact: "Bo Diaz", email: "bo@big.example", phone: "417-555-0199" },
+          { company: "Test Concrete LLC", email: "me@test.example" } ] }] }));
+    }, winner);
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(800);
+    const id = await page.evaluate(() => bidId("Springfield, MO", bidData["Springfield, MO"][0]));
+    await page.evaluate(() => openDetail("Springfield, MO", bidData["Springfield, MO"][0]));
+    await page.waitForTimeout(400);
+    await page.click("#sub-quote-open");
+    await page.waitForTimeout(500);
+    check("with nothing priced yet, it sends you to price the job first",
+          /Price your items first/.test(await page.textContent("#modal-content")));
+    await page.evaluate((i) => {
+      const p = prepFor(i);
+      p.lines = [{ name: "Concrete sidewalk, 4 in.", item: "6086004", st: "MO", unit: "sq yd", qty: 500, price: 70 },
+                 { name: "Concrete curb ramp (ADA)", item: "6081010", st: "MO", unit: "sq yd", qty: 40, price: 200 }];
+      p.markup = 10;
+      savePrep(i, "Springfield, MO");
+      renderSubQuote("Springfield, MO", i);
+    }, id);
+    await page.waitForTimeout(400);
+    const sheet = await page.textContent("#modal-content");
+    check("the quote carries your prices with your markup", /\$77\.00/.test(sheet) && /\$220\.00/.test(sheet));
+    const primes = await page.$$eval(".sq-prime b", (els) => els.map((e) => e.textContent));
+    check("you aren't listed as your own prime", !primes.includes("Test Concrete LLC") && primes.length === 2, primes.join(" | "));
+    check("the prime who wins most state flatwork is listed first, with its record",
+          primes[0] === winner && new RegExp(`${wins[winner]} wins? in`).test(sheet), primes[0]);
+    const mail = decodeURIComponent(await page.getAttribute('.sq-prime [data-sq="1"]', "href"));
+    check("each prime's email is addressed to them, with the items and total",
+          mail.startsWith("mailto:bo@big.example") && /Hi Bo,/.test(mail) && /500 sq yd at \$77\.00\/sq yd = \$38,500\.00/.test(mail)
+            && /Total for the items listed: \$47,300\.00/.test(mail) && /J8P3601/.test(mail), mail.slice(0, 300));
+    await page.evaluate(() => { document.querySelector('.sq-prime [data-sq="1"]').addEventListener("click", (e) => e.preventDefault()); });
+    await page.click('.sq-prime [data-sq="1"]');
+    await page.waitForTimeout(600);
+    check("a sent quote is remembered on that prime", /Quote sent/.test(await page.textContent("#modal-content")));
     check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
     await ctx.close();
   }

@@ -1,0 +1,115 @@
+name: Refresh state going rates (monthly)
+
+# The going rates and bid results in curbcall_netlify_v4/rates and /results
+# are built from what each state DOT publishes -- yearly averages, rolling
+# 12-month reports, and per-letting bid tabs that arrive every few weeks.
+# Built by hand, they go stale a month at a time. This rebuilds every state
+# once a month and opens (or updates) a pull request with what changed, so
+# new numbers reach the app after a look, not silently.
+#
+# tools/refresh_state_data.py runs each state on its own and keeps last
+# month's files for any state whose rebuild failed or came back smaller
+# (usually a DOT that changed its layout). Those are listed in the pull
+# request, and the run is marked failed so GitHub emails about it -- but
+# every other state still gets refreshed.
+#
+# The data tests run here before the pull request is opened: a pull request
+# opened by this workflow's token doesn't start the Run tests workflow.
+#
+# Needs no secrets. Needs one repo setting, once: Settings -> Actions ->
+# General -> Workflow permissions -> tick "Allow GitHub Actions to create
+# and approve pull requests". Without it the data is still pushed to the
+# branch below and the run says how to open the pull request by hand.
+#
+# Run it any time: Actions tab -> this workflow -> Run workflow (optionally
+# naming only some sources, e.g. "IL results,AR rates").
+
+on:
+  schedule:
+    # The 4th of each month, 10:41 UTC (early morning in Missouri): after
+    # month-end files like KDOT's monthly bid tabs are posted.
+    - cron: "41 10 4 * *"
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "Only these sources, comma-separated (e.g. IL results,AR rates). Blank = all."
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: state-data-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      BRANCH: data/monthly-state-refresh
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        # The spreadsheet readers are only needed by the builders, not by the
+        # server, so they're installed here rather than in requirements.txt.
+        run: pip install -r requirements.txt openpyxl==3.1.5 xlrd==2.0.2
+
+      - name: Rebuild every state
+        id: refresh
+        continue-on-error: true
+        env:
+          ONLY: ${{ github.event.inputs.only }}
+        run: |
+          python tools/refresh_state_data.py --summary "$RUNNER_TEMP/refresh.md" ${ONLY:+--only "$ONLY"}
+
+      - name: Check the data the app loads
+        run: |
+          python -m unittest tests.test_state_prices tests.test_bid_results \
+            tests.test_unit_prices tests.test_refresh_state_data
+
+      - name: Open or update the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- curbcall_netlify_v4/rates curbcall_netlify_v4/results \
+             && [ -z "$(git ls-files --others --exclude-standard curbcall_netlify_v4/rates curbcall_netlify_v4/results)" ]; then
+            echo "Nothing changed this month."
+            exit 0
+          fi
+          month=$(date -u +%Y-%m)
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git add curbcall_netlify_v4/rates curbcall_netlify_v4/results
+          git commit -q -m "Refresh state going rates and bid results ($month)"
+          # The branch is rebuilt from main each month, so an unmerged
+          # refresh is replaced by the newer one rather than stacked on.
+          git push -q --force origin "$BRANCH"
+          {
+            echo "Monthly rebuild of every state's going rates and bid results from what each DOT has posted."
+            echo
+            cat "$RUNNER_TEMP/refresh.md"
+            echo
+            echo "Merging deploys it. The app picks the new files up on each user's next visit."
+            echo
+            echo "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          } > "$RUNNER_TEMP/body.md"
+          if [ "$(gh pr view "$BRANCH" --json state -q .state 2>/dev/null)" = "OPEN" ]; then
+            gh pr edit "$BRANCH" --title "Refresh state going rates ($month)" --body-file "$RUNNER_TEMP/body.md"
+          elif ! gh pr create --base main --head "$BRANCH" \
+                 --title "Refresh state going rates ($month)" --body-file "$RUNNER_TEMP/body.md"; then
+            echo "::warning::Couldn't open the pull request (is 'Allow GitHub Actions to create and approve pull requests' ticked?). The data is on branch $BRANCH; open one from it by hand."
+          fi
+
+      - name: Flag sources that kept last month's data
+        if: steps.refresh.outcome == 'failure'
+        run: |
+          cat "$RUNNER_TEMP/refresh.md"
+          echo "::error::Some sources kept last month's data -- see the list above."
+          exit 1
