@@ -5194,10 +5194,10 @@ function myBestQuote(c){
 function priceBases(c,quotes){
   const out=[],mine=myBestQuote(c);
   if(mine)out.push({kind:"mine",lo:mine.price,hi:mine.price,delivery:mine.delivery,short:mine.short,
-    label:`Your quote, ${mine.name}: ${fmtRate(mine.price)}/CY`});
+    label:`My quote (${mine.name}, ${yd(mine.price)} a yard)`});
   if(quotes&&quotes.enough)out.push({kind:"area",lo:quotes.low,hi:quotes.high,median:quotes.median,count:quotes.count,radius:quotes.radius_mi,
-    label:`Local quotes: ${fmtRate(quotes.low)}–${fmtRate(quotes.high)}/CY`});
-  out.push({kind:"est",lo:READY_MIX.low,hi:READY_MIX.high,label:`National estimate: ${fmtRate(READY_MIX.low)}–${fmtRate(READY_MIX.high)}/CY`});
+    label:`Local quotes (${ydRange(quotes.low,quotes.high)} a yard)`});
+  out.push({kind:"est",lo:READY_MIX.low,hi:READY_MIX.high,label:`Typical price (${ydRange(READY_MIX.low,READY_MIX.high)} a yard)`});
   return out;
 }
 function readyMixEstimate(yards,basis,truck){
@@ -5214,19 +5214,29 @@ function readyMixEstimate(yards,basis,truck){
     lo:y*basis.lo+dLo+sLo,hi:y*basis.hi+dHi+sHi};
 }
 const moneyRange=(a,b)=>Math.round(a)===Math.round(b)?money0(a):`${money0(a)}–${money0(b)}`;
+// "$110", "$142.50": how a contractor says a yard price, no ".00".
+const yd=(n)=>Math.abs(n-Math.round(n))<0.005?`$${Math.round(n)}`:`$${n.toFixed(2)}`;
+const ydRange=(a,b)=>Math.abs(a-b)<0.005?yd(a):`${yd(a)}–${yd(b)}`;
 const rateRange=(a,b)=>Math.abs(a-b)<0.005?fmtRate(a):`${fmtRate(a)}–${fmtRate(b)}`;
+// The answer first: yards, trucks, and about what it costs. The middle of
+// the range is the headline (rounded to $100, since it's an estimate); the
+// range and what's behind it sit under it in one short line each.
 function readyMixHTML(e,quotes){
-  if(!e)return`<div class="account-status">Enter the yards to price.</div>`;
-  const k=e.basis.kind,n=quotes&&quotes.count||0;
-  const note=k==="mine"?"Priced with the quote you logged for this bid."
-    :k==="area"?`Per-yard range from ${plural(e.basis.count,"quote")} contractors logged within ${e.basis.radius} miles in the last year (median ${fmtRate(e.basis.median)}).`
-    :`Per-yard range is a national 2026 estimate from published cost guides; Midwest and Southeast plants often run lower.${n&&!(quotes&&quotes.enough)?` ${plural(n,"quote")} logged near here so far; local prices show once there are 3 from at least 2 contractors.`:""}`;
-  return`<table class="ps-table"><tbody>
-    <tr><td>${e.yards.toLocaleString()} CY at ${rateRange(e.pLo,e.pHi)}/CY</td><td>${moneyRange(e.yards*e.pLo,e.yards*e.pHi)}</td></tr>
-    <tr><td>Delivery, ${plural(e.trucks,"truck")} of ${e.truckCY} CY${k==="mine"&&e.dLo===e.dHi?" (as quoted)":" (often in the price)"}</td><td>${moneyRange(e.dLo,e.dHi)}</td></tr>
-    ${e.short?`<tr><td>Short load: ${e.short} CY under a full truck</td><td>${moneyRange(e.sLo,e.sHi)}</td></tr>`:""}
-    <tr><td><b>${k==="mine"?"Total":"Estimated total"}</b></td><td><b>${moneyRange(e.lo,e.hi)}</b></td></tr></tbody></table>
-    <div class="rate-note">${note}${k!=="mine"?" A plant's quote is the real number.":""}</div>`;
+  if(!e)return`<div class="cq-card"><div class="account-status">Enter the yards to price under Adjust.</div></div>`;
+  const k=e.basis.kind,exact=Math.round(e.lo)===Math.round(e.hi);
+  const mid=exact?e.lo:Math.round((e.lo+e.hi)/2/100)*100;
+  const n=quotes&&!quotes.enough?quotes.count||0:0;
+  const why=k==="mine"?`From your quote: ${yd(e.pLo)} a yard${e.dLo===e.dHi&&e.dLo>0?` plus ${money0(e.dLo)} delivery`:""}.`
+    :k==="area"?`From ${plural(e.basis.count,"quote")} contractors got within ${e.basis.radius} miles this past year (${ydRange(e.pLo,e.pHi)} a yard).`
+    :`Typical U.S. price, ${ydRange(e.pLo,e.pHi)} a yard. A plant's quote will be exact.${n?` ${plural(n,"local quote")} so far; local prices show at 3.`:""}`;
+  return`<div class="cq-card">
+    <div class="cq-big">${e.yards.toLocaleString()} yards · ${plural(e.trucks,"truck")}</div>
+    <div class="cq-cost">${exact?"":"About "}${money0(mid)}</div>
+    ${exact?"":`<div class="cq-range">Could run ${moneyRange(e.lo,e.hi)}</div>`}
+    <div class="cq-why">${why}</div>
+    ${e.short?`<div class="cq-why">Includes a short-load charge: ${e.short} yards under a full truck.</div>`:""}
+    ${k!=="mine"?`<div class="cq-why">Delivery is usually in the price; some plants add up to ${money0(READY_MIX.deliveryHigh)} a truck.</div>`:""}
+  </div>`;
 }
 // What the concrete alone costs per unit of each bid line, and how much of
 // the line's price that is: the number that says whether a price still
@@ -5239,11 +5249,11 @@ function concreteShareHTML(y,lines,basis,waste){
     const line=(lines||[]).find(l=>String(l.name||"").trim()===x.name);
     const price=Number(line&&line.price)||0;
     const pct=price>0?Math.round((lo+hi)/2/price*100):null;
-    return`<tr><td>${esc(x.name)}</td><td>${rateRange(lo,hi)}/${esc(x.unit)}</td><td>${pct==null?"no price yet":`${pct}% of ${fmtRate(price)}`}</td></tr>`;
+    return`<tr><td>${esc(x.name)}</td><td>${rateRange(lo,hi)} a ${esc(x.unit)}</td><td>${pct==null?"price it first":`${pct}% of your ${yd(price)}`}</td></tr>`;
   }).join("");
-  return`<div class="workspace-title" style="margin-top:1rem;">Concrete in each line</div>
-    <table class="ps-table"><thead><tr><th>Line</th><th>Concrete</th><th>Of your price</th></tr></thead><tbody>${rows}</tbody></table>
-    <div class="rate-note">Concrete only, with ${waste}% waste, at the price basis above. Labor, base, forms and finishing come on top.</div>`;
+  return`<div class="workspace-title" style="margin-top:1rem;">How much of each price is concrete</div>
+    <table class="ps-table"><thead><tr><th>Line</th><th>Concrete</th><th>Share</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="rate-note">Concrete only. Labor, base, forms and finishing are on top of this.</div>`;
 }
 // Ready-mix plants near the bid's town, from the server (OpenStreetMap, with
 // a web search where the map knows little). Kept for the session per town.
@@ -5274,28 +5284,28 @@ function plantSelect(name,status,i){
 function suppliersHTML(d,b,p,city,waste){
   if(!d||!d.ok){
     const why={not_licensed:"Supplier search is part of a paid plan.",place_not_found:"Couldn't place this town on the map.",
-      rate_limited:"Too many searches today. Try again tomorrow.",offline:"You're offline."}[d&&d.reason]||"Couldn't load suppliers right now.";
+      rate_limited:"Too many searches today. Try again tomorrow.",offline:"You're offline."}[d&&d.reason]||"Couldn't load plants right now.";
     return`<div class="account-status">${esc(why)}</div>`;
   }
   const c=concreteState(p),plants=(d.plants||[]).map((x,i)=>({...x,i,st:(c.plants[x.name]||{}).status||"Not contacted"}));
   // A plant that doesn't deliver here goes to the bottom, out of the way.
   plants.sort((a,z)=>(a.st===PLANT_STATUS[4])-(z.st===PLANT_STATUS[4])||a.miles-z.miles);
   const web=d.web||[];
-  if(!plants.length&&!web.length)return`<div class="account-status">No ready-mix plants found within ${d.radius_mi} miles of ${esc(d.city)}.</div>`;
+  if(!plants.length&&!web.length)return`<div class="account-status">No ready-mix plants found within ${d.radius_mi} miles.</div>`;
   return`${plants.map(x=>{
     const q=c.plants[x.name]||{};
     return`<div class="sup-row${x.st===PLANT_STATUS[4]?" sup-out":""}">
       <div class="sup-head"><div class="sup-name">${esc(x.name)} <span class="sup-mi">${x.miles} mi</span></div>${plantSelect(x.name,x.st,x.i)}</div>
-      ${q.price>0?`<div class="sup-quote">Quoted ${fmtRate(q.price)}/CY${q.yards?` for ${q.yards} CY`:""}${q.delivery!=null&&q.delivery!==""?` · delivery ${money0(q.delivery)}`:""}</div>`:""}
+      ${q.price>0?`<div class="sup-quote">Quoted ${yd(q.price)} a yard${q.yards?` for ${q.yards} yards`:""}${q.delivery!=null&&q.delivery!==""?`, ${money0(q.delivery)} delivery`:""}</div>`:""}
       ${x.address?`<div class="rate-note">${esc(x.address)}</div>`:""}
       <div class="sup-acts">${x.phone?`<a href="tel:${esc(x.phone.replace(/[^\d+]/g,""))}">Call ${esc(x.phone)}</a>`:""}
         ${safeUrl(x.website)?`<a href="${esc(safeUrl(x.website))}" target="_blank" rel="noopener noreferrer">Website</a>`:""}
         ${/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(x.email||"")?`<a href="${esc(concreteQuoteMail(b,p,city,waste,x.email))}" data-mailed="${x.i}">Email for a quote</a>`:""}</div>
     </div>`;}).join("")}
-    ${web.length?`<div class="rate-note" style="margin-top:0.5rem;">${plants.length?"More":"Found"} on the web:</div>
+    ${web.length?`<div class="rate-note" style="margin-top:0.5rem;">${plants.length?"Also found online":"Found online"}:</div>
       ${web.map(w=>safeUrl(w.url)?`<div class="sup-row"><a href="${esc(safeUrl(w.url))}" target="_blank" rel="noopener noreferrer">${esc(w.site)}</a>
         ${w.snippet?`<div class="rate-note">${esc(w.snippet)}</div>`:""}</div>`:"").join("")}`:""}
-    <div class="rate-note">Plants within ${d.radius_mi} miles of ${esc(d.city)}, from OpenStreetMap${web.length?" and a web search":""}. Not every plant is listed; call to confirm they deliver to the job.</div>`;
+    <div class="rate-note">Plants within ${d.radius_mi} miles. Some may be missing. Call to make sure they deliver to your job.</div>`;
 }
 // A quote is saved with the bid (and its plant) every time; it's also sent,
 // anonymously, toward the area's prices unless the contractor says not to.
@@ -5356,45 +5366,43 @@ function renderConcretePanel(body,city,id,b){
   const opt=(v,label,cur)=>`<option value="${esc(String(v))}"${String(v)===String(cur)?" selected":""}>${esc(label)}</option>`;
   const waste=wastePct(),steps=WASTE_STEPS.includes(waste)?WASTE_STEPS:[...WASTE_STEPS,waste].sort((a,z)=>a-z);
   const place=(placeParts(city)||{}).city||city;
+  const pickOptions=(w)=>`${y.total?opt("all",`All concrete lines · ${Math.ceil(y.total*(1+w/100))} yards`,c.pick||"all"):""}
+    ${y.out.length>1?y.out.map((x,i)=>opt(`line:${i}`,`${x.name} · ${Math.ceil(x.cy*(1+w/100))} yards`,c.pick)).join(""):""}
+    ${opt("custom","Type in yards",y.total?c.pick:"custom")}`;
   body.innerHTML=`<div class="workspace-title">Concrete for this bid</div>
-    ${y.out.length?`<table class="ps-table"><thead><tr><th>Line</th><th>Quantity</th><th>Concrete</th></tr></thead><tbody>
-      ${y.out.map(x=>`<tr><td>${esc(x.name)}</td><td>${Math.round(x.qty).toLocaleString()} ${esc(x.unit)}</td><td>${x.cy.toFixed(1)} CY</td></tr>`).join("")}</tbody></table>`
-      :`<div class="account-status">No line gives an area and a thickness (like "4 in. sidewalk, sq yd"), so there's no volume to work out. The email still lists your lines.</div>`}
-    ${y.other.length?`<div class="rate-note">Not counted, size from the plans: ${y.other.map(x=>esc(x.name)).join("; ")}.</div>`:""}
-    <div class="cq-grid">
-      <label>Waste <select id="cq-waste" class="pl-pick">${steps.map(v=>opt(v,`${v}%`,waste)).join("")}</select></label>
-      <label>Mix <select id="cq-psi" class="pl-pick">${opt("","Per the specs",c.psi||"")}${MIX_PSI.map(v=>opt(v,`${v} PSI`,c.psi||"")).join("")}</select></label>
-    </div>
-    ${y.total?`<div class="rate-note"><b id="cq-total">${Math.ceil(y.total*(1+waste/100))} CY</b> to order</div>`:""}
-    ${bidInfo().supplier_email?"":`<div class="rate-note">Add your supplier's email in <a href="#" id="cq-profile">bid details</a> and it's filled in for you.</div>`}
-    <div class="act-primary"><a class="ma-gold" id="cq-send" href="${esc(concreteQuoteMail(b,p,city,waste))}">Write the quote request</a></div>
-    <div class="workspace-title" style="margin-top:1rem;">What the concrete should cost</div>
-    <div class="cq-grid">
-      <label class="cq-wide">Yards <select id="rm-pick" class="pl-pick">
-        ${y.total?opt("all",`All concrete lines · ${Math.ceil(y.total*(1+waste/100))} CY`,c.pick||"all"):""}
-        ${y.out.length>1?y.out.map((x,i)=>opt(`line:${i}`,`${x.name} · ${Math.ceil(x.cy*(1+waste/100))} CY`,c.pick)).join(""):""}
-        ${opt("custom","Enter yards",y.total?c.pick:"custom")}</select></label>
-      <label id="rm-custom-row">CY <input id="rm-yards" type="number" min="0" step="0.5" value="${esc(String(c.custom||10))}" aria-label="Cubic yards"></label>
-      <label>Truck <select id="rm-truck" class="pl-pick">${TRUCK_SIZES.map(v=>opt(v,`${v} CY`,truckCY())).join("")}</select></label>
-      <label class="cq-wide">Price with <select id="rm-basis" class="pl-pick"></select></label>
-    </div>
     <div id="rm-est"></div>
-    <div id="rm-share"></div>
+    <div class="act-primary"><a class="ma-gold" id="cq-send" href="${esc(concreteQuoteMail(b,p,city,waste))}">Email my supplier for a quote</a></div>
+    ${bidInfo().supplier_email?"":`<div class="rate-note">Save your supplier's email in <a href="#" id="cq-profile">bid details</a> and this goes straight to them.</div>`}
     <div class="workspace-title" style="margin-top:1rem;">Ready-mix plants near ${esc(place)}</div>
     <div id="rm-sup"><div class="account-status">Looking for plants…</div></div>
-    <details class="rm-log" id="rm-log" style="margin-top:0.75rem;"><summary>Got a quote? Log it</summary>
+    <details class="rm-log" id="rm-log"><summary>Got a quote? Save it</summary>
       <form id="rm-form" class="rm-form">
         <label>From <select name="supplier" class="pl-pick"><option>Another supplier</option></select></label>
-        <label>Price per CY $ <input name="price" type="number" min="40" max="600" step="0.01" required></label>
+        <label>Price a yard $ <input name="price" type="number" min="40" max="600" step="0.01" required></label>
         <label>Yards quoted <input name="yards" type="number" min="0.25" step="0.25" required></label>
-        <label>Delivery fee $ <input name="delivery" type="number" min="0" step="1" placeholder="if separate"></label>
+        <label>Delivery $ <input name="delivery" type="number" min="0" step="1" placeholder="if extra"></label>
         <label>Short-load fee $ <input name="short" type="number" min="0" step="1" placeholder="if any"></label>
         <label>Mix <select name="psi" class="pl-pick">${opt("","Not stated",c.psi||"")}${MIX_PSI.map(v=>opt(v,`${v} PSI`,c.psi||"")).join("")}</select></label>
-        <label class="rm-share"><input name="share" type="checkbox" checked> Count it toward this area's prices</label>
+        <label class="rm-share"><input name="share" type="checkbox" checked> Add it to local prices (anonymous)</label>
         <button class="btn-ghost" type="submit">Save quote</button>
-        <div class="rate-note">Saved with this bid. When counted, it's never shown on its own or with your name or the supplier's: it only adds to the area's range, once there are 3 quotes from at least 2 contractors.</div>
+        <div class="rate-note">Saved with this bid. If added to local prices, no names go with it, yours or the plant's.</div>
       </form></details>
-    <button class="btn-ghost" id="cq-back" style="margin-top:0.5rem;">Back to summary</button>`;
+    <div id="rm-share"></div>
+    <details class="rm-log" id="rm-adjust"><summary>Adjust yards, waste, mix, truck or price</summary>
+      <div class="cq-grid">
+        <label class="cq-wide">Yards to price <select id="rm-pick" class="pl-pick">${pickOptions(waste)}</select></label>
+        <label id="rm-custom-row">Yards <input id="rm-yards" type="number" min="0" step="0.5" value="${esc(String(c.custom||10))}" aria-label="Cubic yards"></label>
+        <label>Waste <select id="cq-waste" class="pl-pick">${steps.map(v=>opt(v,`${v}%`,waste)).join("")}</select></label>
+        <label>Mix <select id="cq-psi" class="pl-pick">${opt("","Per the specs",c.psi||"")}${MIX_PSI.map(v=>opt(v,`${v} PSI`,c.psi||"")).join("")}</select></label>
+        <label>Truck size <select id="rm-truck" class="pl-pick">${TRUCK_SIZES.map(v=>opt(v,`${v} yards`,truckCY())).join("")}</select></label>
+        <label class="cq-wide">Based on <select id="rm-basis" class="pl-pick"></select></label>
+      </div>
+      ${y.out.length?`<div class="rate-note">Where the yards come from:</div><table class="ps-table"><thead><tr><th>Line</th><th>Quantity</th><th>Concrete</th></tr></thead><tbody>
+        ${y.out.map(x=>`<tr><td>${esc(x.name)}</td><td>${Math.round(x.qty).toLocaleString()} ${esc(x.unit)}</td><td>${x.cy.toFixed(1)} CY</td></tr>`).join("")}</tbody></table>`
+        :`<div class="rate-note">No line gives an area and a thickness (like "4 in. sidewalk, sq yd"), so type in the yards.</div>`}
+      ${y.other.length?`<div class="rate-note">Not counted, size from the plans: ${y.other.map(x=>esc(x.name)).join("; ")}.</div>`:""}
+    </details>
+    <button class="btn-ghost" id="cq-back" style="margin-top:0.75rem;">Back to summary</button>`;
   let sup=null,quotes=null;
   const $=(i)=>document.getElementById(i);
   const redraw=()=>{
@@ -5402,11 +5410,11 @@ function renderConcretePanel(body,city,id,b){
     const bases=priceBases(c,quotes);
     const pick=bases.find(x=>x.kind===c.basis)||bases[0];
     $("rm-basis").innerHTML=bases.map(x=>opt(x.kind,x.label,pick.kind)).join("");
+    $("rm-pick").innerHTML=pickOptions(w);
     const py=pickedYards(y,c,w);
     $("rm-custom-row").style.display=py.custom?"":"none";
     $("rm-est").innerHTML=readyMixHTML(readyMixEstimate(py.yards,pick,truckCY()),quotes);
     $("rm-share").innerHTML=concreteShareHTML(y,p.lines,pick,w);
-    if($("cq-total"))$("cq-total").textContent=`${Math.ceil(y.total*(1+w/100))} CY`;
     $("cq-send").href=concreteQuoteMail(b,p,city,w);
     if(sup){$("rm-sup").innerHTML=suppliersHTML(sup,b,p,city,w);wirePlants();}
     const sel=$("rm-form").querySelector('[name="supplier"]'),cur=sel.value;
