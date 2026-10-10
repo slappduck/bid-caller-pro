@@ -893,3 +893,36 @@ body{font-family:var(--ui);background:radial-gradient(ellipse 120% 60% at 50% -1
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
   select,textarea{font-size:max(16px,1em)!important;}
 }
+
+/* Ready-mix plants near a bid, and the quote log */
+.sup-row{padding:0.55rem 0;border-bottom:1px solid var(--border);}
+.sup-row:last-of-type{border-bottom:none;}
+.sup-name{font-weight:600;color:var(--text);}
+.sup-mi{font-weight:400;color:var(--text2);font-size:var(--fs-sm);margin-left:0.35rem;white-space:nowrap;}
+.sup-acts{display:flex;flex-wrap:wrap;gap:0.4rem 1rem;margin-top:0.3rem;font-size:var(--fs-sm);}
+.sup-acts a{min-height:44px;display:inline-flex;align-items:center;}
+.rm-log summary{cursor:pointer;color:var(--accent);font-weight:600;font-size:var(--fs-md);min-height:44px;display:flex;align-items:center;}
+.rm-form{display:grid;gap:0.5rem;margin-top:0.5rem;}
+.rm-form label{display:flex;justify-content:space-between;align-items:center;gap:0.75rem;font-size:var(--fs-sm);color:var(--text);}
+.rm-form input{width:7.5rem;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text);padding:0.35rem 0.5rem;font-family:var(--ui);}
+.sup-row a{color:var(--accent);text-decoration:none;font-weight:600;font-size:var(--fs-base);}
+.sup-row a:hover,.sup-row a:focus-visible{text-decoration:underline;}
+/* Dropdowns in the concrete panel: two to a row on a phone, labels above */
+.cq-grid{display:grid;grid-template-columns:1fr 1fr;gap:0.5rem 0.75rem;margin:0.6rem 0;}
+.cq-grid label{display:flex;flex-direction:column;gap:0.25rem;font-size:var(--fs-sm);color:var(--text2);}
+.cq-grid select,.cq-grid input,.rm-form select,.sup-status{width:100%;min-height:44px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:var(--r-sm);padding:0.35rem 0.5rem;font-family:var(--ui);}
+.rm-form select{width:9.5rem;}
+.sup-head{display:flex;justify-content:space-between;align-items:center;gap:0.75rem;}
+.sup-head .sup-status{width:auto;max-width:11rem;flex-shrink:0;font-size:var(--fs-sm);}
+.sup-quote{color:var(--green);font-size:var(--fs-sm);font-weight:600;margin-top:0.2rem;}
+.sup-out{opacity:0.55;}
+.rm-form .rm-share{justify-content:flex-start;gap:0.5rem;}
+.rm-form .rm-share input{width:auto;min-height:0;}
+.cq-grid .cq-wide{grid-column:1/-1;}
+/* The concrete answer: yards and trucks, then the cost, big */
+.cq-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:0.9rem 1rem;margin:0.5rem 0 0.75rem;}
+.cq-big{font-size:var(--fs-md);color:var(--text2);font-weight:600;}
+.cq-cost{font-size:1.6rem;font-weight:700;color:var(--text);margin-top:0.15rem;}
+.cq-range{font-size:var(--fs-base);color:var(--text);margin-top:0.1rem;}
+.cq-why{font-size:var(--fs-sm);color:var(--text2);margin-top:0.35rem;line-height:1.4;}
+.rm-log{margin-top:0.75rem;}
