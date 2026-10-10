@@ -5144,7 +5144,7 @@ function concreteYards(lines){
   });
   return{out,other,total:out.reduce((s,x)=>s+x.cy,0)};
 }
-function concreteQuoteMail(b,p,city,waste){
+function concreteQuoteMail(b,p,city,waste,to){
   const i=bidInfo(),y=concreteYards(p.lines);
   const k=1+(Number(waste)||0)/100;
   const body=["Hello,","",
@@ -5154,7 +5154,97 @@ function concreteQuoteMail(b,p,city,waste){
     "",y.total?`Total: about ${Math.ceil(y.total*k)} CY including ${Number(waste)||0}% waste.`:"",
     "Mix per the project specs. Start date to be set once the job is awarded.","",
     "Please include delivery and any short-load or minimum charges.","","Thanks,",signOff()].filter((x,j,a)=>x!==""||a[j-1]!=="").join("\n");
-  return mailtoUrl(i.supplier_email,`Ready-mix quote: ${y.total?`~${Math.ceil(y.total*k)} CY, `:""}${b.title||""}`,body);
+  return mailtoUrl(to||i.supplier_email,`Ready-mix quote: ${y.total?`~${Math.ceil(y.total*k)} CY, `:""}${b.title||""}`,body);
+}
+// Ready-mix ballpark for when an area has no logged quotes yet. Nobody
+// publishes local prices; these are the national 2026 figures from cost
+// guides (costinsighthub, costflowai, invoiceowl), which disagree with each
+// other, so the range is wide and always labelled an estimate. A truck is
+// taken as 10 CY; under that, plants add a short-load charge per missing yard.
+const READY_MIX={low:110,high:175,truckCY:10,deliveryHigh:180,shortLow:40,shortHigh:100};
+function readyMixEstimate(yards,quotes){
+  const y=Math.round((Number(yards)||0)*4)/4;
+  if(!(y>0))return null;
+  const local=!!(quotes&&quotes.enough);
+  const pLo=local?quotes.low:READY_MIX.low,pHi=local?quotes.high:READY_MIX.high;
+  const trucks=Math.ceil(y/READY_MIX.truckCY);
+  const short=y<READY_MIX.truckCY?Math.round((READY_MIX.truckCY-y)*4)/4:0;
+  return{yards:y,trucks,short,pLo,pHi,local,
+    lo:y*pLo+short*READY_MIX.shortLow,
+    hi:y*pHi+trucks*READY_MIX.deliveryHigh+short*READY_MIX.shortHigh};
+}
+function readyMixHTML(e,quotes){
+  if(!e)return`<div class="account-status">Enter the yards to price.</div>`;
+  const per=`${fmtRate(e.pLo)}–${fmtRate(e.pHi)}`;
+  const n=quotes&&quotes.count||0;
+  return`<table class="ps-table"><tbody>
+    <tr><td>${e.yards.toLocaleString()} CY at ${per}/CY</td><td>${money0(e.yards*e.pLo)}–${money0(e.yards*e.pHi)}</td></tr>
+    <tr><td>Delivery, ${plural(e.trucks,"truck")} (often in the price)</td><td>$0–${money0(e.trucks*READY_MIX.deliveryHigh)}</td></tr>
+    ${e.short?`<tr><td>Short load: ${e.short} CY under a full truck</td><td>${money0(e.short*READY_MIX.shortLow)}–${money0(e.short*READY_MIX.shortHigh)}</td></tr>`:""}
+    <tr><td><b>Estimated total</b></td><td><b>${money0(e.lo)}–${money0(e.hi)}</b></td></tr></tbody></table>
+    <div class="rate-note">${e.local
+      ?`Per-yard range from ${plural(quotes.count,"quote")} contractors logged within ${quotes.radius_mi} miles in the last year (median ${fmtRate(quotes.median)}).`
+      :`Per-yard range is a national 2026 estimate from published cost guides; Midwest and Southeast plants often run lower.${n?` ${plural(n,"quote")} logged near here so far; local prices show once there are 3 from at least 2 contractors.`:""}`}
+      A plant's quote is the real number.</div>`;
+}
+// Ready-mix plants near the bid's town, from the server (OpenStreetMap, with
+// a web search where the map knows little). Kept for the session per town.
+const supplierCache=new Map();
+function placeParts(city){
+  const m=/^(.+?),\s*([A-Za-z]{2})\s*$/.exec(String(city||"").trim());
+  return m?{city:m[1],state:m[2].toUpperCase()}:null;
+}
+async function loadSuppliers(city,fresh){
+  const pl=placeParts(city);
+  if(!pl)return{ok:false,reason:"bad_place"};
+  const k=`${pl.city},${pl.state}`.toLowerCase();
+  if(!fresh&&supplierCache.has(k))return supplierCache.get(k);
+  if(isOffline())return{ok:false,reason:"offline"};
+  try{
+    const token=await getSupabaseToken();
+    const r=await fetchWithTimeout(SERVER+"/suppliers/nearby",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,...pl})},60000);
+    const d=await r.json();
+    if(d&&d.ok)supplierCache.set(k,d);
+    return d||{ok:false};
+  }catch(e){return{ok:false,reason:"network"};}
+}
+function suppliersHTML(d,b,p,city,waste){
+  if(!d||!d.ok){
+    const why={not_licensed:"Supplier search is part of a paid plan.",place_not_found:"Couldn't place this town on the map.",
+      rate_limited:"Too many searches today. Try again tomorrow.",offline:"You're offline."}[d&&d.reason]||"Couldn't load suppliers right now.";
+    return`<div class="account-status">${esc(why)}</div>`;
+  }
+  const plants=d.plants||[],web=d.web||[];
+  if(!plants.length&&!web.length)return`<div class="account-status">No ready-mix plants found within ${d.radius_mi} miles of ${esc(d.city)}.</div>`;
+  return`${plants.map(x=>`<div class="sup-row">
+      <div class="sup-name">${esc(x.name)} <span class="sup-mi">${x.miles} mi</span></div>
+      ${x.address?`<div class="rate-note">${esc(x.address)}</div>`:""}
+      <div class="sup-acts">${x.phone?`<a href="tel:${esc(x.phone.replace(/[^\d+]/g,""))}">Call ${esc(x.phone)}</a>`:""}
+        ${safeUrl(x.website)?`<a href="${esc(safeUrl(x.website))}" target="_blank" rel="noopener noreferrer">Website</a>`:""}
+        ${/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(x.email||"")?`<a href="${esc(concreteQuoteMail(b,p,city,waste,x.email))}">Email for a quote</a>`:""}</div>
+    </div>`).join("")}
+    ${web.length?`<div class="rate-note" style="margin-top:0.5rem;">${plants.length?"More":"Found"} on the web:</div>
+      ${web.map(w=>safeUrl(w.url)?`<div class="sup-row"><a href="${esc(safeUrl(w.url))}" target="_blank" rel="noopener noreferrer">${esc(w.site)}</a>
+        ${w.snippet?`<div class="rate-note">${esc(w.snippet)}</div>`:""}</div>`:"").join("")}`:""}
+    <div class="rate-note">Plants within ${d.radius_mi} miles of ${esc(d.city)}, from OpenStreetMap${web.length?" and a web search":""}. Not every plant is listed; call to confirm they deliver to the job.</div>`;
+}
+async function logConcreteQuote(city,form){
+  const pl=placeParts(city);
+  const token=await getSupabaseToken();
+  if(!token){toast("Sign in to log a quote");return false;}
+  const num=(n)=>{const v=form.querySelector(`[name="${n}"]`).value.trim();return v===""?null:Number(v);};
+  const body={supabase_token:token,...pl,price_per_cy:num("price"),yards:num("yards"),
+    delivery_fee:num("delivery"),short_load_fee:num("short"),psi:num("psi")};
+  if(!(body.price_per_cy>=40&&body.price_per_cy<=600)){toast("Enter the price per cubic yard (between $40 and $600)");return false;}
+  if(!(body.yards>0)){toast("Enter how many yards the quote was for");return false;}
+  try{
+    const r=await fetchWithTimeout(SERVER+"/suppliers/quote",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)},30000);
+    const d=await r.json();
+    if(d&&d.ok){toast("Quote saved. Thanks, it helps everyone price this area.");return true;}
+    toast(d&&d.reason==="sign_in"?"Sign in to log a quote":"Couldn't save the quote. Try again later.");
+  }catch(e){toast("Couldn't save the quote. Try again later.");}
+  return false;
 }
 function agencyQuestionMail(b){
   const body=["Hello,","",`Regarding ${b.title||"the bid"}${b.bid_number?` (${b.bid_number})`:""}${b.deadline?`, due ${b.deadline}`:""}:`,"",
@@ -5200,7 +5290,39 @@ function renderConcretePanel(body,city,id,b){
       ${y.total?` · <b id="cq-total">${Math.ceil(y.total*(1+waste/100))} CY</b> to order`:""}</div>
     ${bidInfo().supplier_email?"":`<div class="rate-note">Add your supplier's email in <a href="#" id="cq-profile">bid details</a> and it's filled in for you.</div>`}
     <div class="act-primary"><a class="ma-gold" id="cq-send" href="${esc(concreteQuoteMail(b,p,city,waste))}">Write the quote request</a></div>
+    <div class="workspace-title" style="margin-top:1rem;">What the concrete should cost</div>
+    <div class="rate-note est-width">For <input id="rm-yards" type="number" min="0" step="0.5" value="${esc(String(y.total?Math.ceil(y.total*(1+waste/100)):10))}" aria-label="Cubic yards"> CY</div>
+    <div id="rm-est">${readyMixHTML(readyMixEstimate(y.total?Math.ceil(y.total*(1+waste/100)):10,null),null)}</div>
+    <div class="workspace-title" style="margin-top:1rem;">Ready-mix plants near ${esc((placeParts(city)||{}).city||city)}</div>
+    <div id="rm-sup"><div class="account-status">Looking for plants…</div></div>
+    <details class="rm-log" style="margin-top:0.75rem;"><summary>Got a quote? Log it</summary>
+      <form id="rm-form" class="rm-form">
+        <label>Price per CY $ <input name="price" type="number" min="40" max="600" step="0.01" required></label>
+        <label>Yards quoted <input name="yards" type="number" min="0.25" step="0.25" required></label>
+        <label>Delivery fee $ <input name="delivery" type="number" min="0" step="1" placeholder="if separate"></label>
+        <label>Short-load fee $ <input name="short" type="number" min="0" step="1" placeholder="if any"></label>
+        <label>PSI <input name="psi" type="number" min="2000" max="10000" step="500" placeholder="e.g. 4000"></label>
+        <button class="btn-ghost" type="submit">Save quote</button>
+        <div class="rate-note">Never shown on its own or with your name: it only counts toward this area's price range, once there are 3 quotes from at least 2 contractors.</div>
+      </form></details>
     <button class="btn-ghost" id="cq-back" style="margin-top:0.5rem;">Back to summary</button>`;
+  let quotes=null;
+  const yIn=document.getElementById("rm-yards");
+  const redraw=()=>{document.getElementById("rm-est").innerHTML=readyMixHTML(readyMixEstimate(yIn.value,quotes),quotes);};
+  yIn.oninput=redraw;
+  const showSuppliers=(fresh)=>loadSuppliers(city,fresh).then(d=>{
+    const box=document.getElementById("rm-sup");
+    if(!box)return;
+    quotes=d&&d.ok?d.quotes:null;
+    box.innerHTML=suppliersHTML(d,b,p,city,Number(store.get("concrete_waste_pct",5))||0);
+    redraw();
+  });
+  showSuppliers(false);
+  const form=document.getElementById("rm-form");
+  form.onsubmit=async(e)=>{
+    e.preventDefault();
+    if(await logConcreteQuote(city,form)){form.reset();form.closest("details").open=false;showSuppliers(true);}
+  };
   const w=document.getElementById("cq-waste");
   w.oninput=()=>{
     const v=Math.max(0,Math.min(30,Number(w.value)||0));

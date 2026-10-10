@@ -149,6 +149,27 @@ drop policy if exists "Users manage their own push subscriptions" on push_subscr
 create policy "Users manage their own push subscriptions" on push_subscriptions
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
+-- Ready-mix quotes contractors log after getting them from a supplier.
+-- Written and read only by the server (service role): no policy grants the
+-- browser anything. A quote is never shown on its own -- the app only gets
+-- an area's range once 3+ quotes from 2+ contractors exist -- and its
+-- location is rounded to 0.1 degree (about seven miles).
+create table if not exists concrete_quotes (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  lat numeric(5,1) not null,
+  lon numeric(5,1) not null,
+  state text not null,
+  price_per_cy numeric(8,2) not null,
+  yards numeric(10,2) not null,
+  delivery_fee numeric(8,2),
+  short_load_fee numeric(8,2),
+  psi int,
+  created_at timestamptz default now()
+);
+alter table concrete_quotes enable row level security;
+create index if not exists concrete_quotes_place on concrete_quotes (lat, lon, created_at);
+
 -- Customer reviews, shown as testimonials on the marketing page.
 --
 -- Nothing appears publicly until approved is flipped to true by hand
