@@ -3,5 +3,5 @@ flask-cors==6.0.5
 gunicorn==26.2.0
 anthropic==1.11.0
 Pillow==12.3.0
-pypdf==6.19.0
+pypdf==6.20.0
 cryptography==46.0.7
