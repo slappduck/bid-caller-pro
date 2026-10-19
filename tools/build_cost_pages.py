@@ -29,6 +29,9 @@ RATES = os.path.join(SITE, "rates")
 OUT = os.path.join(SITE, "concrete-cost")
 SITEMAP = os.path.join(SITE, "sitemap.xml")
 BASE_URL = "https://curbcallpro.com"
+# The free weekly bid email signup (license_server/digest.py). A plain form
+# post, so the pages still load no script of their own.
+DIGEST_URL = "https://bid-caller-pro.onrender.com/digest/subscribe"
 
 AGENCY = {"MO": "MoDOT", "FL": "FDOT", "OR": "ODOT", "MN": "MnDOT", "OK": "ODOT", "NC": "NCDOT",
           "TX": "TxDOT", "TN": "TDOT", "IN": "INDOT", "MT": "MDT", "SD": "SDDOT", "KY": "KYTC",
@@ -165,6 +168,11 @@ td .sub{color:var(--text3);font-size:0.8rem;}
 details{border-bottom:1px solid var(--line);padding:0.7rem 0;}
 summary{cursor:pointer;font-weight:600;}
 details p{color:var(--text2);margin-top:0.4rem;font-size:0.93rem;}
+.su{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0.6rem 0.9rem;margin-top:0.8rem;}
+.su label{display:flex;flex-direction:column;font-size:0.8rem;color:var(--text2);gap:0.25rem;}
+.su input{width:100%;min-width:0;min-height:44px;background:var(--bg);border:1px solid var(--line);border-radius:10px;color:var(--text);padding:0.4rem 0.6rem;font-family:var(--ui);font-size:16px;}
+.su button{grid-column:1/-1;min-height:48px;background:var(--amber);color:#10131c;font-weight:800;font-size:1rem;border:0;border-radius:12px;cursor:pointer;font-family:var(--ui);}
+.su .hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0;}
 footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--text3);font-size:0.82rem;margin-top:2.5rem;}
 """
 
@@ -200,6 +208,22 @@ def calculator():
   A plant's quote is the real number.</p>
 </div>
 <script>{CALC_JS % json.dumps(READY_MIX)}</script>"""
+
+
+def signup():
+    """The free weekly bid email box. The hidden "website" field is a trap
+    for bots; people never see it."""
+    return f"""<div class="card" id="weekly-bids">
+<h2 style="margin-top:0;">Get open bids near you, free, every Monday</h2>
+<p class="why">The open sidewalk, curb and ADA ramp bids within 50 miles of your ZIP, in one email a week. No account. One click to stop.</p>
+<form class="su" method="post" action="{DIGEST_URL}">
+<label>Email<input type="email" name="email" required autocomplete="email" /></label>
+<label>ZIP code<input type="text" name="zip" required pattern="[0-9]{{5}}" maxlength="5" inputmode="numeric" autocomplete="postal-code" /></label>
+<input class="hp" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" />
+<button type="submit">Send me the bids</button>
+</form>
+<p class="note">We email you a link to confirm first. <a href="/privacy.html">Privacy policy</a>.</p>
+</div>"""
 
 
 def page(title, desc, path, body, ld=None):
@@ -301,6 +325,7 @@ These are state highway jobs; city and county work can run different.</p>
 <p class="note">Source: <a href="{e(d['source_url'])}" rel="nofollow noopener" target="_blank">{e(d['source'])}</a>.
 {"Averages of every bid received." if d["basis"] == "all_bids" else "Averages of winning prices only."}</p>
 {dist}
+{signup()}
 {calculator()}
 <a class="cta" href="/app.html">See open sidewalk &amp; curb bids near you</a>
 <p class="note" style="text-align:center;">CurbCall Pro finds city, county and state concrete bids near you, shows these prices on each one,
@@ -324,6 +349,7 @@ def index_page(states):
 from each DOT's own published data, plus what the ready-mix itself costs.</p>
 </header>
 <div class="states">{cards}</div>
+{signup()}
 {calculator()}
 <a class="cta" href="/app.html">See open sidewalk &amp; curb bids near you</a>"""
     title = "Concrete prices by state: sidewalk, curb, ADA ramps & ready-mix"

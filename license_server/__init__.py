@@ -116,6 +116,7 @@ _FILES = (
     "bid_documents.py",
     "push.py",
     "suppliers.py",
+    "digest.py",
 )
 
 _pkg_dir = _os.path.dirname(_os.path.abspath(__file__))

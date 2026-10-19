@@ -193,6 +193,7 @@ CRON_EXPECTED = {
     "weekly-digest": 192,        # weekly; its absence is the outer alarm
     "purge-expired-consent": 960,  # monthly
     "bid-watch": 14,             # every 6 hours: addenda and due-tomorrow alerts
+    "bid-digest": 192,           # weekly: the free bid email (digest.py)
 }
 
 
