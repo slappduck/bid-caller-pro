@@ -4371,48 +4371,100 @@ function savePrep(id,city){
   clearTimeout(_prepPushTimers[id]);
   _prepPushTimers[id]=setTimeout(()=>pushSavedBid(id,city),1200);
 }
-// What a public concrete bid usually takes. Generic items say "if required":
-// the posting decides, and inventing a requirement is as bad as missing one.
+// What a public concrete bid usually takes, in the order it gets done.
+// Generic items say "if required": the posting decides, and inventing a
+// requirement is as bad as missing one. Each step belongs to a phase, so
+// the Steps tab can walk the contractor through it from documents to
+// submission instead of handing them one long list.
+const PREP_PHASES=[["before","Before you price"],["price","Price it"],["paper","Paperwork"],["submit","Submit"]];
 function prepChecklist(b,info){
   info=info||{};
-  const fromDocs=(t)=>t?` From the bid documents: ${t}`:"";
+  // What the documents say often has no full stop of its own, and the next
+  // sentence ran straight into it ("5% bid bond Ask your bonding company").
+  const fromDocs=(t)=>{t=String(t||"").trim();return t?` From the bid documents: ${t}${/[.!?]$/.test(t)?"":"."}`:"";};
   const docs=((b&&b.documents)||[]).map(d=>({
     name:(d&&d.name)?String(d.name):"Document",url:safeUrl(typeof d==="string"?d:(d&&d.url))
   })).filter(d=>d.url);
   const items=[
-    {key:"docs",label:"Get the bid documents",
+    {key:"docs",phase:"before",label:"Get the bid documents",
       detail:docs.length?"Plans, specs and the bid form. Linked below."
         :"Plans, specs and the bid form. Some agencies require registering on their plan room first.",docs},
-    !(b&&b.prebid)&&info.prebid?{key:"prebid",label:"Attend the pre-bid meeting",
+    !(b&&b.prebid)&&info.prebid?{key:"prebid",phase:"before",label:/mandatory/i.test(info.prebid)?"Attend the MANDATORY pre-bid meeting":"Attend the pre-bid meeting",
       detail:fromDocs(info.prebid).trim(),urgent:/mandatory/i.test(info.prebid)}:null,
-    b&&b.prebid?{key:"prebid",label:b.prebid==="mandatory"?"Attend the MANDATORY pre-bid meeting":"Attend the pre-bid meeting",
+    b&&b.prebid?{key:"prebid",phase:"before",label:b.prebid==="mandatory"?"Attend the MANDATORY pre-bid meeting":"Attend the pre-bid meeting",
       detail:(b.prebid==="mandatory"?"Missing it disqualifies the bid. Date and place are in the posting.":"Date and place are in the posting.")+fromDocs(info.prebid),
       urgent:b.prebid==="mandatory"}:null,
-    {key:"addenda",label:"Read every addendum",
+    {key:"addenda",phase:"before",label:"Read every addendum",
       detail:(b&&b.addenda?"This bid has addenda. ":"")+"Check for new ones up to the deadline. Most bid forms ask you to list each addendum by number.",
       urgent:!!(b&&b.addenda)},
-    info.questions_due?{key:"questions",label:"Send any questions before the deadline",detail:fromDocs(info.questions_due).trim()}:null,
-    {key:"site",label:"Visit the site",detail:"Optional, but quantities on paper and in the field don't always agree.",optional:true},
-    {key:"price",label:"Price every line item",detail:"Use the Pricing tab."},
-    {key:"bond",label:info.bid_security?"Bid bond or bid security":"Bid bond or bid security, if required",
+    info.questions_due?{key:"questions",phase:"before",label:"Send any questions before the deadline",detail:fromDocs(info.questions_due).trim()}
+      :{key:"questions",phase:"before",label:"Ask the agency anything unclear",detail:"Questions usually close a week or so before bids are due.",optional:true},
+    {key:"site",phase:"before",label:"Visit the site",detail:"Quantities on paper and in the field don't always agree.",optional:true},
+    {key:"price",phase:"price",label:"Price every line item",detail:"Start from the going rates and change anything to your own numbers."},
+    {key:"concrete",phase:"price",label:"Get a concrete quote",detail:"Plants near the job and an email to your supplier with the yards worked out."},
+    {key:"bond",phase:"paper",label:info.bid_security?"Bid bond or bid security":"Bid bond or bid security, if required",
       detail:info.bid_security?fromDocs(info.bid_security).trim()+" Ask your bonding company early."
         :"Often a percentage of the bid amount. The posting says if one is needed. Ask your bonding company early.",urgent:!!info.bid_security},
-    {key:"forms",label:"Fill out the bid form and required affidavits",
-      detail:"Use the agency's own form. Copy prices from the Summary tab."+(info.required_forms&&info.required_forms.length
+    {key:"forms",phase:"paper",label:"Fill out the bid form and required affidavits",
+      detail:"Use the agency's own form."+(info.required_forms&&info.required_forms.length
         ?` Required by the bid documents: ${info.required_forms.join("; ")}.`:"")},
-    {key:"insurance",label:"Insurance certificate, if requested",detail:"Check the posting for limits and who to name as additional insured."},
-    {key:"sign",label:"Sign, and notarize if required",detail:"Done by you, outside the app."},
-    {key:"submit",label:"Submit before the deadline",
+    {key:"insurance",phase:"paper",label:"Insurance certificate, if requested",detail:"Check the posting for limits and who to name as additional insured."},
+    {key:"sign",phase:"paper",label:"Sign, and notarize if required",detail:"Done by you, outside the app."},
+    {key:"submit",phase:"submit",label:"Submit before the deadline",
       detail:`${b&&b.deadline?`Due ${b.deadline}. `:""}${info.submission?fromDocs(info.submission).trim():"Sealed envelope or online, as the posting says."} Late bids are usually returned unopened.`,urgent:true},
   ];
   return items.filter(Boolean);
 }
+// Steps the app can see are done without being told: the documents were
+// read, every line has a price, a concrete quote was saved, the form was
+// filled in, the addenda were recorded.
+function prepAuto(b,p){
+  const out={};
+  if(p.docInfo&&p.docInfo.read_at)out.docs="Read in the app";
+  const lines=(p.lines||[]).filter(l=>Number(l.qty)>0);
+  if(lines.length&&lines.every(l=>Number(l.price)>0))out.price="Every line priced";
+  const c=p.concrete&&p.concrete.plants;
+  if(c&&Object.values(c).some(x=>x&&x.status==="Quoted"))out.concrete="Quote saved";
+  if(p.formFilledAt)out.forms="Filled in "+shortDate(new Date(p.formFilledAt));
+  if(String(p.addenda||"").trim())out.addenda="Recorded: "+String(p.addenda).trim();
+  return out;
+}
+function stepDone(p,auto,key){return!!(p.checks[key]||auto[key]);}
 function prepProgress(id,b){
   const p=bidPrep[id];
   if(!p)return null;
+  const auto=prepAuto(b,p);
   const list=prepChecklist(b,p.docInfo).filter(i=>!i.optional).concat((p.custom||[]).map((c,i)=>({key:"c"+i})));
-  const done=list.filter(i=>p.checks[i.key]).length;
+  const done=list.filter(i=>stepDone(p,auto,i.key)).length;
   return{done,total:list.length};
+}
+// The tab a tool was opened from, for its Back button.
+function prepBackName(id,dflt){
+  const s=(bidPrep[id]&&bidPrep[id].step)||dflt;
+  return{steps:"steps",pricing:"pricing",summary:"summary"}[s]||dflt;
+}
+// Where the pre-bid meeting is: typed in, else what the documents say.
+function meetingPlace(p){return String((p&&p.meetingPlace)||(p&&p.docInfo&&p.docInfo.prebid_place)||"").trim();}
+// Apple Maps on an iPhone or iPad, Google Maps everywhere else: each opens
+// the phone's own maps app with directions one tap away.
+function mapUrl(q){
+  const ios=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+  return ios?`https://maps.apple.com/?q=${encodeURIComponent(q)}`
+    :`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+}
+function shortDate(d){return d.toLocaleDateString(undefined,{month:"short",day:"numeric"});}
+// When each step should be done by. Dates the bid itself gives (pre-bid
+// meeting, questions) are used as they are; the rest are worked back from
+// the due date, far enough ahead that the other party has time to answer.
+const STEP_LEAD_DAYS={bond:5,concrete:3,price:2,forms:1,insurance:2,sign:1,submit:0};
+function stepDue(item,b,p){
+  const info=p.docInfo||{};
+  if(item.key==="prebid"&&info.prebid){const d=deadlineDate({deadline:info.prebid});return d?{date:d,fixed:true}:null;}
+  if(item.key==="questions"&&info.questions_due){const d=deadlineDate({deadline:info.questions_due});return d?{date:d,fixed:true}:null;}
+  const due=deadlineDate(b);
+  if(!due||!(item.key in STEP_LEAD_DAYS))return null;
+  const d=new Date(due);d.setDate(d.getDate()-STEP_LEAD_DAYS[item.key]);
+  return{date:d,fixed:item.key==="submit"};
 }
 // Starting lines: the ballpark's priced quantities, then anything it could
 // read but not price (ramp counts), then one blank line to fill in.
@@ -4452,7 +4504,10 @@ async function openPrep(city,id,step){
   const p=prepFor(id);
   if(!p.lines)p.lines=defaultPrepLines(b,city);
   savePrep(id,city);
-  step=step||p.step||"checklist";
+  // "checklist" is what the Steps tab was called before; a saved bid may
+  // still remember it.
+  step=step||p.step||"steps";
+  if(step==="checklist")step="steps";
   p.step=step;
   const mc=document.getElementById("modal-content");
   const prog=prepProgress(id,b);
@@ -4463,7 +4518,7 @@ async function openPrep(city,id,step){
         ${b.deadline?`<span class="chip"${dleft!=null&&dleft<=2?' style="color:var(--red);"':""}>Due ${esc(b.deadline)}${dleft!=null&&dleft>=0?` · ${dleft===0?"today":dleft+"d left"}`:""}</span>`:""}</div></div>
     <a href="#" class="prep-back" id="prep-back">← Bid details</a>
     <div class="prep-tabs" role="tablist">
-      <button role="tab" data-step="checklist" class="${step==="checklist"?"on":""}">Checklist <span>${prog.done}/${prog.total}</span></button>
+      <button role="tab" data-step="steps" class="${step==="steps"?"on":""}">Steps <span>${prog.done}/${prog.total}</span></button>
       <button role="tab" data-step="pricing" class="${step==="pricing"?"on":""}">Pricing <span id="prep-tab-total">${t.total?money0(t.total):""}</span></button>
       <button role="tab" data-step="summary" class="${step==="summary"?"on":""}">Summary</button>
     </div>
@@ -4471,31 +4526,133 @@ async function openPrep(city,id,step){
   mc.querySelectorAll(".prep-tabs button").forEach(btn=>btn.onclick=()=>openPrep(city,id,btn.dataset.step));
   document.getElementById("prep-back").onclick=(e)=>{e.preventDefault();openDetail(city,b);};
   const body=document.getElementById("prep-body");
-  if(step==="checklist")renderPrepChecklist(body,city,id,b);
+  if(step==="steps")renderPrepSteps(body,city,id,b);
   else if(step==="pricing")renderPrepPricing(body,city,id,b);
   else renderPrepSummary(body,city,id,b);
   document.getElementById("modal-back").classList.add("open");
   document.getElementById("modal").classList.add("open");
 }
 
-function renderPrepChecklist(body,city,id,b){
+function renderPrepSteps(body,city,id,b){
   const p=prepFor(id);
-  const items=prepChecklist(b,p.docInfo);
-  const row=(key,label,detail,opts={})=>`<label class="prep-check${p.checks[key]?" done":""}${opts.urgent?" urgent":""}">
-      <input type="checkbox" data-check="${esc(key)}"${p.checks[key]?" checked":""}>
-      <span><b>${esc(label)}</b>${opts.optional?' <em>optional</em>':""}
-        ${detail?`<small>${esc(detail)}</small>`:""}
-        ${opts.docs&&opts.docs.length?`<small class="prep-docs">${opts.docs.slice(0,6).map(d=>`<a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">${esc(d.name)}</a>`).join(" · ")}</small>`:""}
-        ${opts.remove!=null?`<button type="button" class="prep-x" data-remove="${opts.remove}" aria-label="Remove">×</button>`:""}</span>
-    </label>`;
-  body.innerHTML=`${items.map(i=>row(i.key,i.label,i.detail,i)).join("")}
-    ${(p.custom||[]).map((c,i)=>row("c"+i,c,"",{remove:i})).join("")}
-    <div class="prep-add"><input class="input" id="prep-new" placeholder="Add your own step"><button class="btn-ghost" id="prep-add-btn">Add</button></div>
-    ${b.deadline?`<button class="btn-ghost" id="prep-cal" style="margin-top:0.6rem;">Add deadline to calendar</button>`:""}`;
+  const items=prepChecklist(b,p.docInfo),auto=prepAuto(b,p);
+  const today=new Date();today.setHours(0,0,0,0);
+  const t=prepTotals(p),info=bidInfo(),marks=p.marks||{};
+  const canFill=prepDocCandidates(b).some(d=>d.name!=="Original posting");
+  const canRead=prepDocCandidates(b).length>0;
+  const dates=bidDates(b,p),place=meetingPlace(p);
+  const dueOf=(i)=>{
+    const d=stepDue(i,b,p);if(!d)return null;
+    const days=Math.round((d.date-today)/86400000);
+    return{...d,days};
+  };
+  // One button per step, the tool that actually does it.
+  const action=(i)=>{
+    const a=(attrs,label)=>`<a class="step-act" ${attrs}>${esc(label)}</a>`;
+    const btn=(act,label)=>`<button type="button" class="step-act" data-act="${act}">${esc(label)}</button>`;
+    switch(i.key){
+      case"docs":return canRead&&!auto.docs?btn("read","Read them for me"):"";
+      case"prebid":return(place?a(`href="${esc(mapUrl(place+(city?", "+city:"")))}" target="_blank" rel="noopener noreferrer"`,"Directions"):"")
+        +(dates.some(d=>/pre-bid/i.test(d.label))?btn("dates","Add to calendar"):"");
+      case"questions":return b.email?a(`href="${esc(agencyQuestionMail(b))}" data-mark="questions"`,"Email the agency"):"";
+      case"site":return a(`href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(city||"")}" target="_blank" rel="noopener noreferrer"`,"Open map");
+      case"price":return btn("pricing",t.total?"Open pricing":"Start pricing");
+      case"concrete":return btn("concrete","Find plants and get a quote");
+      case"bond":return info.bond_email?a(`href="${esc(bondRequestMail(b,p,city))}" data-mark="bond"`,"Email my bonding agent"):btn("bondinfo","Add your bonding agent");
+      case"forms":return canFill?btn("fill","Fill in the agency's form"):btn("summary","Open the summary to copy");
+      case"submit":return dates.length?btn("dates","Add to calendar"):"";
+      default:return"";
+    }
+  };
+  const note=(i)=>{
+    const out=[];
+    if(i.key==="price"&&t.total)out.push(`${money0(t.total)} so far`);
+    if(marks[i.key])out.push(`Emailed ${shortDate(new Date(marks[i.key]))}`);
+    if(auto[i.key])out.push(auto[i.key]);
+    return out.join(" · ");
+  };
+  const placeField=()=>place&&!p.editPlace
+    ?`<small class="step-place">Meeting place: <b>${esc(place)}</b> <a href="#" data-edit-place>Change</a></small>`
+    :`<input class="input step-addenda" data-place placeholder="Meeting address, e.g. City Hall, 200 E Main St" value="${esc(place)}" aria-label="Meeting address">`;
+  const dueChip=(i,done)=>{
+    const d=dueOf(i);if(!d||done)return"";
+    // A meeting or a deadline is a date; anything else is "do by" a date.
+    const day=d.days===0?"today":d.days===1?"tomorrow":shortDate(d.date);
+    const when=d.days<0?(d.fixed?`was ${shortDate(d.date)}`:"overdue, do today")
+      :i.key==="submit"?`Due ${day}`:d.fixed?day:`Do by ${day}`;
+    const cls=d.days<0&&!d.fixed?" late":d.days<=1?" soon":"";
+    return`<span class="step-due${cls}">${esc(when)}</span>`;
+  };
+  const row=(i)=>{
+    const done=stepDone(p,auto,i.key);
+    return`<div class="prep-check step${done?" done":""}${i.urgent&&!done?" urgent":""}">
+      <input type="checkbox" data-check="${esc(i.key)}" aria-label="${esc(i.label)}"${done?" checked":""}${auto[i.key]?" disabled":""}>
+      <span><b>${esc(i.label)}</b>${i.optional?' <em>optional</em>':""} ${dueChip(i,done)}
+        ${i.detail?`<small>${esc(i.detail)}</small>`:""}
+        ${i.docs&&i.docs.length?`<small class="prep-docs">${i.docs.slice(0,6).map(d=>`<a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">${esc(d.name)}</a>`).join(" · ")}</small>`:""}
+        ${note(i)?`<small class="step-note">${esc(note(i))}</small>`:""}
+        ${i.key==="prebid"&&!done?placeField():""}
+        ${i.key==="addenda"?`<input class="input step-addenda" data-addenda placeholder="Addenda you've read, e.g. #1, #2 (or none)" value="${esc(p.addenda||"")}" aria-label="Addenda you've read">`:""}
+        ${done?"":action(i)}</span>
+    </div>`;
+  };
+  // Next up: the first required step not done, skipping meetings and
+  // deadlines that have already gone by (nothing left to do about those).
+  const required=items.filter(i=>!i.optional);
+  const next=required.find(i=>{
+    if(stepDone(p,auto,i.key))return false;
+    const d=dueOf(i);
+    return!(d&&d.fixed&&d.days<0&&i.key!=="submit");
+  });
+  const prog=prepProgress(id,b),pct=prog.total?Math.round(prog.done/prog.total*100):0;
+  body.innerHTML=`<div class="step-progress"><div class="step-bar"><i style="width:${pct}%"></i></div>
+      <span>${prog.done} of ${prog.total} done</span></div>
+    ${next?`<div class="step-next"><div class="step-next-k">Next up</div>
+        <b>${esc(next.label)}</b> ${dueChip(next,false)}
+        ${next.key==="prebid"&&place?`<small class="step-place">${esc(place)}</small>`:""}
+        ${note(next)?`<small class="step-note">${esc(note(next))}</small>`:""}
+        <div class="step-next-act">${action(next)||`<button type="button" class="step-act" data-done="${esc(next.key)}">Mark done</button>`}</div></div>`
+      :`<div class="step-next all"><b>Every step is done.</b> Good luck on the bid.</div>`}
+    ${PREP_PHASES.map(([ph,title],n)=>{
+      const list=items.filter(i=>i.phase===ph);
+      if(!list.length)return"";
+      const left=list.filter(i=>!i.optional&&!stepDone(p,auto,i.key)).length;
+      return`<div class="step-phase"><div class="step-phase-h"><span>${n+1}</span>${esc(title)}${left?"":`<em>done</em>`}</div>${list.map(row).join("")}</div>`;
+    }).join("")}
+    <div class="step-phase"><div class="step-phase-h"><span>+</span>Your own steps</div>
+      ${(p.custom||[]).map((c,i)=>`<label class="prep-check${p.checks["c"+i]?" done":""}">
+        <input type="checkbox" data-check="c${i}"${p.checks["c"+i]?" checked":""}>
+        <span><b>${esc(c)}</b><button type="button" class="prep-x" data-remove="${i}" aria-label="Remove">×</button></span></label>`).join("")}
+      <div class="prep-add"><input class="input" id="prep-new" placeholder="Add your own step"><button class="btn-ghost" id="prep-add-btn">Add</button></div></div>`;
+  const reopen=()=>openPrep(city,id,"steps");
   body.querySelectorAll("[data-check]").forEach(cb=>cb.onchange=()=>{
     p.checks[cb.dataset.check]=cb.checked;
     if(!cb.checked)delete p.checks[cb.dataset.check];
-    savePrep(id,city);openPrep(city,id,"checklist");
+    savePrep(id,city);reopen();
+  });
+  body.querySelectorAll("[data-done]").forEach(x=>x.onclick=()=>{p.checks[x.dataset.done]=true;savePrep(id,city);reopen();});
+  body.querySelectorAll("[data-mark]").forEach(x=>x.addEventListener("click",()=>{
+    (p.marks=p.marks||{})[x.dataset.mark]=Date.now();savePrep(id,city);
+    setTimeout(reopen,300);
+  }));
+  const pl=body.querySelector("[data-place]");
+  if(pl)pl.onchange=()=>{p.meetingPlace=pl.value.trim().slice(0,200);delete p.editPlace;savePrep(id,city);reopen();};
+  const ep=body.querySelector("[data-edit-place]");
+  if(ep)ep.onclick=(e)=>{e.preventDefault();p.editPlace=true;reopen();};
+  const ad=body.querySelector("[data-addenda]");
+  if(ad){
+    ad.oninput=()=>{p.addenda=ad.value.slice(0,200);savePrep(id,city);};
+    ad.onchange=reopen;
+  }
+  body.querySelectorAll("[data-act]").forEach(x=>x.onclick=()=>{
+    const act=x.dataset.act;
+    if(act==="read")renderDocPicker(body,city,id,b);
+    else if(act==="pricing")openPrep(city,id,"pricing");
+    else if(act==="summary")openPrep(city,id,"summary");
+    else if(act==="concrete")renderConcretePanel(body,city,id,b);
+    else if(act==="fill")renderFormFill(body,city,id,b);
+    else if(act==="dates")downloadBidDates(b,p,city,id);
+    else if(act==="bondinfo")openBidInfo(reopen);
   });
   body.querySelectorAll("[data-remove]").forEach(x=>x.onclick=(e)=>{
     e.preventDefault();
@@ -4510,18 +4667,16 @@ function renderPrepChecklist(body,city,id,b){
       else if(+m[1]>i)next["c"+(+m[1]-1)]=p.checks[k];
     });
     p.checks=next;
-    savePrep(id,city);openPrep(city,id,"checklist");
+    savePrep(id,city);reopen();
   });
   const add=()=>{
     const v=document.getElementById("prep-new").value.trim();
     if(!v)return;
     (p.custom=p.custom||[]).push(v.slice(0,200));
-    savePrep(id,city);openPrep(city,id,"checklist");
+    savePrep(id,city);reopen();
   };
   document.getElementById("prep-add-btn").onclick=add;
   document.getElementById("prep-new").onkeydown=(e)=>{if(e.key==="Enter")add();};
-  const cal=document.getElementById("prep-cal");
-  if(cal)cal.onclick=()=>addToCalendar(city,id);
 }
 
 // ── Reading the bid documents (server: /bid-documents/read) ──
@@ -4594,20 +4749,20 @@ function renderDocPicker(body,city,id,b){
     const res=await readBidDocument(d.url);
     if(!document.getElementById("prep-body"))return;
     if(!res.ok){
-      body.innerHTML=`<div class="alert alert-amber"><span>${esc(res.msg)}</span></div><button class="btn-ghost" id="doc-back">Back to pricing</button>`;
-      document.getElementById("doc-back").onclick=()=>openPrep(city,id,"pricing");
+      body.innerHTML=`<div class="alert alert-amber"><span>${esc(res.msg)}</span></div><button class="btn-ghost" id="doc-back">Back to ${prepBackName(id,"pricing")}</button>`;
+      document.getElementById("doc-back").onclick=()=>openPrep(city,id,prepFor(id).step||"pricing");
       return;
     }
     renderDocReview(body,city,id,b,d,res);
   });
-  document.getElementById("doc-cancel").onclick=()=>openPrep(city,id,"pricing");
+  document.getElementById("doc-cancel").onclick=()=>openPrep(city,id,prepFor(id).step||"pricing");
 }
 function renderDocReview(body,city,id,b,doc,res){
   const p=prepFor(id);
   // What the documents say about the bid is kept whatever happens to the
   // lines -- it feeds the checklist.
   p.docInfo={source:doc.name,submission:res.submission||"",bid_security:res.bid_security||"",
-    prebid:res.prebid||"",questions_due:res.questions_due||"",required_forms:res.required_forms||[],read_at:Date.now()};
+    prebid:res.prebid||"",prebid_place:res.prebid_place||"",questions_due:res.questions_due||"",required_forms:res.required_forms||[],read_at:Date.now()};
   savePrep(id,city);
   const items=res.line_items||[];
   const found=[res.submission&&"how to submit",res.bid_security&&"bid security",res.prebid&&"the pre-bid meeting",
@@ -4620,8 +4775,8 @@ function renderDocReview(body,city,id,b,doc,res){
       </tbody></table>
       <div class="act-primary"><button class="ma-gold" id="doc-replace">Use these lines</button><button class="ma-ghost" id="doc-add">Add to my lines</button></div>`
     :`<div class="alert alert-amber"><span>No schedule of items found in this document. Try the bid form if there's another document.</span></div>`}
-    ${found.length?`<div class="rate-note">Also found ${found.join(", ")}. It's now on your Checklist.</div>`:""}
-    <button class="btn-ghost" id="doc-back" style="margin-top:0.5rem;">Back to pricing</button>`;
+    ${found.length?`<div class="rate-note">Also found ${found.join(", ")}. It's now on your Steps.</div>`:""}
+    <button class="btn-ghost" id="doc-back" style="margin-top:0.5rem;">Back to ${prepBackName(id,"pricing")}</button>`;
   const take=(replace)=>{
     const d=rateData[bidState(city,b)];
     const lines=items.map(it=>lineFromDocItem(it,d));
@@ -4632,7 +4787,7 @@ function renderDocReview(body,city,id,b,doc,res){
   const rep=document.getElementById("doc-replace"),add=document.getElementById("doc-add");
   if(rep)rep.onclick=()=>{if(confirm("Replace your current lines with the items read from the document?"))take(true);};
   if(add)add.onclick=()=>take(false);
-  document.getElementById("doc-back").onclick=()=>openPrep(city,id,"pricing");
+  document.getElementById("doc-back").onclick=()=>openPrep(city,id,prepFor(id).step||"pricing");
 }
 
 // ── Your own pricing history ──
@@ -5081,29 +5236,30 @@ function renderFormFill(body,city,id,b){
       <button class="btn-ghost" id="ff-profile">Add bid details</button>`:""}
     ${docs.map((d,i)=>`<button class="btn-ghost doc-pick" data-doc="${i}">${esc(d.name)}</button>`).join("")||
       `<div class="account-status">No documents are linked to this bid.</div>`}
-    <button class="btn-ghost" id="ff-cancel">Back to summary</button>`;
+    <button class="btn-ghost" id="ff-cancel">Back to ${prepBackName(id,"summary")}</button>`;
   const prof=document.getElementById("ff-profile");
-  if(prof)prof.onclick=()=>openBidInfo(()=>openPrep(city,id,"summary"));
-  document.getElementById("ff-cancel").onclick=()=>openPrep(city,id,"summary");
+  if(prof)prof.onclick=()=>openBidInfo(()=>openPrep(city,id,p.step||"summary"));
+  document.getElementById("ff-cancel").onclick=()=>openPrep(city,id,p.step||"summary");
   body.querySelectorAll("[data-doc]").forEach(btn=>btn.onclick=async()=>{
     const d=docs[Number(btn.dataset.doc)];
     body.innerHTML=`<div class="account-status"><span class="spin"></span> Filling in ${esc(d.name)}…</div>`;
     const res=await fillBidForm(d.url,fillPayload(b,p));
     if(!document.getElementById("prep-body"))return;
     if(!res.ok){
-      body.innerHTML=`<div class="alert alert-amber"><span>${esc(res.msg)}</span></div><button class="btn-ghost" id="ff-back">Back to summary</button>`;
-      document.getElementById("ff-back").onclick=()=>openPrep(city,id,"summary");
+      body.innerHTML=`<div class="alert alert-amber"><span>${esc(res.msg)}</span></div><button class="btn-ghost" id="ff-back">Back to ${prepBackName(id,"summary")}</button>`;
+      document.getElementById("ff-back").onclick=()=>openPrep(city,id,p.step||"summary");
       return;
     }
+    p.formFilledAt=Date.now();savePrep(id,city);
     const fname=`${String(b.title||"bid").replace(/[^a-z0-9]+/gi,"_").slice(0,40)}_bid_form_filled.pdf`;
     body.innerHTML=`<div class="workspace-title">Filled ${plural(res.filled.length,"box","boxes")} on ${esc(d.name)}</div>
       <table class="ps-table"><thead><tr><th>Box on the form</th><th>Filled with</th></tr></thead><tbody>
       ${res.filled.map(f=>`<tr><td>${esc(f.label)}</td><td>${esc(f.value)}</td></tr>`).join("")}</tbody></table>
       <div class="rate-note">${plural(res.left_blank,"box","boxes")} left blank: signatures, notary, tax ID, and anything you haven't entered. Check every box before you sign.</div>
       <div class="act-primary"><button class="ma-gold" id="ff-download">Download filled form</button></div>
-      <button class="btn-ghost" id="ff-back" style="margin-top:0.5rem;">Back to summary</button>`;
+      <button class="btn-ghost" id="ff-back" style="margin-top:0.5rem;">Back to ${prepBackName(id,"summary")}</button>`;
     document.getElementById("ff-download").onclick=()=>downloadBase64Pdf(res.pdf_b64,fname);
-    document.getElementById("ff-back").onclick=()=>openPrep(city,id,"summary");
+    document.getElementById("ff-back").onclick=()=>openPrep(city,id,p.step||"summary");
   });
 }
 
@@ -5351,7 +5507,8 @@ function downloadBidDates(b,p,city,id){
   const lines=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//CurbCall Pro//Bid Dates//EN"];
   events.forEach((e,i)=>lines.push("BEGIN:VEVENT",`UID:${id}-${i}@curbcall.app`,`DTSTAMP:${stamp}`,
     `DTSTART;VALUE=DATE:${d8(e.date)}`,`SUMMARY:${icsEscape(`${e.label}: ${b.title||"Bid"}`)}`,
-    `DESCRIPTION:${icsEscape(`${e.text}${city?" — "+city:""}`)}`,`LOCATION:${icsEscape(city||"")}`,
+    `DESCRIPTION:${icsEscape(`${e.text}${city?" — "+city:""}`)}`,
+    `LOCATION:${icsEscape(/pre-bid/i.test(e.label)&&meetingPlace(p)?meetingPlace(p):(city||""))}`,
     "BEGIN:VALARM","TRIGGER:-P1D","ACTION:DISPLAY",`DESCRIPTION:${icsEscape(e.label)}`,"END:VALARM","END:VEVENT"));
   lines.push("END:VCALENDAR");
   const url=URL.createObjectURL(new Blob([lines.join("\r\n")],{type:"text/calendar"}));
@@ -5403,7 +5560,7 @@ function renderConcretePanel(body,city,id,b){
         :`<div class="rate-note">No line gives an area and a thickness (like "4 in. sidewalk, sq yd"), so type in the yards.</div>`}
       ${y.other.length?`<div class="rate-note">Not counted, size from the plans: ${y.other.map(x=>esc(x.name)).join("; ")}.</div>`:""}
     </details>
-    <button class="btn-ghost" id="cq-back" style="margin-top:0.75rem;">Back to summary</button>`;
+    <button class="btn-ghost" id="cq-back" style="margin-top:0.75rem;">Back to ${prepBackName(id,"summary")}</button>`;
   let sup=null,quotes=null;
   const $=(i)=>document.getElementById(i);
   const redraw=()=>{
@@ -5474,8 +5631,8 @@ function renderConcretePanel(body,city,id,b){
     }
   };
   const prof=$("cq-profile");
-  if(prof)prof.onclick=(e)=>{e.preventDefault();openBidInfo(()=>{openPrep(city,id,"summary");});};
-  $("cq-back").onclick=()=>openPrep(city,id,"summary");
+  if(prof)prof.onclick=(e)=>{e.preventDefault();openBidInfo(()=>{openPrep(city,id,p.step||"summary");});};
+  $("cq-back").onclick=()=>openPrep(city,id,p.step||"summary");
 }
 
 async function fillDetailRates(city,b){

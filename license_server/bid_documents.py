@@ -142,6 +142,8 @@ _BID_DOC_PROMPT = (
     "\"submission\": how and where bids are submitted and the deadline, as stated.\n"
     "\"bid_security\": the bid bond / bid security requirement, as stated.\n"
     "\"prebid\": pre-bid meeting date, place and whether mandatory, as stated.\n"
+    "\"prebid_place\": just where the pre-bid meeting is held: the building "
+    "and street address exactly as printed, \"\" if the document gives none.\n"
     "\"required_forms\": names of forms, affidavits or certificates the bid "
     "must include, as stated.\n"
     "\"questions_due\": the deadline for written questions, as stated.\n"
@@ -185,6 +187,7 @@ def _clean_doc_result(raw):
              for f in (raw.get("required_forms") or []) if str(f).strip()][:30]
     return {"line_items": items, "submission": text("submission"),
             "bid_security": text("bid_security"), "prebid": text("prebid"),
+            "prebid_place": text("prebid_place", 200),
             "questions_due": text("questions_due", 300), "required_forms": forms}
 
 

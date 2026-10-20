@@ -1507,7 +1507,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     return Math.round((w ? w[0] : last(rates.prices[item][district])[0]) * 100) / 100;
   };
 
-  // ── Prepare bid: checklist, pricing, summary ──
+  // ── Prepare bid: steps, pricing, summary ──
   console.log("\nPrepare bid keeps the whole bid in the app");
   {
     const swAvg = startPrice("6086004", "SW");
@@ -1549,13 +1549,18 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await page.waitForTimeout(500);
 
     const checklist = await page.textContent("#prep-body");
-    check("the checklist covers the posting's addenda and the submit step",
+    check("the steps cover the posting's addenda and the submit step",
           /Read every addendum/.test(checklist) && /This bid has addenda/.test(checklist) && /Submit before the deadline/.test(checklist));
-    check("the bid's documents are linked from the checklist", /Plans/.test(checklist));
+    check("the bid's documents are linked from the steps", /Plans/.test(checklist));
+    check("the steps are grouped into the four phases of a bid",
+          /Before you price/.test(checklist) && /Price it/.test(checklist) && /Paperwork/.test(checklist) && /Submit/.test(checklist));
+    check("the first step to do is shown as Next up", /Next up\s*Get the bid documents/.test(checklist), checklist.slice(0, 160));
+    check("the pricing step opens the Pricing tab from where it's listed", !!(await page.$('[data-act="pricing"]')));
     check("nothing is ticked yet", /0\/\d+/.test(await page.textContent(".prep-tabs")));
     await page.check('[data-check="docs"]');
     await page.waitForTimeout(300);
     check("ticking a step updates progress", /1\/\d+/.test(await page.textContent(".prep-tabs")));
+    check("...and Next up moves on to the next step", !/Next up\s*Get the bid documents/.test(await page.textContent("#prep-body")));
     await page.fill("#prep-new", "Call the bonding company");
     await page.click("#prep-add-btn");
     await page.waitForTimeout(300);
@@ -1602,6 +1607,10 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     const shown = await page.textContent("#pt-total");
     check("the total is quantity x price plus markup", shown === "$" + Math.round(expected).toLocaleString("en-US"), `${shown} vs ${expected}`);
 
+    await page.click('[data-step="steps"]');
+    await page.waitForTimeout(300);
+    check("pricing every line ticks the pricing step by itself", /Every line priced/.test(await page.textContent("#prep-body"))
+          && await page.$eval('[data-check="price"]', (c) => c.checked && c.disabled));
     await page.click('[data-step="summary"]');
     await page.waitForTimeout(300);
     const summary = await page.textContent("#prep-body");
@@ -1623,7 +1632,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     check("the workspace survives a reload", after && after.checks.docs === true && after.custom[0] === "Call the bonding company" && Number(after.markup) === 10);
     await page.evaluate(() => switchScreen("feed"));
     await page.waitForTimeout(300);
-    check("the bid card shows prep progress", /Prep 1\/\d+/.test(await page.textContent("#feed-list")));
+    check("the bid card shows prep progress (documents ticked, pricing done)", /Prep 2\/\d+/.test(await page.textContent("#feed-list")));
     check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
     await ctx.close();
   }
@@ -1707,10 +1716,10 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     check("the same words in a lump-sum unit get no MoDOT price", ls && ls.unit === "lump sum" && ls.price === "", JSON.stringify(ls));
     check("mobilization comes through to be priced", lines.some((l) => /Mobilization/.test(l.name) && l.unit === "lump sum"));
 
-    await page.click('[data-step="checklist"]');
+    await page.click('[data-step="steps"]');
     await page.waitForTimeout(300);
     const cl = await page.textContent("#prep-body");
-    check("the checklist shows the bid security the documents require", /From the bid documents: 5% bid bond/.test(cl));
+    check("the steps show the bid security the documents require", /From the bid documents: 5% bid bond/.test(cl));
     check("...how to submit", /Sealed envelope to the City Clerk/.test(cl));
     check("...and the required forms", /Non-collusion affidavit; E-Verify affidavit/.test(cl));
     check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
@@ -1844,10 +1853,36 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
                  { name: "3. Curb and gutter", qty: 300, unit: "ft", price: 0 }];
       p.addenda = "#1";
       p.docInfo = { source: "Bid form", bid_security: "5% bid bond", prebid: "Mandatory pre-bid meeting October 20, 2099 at 10 AM",
+                    prebid_place: "City Hall, 200 E Main St",
                     questions_due: "Questions due by October 25, 2099", submission: "", required_forms: [] };
       savePrep(i, "Aurora, MO");
-      openPrep("Aurora, MO", i, "summary");
+      openPrep("Aurora, MO", i, "steps");
     }, id);
+    await page.waitForTimeout(400);
+
+    // ── The Steps view: dates worked back from the due date, tools on each step ──
+    const steps = await page.textContent("#prep-body");
+    const short = (m, d) => new Date(2099, m, d).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    check("the bond step says when to ask, five days before the bid is due", steps.includes(`Do by ${short(9, 27)}`), steps.slice(0, 300));
+    check("the pre-bid meeting and questions use the dates the documents give",
+          steps.includes(short(9, 20)) && steps.includes(short(9, 25)) && !steps.includes(`by ${short(9, 20)}`));
+    check("recorded addenda tick the addenda step", /Recorded: #1/.test(steps));
+    check("the meeting place the documents give is on the meeting step", /Meeting place: City Hall, 200 E Main St/.test(steps));
+    const dir = await page.getAttribute('.prep-check.step a.step-act[href*="maps"]', "href");
+    check("...with directions in the phone's maps app", /City%20Hall%2C%20200%20E%20Main%20St/.test(dir || ""), dir);
+    await page.click("[data-edit-place]");
+    await page.waitForTimeout(200);
+    await page.fill("[data-place]", "Public Works, 12 Oak St");
+    await page.dispatchEvent("[data-place]", "change");
+    await page.waitForTimeout(300);
+    check("the meeting place can be changed", /Meeting place: Public Works, 12 Oak St/.test(await page.textContent("#prep-body")));
+    const stepBond = decodeURIComponent(await page.getAttribute('[data-mark="bond"]', "href"));
+    check("the bond step emails the bonding agent from right there", stepBond.startsWith("mailto:sam@surety.example") && /5% bid bond/.test(stepBond));
+    check("the form step fills in the agency's form", !!(await page.$('[data-act="fill"]')));
+    await page.click('[data-act="concrete"]');
+    await page.waitForTimeout(300);
+    check("a tool opened from Steps goes back to Steps", /Back to steps/.test(await page.textContent("#cq-back")));
+    await page.evaluate((i) => openPrep("Aurora, MO", i, "summary"), id);
     await page.waitForTimeout(400);
 
     const bond = decodeURIComponent(await page.getAttribute("#ps-bond", "href"));
@@ -1861,6 +1896,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     const icsText = fs.readFileSync(await ics.path(), "utf8");
     check("...due date, mandatory pre-bid meeting and questions deadline",
           /DTSTART;VALUE=DATE:20991101/.test(icsText) && /MANDATORY pre-bid meeting/.test(icsText) && /DTSTART;VALUE=DATE:20991025/.test(icsText));
+    check("...and the meeting's calendar entry has its address", /LOCATION:Public Works\\, 12 Oak St/.test(icsText), icsText.slice(0, 400));
 
     await page.click("#ps-concrete");
     await page.waitForTimeout(300);

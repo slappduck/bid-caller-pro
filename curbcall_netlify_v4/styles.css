@@ -380,6 +380,34 @@ body{font-family:var(--ui);background:radial-gradient(ellipse 120% 60% at 50% -1
 .prep-check.urgent b{color:var(--accent);}
 .prep-check.done b{color:var(--text3);text-decoration:line-through;}
 .prep-docs a{color:var(--text2);}
+/* Steps: the bid process as phases, each step with the tool that does it. */
+.step-progress{display:flex;align-items:center;gap:0.7rem;margin-bottom:0.8rem;font-size:var(--fs-sm);color:var(--text2);}
+.step-bar{flex:1;height:8px;background:var(--surface);border-radius:999px;overflow:hidden;}
+.step-bar i{display:block;height:100%;background:var(--accent);border-radius:999px;}
+.step-next{background:rgba(245,158,11,0.08);border:1px solid var(--accent);border-radius:var(--r);padding:0.85rem 0.95rem;margin-bottom:1rem;}
+.step-next.all{border-color:var(--border);background:var(--card);color:var(--text2);}
+.step-next-k{font-size:var(--fs-xs);font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:var(--accent);margin-bottom:0.25rem;}
+.step-next b{color:var(--text);}
+.step-next-act{margin-top:0.6rem;}
+.step-next-act .step-act{display:block;width:100%;text-align:center;background:var(--accent);color:#10131c;border-color:var(--accent);margin-top:0;min-height:44px;font-size:var(--fs-base);}
+.step-phase{margin-bottom:0.9rem;}
+.step-phase-h{display:flex;align-items:center;gap:0.55rem;font-weight:800;font-size:var(--fs-sm);text-transform:uppercase;letter-spacing:0.06em;color:var(--text2);padding:0.4rem 0;border-bottom:1px solid var(--border);}
+.step-phase-h span{display:inline-flex;align-items:center;justify-content:center;width:1.5rem;height:1.5rem;border-radius:50%;background:var(--surface);color:var(--text);font-size:var(--fs-xs);}
+.step-phase-h em{margin-left:auto;font-style:normal;color:var(--text3);font-weight:700;text-transform:none;letter-spacing:0;}
+.prep-check.step{cursor:default;}
+.step-due{display:inline-block;font-size:var(--fs-xs);font-weight:700;color:var(--text2);background:var(--surface);border-radius:var(--r-sm);padding:0.05rem 0.4rem;margin-left:0.2rem;vertical-align:0.1em;white-space:nowrap;}
+.step-due.soon{color:var(--accent);}
+.step-due.late{color:var(--red);}
+.step-note{color:var(--text2) !important;}
+.step-place{color:var(--text2) !important;}
+.step-next small{display:block;color:var(--text2);font-size:var(--fs-sm);margin-top:0.15rem;}
+.step-place b{color:var(--text);text-decoration:none !important;}
+.step-place a{color:var(--accent);margin-left:0.3rem;}
+.step-act+.step-act{margin-left:0.45rem;}
+.step-next-act .step-act+.step-act{margin-left:0;margin-top:0.5rem;background:var(--card);color:var(--accent);border-color:var(--border);}
+.step-act{display:inline-block;margin-top:0.45rem;background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--accent);font-family:var(--ui);font-size:var(--fs-sm);font-weight:700;padding:0.45rem 0.75rem;cursor:pointer;text-decoration:none;min-height:36px;}
+/* .prep-check input sizes the checkbox; the addenda box is a text field. */
+.prep-check input.step-addenda{display:block;width:100%;height:auto;margin-top:0.45rem;font-size:var(--fs-base);padding:0.5rem 0.7rem;accent-color:auto;}
 .prep-x{position:absolute;right:0;top:0;background:none;border:none;color:var(--text3);font-size:1.2rem;cursor:pointer;line-height:1;padding:0 0.2rem;}
 .prep-add{display:flex;gap:0.5rem;margin-top:0.7rem;}
 .prep-add .input{flex:1;font-size:var(--fs-base);padding:0.6rem 0.8rem;}
