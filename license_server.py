@@ -8857,6 +8857,9 @@ BID_DOC_TEXT_CHARS = int(os.environ.get("BID_DOC_TEXT_CHARS", "60000"))
 BID_DOC_MAX_PER_KEY_PER_DAY = int(os.environ.get("BID_DOC_MAX_PER_KEY_PER_DAY", "25"))
 _BID_DOC_RATE_KEY = "bidcaller:bid_doc_rate"
 _BID_DOC_CACHE_PREFIX = "bidcaller:bid_doc:"
+# Bump when the reader starts returning something new, so documents read
+# before the change are read again instead of served from the cache.
+BID_DOC_READER_VERSION = 2
 BID_DOC_CACHE_TTL_DAYS = 30
 
 
@@ -9068,7 +9071,10 @@ def bid_documents_read():
         hit = kv_backend.get(cache_key, None)
     except Exception:
         hit = None
-    if isinstance(hit, dict) and hit.get("result"):
+    # A result saved before the reader learned a field (the meeting place,
+    # the job site) would hand back the old answer without it for weeks, so
+    # only a result read by the current reader counts as a hit.
+    if isinstance(hit, dict) and hit.get("result") and hit.get("v") == BID_DOC_READER_VERSION:
         try:
             age = time.time() - float(hit.get("at") or 0)
         except (TypeError, ValueError):
@@ -9095,7 +9101,7 @@ def bid_documents_read():
         return jsonify({"ok": False, "reason": "ai_error"}), 502
     result.update({"pages_read": pages, "truncated": truncated})
     try:
-        kv_backend.set(cache_key, {"at": time.time(), "result": result})
+        kv_backend.set(cache_key, {"at": time.time(), "v": BID_DOC_READER_VERSION, "result": result})
     except Exception:
         pass
     return jsonify({"ok": True, "cached": False, **result})
