@@ -1839,6 +1839,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
       localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
       const bid = { title: "Elm St Sidewalk", scope: "Sidewalk replacement", deadline: "2099-11-01", status: "open",
         url: "https://e.gov/3", email: "clerk@e.gov", bid_number: "B-17",
+        plan_room: "https://e.gov/Bids/PlanHolders/17?documentId=-1",
         documents: [{ name: "Bid form", url: "https://e.gov/form.pdf" }] };
       localStorage.setItem("last_feed", JSON.stringify({ "Aurora, MO": [bid] }));
       localStorage.setItem("company_profile", JSON.stringify({ name: "Test Concrete LLC", contact: "Pat Lee", phone: "417-555-0100",
@@ -1864,6 +1865,9 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
 
     // ── The Steps view: dates worked back from the due date, tools on each step ──
     const steps = await page.textContent("#prep-body");
+    check("documents given out to plan holders get a button to register for them",
+          (await page.getAttribute("a.step-act >> text=Register to get the documents", "href")) === "https://e.gov/Bids/PlanHolders/17?documentId=-1"
+            && /after you register as a plan holder/.test(steps));
     const short = (m, d) => new Date(2099, m, d).toLocaleDateString(undefined, { month: "short", day: "numeric" });
     check("the bond step says when to ask, five days before the bid is due", steps.includes(`Do by ${short(9, 27)}`), steps.slice(0, 300));
     check("the pre-bid meeting and questions use the dates the documents give",

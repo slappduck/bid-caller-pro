@@ -396,3 +396,34 @@ class DocumentPickerTests(unittest.TestCase):
         html = ('<a href="/d/location-map.pdf">Project location map</a>'
                 '<a href="/d/prevailing-wage.pdf">Prevailing wage ordinance</a>')
         self.assertEqual(len(self.B.detail_documents(html, "https://t.gov/")), 2)
+
+
+class PlanRoomTests(unittest.TestCase):
+    """Bids whose documents the agency gives out only to registered plan
+    holders. The files can't be fetched; the link to register can."""
+
+    import bid_sources as B
+
+    def test_a_civicplus_view_documents_link_is_the_plan_room(self):
+        # Bensenville, IL: "View Document(s)" leads to "Please fill out this
+        # form to view bid details. Plan Holders Form".
+        html = ('<a href="/DocumentView.aspx?DID=1925">Board &amp; Committee Meeting Schedule</a>'
+                '<a href="/Bids/PlanHolders/181?documentId=-1">View Document(s)</a>')
+        self.assertEqual(self.B.detail_plan_room(html, "https://bensenville.gov/bids.aspx?bidID=181"),
+                         "https://bensenville.gov/Bids/PlanHolders/181?documentId=-1")
+
+    def test_a_plan_room_platform_counts_when_the_link_says_documents(self):
+        html = '<a href="https://qcpi.questcdn.com/cdn/posting/?provider=123">Download the bid documents</a>'
+        self.assertIn("questcdn.com", self.B.detail_plan_room(html, "https://town.gov/bids/7"))
+
+    def test_a_platform_in_the_footer_for_vendor_sign_up_does_not(self):
+        html = '<a href="https://vendor.bonfirehub.com/register">Vendor registration</a>'
+        self.assertEqual(self.B.detail_plan_room(html, "https://town.gov/bids.aspx?bidID=1"), "")
+
+    def test_a_posting_on_a_plan_room_platform_is_its_own_plan_room(self):
+        url = "https://cityx.bonfirehub.com/opportunities/12345"
+        self.assertEqual(self.B.detail_plan_room("", url), url)
+
+    def test_ordinary_document_links_are_not_a_plan_room(self):
+        html = '<a href="/DocumentCenter/View/88/Bid-Form">Bid Form</a>'
+        self.assertEqual(self.B.detail_plan_room(html, "https://city.gov/bids.aspx?bidID=1"), "")

@@ -4387,7 +4387,9 @@ function prepChecklist(b,info){
   })).filter(d=>d.url);
   const items=[
     {key:"docs",phase:"before",label:"Get the bid documents",
-      detail:docs.length?"Plans, specs and the bid form. Linked below."
+      detail:b&&safeUrl(b.plan_room)
+        ?"This agency gives out the plans, specs and bid form after you register as a plan holder. Registering also gets you any addenda by email."
+        :docs.length?"Plans, specs and the bid form. Linked below."
         :"Plans, specs and the bid form. Some agencies require registering on their plan room first.",docs},
     !(b&&b.prebid)&&info.prebid?{key:"prebid",phase:"before",label:/mandatory/i.test(info.prebid)?"Attend the MANDATORY pre-bid meeting":"Attend the pre-bid meeting",
       detail:fromDocs(info.prebid).trim(),urgent:/mandatory/i.test(info.prebid)}:null,
@@ -4584,7 +4586,8 @@ function renderPrepSteps(body,city,id,b){
     const a=(attrs,label)=>`<a class="step-act" ${attrs}>${esc(label)}</a>`;
     const btn=(act,label)=>`<button type="button" class="step-act" data-act="${act}">${esc(label)}</button>`;
     switch(i.key){
-      case"docs":return canRead&&!auto.docs?btn("read","Read them for me"):"";
+      case"docs":return(safeUrl(b.plan_room)?a(`href="${esc(safeUrl(b.plan_room))}" target="_blank" rel="noopener noreferrer"`,"Register to get the documents"):"")
+        +(canRead&&!auto.docs?btn("read","Read them for me"):"");
       case"prebid":return(dest?a(`href="${esc(mapUrl(mapQuery(dest,city)))}" target="_blank" rel="noopener noreferrer"`,onSite?"Directions to the site":"Directions"):"")
         +(dates.some(d=>/pre-bid/i.test(d.label))?btn("dates","Add to calendar"):"");
       case"questions":return b.email?a(`href="${esc(agencyQuestionMail(b))}" data-mark="questions"`,"Email the agency"):"";
@@ -5996,13 +5999,16 @@ function prettyUrl(u){
 // the card can say "Bid Book" and "Plans" instead of "Document 1".
 function docRow(b){
   const ds=(b&&b.documents)||[];
-  if(!ds.length)return"";
+  // Documents handed out only to registered plan holders: the link to the
+  // agency's sign-up is the way to them.
+  const room=safeUrl(b&&b.plan_room);
+  if(!ds.length&&!room)return"";
   const links=ds.slice(0,5).map((d,i)=>{
     const url=safeUrl(typeof d==="string"?d:(d&&d.url));
     if(!url)return"";
     const name=(d&&d.name)?String(d.name):("Document "+(i+1));
     return `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(name)}</a>`;
-  }).filter(Boolean).join(" &middot; ");
+  }).filter(Boolean).concat(room?[`<a href="${esc(room)}" target="_blank" rel="noopener noreferrer">Register as a plan holder to get them</a>`]:[]).join(" &middot; ");
   if(!links)return"";
   return `<div class="detail-row"><div class="detail-label">Bid Documents</div>
     <div class="detail-val">${links}</div></div>`;

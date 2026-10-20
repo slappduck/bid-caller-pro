@@ -5950,6 +5950,11 @@ def _enrich_from_detail_pages(rows, stats=None, lock=None):
             if docs:
                 row["documents"] = docs
                 got = True
+        if not row.get("plan_room"):
+            room = bid_sources.detail_plan_room(page, row["url"])
+            if room:
+                row["plan_room"] = room
+                got = True
         return got
 
     with ThreadPoolExecutor(max_workers=DETAIL_WORKERS) as ex:
