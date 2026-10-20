@@ -1556,6 +1556,8 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
           /Before you price/.test(checklist) && /Price it/.test(checklist) && /Paperwork/.test(checklist) && /Submit/.test(checklist));
     check("the first step to do is shown as Next up", /Next up\s*Get the bid documents/.test(checklist), checklist.slice(0, 160));
     check("the pricing step opens the Pricing tab from where it's listed", !!(await page.$('[data-act="pricing"]')));
+    check("with no job address yet, the site step asks for one instead of mapping the whole town",
+          !!(await page.$("[data-job]")) && !(await page.$('.prep-check.step a.step-act[href*="maps"]')));
     check("nothing is ticked yet", /0\/\d+/.test(await page.textContent(".prep-tabs")));
     await page.check('[data-check="docs"]');
     await page.waitForTimeout(300);
@@ -1853,7 +1855,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
                  { name: "3. Curb and gutter", qty: 300, unit: "ft", price: 0 }];
       p.addenda = "#1";
       p.docInfo = { source: "Bid form", bid_security: "5% bid bond", prebid: "Mandatory pre-bid meeting October 20, 2099 at 10 AM",
-                    prebid_place: "City Hall, 200 E Main St",
+                    prebid_place: "City Hall, 200 E Main St", project_location: "Elm St from 1st St to 5th St",
                     questions_due: "Questions due by October 25, 2099", submission: "", required_forms: [] };
       savePrep(i, "Aurora, MO");
       openPrep("Aurora, MO", i, "steps");
@@ -1876,6 +1878,22 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await page.dispatchEvent("[data-place]", "change");
     await page.waitForTimeout(300);
     check("the meeting place can be changed", /Meeting place: Public Works, 12 Oak St/.test(await page.textContent("#prep-body")));
+    check("the job site the documents give is on the site-visit step", /Job site: Elm St from 1st St to 5th St/.test(await page.textContent("#prep-body")));
+    const hrefs = await page.$$eval('.prep-check.step a.step-act[href*="maps"]', (as) => as.map((x) => decodeURIComponent(x.getAttribute("href"))));
+    check("...with directions to the streets, in the bid's town", hrefs.some((h) => /Elm St from 1st St to 5th St, Aurora, MO$/.test(h)), JSON.stringify(hrefs));
+    // A pre-bid meeting held at the job: directions go to the site.
+    await page.evaluate((i) => {
+      const p = prepFor(i); delete p.meetingPlace;
+      p.docInfo.prebid = "Mandatory pre-bid meeting and site walk-through at the project site, October 20, 2099 at 10 AM";
+      p.docInfo.prebid_place = "the project site";
+      savePrep(i, "Aurora, MO"); openPrep("Aurora, MO", i, "steps");
+    }, id);
+    await page.waitForTimeout(300);
+    check("a meeting held at the job site says so", /Held at the job site: Elm St from 1st St to 5th St/.test(await page.textContent("#prep-body")));
+    const siteDir = decodeURIComponent(await page.getAttribute("a.step-act >> text=Directions to the site", "href") || "");
+    check("...and its directions go to the job site", /Elm St from 1st St to 5th St, Aurora, MO$/.test(siteDir), siteDir);
+    await page.evaluate((i) => { const p = prepFor(i); p.meetingPlace = "Public Works, 12 Oak St"; savePrep(i, "Aurora, MO"); openPrep("Aurora, MO", i, "steps"); }, id);
+    await page.waitForTimeout(300);
     const stepBond = decodeURIComponent(await page.getAttribute('[data-mark="bond"]', "href"));
     check("the bond step emails the bonding agent from right there", stepBond.startsWith("mailto:sam@surety.example") && /5% bid bond/.test(stepBond));
     check("the form step fills in the agency's form", !!(await page.$('[data-act="fill"]')));
