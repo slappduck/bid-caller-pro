@@ -165,6 +165,19 @@ class EndpointTests(unittest.TestCase):
         self.assertTrue(d["cached"])
         self.assertEqual(len(self.fetches), 1)
 
+    def test_a_document_read_by_an_older_reader_is_read_again(self):
+        """A result cached before the reader returned the meeting place and
+        job site would otherwise come back without them for 30 days."""
+        self.post()
+        for k, v in self.store.items():
+            if k.startswith(ls._BID_DOC_CACHE_PREFIX):
+                v.pop("v", None)
+                v["result"].pop("project_location", None)
+        d = self.post().get_json()
+        self.assertFalse(d["cached"])
+        self.assertEqual(len(self.fetches), 2)
+        self.assertTrue(self.post().get_json()["cached"])
+
     def test_the_daily_limit_applies(self):
         with patch.object(ls, "_ip_rate_ok", return_value=False):
             self.assertEqual(self.post().status_code, 429)
