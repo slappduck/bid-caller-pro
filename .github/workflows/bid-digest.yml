@@ -1,0 +1,49 @@
+name: Free weekly bid email
+
+# Sends the free weekly bid email (license_server/digest.py) to everyone who
+# signed up on the price pages or the landing page and confirmed by email.
+# Render can't wake itself, so GitHub Actions is the clock.
+#
+# Each call to /run-bid-digest scans a few subscriber areas and emails those
+# subscribers, then says how many areas are left. This loops until none are,
+# so the run never hits the server's request timeout however many people
+# sign up. The server records who already got this week's email, so a rerun
+# of this workflow never sends anyone a second copy.
+#
+# Same two repo secrets as the other jobs: BIDCALLER_SERVER_URL and
+# CRON_SECRET. Nothing sends until MAILING_ADDRESS is set on Render (the
+# endpoint answers mailing_address_not_set and this run fails, which is
+# GitHub's failure email telling you so).
+#
+# Run it any time: Actions tab -> this workflow -> Run workflow.
+
+on:
+  schedule:
+    # Monday 11:15 UTC = ~6:15am US Central: in the inbox before the day starts.
+    - cron: "15 11 * * 1"
+  workflow_dispatch: {}
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Send this week's bid email in batches
+        run: |
+          for i in $(seq 1 60); do
+            resp=$(curl -sS -X POST "${BIDCALLER_SERVER_URL}/run-bid-digest" \
+              -H "Content-Type: application/json" \
+              -H "X-Cron-Secret: ${CRON_SECRET}" \
+              --max-time 280 \
+              -w "\nHTTP_STATUS:%{http_code}")
+            echo "$resp"
+            status=$(echo "$resp" | grep -o 'HTTP_STATUS:[0-9]*' | cut -d: -f2)
+            if [ "$status" -ge 400 ]; then exit 1; fi
+            remaining=$(echo "$resp" | sed '$d' | jq -r '.remaining')
+            if [ "$remaining" = "0" ]; then echo "All areas done."; exit 0; fi
+          done
+          echo "::error::Still areas left after 60 batches."
+          exit 1
+        env:
+          BIDCALLER_SERVER_URL: ${{ secrets.BIDCALLER_SERVER_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}

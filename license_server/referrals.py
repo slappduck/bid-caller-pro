@@ -439,10 +439,14 @@ def _unsub_url(email):
     return f"{PUBLIC_BASE_URL}/unsubscribe?{qs}"
 
 
-@app.route("/unsubscribe", methods=["GET"])
+@app.route("/unsubscribe", methods=["GET", "POST"])
 def unsubscribe():
     """Public and GET on purpose -- this is the link in the email, and it has
-    to work in one click from any mail client with no login and no form."""
+    to work in one click from any mail client with no login and no form.
+    POST too: the List-Unsubscribe-Post header promises one-click
+    unsubscribe, which is Gmail and Yahoo POSTing to this same URL (with the
+    address and token still in the query string). GET-only answered that
+    with 405, so the unsubscribe button in the mail client did nothing."""
     email = (request.args.get("e") or "").strip().lower()
     token = (request.args.get("t") or "").strip()
     page = ("<!doctype html><meta name=viewport content='width=device-width,initial-scale=1'>"

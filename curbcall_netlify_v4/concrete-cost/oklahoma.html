@@ -50,6 +50,11 @@ td .sub{color:var(--text3);font-size:0.8rem;}
 details{border-bottom:1px solid var(--line);padding:0.7rem 0;}
 summary{cursor:pointer;font-weight:600;}
 details p{color:var(--text2);margin-top:0.4rem;font-size:0.93rem;}
+.su{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0.6rem 0.9rem;margin-top:0.8rem;}
+.su label{display:flex;flex-direction:column;font-size:0.8rem;color:var(--text2);gap:0.25rem;}
+.su input{width:100%;min-width:0;min-height:44px;background:var(--bg);border:1px solid var(--line);border-radius:10px;color:var(--text);padding:0.4rem 0.6rem;font-family:var(--ui);font-size:16px;}
+.su button{grid-column:1/-1;min-height:48px;background:var(--amber);color:#10131c;font-weight:800;font-size:1rem;border:0;border-radius:12px;cursor:pointer;font-family:var(--ui);}
+.su .hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0;}
 footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--text3);font-size:0.82rem;margin-top:2.5rem;}
 </style>
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"How much does concrete sidewalk cost in Oklahoma?","acceptedAnswer":{"@type":"Answer","text":"On ODOT jobs (2026), the average winning price for concrete sidewalk, 4 in. was $85.20 a\u00a0sq\u00a0yd, from 25 contracts. That's state highway work; city jobs can run different, and the price includes labor, materials and the contractor's markup."}},{"@type":"Question","name":"How much does curb and gutter cost in Oklahoma?","acceptedAnswer":{"@type":"Answer","text":"On ODOT jobs (2026), the average winning price for curb and gutter, 6 in. barrier was $36.45 a\u00a0foot, from 5 contracts. That's state highway work; city jobs can run different, and the price includes labor, materials and the contractor's markup."}},{"@type":"Question","name":"How much does concrete driveway cost in Oklahoma?","acceptedAnswer":{"@type":"Answer","text":"On ODOT jobs (2026), the average winning price for concrete driveway, 6 in. was $100.83 a\u00a0sq\u00a0yd, from 16 contracts. That's state highway work; city jobs can run different, and the price includes labor, materials and the contractor's markup."}},{"@type":"Question","name":"How much is ready-mix concrete per yard?","acceptedAnswer":{"@type":"Answer","text":"Typically $110\u2013$175 a cubic yard in 2026, before any delivery charge, and often less in the Midwest and Southeast. Orders under a full truck (about 10 yards) usually carry a short-load charge. A local plant's quote is the real number."}}]}</script>
@@ -70,6 +75,17 @@ These are state highway jobs; city and county work can run different.</p>
 <p class="note">Source: <a href="https://www.odot.org/contracts/avgprices/eng260722.pdf" rel="nofollow noopener" target="_blank">ODOT Weighted Average Item Price Report</a>.
 Averages of winning prices only.</p>
 <h2>Concrete sidewalk by ODOT district</h2><table><thead><tr><th>District</th><th>Average winning price</th></tr></thead><tbody><tr><td>Division 1</td><td><b>$79.68</b> a sq yd<div class="sub">2 contracts</div></td></tr><tr><td>Division 2</td><td><b>$102.50</b> a sq yd<div class="sub">2 contracts</div></td></tr><tr><td>Division 3</td><td><b>$79.48</b> a sq yd<div class="sub">3 contracts</div></td></tr><tr><td>Division 4</td><td><b>$85.37</b> a sq yd<div class="sub">11 contracts</div></td></tr><tr><td>Division 5</td><td><b>$84.15</b> a sq yd<div class="sub">2 contracts</div></td></tr><tr><td>Division 6</td><td><b>$120.15</b> a sq yd<div class="sub">1 contract</div></td></tr><tr><td>Division 7</td><td><b>$96.75</b> a sq yd<div class="sub">1 contract</div></td></tr><tr><td>Division 8</td><td><b>$86.64</b> a sq yd<div class="sub">3 contracts</div></td></tr></tbody></table><p class="note">Latest year each district reported.</p>
+<div class="card" id="weekly-bids">
+<h2 style="margin-top:0;">Get open bids near you, free, every Monday</h2>
+<p class="why">The open sidewalk, curb and ADA ramp bids within 50 miles of your ZIP, in one email a week. No account. One click to stop.</p>
+<form class="su" method="post" action="https://bid-caller-pro.onrender.com/digest/subscribe">
+<label>Email<input type="email" name="email" required autocomplete="email" /></label>
+<label>ZIP code<input type="text" name="zip" required pattern="[0-9]{5}" maxlength="5" inputmode="numeric" autocomplete="postal-code" /></label>
+<input class="hp" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" />
+<button type="submit">Send me the bids</button>
+</form>
+<p class="note">We email you a link to confirm first. <a href="/privacy.html">Privacy policy</a>.</p>
+</div>
 <h2>What the concrete itself will cost</h2>
 <div class="card">
   <div class="calc">
