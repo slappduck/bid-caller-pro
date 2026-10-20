@@ -1853,6 +1853,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
                  { name: "3. Curb and gutter", qty: 300, unit: "ft", price: 0 }];
       p.addenda = "#1";
       p.docInfo = { source: "Bid form", bid_security: "5% bid bond", prebid: "Mandatory pre-bid meeting October 20, 2099 at 10 AM",
+                    prebid_place: "City Hall, 200 E Main St",
                     questions_due: "Questions due by October 25, 2099", submission: "", required_forms: [] };
       savePrep(i, "Aurora, MO");
       openPrep("Aurora, MO", i, "steps");
@@ -1866,6 +1867,15 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     check("the pre-bid meeting and questions use the dates the documents give",
           steps.includes(short(9, 20)) && steps.includes(short(9, 25)) && !steps.includes(`by ${short(9, 20)}`));
     check("recorded addenda tick the addenda step", /Recorded: #1/.test(steps));
+    check("the meeting place the documents give is on the meeting step", /Meeting place: City Hall, 200 E Main St/.test(steps));
+    const dir = await page.getAttribute('.prep-check.step a.step-act[href*="maps"]', "href");
+    check("...with directions in the phone's maps app", /City%20Hall%2C%20200%20E%20Main%20St/.test(dir || ""), dir);
+    await page.click("[data-edit-place]");
+    await page.waitForTimeout(200);
+    await page.fill("[data-place]", "Public Works, 12 Oak St");
+    await page.dispatchEvent("[data-place]", "change");
+    await page.waitForTimeout(300);
+    check("the meeting place can be changed", /Meeting place: Public Works, 12 Oak St/.test(await page.textContent("#prep-body")));
     const stepBond = decodeURIComponent(await page.getAttribute('[data-mark="bond"]', "href"));
     check("the bond step emails the bonding agent from right there", stepBond.startsWith("mailto:sam@surety.example") && /5% bid bond/.test(stepBond));
     check("the form step fills in the agency's form", !!(await page.$('[data-act="fill"]')));
@@ -1886,6 +1896,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     const icsText = fs.readFileSync(await ics.path(), "utf8");
     check("...due date, mandatory pre-bid meeting and questions deadline",
           /DTSTART;VALUE=DATE:20991101/.test(icsText) && /MANDATORY pre-bid meeting/.test(icsText) && /DTSTART;VALUE=DATE:20991025/.test(icsText));
+    check("...and the meeting's calendar entry has its address", /LOCATION:Public Works\\, 12 Oak St/.test(icsText), icsText.slice(0, 400));
 
     await page.click("#ps-concrete");
     await page.waitForTimeout(300);

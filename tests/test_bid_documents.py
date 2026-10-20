@@ -86,6 +86,13 @@ class CleanResultTests(unittest.TestCase):
         self.assertEqual(got["required_forms"], ["Non-collusion affidavit"])
         self.assertEqual(got["submission"], "", "a non-string field is blanked")
 
+    def test_the_meeting_place_comes_through_tidied_and_capped(self):
+        got = ls._clean_doc_result({"prebid": "Pre-bid Oct 20 at City Hall",
+                                    "prebid_place": "  City Hall,\n 200 E Main St ", "line_items": []})
+        self.assertEqual(got["prebid_place"], "City Hall, 200 E Main St")
+        self.assertLessEqual(len(ls._clean_doc_result({"prebid_place": "x" * 900})["prebid_place"]), 200)
+        self.assertEqual(ls._clean_doc_result({})["prebid_place"], "")
+
     def test_a_non_object_is_rejected(self):
         self.assertIsNone(ls._clean_doc_result(["a list"]))
 

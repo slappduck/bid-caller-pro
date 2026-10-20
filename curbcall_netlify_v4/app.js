@@ -4443,6 +4443,15 @@ function prepBackName(id,dflt){
   const s=(bidPrep[id]&&bidPrep[id].step)||dflt;
   return{steps:"steps",pricing:"pricing",summary:"summary"}[s]||dflt;
 }
+// Where the pre-bid meeting is: typed in, else what the documents say.
+function meetingPlace(p){return String((p&&p.meetingPlace)||(p&&p.docInfo&&p.docInfo.prebid_place)||"").trim();}
+// Apple Maps on an iPhone or iPad, Google Maps everywhere else: each opens
+// the phone's own maps app with directions one tap away.
+function mapUrl(q){
+  const ios=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+  return ios?`https://maps.apple.com/?q=${encodeURIComponent(q)}`
+    :`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+}
 function shortDate(d){return d.toLocaleDateString(undefined,{month:"short",day:"numeric"});}
 // When each step should be done by. Dates the bid itself gives (pre-bid
 // meeting, questions) are used as they are; the rest are worked back from
@@ -4531,7 +4540,7 @@ function renderPrepSteps(body,city,id,b){
   const t=prepTotals(p),info=bidInfo(),marks=p.marks||{};
   const canFill=prepDocCandidates(b).some(d=>d.name!=="Original posting");
   const canRead=prepDocCandidates(b).length>0;
-  const dates=bidDates(b,p);
+  const dates=bidDates(b,p),place=meetingPlace(p);
   const dueOf=(i)=>{
     const d=stepDue(i,b,p);if(!d)return null;
     const days=Math.round((d.date-today)/86400000);
@@ -4543,7 +4552,8 @@ function renderPrepSteps(body,city,id,b){
     const btn=(act,label)=>`<button type="button" class="step-act" data-act="${act}">${esc(label)}</button>`;
     switch(i.key){
       case"docs":return canRead&&!auto.docs?btn("read","Read them for me"):"";
-      case"prebid":return dates.some(d=>/pre-bid/i.test(d.label))?btn("dates","Add to calendar"):"";
+      case"prebid":return(place?a(`href="${esc(mapUrl(place+(city?", "+city:"")))}" target="_blank" rel="noopener noreferrer"`,"Directions"):"")
+        +(dates.some(d=>/pre-bid/i.test(d.label))?btn("dates","Add to calendar"):"");
       case"questions":return b.email?a(`href="${esc(agencyQuestionMail(b))}" data-mark="questions"`,"Email the agency"):"";
       case"site":return a(`href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(city||"")}" target="_blank" rel="noopener noreferrer"`,"Open map");
       case"price":return btn("pricing",t.total?"Open pricing":"Start pricing");
@@ -4561,6 +4571,9 @@ function renderPrepSteps(body,city,id,b){
     if(auto[i.key])out.push(auto[i.key]);
     return out.join(" · ");
   };
+  const placeField=()=>place&&!p.editPlace
+    ?`<small class="step-place">Meeting place: <b>${esc(place)}</b> <a href="#" data-edit-place>Change</a></small>`
+    :`<input class="input step-addenda" data-place placeholder="Meeting address, e.g. City Hall, 200 E Main St" value="${esc(place)}" aria-label="Meeting address">`;
   const dueChip=(i,done)=>{
     const d=dueOf(i);if(!d||done)return"";
     // A meeting or a deadline is a date; anything else is "do by" a date.
@@ -4578,6 +4591,7 @@ function renderPrepSteps(body,city,id,b){
         ${i.detail?`<small>${esc(i.detail)}</small>`:""}
         ${i.docs&&i.docs.length?`<small class="prep-docs">${i.docs.slice(0,6).map(d=>`<a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">${esc(d.name)}</a>`).join(" · ")}</small>`:""}
         ${note(i)?`<small class="step-note">${esc(note(i))}</small>`:""}
+        ${i.key==="prebid"&&!done?placeField():""}
         ${i.key==="addenda"?`<input class="input step-addenda" data-addenda placeholder="Addenda you've read, e.g. #1, #2 (or none)" value="${esc(p.addenda||"")}" aria-label="Addenda you've read">`:""}
         ${done?"":action(i)}</span>
     </div>`;
@@ -4595,6 +4609,7 @@ function renderPrepSteps(body,city,id,b){
       <span>${prog.done} of ${prog.total} done</span></div>
     ${next?`<div class="step-next"><div class="step-next-k">Next up</div>
         <b>${esc(next.label)}</b> ${dueChip(next,false)}
+        ${next.key==="prebid"&&place?`<small class="step-place">${esc(place)}</small>`:""}
         ${note(next)?`<small class="step-note">${esc(note(next))}</small>`:""}
         <div class="step-next-act">${action(next)||`<button type="button" class="step-act" data-done="${esc(next.key)}">Mark done</button>`}</div></div>`
       :`<div class="step-next all"><b>Every step is done.</b> Good luck on the bid.</div>`}
@@ -4620,6 +4635,10 @@ function renderPrepSteps(body,city,id,b){
     (p.marks=p.marks||{})[x.dataset.mark]=Date.now();savePrep(id,city);
     setTimeout(reopen,300);
   }));
+  const pl=body.querySelector("[data-place]");
+  if(pl)pl.onchange=()=>{p.meetingPlace=pl.value.trim().slice(0,200);delete p.editPlace;savePrep(id,city);reopen();};
+  const ep=body.querySelector("[data-edit-place]");
+  if(ep)ep.onclick=(e)=>{e.preventDefault();p.editPlace=true;reopen();};
   const ad=body.querySelector("[data-addenda]");
   if(ad){
     ad.oninput=()=>{p.addenda=ad.value.slice(0,200);savePrep(id,city);};
@@ -4743,7 +4762,7 @@ function renderDocReview(body,city,id,b,doc,res){
   // What the documents say about the bid is kept whatever happens to the
   // lines -- it feeds the checklist.
   p.docInfo={source:doc.name,submission:res.submission||"",bid_security:res.bid_security||"",
-    prebid:res.prebid||"",questions_due:res.questions_due||"",required_forms:res.required_forms||[],read_at:Date.now()};
+    prebid:res.prebid||"",prebid_place:res.prebid_place||"",questions_due:res.questions_due||"",required_forms:res.required_forms||[],read_at:Date.now()};
   savePrep(id,city);
   const items=res.line_items||[];
   const found=[res.submission&&"how to submit",res.bid_security&&"bid security",res.prebid&&"the pre-bid meeting",
@@ -5488,7 +5507,8 @@ function downloadBidDates(b,p,city,id){
   const lines=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//CurbCall Pro//Bid Dates//EN"];
   events.forEach((e,i)=>lines.push("BEGIN:VEVENT",`UID:${id}-${i}@curbcall.app`,`DTSTAMP:${stamp}`,
     `DTSTART;VALUE=DATE:${d8(e.date)}`,`SUMMARY:${icsEscape(`${e.label}: ${b.title||"Bid"}`)}`,
-    `DESCRIPTION:${icsEscape(`${e.text}${city?" — "+city:""}`)}`,`LOCATION:${icsEscape(city||"")}`,
+    `DESCRIPTION:${icsEscape(`${e.text}${city?" — "+city:""}`)}`,
+    `LOCATION:${icsEscape(/pre-bid/i.test(e.label)&&meetingPlace(p)?meetingPlace(p):(city||""))}`,
     "BEGIN:VALARM","TRIGGER:-P1D","ACTION:DISPLAY",`DESCRIPTION:${icsEscape(e.label)}`,"END:VALARM","END:VEVENT"));
   lines.push("END:VCALENDAR");
   const url=URL.createObjectURL(new Blob([lines.join("\r\n")],{type:"text/calendar"}));
