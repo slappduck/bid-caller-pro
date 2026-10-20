@@ -4399,7 +4399,7 @@ function prepChecklist(b,info){
       urgent:!!(b&&b.addenda)},
     info.questions_due?{key:"questions",phase:"before",label:"Send any questions before the deadline",detail:fromDocs(info.questions_due).trim()}
       :{key:"questions",phase:"before",label:"Ask the agency anything unclear",detail:"Questions usually close a week or so before bids are due.",optional:true},
-    {key:"site",phase:"before",label:"Visit the site",detail:"Quantities on paper and in the field don't always agree.",optional:true},
+    {key:"site",phase:"before",label:"Visit the site",detail:"Quantities on paper and in the field don't always agree. Often done at the pre-bid meeting.",optional:true},
     {key:"price",phase:"price",label:"Price every line item",detail:"Start from the going rates and change anything to your own numbers."},
     {key:"concrete",phase:"price",label:"Get a concrete quote",detail:"Plants near the job and an email to your supplier with the yards worked out."},
     {key:"bond",phase:"paper",label:info.bid_security?"Bid bond or bid security":"Bid bond or bid security, if required",
@@ -4448,6 +4448,24 @@ function prepBackName(id,dflt){
 // that "town" is the whole state -- so these are what a map can actually use.
 function meetingPlace(p){return String((p&&p.meetingPlace)||(p&&p.docInfo&&p.docInfo.prebid_place)||"").trim();}
 function jobAddress(p){return String((p&&p.jobAddress)||(p&&p.docInfo&&p.docInfo.project_location)||"").trim();}
+// Many pre-bid meetings are a walk of the job itself ("pre-bid meeting at
+// the project site"). Then the place to drive to is the job site, and a
+// "meeting place" of "the project site" is no address at all.
+const ONSITE_RE=/\b(on[- ]?site|job ?site|project site|site (?:visit|walk|inspection|tour|meeting)|walk[- ]?through|at the site)\b/i;
+function meetingOnSite(p){
+  const typed=String((p&&p.meetingPlace)||"");
+  if(typed)return ONSITE_RE.test(typed);
+  const info=(p&&p.docInfo)||{};
+  return ONSITE_RE.test(`${info.prebid_place||""} ${info.prebid||""}`);
+}
+// Where to send someone going to the meeting: the job site when the meeting
+// is held there, otherwise the meeting place.
+function meetingDest(p){
+  const job=jobAddress(p);
+  if(meetingOnSite(p)&&job)return job;
+  const place=meetingPlace(p);
+  return ONSITE_RE.test(place)&&!/\d/.test(place)?"":place;
+}
 // The bid's town is added to a map search only when the address doesn't
 // already say where it is: "City Hall" needs "Aurora, MO"; "200 E Main St,
 // Aurora, MO 65605" is only muddied by it.
@@ -4555,7 +4573,7 @@ function renderPrepSteps(body,city,id,b){
   const t=prepTotals(p),info=bidInfo(),marks=p.marks||{};
   const canFill=prepDocCandidates(b).some(d=>d.name!=="Original posting");
   const canRead=prepDocCandidates(b).length>0;
-  const dates=bidDates(b,p),place=meetingPlace(p),job=jobAddress(p);
+  const dates=bidDates(b,p),place=meetingPlace(p),job=jobAddress(p),onSite=meetingOnSite(p),dest=meetingDest(p);
   const dueOf=(i)=>{
     const d=stepDue(i,b,p);if(!d)return null;
     const days=Math.round((d.date-today)/86400000);
@@ -4567,7 +4585,7 @@ function renderPrepSteps(body,city,id,b){
     const btn=(act,label)=>`<button type="button" class="step-act" data-act="${act}">${esc(label)}</button>`;
     switch(i.key){
       case"docs":return canRead&&!auto.docs?btn("read","Read them for me"):"";
-      case"prebid":return(place?a(`href="${esc(mapUrl(mapQuery(place,city)))}" target="_blank" rel="noopener noreferrer"`,"Directions"):"")
+      case"prebid":return(dest?a(`href="${esc(mapUrl(mapQuery(dest,city)))}" target="_blank" rel="noopener noreferrer"`,onSite?"Directions to the site":"Directions"):"")
         +(dates.some(d=>/pre-bid/i.test(d.label))?btn("dates","Add to calendar"):"");
       case"questions":return b.email?a(`href="${esc(agencyQuestionMail(b))}" data-mark="questions"`,"Email the agency"):"";
       case"site":return job?a(`href="${esc(mapUrl(mapQuery(job,city)))}" target="_blank" rel="noopener noreferrer"`,"Directions"):"";
@@ -4586,7 +4604,10 @@ function renderPrepSteps(body,city,id,b){
     if(auto[i.key])out.push(auto[i.key]);
     return out.join(" · ");
   };
-  const placeField=()=>place&&!p.editPlace
+  const placeField=()=>onSite&&!p.editPlace
+    ?(job?`<small class="step-place">Held at the job site: <b>${esc(job)}</b> <a href="#" data-edit-place>Change</a></small>`
+      :`<small class="step-place">Held at the job site.</small><input class="input step-addenda" data-job placeholder="Job address or streets, from the plans" value="" aria-label="Job address">`)
+    :place&&!p.editPlace
     ?`<small class="step-place">Meeting place: <b>${esc(place)}</b> <a href="#" data-edit-place>Change</a></small>`
     :`<input class="input step-addenda" data-place placeholder="Meeting address, e.g. City Hall, 200 E Main St" value="${esc(place)}" aria-label="Meeting address">`;
   const jobField=()=>job&&!p.editJob
@@ -4628,7 +4649,7 @@ function renderPrepSteps(body,city,id,b){
       <span>${prog.done} of ${prog.total} done</span></div>
     ${next?`<div class="step-next"><div class="step-next-k">Next up</div>
         <b>${esc(next.label)}</b> ${dueChip(next,false)}
-        ${next.key==="prebid"&&place?`<small class="step-place">${esc(place)}</small>`:""}
+        ${next.key==="prebid"&&dest?`<small class="step-place">${onSite?"At the job site: ":""}${esc(dest)}</small>`:""}
         ${note(next)?`<small class="step-note">${esc(note(next))}</small>`:""}
         <div class="step-next-act">${action(next)||`<button type="button" class="step-act" data-done="${esc(next.key)}">Mark done</button>`}</div></div>`
       :`<div class="step-next all"><b>Every step is done.</b> Good luck on the bid.</div>`}
@@ -4658,8 +4679,7 @@ function renderPrepSteps(body,city,id,b){
   if(pl)pl.onchange=()=>{p.meetingPlace=pl.value.trim().slice(0,200);delete p.editPlace;savePrep(id,city);reopen();};
   const ep=body.querySelector("[data-edit-place]");
   if(ep)ep.onclick=(e)=>{e.preventDefault();p.editPlace=true;reopen();};
-  const jb=body.querySelector("[data-job]");
-  if(jb)jb.onchange=()=>{p.jobAddress=jb.value.trim().slice(0,200);delete p.editJob;savePrep(id,city);reopen();};
+  body.querySelectorAll("[data-job]").forEach(jb=>jb.onchange=()=>{p.jobAddress=jb.value.trim().slice(0,200);delete p.editJob;savePrep(id,city);reopen();});
   const ej=body.querySelector("[data-edit-job]");
   if(ej)ej.onclick=(e)=>{e.preventDefault();p.editJob=true;reopen();};
   const ad=body.querySelector("[data-addenda]");
@@ -5531,7 +5551,7 @@ function downloadBidDates(b,p,city,id){
   events.forEach((e,i)=>lines.push("BEGIN:VEVENT",`UID:${id}-${i}@curbcall.app`,`DTSTAMP:${stamp}`,
     `DTSTART;VALUE=DATE:${d8(e.date)}`,`SUMMARY:${icsEscape(`${e.label}: ${b.title||"Bid"}`)}`,
     `DESCRIPTION:${icsEscape(`${e.text}${city?" — "+city:""}`)}`,
-    `LOCATION:${icsEscape(/pre-bid/i.test(e.label)&&meetingPlace(p)?meetingPlace(p):(city||""))}`,
+    `LOCATION:${icsEscape(/pre-bid/i.test(e.label)&&meetingDest(p)?meetingDest(p):(city||""))}`,
     "BEGIN:VALARM","TRIGGER:-P1D","ACTION:DISPLAY",`DESCRIPTION:${icsEscape(e.label)}`,"END:VALARM","END:VEVENT"));
   lines.push("END:VCALENDAR");
   const url=URL.createObjectURL(new Blob([lines.join("\r\n")],{type:"text/calendar"}));

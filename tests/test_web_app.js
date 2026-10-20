@@ -1881,6 +1881,19 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     check("the job site the documents give is on the site-visit step", /Job site: Elm St from 1st St to 5th St/.test(await page.textContent("#prep-body")));
     const hrefs = await page.$$eval('.prep-check.step a.step-act[href*="maps"]', (as) => as.map((x) => decodeURIComponent(x.getAttribute("href"))));
     check("...with directions to the streets, in the bid's town", hrefs.some((h) => /Elm St from 1st St to 5th St, Aurora, MO$/.test(h)), JSON.stringify(hrefs));
+    // A pre-bid meeting held at the job: directions go to the site.
+    await page.evaluate((i) => {
+      const p = prepFor(i); delete p.meetingPlace;
+      p.docInfo.prebid = "Mandatory pre-bid meeting and site walk-through at the project site, October 20, 2099 at 10 AM";
+      p.docInfo.prebid_place = "the project site";
+      savePrep(i, "Aurora, MO"); openPrep("Aurora, MO", i, "steps");
+    }, id);
+    await page.waitForTimeout(300);
+    check("a meeting held at the job site says so", /Held at the job site: Elm St from 1st St to 5th St/.test(await page.textContent("#prep-body")));
+    const siteDir = decodeURIComponent(await page.getAttribute("a.step-act >> text=Directions to the site", "href") || "");
+    check("...and its directions go to the job site", /Elm St from 1st St to 5th St, Aurora, MO$/.test(siteDir), siteDir);
+    await page.evaluate((i) => { const p = prepFor(i); p.meetingPlace = "Public Works, 12 Oak St"; savePrep(i, "Aurora, MO"); openPrep("Aurora, MO", i, "steps"); }, id);
+    await page.waitForTimeout(300);
     const stepBond = decodeURIComponent(await page.getAttribute('[data-mark="bond"]', "href"));
     check("the bond step emails the bonding agent from right there", stepBond.startsWith("mailto:sam@surety.example") && /5% bid bond/.test(stepBond));
     check("the form step fills in the agency's form", !!(await page.$('[data-act="fill"]')));
