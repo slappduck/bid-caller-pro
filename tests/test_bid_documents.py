@@ -92,6 +92,8 @@ class CleanResultTests(unittest.TestCase):
         self.assertEqual(got["prebid_place"], "City Hall, 200 E Main St")
         self.assertLessEqual(len(ls._clean_doc_result({"prebid_place": "x" * 900})["prebid_place"]), 200)
         self.assertEqual(ls._clean_doc_result({})["prebid_place"], "")
+        self.assertEqual(ls._clean_doc_result({"project_location": " Elm St  from 1st to 5th "})["project_location"],
+                         "Elm St from 1st to 5th")
 
     def test_a_non_object_is_rejected(self):
         self.assertIsNone(ls._clean_doc_result(["a list"]))

@@ -8978,6 +8978,8 @@ _BID_DOC_PROMPT = (
     "\"prebid\": pre-bid meeting date, place and whether mandatory, as stated.\n"
     "\"prebid_place\": just where the pre-bid meeting is held: the building "
     "and street address exactly as printed, \"\" if the document gives none.\n"
+    "\"project_location\": where the work itself is: the street address, the "
+    "streets or intersections, as printed, \"\" if the document gives none.\n"
     "\"required_forms\": names of forms, affidavits or certificates the bid "
     "must include, as stated.\n"
     "\"questions_due\": the deadline for written questions, as stated.\n"
@@ -9022,6 +9024,7 @@ def _clean_doc_result(raw):
     return {"line_items": items, "submission": text("submission"),
             "bid_security": text("bid_security"), "prebid": text("prebid"),
             "prebid_place": text("prebid_place", 200),
+            "project_location": text("project_location", 200),
             "questions_due": text("questions_due", 300), "required_forms": forms}
 
 

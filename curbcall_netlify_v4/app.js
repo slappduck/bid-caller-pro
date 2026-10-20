@@ -4443,8 +4443,23 @@ function prepBackName(id,dflt){
   const s=(bidPrep[id]&&bidPrep[id].step)||dflt;
   return{steps:"steps",pricing:"pricing",summary:"summary"}[s]||dflt;
 }
-// Where the pre-bid meeting is: typed in, else what the documents say.
+// Where the pre-bid meeting is, and where the work is: typed in, else what
+// the documents say. A bid in the feed only knows its town -- for state jobs
+// that "town" is the whole state -- so these are what a map can actually use.
 function meetingPlace(p){return String((p&&p.meetingPlace)||(p&&p.docInfo&&p.docInfo.prebid_place)||"").trim();}
+function jobAddress(p){return String((p&&p.jobAddress)||(p&&p.docInfo&&p.docInfo.project_location)||"").trim();}
+// The bid's town is added to a map search only when the address doesn't
+// already say where it is: "City Hall" needs "Aurora, MO"; "200 E Main St,
+// Aurora, MO 65605" is only muddied by it.
+function mapQuery(addr,city){
+  const a=String(addr||"").trim(),c=String(city||"").trim();
+  if(!c||/\b\d{5}\b/.test(a)||/,\s*[A-Z]{2}\b/.test(a))return a;
+  const pp=placeParts(c);
+  // Names the town already ("City Hall, Aurora"): add just the state, or
+  // the map may pick an Aurora in another state.
+  if(pp&&a.toLowerCase().includes(pp.city.toLowerCase()))return`${a}, ${pp.state}`;
+  return`${a}, ${c}`;
+}
 // Apple Maps on an iPhone or iPad, Google Maps everywhere else: each opens
 // the phone's own maps app with directions one tap away.
 function mapUrl(q){
@@ -4540,7 +4555,7 @@ function renderPrepSteps(body,city,id,b){
   const t=prepTotals(p),info=bidInfo(),marks=p.marks||{};
   const canFill=prepDocCandidates(b).some(d=>d.name!=="Original posting");
   const canRead=prepDocCandidates(b).length>0;
-  const dates=bidDates(b,p),place=meetingPlace(p);
+  const dates=bidDates(b,p),place=meetingPlace(p),job=jobAddress(p);
   const dueOf=(i)=>{
     const d=stepDue(i,b,p);if(!d)return null;
     const days=Math.round((d.date-today)/86400000);
@@ -4552,10 +4567,10 @@ function renderPrepSteps(body,city,id,b){
     const btn=(act,label)=>`<button type="button" class="step-act" data-act="${act}">${esc(label)}</button>`;
     switch(i.key){
       case"docs":return canRead&&!auto.docs?btn("read","Read them for me"):"";
-      case"prebid":return(place?a(`href="${esc(mapUrl(place+(city?", "+city:"")))}" target="_blank" rel="noopener noreferrer"`,"Directions"):"")
+      case"prebid":return(place?a(`href="${esc(mapUrl(mapQuery(place,city)))}" target="_blank" rel="noopener noreferrer"`,"Directions"):"")
         +(dates.some(d=>/pre-bid/i.test(d.label))?btn("dates","Add to calendar"):"");
       case"questions":return b.email?a(`href="${esc(agencyQuestionMail(b))}" data-mark="questions"`,"Email the agency"):"";
-      case"site":return a(`href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(city||"")}" target="_blank" rel="noopener noreferrer"`,"Open map");
+      case"site":return job?a(`href="${esc(mapUrl(mapQuery(job,city)))}" target="_blank" rel="noopener noreferrer"`,"Directions"):"";
       case"price":return btn("pricing",t.total?"Open pricing":"Start pricing");
       case"concrete":return btn("concrete","Find plants and get a quote");
       case"bond":return info.bond_email?a(`href="${esc(bondRequestMail(b,p,city))}" data-mark="bond"`,"Email my bonding agent"):btn("bondinfo","Add your bonding agent");
@@ -4574,6 +4589,9 @@ function renderPrepSteps(body,city,id,b){
   const placeField=()=>place&&!p.editPlace
     ?`<small class="step-place">Meeting place: <b>${esc(place)}</b> <a href="#" data-edit-place>Change</a></small>`
     :`<input class="input step-addenda" data-place placeholder="Meeting address, e.g. City Hall, 200 E Main St" value="${esc(place)}" aria-label="Meeting address">`;
+  const jobField=()=>job&&!p.editJob
+    ?`<small class="step-place">Job site: <b>${esc(job)}</b> <a href="#" data-edit-job>Change</a></small>`
+    :`<input class="input step-addenda" data-job placeholder="Job address or streets, from the plans" value="${esc(job)}" aria-label="Job address">`;
   const dueChip=(i,done)=>{
     const d=dueOf(i);if(!d||done)return"";
     // A meeting or a deadline is a date; anything else is "do by" a date.
@@ -4592,6 +4610,7 @@ function renderPrepSteps(body,city,id,b){
         ${i.docs&&i.docs.length?`<small class="prep-docs">${i.docs.slice(0,6).map(d=>`<a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">${esc(d.name)}</a>`).join(" · ")}</small>`:""}
         ${note(i)?`<small class="step-note">${esc(note(i))}</small>`:""}
         ${i.key==="prebid"&&!done?placeField():""}
+        ${i.key==="site"&&!done?jobField():""}
         ${i.key==="addenda"?`<input class="input step-addenda" data-addenda placeholder="Addenda you've read, e.g. #1, #2 (or none)" value="${esc(p.addenda||"")}" aria-label="Addenda you've read">`:""}
         ${done?"":action(i)}</span>
     </div>`;
@@ -4639,6 +4658,10 @@ function renderPrepSteps(body,city,id,b){
   if(pl)pl.onchange=()=>{p.meetingPlace=pl.value.trim().slice(0,200);delete p.editPlace;savePrep(id,city);reopen();};
   const ep=body.querySelector("[data-edit-place]");
   if(ep)ep.onclick=(e)=>{e.preventDefault();p.editPlace=true;reopen();};
+  const jb=body.querySelector("[data-job]");
+  if(jb)jb.onchange=()=>{p.jobAddress=jb.value.trim().slice(0,200);delete p.editJob;savePrep(id,city);reopen();};
+  const ej=body.querySelector("[data-edit-job]");
+  if(ej)ej.onclick=(e)=>{e.preventDefault();p.editJob=true;reopen();};
   const ad=body.querySelector("[data-addenda]");
   if(ad){
     ad.oninput=()=>{p.addenda=ad.value.slice(0,200);savePrep(id,city);};
@@ -4762,7 +4785,7 @@ function renderDocReview(body,city,id,b,doc,res){
   // What the documents say about the bid is kept whatever happens to the
   // lines -- it feeds the checklist.
   p.docInfo={source:doc.name,submission:res.submission||"",bid_security:res.bid_security||"",
-    prebid:res.prebid||"",prebid_place:res.prebid_place||"",questions_due:res.questions_due||"",required_forms:res.required_forms||[],read_at:Date.now()};
+    prebid:res.prebid||"",prebid_place:res.prebid_place||"",project_location:res.project_location||"",questions_due:res.questions_due||"",required_forms:res.required_forms||[],read_at:Date.now()};
   savePrep(id,city);
   const items=res.line_items||[];
   const found=[res.submission&&"how to submit",res.bid_security&&"bid security",res.prebid&&"the pre-bid meeting",
