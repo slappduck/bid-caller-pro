@@ -1648,12 +1648,15 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     const pageErrors = [];
     page.on("pageerror", (e) => pageErrors.push(e.message));
     page.on("dialog", (d) => d.accept());
-    let readCalls = 0, readBody = null, failNext = false;
+    let readCalls = 0, readBody = null, uploadBody = null, failNext = false;
     await page.route("**/*", (route) => {
       const u = route.request().url();
       const host = new URL(u).hostname;
       if (u.endsWith("/bid-documents/read")) {
-        readCalls++; readBody = JSON.parse(route.request().postData() || "{}");
+        readCalls++;
+        const raw = route.request().postData() || "{}";
+        if (/multipart\/form-data/.test(route.request().headers()["content-type"] || "")) { uploadBody = raw; readBody = null; }
+        else readBody = JSON.parse(raw);
         if (failNext) {
           failNext = false;
           return route.fulfill({ status: 200, contentType: "application/json",
@@ -1687,6 +1690,10 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await page.evaluate(() => showApp());
     await page.waitForTimeout(800);
     const id = await page.evaluate(() => bidId("Aurora, MO", bidData["Aurora, MO"][0]));
+    await page.evaluate((i) => openPrep("Aurora, MO", i, "steps"), id);
+    await page.waitForTimeout(300);
+    check("the documents step offers to read them or upload one", (await page.locator('[data-act="read"]').count()) >= 1
+            && (await page.locator('[data-act="upload"]').count()) >= 1);
     await page.evaluate((i) => openPrep("Aurora, MO", i, "pricing"), id);
     await page.waitForTimeout(400);
     check("pricing offers to read the bid form", (await page.locator("#pl-read").count()) === 1);
@@ -1724,6 +1731,25 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     check("the steps show the bid security the documents require", /From the bid documents: 5% bid bond/.test(cl));
     check("...how to submit", /Sealed envelope to the City Clerk/.test(cl));
     check("...and the required forms", /Non-collusion affidavit; E-Verify affidavit/.test(cl));
+
+    // A plan holder's PDF, uploaded from the phone, is read the same way.
+    await page.evaluate((i) => openPrep("Aurora, MO", i, "pricing"), id);
+    await page.waitForTimeout(300);
+    await page.click("#pl-read");
+    await page.waitForTimeout(200);
+    check("the document picker offers an upload", (await page.locator("#doc-upload").count()) === 1);
+    const pdfBytes = Buffer.from("%PDF-1.4 plans");
+    let [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("#doc-upload")]);
+    await chooser.setFiles({ name: "notapdf.txt", mimeType: "text/plain", buffer: Buffer.from("hi") });
+    await page.waitForTimeout(300);
+    check("a file that isn't a PDF is turned away before it's sent", uploadBody === null);
+    [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("#doc-upload")]);
+    await chooser.setFiles({ name: "Plan holder set.pdf", mimeType: "application/pdf", buffer: pdfBytes });
+    await page.waitForTimeout(600);
+    check("the uploaded PDF goes to the reader with the license key",
+          uploadBody && /name="file"; filename="Plan holder set.pdf"/.test(uploadBody) && /%PDF-1.4 plans/.test(uploadBody)
+            && /"key":/.test(uploadBody) && !/"url":/.test(uploadBody), String(uploadBody).slice(0, 300));
+    check("what the upload says is shown for review", /3 line items found/.test(await page.textContent("#prep-body")));
     check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
     await ctx.close();
   }
@@ -1803,7 +1829,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     const page = await ctx.newPage();
     const pageErrors = [];
     page.on("pageerror", (e) => pageErrors.push(e.message));
-    let fillBody = null, nearbyBody = null, quoteBody = null, quotesLogged = 0;
+    let fillBody = null, fillUpload = null, nearbyBody = null, quoteBody = null, quotesLogged = 0;
     await page.route("**/*", (route) => {
       const u = route.request().url();
       const host = new URL(u).hostname;
@@ -1823,7 +1849,9 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
         return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) });
       }
       if (u.endsWith("/bid-documents/fill")) {
-        fillBody = JSON.parse(route.request().postData() || "{}");
+        const raw = route.request().postData() || "{}";
+        if (/multipart\/form-data/.test(route.request().headers()["content-type"] || "")) fillUpload = raw;
+        else fillBody = JSON.parse(raw);
         return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
           ok: true, fields: 9, left_blank: 7, pdf_b64: Buffer.from("%PDF-1.4 filled").toString("base64"),
           filled: [{ field: "Bidder", label: "Name of bidder", value: "Test Concrete LLC", key: "company.name" },
@@ -1868,6 +1896,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     check("documents given out to plan holders get a button to register for them",
           (await page.getAttribute("a.step-act >> text=Register to get the documents", "href")) === "https://e.gov/Bids/PlanHolders/17?documentId=-1"
             && /after you register as a plan holder/.test(steps));
+    check("...and a button to upload them once they have them", (await page.locator('[data-act="upload"]').count()) >= 1);
     const short = (m, d) => new Date(2099, m, d).toLocaleDateString(undefined, { month: "short", day: "numeric" });
     check("the bond step says when to ask, five days before the bid is due", steps.includes(`Do by ${short(9, 27)}`), steps.slice(0, 300));
     check("the pre-bid meeting and questions use the dates the documents give",
@@ -2009,6 +2038,27 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     check("every filled box is listed for checking", /Name of bidder/.test(filled) && /75,000\.00/.test(filled) && /7 boxes left blank/.test(filled));
     const [pdf] = await Promise.all([page.waitForEvent("download"), page.click("#ff-download")]);
     check("the filled form downloads", fs.readFileSync(await pdf.path(), "utf8").startsWith("%PDF") && /filled\.pdf$/.test(pdf.suggestedFilename()));
+    await page.click("#ff-back");
+    await page.waitForTimeout(300);
+    await page.evaluate((i) => openPrep("Aurora, MO", i, "summary"), id);
+    await page.waitForTimeout(300);
+    await page.click("#ps-fill");
+    await page.waitForTimeout(300);
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("#ff-upload")]);
+    await chooser.setFiles({ name: "Bid form.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4 form") });
+    await page.waitForTimeout(600);
+    check("an uploaded bid form is filled with the same details",
+          fillUpload && /filename="Bid form.pdf"/.test(fillUpload) && /Test Concrete LLC/.test(fillUpload) && /"total":75000/.test(fillUpload),
+          String(fillUpload).slice(0, 300));
+    check("...and its filled boxes are listed", /Filled 2 boxes on Bid form\.pdf/.test(await page.textContent("#prep-body")));
+    await page.click("#ff-back");
+    await page.waitForTimeout(300);
+    await page.evaluate((i) => openPrep("Aurora, MO", i, "summary"), id);
+    await page.waitForTimeout(300);
+    await page.click("#ps-fill");
+    await page.waitForTimeout(300);
+    check("the uploaded form is offered again without picking it a second time",
+          (await page.locator('[data-up="0"]').count()) === 1 && /Bid form\.pdf \(uploaded\)/.test(await page.textContent("#prep-body")));
 
     await page.evaluate(() => { closeModal(); switchScreen("account"); });
     await page.waitForTimeout(500);
