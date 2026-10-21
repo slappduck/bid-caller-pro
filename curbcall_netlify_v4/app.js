@@ -4530,7 +4530,46 @@ function prepBackName(id,dflt){
 // the documents say. A bid in the feed only knows its town -- for state jobs
 // that "town" is the whole state -- so these are what a map can actually use.
 function meetingPlace(p){return String((p&&p.meetingPlace)||(p&&p.docInfo&&p.docInfo.prebid_place)||"").trim();}
-function jobAddress(p){return String((p&&p.jobAddress)||(p&&p.docInfo&&p.docInfo.project_location)||"").trim();}
+function jobAddress(p){
+  const located=p&&p.located&&p.located.how!=="town"?p.located.label:"";
+  return String((p&&p.jobAddress)||(p&&p.docInfo&&p.docInfo.project_location)||located||"").trim();
+}
+// Where the job is, worked out by the server from the bid itself when no
+// address was given or read: "Kickingbird Golf Course Parking Lot" on a
+// statewide Oklahoma search is the golf course in Edmond. Asked once per bid.
+const STATE_CODES={alabama:"AL",alaska:"AK",arizona:"AZ",arkansas:"AR",california:"CA",colorado:"CO",connecticut:"CT",
+  delaware:"DE","district of columbia":"DC",florida:"FL",georgia:"GA",hawaii:"HI",idaho:"ID",illinois:"IL",indiana:"IN",
+  iowa:"IA",kansas:"KS",kentucky:"KY",louisiana:"LA",maine:"ME",maryland:"MD",massachusetts:"MA",michigan:"MI",
+  minnesota:"MN",mississippi:"MS",missouri:"MO",montana:"MT",nebraska:"NE",nevada:"NV","new hampshire":"NH",
+  "new jersey":"NJ","new mexico":"NM","new york":"NY","north carolina":"NC","north dakota":"ND",ohio:"OH",oklahoma:"OK",
+  oregon:"OR",pennsylvania:"PA","rhode island":"RI","south carolina":"SC","south dakota":"SD",tennessee:"TN",texas:"TX",
+  utah:"UT",vermont:"VT",virginia:"VA",washington:"WA","west virginia":"WV",wisconsin:"WI",wyoming:"WY"};
+// {city, state} to search from: "Aurora, MO" is a town; "Oklahoma" from a
+// statewide search is only a state.
+function searchPlace(city,b){
+  const pp=placeParts(city);
+  if(pp)return pp;
+  const st=STATE_CODES[String(city||"").trim().toLowerCase()]||bidState(city,b);
+  return st?{city:"",state:st}:null;
+}
+const _locating={};
+async function locateBid(id,city,b){
+  const p=prepFor(id);
+  if(p.located||p.jobAddress||(p.docInfo&&p.docInfo.project_location)||_locating[id]||isOffline())return null;
+  const pl=searchPlace(city,b);
+  if(!pl)return null;
+  _locating[id]=true;
+  try{
+    const token=await getSupabaseToken();
+    const r=await fetchWithTimeout(SERVER+"/bid/locate",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,...pl,
+        title:b.title||"",scope:String(b.scope||"").slice(0,1500),url:b.url||""})},45000);
+    const d=await r.json();
+    if(d&&d.ok){p.located={label:d.label,how:d.how,at:Date.now()};savePrep(id,city);return p.located;}
+  }catch(e){}
+  finally{delete _locating[id];}
+  return null;
+}
 // Many pre-bid meetings are a walk of the job itself ("pre-bid meeting at
 // the project site"). Then the place to drive to is the job site, and a
 // "meeting place" of "the project site" is no address at all.
@@ -4978,8 +5017,9 @@ function renderPrepSteps(body,city,id,b){
     :place&&!p.editPlace
     ?`<small class="step-place">Meeting place: <b>${esc(place)}</b> <a href="#" data-edit-place>Change</a></small>`
     :`<input class="input step-addenda" data-place placeholder="Meeting address, e.g. City Hall, 200 E Main St" value="${esc(place)}" aria-label="Meeting address">`;
+  const fromName=!p.jobAddress&&!(p.docInfo&&p.docInfo.project_location)&&p.located&&p.located.how==="bid";
   const jobField=()=>job&&!p.editJob
-    ?`<small class="step-place">Job site: <b>${esc(job)}</b> <a href="#" data-edit-job>Change</a></small>`
+    ?`<small class="step-place">Job site${fromName?", from the bid's name":""}: <b>${esc(job)}</b> <a href="#" data-edit-job>Change</a></small>`
     :`<input class="input step-addenda" data-job placeholder="Job address or streets, from the plans" value="${esc(job)}" aria-label="Job address">`;
   const dueChip=(i,done)=>{
     const d=dueOf(i);if(!d||done)return"";
@@ -5042,6 +5082,9 @@ function renderPrepSteps(body,city,id,b){
   const reopen=()=>openPrep(city,id,"steps");
   // Whether email-in is set up is asked once a visit; the option appears
   // when the answer comes back.
+  if(!p.located&&!job)locateBid(id,city,b).then(loc=>{
+    if(loc&&loc.how!=="town"&&document.getElementById("prep-body")===body&&prepFor(id).step==="steps")reopen();
+  });
   if(!_inboxChecked&&!inboxAddress())checkInboxAddress().then(addr=>{
     if(addr&&document.getElementById("prep-body")===body&&prepFor(id).step==="steps")reopen();
   });
@@ -6358,17 +6401,18 @@ function placeParts(city){
   const m=/^(.+?),\s*([A-Za-z]{2})\s*$/.exec(String(city||"").trim());
   return m?{city:m[1],state:m[2].toUpperCase()}:null;
 }
-async function loadSuppliers(city,fresh,near){
-  const pl=placeParts(city);
+async function loadSuppliers(city,fresh,near,b){
+  const pl=searchPlace(city,b);
   if(!pl)return{ok:false,reason:"bad_place"};
   near=String(near||"").trim().slice(0,160);
-  const k=`${pl.city},${pl.state}|${near}`.toLowerCase();
+  const k=`${pl.city},${pl.state}|${near}|${(b&&b.title)||""}`.toLowerCase();
   if(!fresh&&supplierCache.has(k))return supplierCache.get(k);
   if(isOffline())return{ok:false,reason:"offline"};
   try{
     const token=await getSupabaseToken();
     const r=await fetchWithTimeout(SERVER+"/suppliers/nearby",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,...pl,near})},75000);
+      body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,...pl,near,
+        title:(b&&b.title)||"",scope:String((b&&b.scope)||"").slice(0,1500),url:(b&&b.url)||""})},75000);
     const d=await r.json();
     if(d&&d.ok)supplierCache.set(k,d);
     return d||{ok:false};
@@ -6381,7 +6425,8 @@ function plantSelect(name,status,i){
 function suppliersHTML(d,b,p,city,waste){
   if(!d||!d.ok){
     const why={not_licensed:"Supplier search is part of a paid plan.",place_not_found:"Couldn't place this town on the map.",
-      bad_place:"This bid has no town and state to search from. Add the job address on the Steps tab.",
+      bad_place:"Couldn't tell where this job is. Add the job address on the Steps tab.",
+      place_not_found:"Couldn't tell where this job is. Add the job address on the Steps tab.",
       rate_limited:"Too many searches today. Try again tomorrow.",offline:"You're offline."}[d&&d.reason]
       ||"The plant search took too long. The map servers it uses get busy; try again in a minute.";
     return`<div class="account-status">${esc(why)}</div>${d&&["not_licensed","rate_limited","offline","bad_place"].includes(d.reason)?"":
@@ -6537,8 +6582,8 @@ function renderConcretePanel(body,city,id,b){
     <div id="rm-est"></div>
     <div class="act-primary"><a class="ma-gold" id="cq-send" href="${esc(concreteQuoteMail(b,p,city,waste))}">Email my supplier for a quote</a></div>
     ${bidInfo().supplier_email?"":`<div class="rate-note">Save your supplier's email in <a href="#" id="cq-profile">bid details</a> and this goes straight to them.</div>`}
-    <div class="workspace-title" style="margin-top:1rem;">Ready-mix plants near ${near?"the job site":esc(place)}</div>
-    ${near?`<div class="rate-note" style="margin-top:0;">Searching around ${esc(near)}, ${esc(place)}.</div>`:""}
+    <div class="workspace-title" style="margin-top:1rem;">Ready-mix plants near ${near||placeParts(city)?"the job":esc(place)}</div>
+    <div class="rate-note" id="rm-near" style="margin-top:0;${near?"":"display:none;"}">${near?`Searching around ${esc(near)}${placeParts(city)&&!near.toLowerCase().includes(String(place).toLowerCase())?`, ${esc(place)}`:""}.`:""}</div>
     <div id="rm-sup"><div class="account-status">Looking for plants…</div></div>
     <details class="rm-log" id="rm-log"><summary>Got a quote? Save it</summary>
       <form id="rm-form" class="rm-form">
@@ -6617,8 +6662,11 @@ function renderConcretePanel(body,city,id,b){
   $("cq-waste").onchange=(e)=>{store.set("concrete_waste_pct",Number(e.target.value)||0);redraw();};
   $("cq-psi").onchange=(e)=>{c.psi=e.target.value?Number(e.target.value):"";save();
     $("rm-form").querySelector('[name="psi"]').value=e.target.value;redraw();};
-  const showSuppliers=(fresh)=>loadSuppliers(city,fresh,near).then(d=>{
+  const showSuppliers=(fresh)=>loadSuppliers(city,fresh,near,b).then(d=>{
     if(!$("rm-sup"))return;
+    // Where the server found the job, when the bid didn't say in an address.
+    const nn=$("rm-near");
+    if(nn&&d&&d.ok&&d.near){nn.textContent=`Searching around ${d.near}.`;nn.style.display="";}
     sup=d;quotes=d&&d.ok?d.quotes:null;
     if(!(d&&d.ok)){
       $("rm-sup").innerHTML=suppliersHTML(d,b,p,city,wastePct());sup=null;

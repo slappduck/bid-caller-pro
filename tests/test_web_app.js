@@ -1975,6 +1975,63 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── A statewide bid is placed by its own name ──
+  console.log("\nA bid from a statewide search is placed by the site its name gives");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    let locateBody = null, nearbyBody = null;
+    await page.route("**/*", (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      const json = (o) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(o) });
+      if (u.endsWith("/bid/locate")) {
+        locateBody = JSON.parse(route.request().postData() || "{}");
+        return json({ ok: true, lat: 35.66, lon: -97.46, label: "Kickingbird Golf Course, Edmond, OK", how: "bid" });
+      }
+      if (u.endsWith("/suppliers/nearby")) {
+        nearbyBody = JSON.parse(route.request().postData() || "{}");
+        return json({ ok: true, city: "", state: "OK", radius_mi: 50, near: "Kickingbird Golf Course, Edmond, OK", how: "bid",
+          plants: [{ name: "Edmond Ready Mix", miles: 3.1, phone: "405-555-0100", address: "Edmond, OK", source: "OpenStreetMap" }],
+          web: [], quotes: { enough: false, count: 0 } });
+      }
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      localStorage.setItem("last_feed", JSON.stringify({ "Oklahoma": [
+        { title: "Kickingbird Golf Course Parking Lot Bid", scope: "Mill and overlay, new curb", deadline: "2099-10-26",
+          status: "open", url: "https://www.edmondok.gov/Bids.aspx?bidID=88" }] }));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(800);
+    const id = await page.evaluate(() => { window.getSupabaseToken = async () => "tok"; return bidId("Oklahoma", bidData["Oklahoma"][0]); });
+    await page.evaluate((i) => openPrep("Oklahoma", i, "steps"), id);
+    await page.waitForTimeout(800);
+    check("the server is asked where a statewide bid is, with the bid's own words",
+          locateBody && locateBody.state === "OK" && locateBody.city === "" && /Kickingbird/.test(locateBody.title)
+            && /edmondok\.gov/.test(locateBody.url), JSON.stringify(locateBody));
+    const steps = await page.textContent("#prep-body");
+    check("the site step shows where the job is, and says it came from the bid's name",
+          /Job site, from the bid's name: Kickingbird Golf Course, Edmond, OK/.test(steps), steps.slice(0, 800));
+    check("...with directions to it", /Kickingbird%20Golf%20Course%2C%20Edmond%2C%20OK/.test(
+          await page.getAttribute('a.step-act[href*="Kickingbird"]', "href")));
+    await page.evaluate((i) => renderConcretePanel(document.getElementById("prep-body"), "Oklahoma", i, bidData["Oklahoma"][0]), id);
+    await page.waitForTimeout(800);
+    check("plants are searched around that site, not the whole state",
+          nearbyBody && nearbyBody.state === "OK" && nearbyBody.near === "Kickingbird Golf Course, Edmond, OK", JSON.stringify(nearbyBody));
+    check("...and the panel lists them", /Edmond Ready Mix/.test(await page.textContent("#rm-sup"))
+          && /Searching around Kickingbird Golf Course, Edmond, OK/.test(await page.textContent("#prep-body")));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   // ── Phase 3: your own pricing history ──
   console.log("\nPast bids feed your prices: history, copy, won vs lost");
   {
@@ -2232,7 +2289,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
           /How much of each price is concrete/.test(share) && /\$12\.83–\$20\.42 a sq yd/.test(share) && /28% of your \$60/.test(share), share.slice(0, 300));
     check("plants are asked for around the job site, in the bid's town", nearbyBody && nearbyBody.city === "Aurora" && nearbyBody.state === "MO"
             && nearbyBody.near === "Elm St from 1st St to 5th St", JSON.stringify(nearbyBody));
-    check("...and the panel says so", /Ready-mix plants near the job site/.test(await page.textContent("#prep-body"))
+    check("...and the panel says so", /Ready-mix plants near the job/.test(await page.textContent("#prep-body"))
             && /Searching around Elm St from 1st St to 5th St, Aurora/.test(await page.textContent("#prep-body")));
     const sup = await page.textContent("#rm-sup");
     check("nearby plants are listed with distance and a phone number", /Ozark Ready Mix/.test(sup) && /4\.2 mi/.test(sup) && /417-555-0199/.test(sup));
