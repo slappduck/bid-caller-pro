@@ -4,5 +4,5 @@ gunicorn==26.2.0
 anthropic==1.11.0
 Pillow==12.3.0
 pypdf==6.19.0
-cryptography==46.0.7
+cryptography==50.0.2
 pypdfium2==5.14.0
