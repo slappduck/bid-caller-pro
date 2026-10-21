@@ -673,6 +673,13 @@ class DocumentPickerTests(unittest.TestCase):
         got = self.B.detail_documents(html, "https://county.gov/bids.aspx?bidID=137")
         self.assertEqual([d["name"] for d in got], ["Specifications"])
 
+    def test_the_city_board_volunteer_form_is_not_a_bid_document(self):
+        html = ('<a href="/DocumentCenter/View/88/Application-for-Boards">Application for Boards</a>'
+                '<a href="/DocumentCenter/View/89/Boards-Commissions-Application">Boards &amp; Commissions</a>'
+                '<a href="/DocumentCenter/View/90/Bid-Form">Bid Form</a>')
+        got = self.B.detail_documents(html, "https://city.gov/bids.aspx?bidID=12")
+        self.assertEqual([d["name"] for d in got], ["Bid Form"])
+
     def test_a_link_with_no_useful_text_is_named_from_its_file(self):
         got = self.B.detail_documents('<a href="/docs/2026_Sidewalk_Bid_Tabulation_Sheet.pdf">click here</a>', "https://t.gov/")
         self.assertEqual(got[0]["name"], "2026 Sidewalk Bid Tabulation Sheet")

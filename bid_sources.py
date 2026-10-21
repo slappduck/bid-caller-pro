@@ -2039,7 +2039,12 @@ _DOC_ANCHOR_RE = re.compile(
 _SITEWIDE_DOC_RE = re.compile(
     r"open[\s_-]*records|records[\s_-]*request|\bfoia\b|employment|job[\s_-]*application"
     r"|\bagenda|\bminutes\b|newsletter|privacy[\s_-]*policy|accessibility"
-    r"|annual[\s_-]*report|comprehensive[\s_-]*plan", re.I)
+    r"|annual[\s_-]*report|comprehensive[\s_-]*plan"
+    # The form for volunteering on a city board ("Application for Boards",
+    # "Boards & Commissions Application") -- linked site-wide by CivicPlus
+    # towns, and the only "document" one bridge posting had.
+    r"|boards?[\s_-]*(?:and|&)?[\s_-]*commissions?|application[\s_-]*for[\s_-]*(?:boards?|commissions?)"
+    r"|board[\s_-]*application|volunteer", re.I)
 
 
 def _doc_name(anchor_html, url):

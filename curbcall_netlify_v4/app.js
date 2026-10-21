@@ -4388,9 +4388,7 @@ function prepChecklist(b,info){
   // What the documents say often has no full stop of its own, and the next
   // sentence ran straight into it ("5% bid bond Ask your bonding company").
   const fromDocs=(t)=>{t=String(t||"").trim();return t?` From the bid documents: ${t}${/[.!?]$/.test(t)?"":"."}`:"";};
-  const docs=((b&&b.documents)||[]).map(d=>({
-    name:(d&&d.name)?String(d.name):"Document",url:safeUrl(typeof d==="string"?d:(d&&d.url))
-  })).filter(d=>d.url);
+  const docs=bidDocs(b);
   const items=[
     {key:"docs",phase:"before",label:"Get the bid documents",
       detail:b&&safeUrl(b.plan_room)
@@ -4428,7 +4426,9 @@ function prepChecklist(b,info){
 // filled in, the addenda were recorded.
 function prepAuto(b,p){
   const out={};
-  if(p.docInfo&&p.docInfo.read_at)out.docs="Read in the app";
+  // A reading of a town-wide form (the board volunteer application) says
+  // nothing about the bid, so it doesn't count as having the documents.
+  if(p.docInfo&&p.docInfo.read_at&&!SITEWIDE_DOC_RE.test(p.docInfo.source||""))out.docs="Read in the app";
   const lines=(p.lines||[]).filter(l=>Number(l.qty)>0);
   if(lines.length&&lines.every(l=>Number(l.price)>0))out.price="Every line priced";
   const c=p.concrete&&p.concrete.plants;
@@ -4814,12 +4814,21 @@ function renderPrepSteps(body,city,id,b){
 // server fetches the document, reads it, and returns the items and what it
 // says about submitting, bid security, the pre-bid meeting and forms.
 // Nothing replaces the contractor's lines until they've seen what was read.
+// Town-wide forms linked from every page, not this bid (mirrors the
+// scanner's _SITEWIDE_DOC_RE). Bids saved before the scanner learned one
+// still carry it, so the app drops them too.
+const SITEWIDE_DOC_RE=/open[\s_-]*records|records[\s_-]*request|\bfoia\b|employment|job[\s_-]*application|\bagenda|\bminutes\b|newsletter|privacy[\s_-]*policy|accessibility|annual[\s_-]*report|comprehensive[\s_-]*plan|boards?[\s_-]*(?:and|&)?[\s_-]*commissions?|application[\s_-]*for[\s_-]*(?:boards?|commissions?)|board[\s_-]*application|volunteer/i;
+function bidDocs(b){
+  return((b&&b.documents)||[]).map((d,i)=>({name:(d&&d.name)?String(d.name):"Document "+(i+1),url:safeUrl(typeof d==="string"?d:(d&&d.url))}))
+    .filter(d=>{
+      if(!d.url||SITEWIDE_DOC_RE.test(d.name))return false;
+      let u=d.url;try{u=decodeURIComponent(u);}catch(e){}
+      return!SITEWIDE_DOC_RE.test(u);
+    });
+}
 function prepDocCandidates(b){
   const out=[];
-  ((b&&b.documents)||[]).forEach((d,i)=>{
-    const url=safeUrl(typeof d==="string"?d:(d&&d.url));
-    if(url&&/^https?:/i.test(url))out.push({name:(d&&d.name)?String(d.name):"Document "+(i+1),url});
-  });
+  bidDocs(b).forEach(d=>{if(/^https?:/i.test(d.url))out.push(d);});
   const post=safeUrl(b&&b.url);
   if(post&&/^https?:/i.test(post)&&!out.some(d=>d.url===post))out.push({name:"Original posting",url:post});
   return out;

@@ -2003,6 +2003,11 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     check("documents given out to plan holders get a button to register for them",
           (await page.getAttribute("a.step-act >> text=Register to get the documents", "href")) === "https://e.gov/Bids/PlanHolders/17?documentId=-1"
             && /after you register as a plan holder/.test(steps));
+    check("a town's board volunteer form saved on an older bid isn't offered as a bid document",
+          await page.evaluate(() => bidDocs({ documents: [{ name: "Application for Boards", url: "https://e.gov/DocumentCenter/View/88" },
+            { name: "Bid form", url: "https://e.gov/form.pdf" }, { name: "x", url: "https://e.gov/%E0%A4%A" }] }).map((d) => d.name).join("|") === "Bid form|x"));
+    check("...and reading one doesn't count as having the documents",
+          await page.evaluate(() => !prepAuto({}, { docInfo: { source: "Application for Boards", read_at: 1 }, lines: [] }).docs));
     check("a meeting the documents call non-mandatory is not flagged MANDATORY",
           await page.evaluate(() => !isMandatory("Non-mandatory pre-bid meeting October 24") && !isMandatory("Attendance is not mandatory")
             && isMandatory("Mandatory pre-bid meeting October 20")));
