@@ -570,6 +570,7 @@ def _fill_values(data):
     put("bid.number", "Bid / project number", bid.get("number"), 80)
     put("bid.title", "Project", bid.get("title"))
     put("bid.agency", "Owner / agency the bid is for", bid.get("agency"), 120)
+    put("bid.location", "Project location / job site", bid.get("location"), 160)
     put("bid.addenda", "Addenda acknowledged", bid.get("addenda"), 120)
     put("date", "Date", bid.get("date"), 40)
     try:
@@ -982,7 +983,7 @@ def _packet_front(data, names):
     L = _PageLayout()
     L.text("Bid packet", 20, True)
     L.text(s(bid.get("title")) or "Bid", 13, True)
-    for label, v in (("Owner", bid.get("agency")), ("Bid number", bid.get("number")),
+    for label, v in (("Owner", bid.get("agency")), ("Job site", bid.get("location")), ("Bid number", bid.get("number")),
                      ("Bids due", bid.get("due")), ("Bidder", co.get("name"))):
         if s(v):
             L.text(f"{label}: {s(v)}", 10.5)

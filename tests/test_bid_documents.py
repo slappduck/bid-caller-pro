@@ -549,11 +549,13 @@ class FlatFormTests(unittest.TestCase):
         self.assertEqual((vals["company.city"][1], vals["company.state"][1], vals["company.zip"][1]),
                          ("Aurora", "MO", "65605"))
         self.assertEqual(vals["bid.agency"][1], "City of Aurora")
+        vals = ls._fill_values({"bid": {"location": "Kickingbird Golf Course, Edmond, OK"}})
+        self.assertEqual(vals["bid.location"], ("Project location / job site", "Kickingbird Golf Course, Edmond, OK"))
 
 
 class PacketTests(unittest.TestCase):
     BODY = {"key": "k", "device_id": "d",
-            "bid": {"title": "Elm St Sidewalk", "agency": "City of Aurora", "number": "B-17",
+            "bid": {"title": "Elm St Sidewalk", "agency": "City of Aurora", "number": "B-17", "location": "Elm St from 1st St to 5th St, Aurora, MO",
                     "total": 75000, "submission": "Sealed envelope to the City Clerk", "addenda": "#1"},
             "company": {"name": "Test Concrete LLC"},
             "checklist": ["Sign the bid form", "Attach the 5% bid bond"],
@@ -581,7 +583,7 @@ class PacketTests(unittest.TestCase):
         pdf = ls.base64.b64decode(d["pdf_b64"])
         self.assertEqual(d["pages"], 4)
         cover = page_text(pdf, 0)
-        for want in ("Bid packet", "Elm St Sidewalk", "Sign the bid form", "Attach the 5% bid bond",
+        for want in ("Bid packet", "Elm St Sidewalk", "Job site: Elm St from 1st St to 5th St, Aurora, MO", "Sign the bid form", "Attach the 5% bid bond",
                      "Sealed envelope to the City Clerk", "3. Bid form.pdf", "4. Affidavit.pdf",
                      "Seventy-five thousand dollars"):
             self.assertIn(want, cover)

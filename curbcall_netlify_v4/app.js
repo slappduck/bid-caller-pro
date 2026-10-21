@@ -4600,6 +4600,14 @@ function mapQuery(addr,city){
   if(pp&&a.toLowerCase().includes(pp.city.toLowerCase()))return`${a}, ${pp.state}`;
   return`${a}, ${c}`;
 }
+// The best words for where the job is, for anything that names it: the job
+// address (typed, read from the documents, or found from the bid's name)
+// with its town when it doesn't carry one, else the bid's town. One place
+// so a summary, an email and a map never disagree.
+function jobPlace(p,city){
+  const job=jobAddress(p);
+  return job?mapQuery(job,city):String(city||"");
+}
 // Apple Maps on an iPhone or iPad, Google Maps everywhere else: each opens
 // the phone's own maps app with directions one tap away.
 function mapUrl(q){
@@ -5881,12 +5889,12 @@ function renderPrepPricing(body,city,id,b){
 function prepSummaryData(id,b,city){
   const p=prepFor(id);
   const lines=(p.lines||[]).filter(l=>(l.name||"").trim()||Number(l.qty)||Number(l.price));
-  return{company:companyProfile||{},b,city,lines,t:prepTotals(p),markup:Number(p.markup)||0,addenda:p.addenda||""};
+  return{company:companyProfile||{},b,city,place:jobPlace(p,city),lines,t:prepTotals(p),markup:Number(p.markup)||0,addenda:p.addenda||""};
 }
 function prepSummaryText(s){
   const c=s.company,out=[];
   out.push(`BID SUMMARY: ${s.b.title||""}`);
-  if(s.city)out.push(`Location: ${s.city}`);
+  if(s.place)out.push(`Location: ${s.place}`);
   if(s.b.bid_number)out.push(`Bid number: ${s.b.bid_number}`);
   if(s.b.deadline)out.push(`Due: ${s.b.deadline}`);
   out.push("");
@@ -5959,7 +5967,7 @@ function printPrepSummary(s){
 th{background:#f0f0f0;}td:nth-child(n+2),th:nth-child(n+2){text-align:right;}.t{margin-top:12px;text-align:right;}.t div{margin:3px 0;}
 .g{font-size:16px;font-weight:bold;}.n{margin-top:24px;color:#666;font-size:11px;}</style></head><body>
 <h1>Bid summary: ${esc(s.b.title||"")}</h1>
-${s.city?`<div class="m">Location: ${esc(s.city)}</div>`:""}${s.b.bid_number?`<div class="m">Bid number: ${esc(s.b.bid_number)}</div>`:""}
+${s.place?`<div class="m">Location: ${esc(s.place)}</div>`:""}${s.b.bid_number?`<div class="m">Bid number: ${esc(s.b.bid_number)}</div>`:""}
 ${s.b.deadline?`<div class="m">Due: ${esc(s.b.deadline)}</div>`:""}
 <p><b>${esc(c.name||"")}</b><br>${[c.contact,c.phone,c.email].filter(Boolean).map(esc).join(" &middot; ")}</p>
 <table><thead><tr><th>#</th><th>Item</th><th>Quantity</th><th>Unit price</th><th>Amount</th></tr></thead><tbody>
@@ -6022,7 +6030,7 @@ function splitItemNo(name){
   const m=/^\s*([A-Za-z0-9-]{1,6})\.\s+(.+)$/.exec(String(name||""));
   return m?{item_no:m[1],description:m[2]}:{item_no:"",description:String(name||"").trim()};
 }
-function fillPayload(b,p){
+function fillPayload(b,p,city){
   const c=companyProfile||{},i=bidInfo(),t=prepTotals(p);
   const now=new Date(),pad=n=>String(n).padStart(2,"0");
   // Lines carry the markup the way the total does, so the form's unit
@@ -6031,7 +6039,7 @@ function fillPayload(b,p){
   return{
     company:{name:c.name||"",contact:c.contact||"",phone:c.phone||"",email:c.email||"",
       title:i.title||"",address:i.address||"",city_state_zip:i.city_state_zip||"",license:i.license||"",years:i.years||""},
-    bid:{number:b.bid_number||"",title:b.title||"",agency:b.agency||"",addenda:p.addenda||"",total:Math.round(t.total*100)/100,
+    bid:{number:b.bid_number||"",title:b.title||"",agency:b.agency||"",location:jobPlace(p,city||b._city||""),addenda:p.addenda||"",total:Math.round(t.total*100)/100,
       date:`${pad(now.getMonth()+1)}/${pad(now.getDate())}/${now.getFullYear()}`},
     lines:(p.lines||[]).filter(l=>(l.name||"").trim()).map(l=>{
       const s=splitItemNo(l.name),price=Math.round((Number(l.price)||0)*k*100)/100,qty=Number(l.qty)||0;
@@ -6143,7 +6151,7 @@ async function fillAndShow(body,city,id,b,forms){
   for(let k=0;k<forms.length;k++){
     const f=forms[k];
     body.innerHTML=`<div class="account-status"><span class="spin"></span> Filling in ${esc(f.name)}…${forms.length>1?` (${k+1} of ${forms.length})`:""}</div>`;
-    const res=f.file?await fillBidFormFile(f.file,fillPayload(b,p)):await fillBidForm(f.url,fillPayload(b,p));
+    const res=f.file?await fillBidFormFile(f.file,fillPayload(b,p,city)):await fillBidForm(f.url,fillPayload(b,p,city));
     if(!document.getElementById("prep-body"))return;
     if(res.ok){
       const blob=b64ToBlob(res.pdf_b64);
@@ -6220,7 +6228,7 @@ async function renderPacket(body,city,id,b){
   document.getElementById("pk-more").onclick=()=>renderFormFill(body,city,id,b);
   document.getElementById("pk-go").onclick=async()=>{
     const picked=[...body.querySelectorAll("[data-pk]:checked")].map(x=>done[Number(x.dataset.pk)]);
-    const pay=fillPayload(b,p);
+    const pay=fillPayload(b,p,city);
     pay.bid.due=b.deadline||"";
     pay.bid.submission=(p.docInfo&&p.docInfo.submission)||"";
     pay.checklist=packetChecklist(b,p,picked.map(d=>d.name));
@@ -6261,7 +6269,7 @@ function bondRequestMail(b,p,city){
   const first=String(i.bond_agent||"").trim().split(/\s+/)[0];
   const body=[`${first?`Hi ${first},`:"Hello,"}`,"",
     "We're bidding the project below and need a bid bond.","",
-    `Project: ${b.title||""}`,city?`Location: ${city}`:"",b.bid_number?`Bid number: ${b.bid_number}`:"",
+    `Project: ${b.title||""}`,jobPlace(p,city)?`Location: ${jobPlace(p,city)}`:"",b.bid_number?`Bid number: ${b.bid_number}`:"",
     b.deadline?`Bid due: ${b.deadline}`:"",t.total?`Our bid: about ${money0(t.total)}`:"",
     `Bond required: ${(p.docInfo&&p.docInfo.bid_security)||"see the bid documents"}`,
     b.url?`Bid documents: ${b.url}`:"","","Thanks,",signOff()].filter((x,k,a)=>x!==""||a[k-1]!=="").join("\n");
@@ -6287,7 +6295,8 @@ function concreteQuoteMail(b,p,city,waste,to){
   const i=bidInfo(),y=concreteYards(p.lines);
   const k=1+(Number(waste)||0)/100;
   const body=["Hello,","",
-    `We're bidding ${b.title||"a concrete job"}${city?` in ${city}`:""}${b.deadline?` (bids due ${b.deadline})`:""} and would like a price on ready-mix.`,"",
+    `We're bidding ${b.title||"a concrete job"}${b.deadline?` (bids due ${b.deadline})`:""} and would like a price on ready-mix.`,
+    jobPlace(p,city)?`Delivery to: ${jobPlace(p,city)}`:"","",
     ...y.out.map(x=>`- ${x.name}: ${Math.round(x.qty).toLocaleString()} ${x.unit}, about ${x.cy.toFixed(1)} CY`),
     ...y.other.map(x=>`- ${x.name}: ${Math.round(x.qty).toLocaleString()} ${x.unit} (volume from the plans)`),
     "",y.total?`Total: about ${Math.ceil(y.total*k)} CY including ${Number(waste)||0}% waste.`:"",
@@ -6667,6 +6676,7 @@ function renderConcretePanel(body,city,id,b){
     // Where the server found the job, when the bid didn't say in an address.
     const nn=$("rm-near");
     if(nn&&d&&d.ok&&d.near){nn.textContent=`Searching around ${d.near}.`;nn.style.display="";}
+    if(d&&d.ok&&d.how==="bid"&&d.near&&!p.located&&!jobAddress(p)){p.located={label:d.near,how:"bid",at:Date.now()};save();}
     sup=d;quotes=d&&d.ok?d.quotes:null;
     if(!(d&&d.ok)){
       $("rm-sup").innerHTML=suppliersHTML(d,b,p,city,wastePct());sup=null;
@@ -7060,7 +7070,7 @@ function subQuoteText(b,p,city,to){
   const total=lines.reduce((s,l)=>s+l.qty*l.price,0);
   const first=String((to&&to.contact)||"").trim().split(/\s+/)[0];
   return[`${first?`Hi ${first},`:"Hello,"}`,"",
-    `${c.name||"We"} would like to quote the concrete flatwork on ${b.title||"this job"}${b.bid_number?` (${b.bid_number})`:""}${city?`, ${city}`:""}${b.deadline?`, bids due ${b.deadline}`:""}.`,"",
+    `${c.name||"We"} would like to quote the concrete flatwork on ${b.title||"this job"}${b.bid_number?` (${b.bid_number})`:""}${jobPlace(p,city)?`, ${jobPlace(p,city)}`:""}${b.deadline?`, bids due ${b.deadline}`:""}.`,"",
     ...lines.map(l=>`- ${l.name}: ${l.qty?`${l.qty.toLocaleString()} ${l.unit} at `:""}${money2(l.price)}${l.unit?`/${l.unit}`:""}${l.qty?` = ${money2(l.qty*l.price)}`:""}`),
     "",total?`Total for the items listed: ${money2(total)}`:"","",
     p.subTerms||SUB_QUOTE_TERMS,"","Happy to adjust to your item list. Thanks,",signOff()]
@@ -7232,6 +7242,8 @@ function openDetail(city,b){
     ${row("Scope of Work",b.scope)}
     <div id="detail-rates"></div>
     <div class="detail-grid">
+      ${(()=>{const pp=bidPrep[id],j=pp?jobAddress(pp):"";
+        return j?row(pp.jobAddress||(pp.docInfo&&pp.docInfo.project_location)?"Job Site":"Job Site (from the bid's name)",mapQuery(j,city),mapUrl(mapQuery(j,city))):"";})()}
       ${row("Posted",b.published)}
       ${row("Bid Number",b.bid_number)}
       ${row("Contact",b.contact)}

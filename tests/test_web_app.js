@@ -2028,6 +2028,13 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
           nearbyBody && nearbyBody.state === "OK" && nearbyBody.near === "Kickingbird Golf Course, Edmond, OK", JSON.stringify(nearbyBody));
     check("...and the panel lists them", /Edmond Ready Mix/.test(await page.textContent("#rm-sup"))
           && /Searching around Kickingbird Golf Course, Edmond, OK/.test(await page.textContent("#prep-body")));
+    const sumText = await page.evaluate((i) => { const b = bidData["Oklahoma"][0]; return prepSummaryText(prepSummaryData(i, b, "Oklahoma")); }, id);
+    check("the summary names the job site, not the state", /Location: Kickingbird Golf Course, Edmond, OK/.test(sumText), sumText.slice(0, 200));
+    await page.evaluate(() => { closeModal(); openDetail("Oklahoma", bidData["Oklahoma"][0]); });
+    await page.waitForTimeout(400);
+    const det = await page.textContent("#modal-content");
+    check("the bid's details show the job site with a map link", /Job Site \(from the bid's name\)Kickingbird Golf Course, Edmond, OK/.test(det)
+          && (await page.locator('.detail-val a[href*="Kickingbird"]').count()) === 1, det.slice(0, 500));
     check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
     await ctx.close();
   }
@@ -2259,6 +2266,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     check("the bond request goes to the bonding agent", bond.startsWith("mailto:sam@surety.example"), bond.slice(0, 60));
     check("...with the project, the bid and the bond the documents ask for",
           /Hi Sam,/.test(bond) && /Bid due: 2099-11-01/.test(bond) && /Our bid: about \$75,000/.test(bond) && /Bond required: 5% bid bond/.test(bond));
+    check("...and where the job is, not just the town", /Location: Elm St from 1st St to 5th St, Aurora, MO/.test(bond));
     const q = decodeURIComponent(await page.getAttribute("#ps-question", "href"));
     check("a question to the agency is addressed to its contact", q.startsWith("mailto:dreyes@aurora-mo.gov") && /Hello Sam,/.test(q) && /B-17/.test(q));
     check("every date the documents give is offered for the calendar", /Add 3 dates/.test(await page.textContent("#ps-dates")));
@@ -2276,6 +2284,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     check("...and curb is left to size from the plans, not guessed", /Not counted, size from the plans: 3\. Curb and gutter/.test(conc));
     const quote = decodeURIComponent(await page.getAttribute("#cq-send", "href"));
     check("the quote request goes to the supplier", quote.startsWith("mailto:orders@mix.example") && /about 146 CY/.test(quote));
+    check("...and says where to deliver", /Delivery to: Elm St from 1st St to 5th St, Aurora, MO/.test(quote), quote.slice(0, 400));
 
     // ── Ready-mix plants near the job, and what the concrete should cost ──
     await page.waitForTimeout(500);
@@ -2356,7 +2365,8 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     check("the form filler is sent the company, the prices and the total",
           fillBody && fillBody.url === "https://e.gov/form.pdf" && fillBody.company.name === "Test Concrete LLC"
             && fillBody.company.title === "Owner" && fillBody.bid.total === 75000 && fillBody.bid.addenda === "#1"
-            && fillBody.lines[0].item_no === "2" && fillBody.lines[0].unit_price === 60 && fillBody.lines[0].amount === 75000,
+            && fillBody.lines[0].item_no === "2" && fillBody.lines[0].unit_price === 60 && fillBody.lines[0].amount === 75000
+            && fillBody.bid.location === "Elm St from 1st St to 5th St, Aurora, MO",
           JSON.stringify(fillBody && fillBody.lines));
     const filled = await page.textContent("#prep-body");
     check("every filled box is listed for checking", /Name of bidder/.test(filled) && /75,000\.00/.test(filled) && /7 boxes left/.test(filled));
