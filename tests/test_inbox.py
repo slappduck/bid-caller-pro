@@ -53,7 +53,9 @@ class InboxTests(unittest.TestCase):
             patch.object(ls, "_storage_request", side_effect=storage),
             patch.object(kv_backend, "get", side_effect=lambda k, d=None: self.store.get(k, d)),
             patch.object(kv_backend, "set", side_effect=lambda k, v: self.store.__setitem__(k, v)),
+            patch.object(ls, "_notify_user", side_effect=lambda uid, t, b, u="app.html", subs=None: self.alerts.append((uid, t)) or 1),
         ]
+        self.alerts = []
         for p in self._p:
             p.start()
 
@@ -86,6 +88,17 @@ class InboxTests(unittest.TestCase):
         self.assertIn("Bid B-17", items[0]["snippet"])
         r = self.app_post("/inbox/file", id=items[0]["id"], n=0)
         self.assertEqual((r.status_code, r.data, r.mimetype), (200, PDF, "application/pdf"))
+
+    def test_the_contractor_is_alerted_when_documents_arrive(self):
+        self.deliver(message())
+        self.assertEqual(self.alerts, [("u1", "Bid documents emailed in: Plan holder documents: Elm St Sidewalk")])
+
+    def test_an_emailed_addendum_is_marked_and_alerted_as_one(self):
+        m = message(pdfs=(("Addendum No 2.pdf", PDF),), body="Addendum 2 moves the bid opening.")
+        d = self.deliver(m).get_json()
+        self.assertTrue(d["addendum"])
+        self.assertTrue(self.app_post("/inbox/list").get_json()["items"][0]["addendum"])
+        self.assertTrue(self.alerts[0][1].startswith("Addendum emailed in:"))
 
     def test_download_links_in_the_email_are_listed_but_not_footer_links(self):
         html = ('<p>Download: <a href="https://planroom.example/download/123">here</a></p>'

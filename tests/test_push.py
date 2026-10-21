@@ -137,6 +137,23 @@ class BidWatchJobTests(unittest.TestCase):
         ls._run_bid_watch()
         self.assertEqual(self.sent, ["Elm St Sidewalk: Addendum 2 posted"])   # reminder not repeated
 
+    def test_on_bid_day_the_addenda_on_the_posting_are_named(self):
+        today = ls._today_central().isoformat()
+        self.rows[0]["deadline"] = today
+        self.page = b"<html><a href=\"/a1.pdf\">Addendum 1</a><p>Addendum No. 1</p></html>"
+        with patch.object(ls, "_now_central", return_value=datetime.datetime(2026, 10, 21, 7, 20)):
+            ls._run_bid_watch()
+            self.assertIn("Bids due today: Elm St Sidewalk", self.sent)
+            self.sent.clear()
+            ls._run_bid_watch()
+        self.assertNotIn("Bids due today: Elm St Sidewalk", self.sent)   # once
+
+    def test_bid_day_waits_for_daytime(self):
+        self.rows[0]["deadline"] = ls._today_central().isoformat()
+        with patch.object(ls, "_now_central", return_value=datetime.datetime(2026, 10, 21, 1, 20)):
+            ls._run_bid_watch()
+        self.assertNotIn("Bids due today: Elm St Sidewalk", self.sent)
+
     def test_closed_out_bids_are_left_alone(self):
         ls._run_bid_watch()
         self.assertFalse(any("Done Job" in t for t in self.sent))

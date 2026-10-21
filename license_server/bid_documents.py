@@ -198,11 +198,86 @@ def _clean_doc_result(raw):
             "questions_due": text("questions_due", 300), "required_forms": forms}
 
 
-def _ai_read_bid_document(text, images=None):
+# ── Reading an addendum ──
+# An addendum is a few pages of changes in agency language. What a
+# contractor needs from it is the list of changes: a moved due date, changed
+# quantities, added or deleted items, answers to bidders' questions. Same
+# rule as the document reader: copy what it prints, invent nothing.
+BID_ADDENDUM_READER_VERSION = 1
+
+_ADDENDUM_PROMPT = (
+    "You read an ADDENDUM to a public construction bid, for a concrete contractor. "
+    "List only what the addendum changes or answers. Copy facts EXACTLY as printed. "
+    "Never estimate or infer; use \"\" or [] when the addendum does not say.\n\n"
+    "Return ONE JSON object with keys:\n"
+    "\"addendum_number\": the addendum's number as printed (e.g. \"2\"), \"\" if none.\n"
+    "\"issued\": the date the addendum is dated, as printed.\n"
+    "\"bid_due\": the NEW bid due date and time if the addendum changes it, else \"\".\n"
+    "\"prebid\": any change to the pre-bid meeting, as stated, else \"\".\n"
+    "\"quantity_changes\": bid items whose quantity changes, each {\"item_no\", "
+    "\"description\", \"old_quantity\" (as printed or \"\"), \"new_quantity\", \"unit\"}.\n"
+    "\"items_added\": new bid items, each {\"item_no\", \"description\", \"quantity\", \"unit\"}.\n"
+    "\"items_removed\": deleted bid items, each {\"item_no\", \"description\"}.\n"
+    "\"answers\": questions from bidders and the answers given, each {\"question\", \"answer\"}.\n"
+    "\"other_changes\": every other change in a short plain sentence each "
+    "(specifications, drawings, forms, scope).\n"
+    "No markdown, nothing outside the object.\n\nADDENDUM TEXT:\n"
+)
+
+
+def _num_or_none(v):
+    q = str(v if v is not None else "").replace(",", "").strip()
+    try:
+        x = float(q) if q else None
+    except ValueError:
+        return None
+    return x if x is not None and 0 <= x < 1e9 else None
+
+
+def _clean_addendum_result(raw):
+    """Validate the model's addendum object; malformed parts are dropped."""
+    if not isinstance(raw, dict):
+        return None
+
+    def text(v, n=400):
+        return re.sub(r"\s+", " ", v).strip()[:n] if isinstance(v, str) else ""
+
+    def rows(key, n=100):
+        return [r for r in (raw.get(key) or [])[:n] if isinstance(r, dict)]
+
+    def unit(v):
+        u = str(v or "").strip()
+        return u if _UNIT_RE.match(u) else ""
+    changes = [{"item_no": text(r.get("item_no"), 20), "description": text(r.get("description"), 200),
+                "old_quantity": _num_or_none(r.get("old_quantity")),
+                "new_quantity": _num_or_none(r.get("new_quantity")), "unit": unit(r.get("unit"))}
+               for r in rows("quantity_changes")]
+    changes = [c for c in changes if c["new_quantity"] is not None and (c["item_no"] or c["description"])]
+    added = [{"item_no": text(r.get("item_no"), 20), "description": text(r.get("description"), 200),
+              "quantity": _num_or_none(r.get("quantity")), "unit": unit(r.get("unit"))}
+             for r in rows("items_added")]
+    added = [a for a in added if a["description"]]
+    removed = [{"item_no": text(r.get("item_no"), 20), "description": text(r.get("description"), 200)}
+               for r in rows("items_removed")]
+    removed = [r for r in removed if r["item_no"] or r["description"]]
+    answers = [{"question": text(r.get("question"), 400), "answer": text(r.get("answer"), 600)}
+               for r in rows("answers", 40)]
+    answers = [a for a in answers if a["question"] and a["answer"]]
+    other = [text(x, 300) for x in (raw.get("other_changes") or [])[:40] if text(x, 300)]
+    num = text(raw.get("addendum_number"), 40)
+    m = re.search(r"\d{1,2}", num)
+    return {"addendum_number": m.group(0) if m else "", "issued": text(raw.get("issued"), 80),
+            "bid_due": text(raw.get("bid_due"), 200), "prebid": text(raw.get("prebid"), 300),
+            "quantity_changes": changes, "items_added": added, "items_removed": removed,
+            "answers": answers, "other_changes": other}
+
+
+def _ai_read_bid_document(text, images=None, addendum=False):
     images = images or []
     if not OPENAI_API_KEY or not (text.strip() or images):
         return None
-    content = _BID_DOC_PROMPT + (text if text.strip() else "(none: the pages are scanned images, attached)")
+    prompt = _ADDENDUM_PROMPT if addendum else _BID_DOC_PROMPT
+    content = prompt + (text if text.strip() else "(none: the pages are scanned images, attached)")
     if images:
         content = [{"type": "text", "text": content + "\n\nSCANNED PAGES are attached as images; read them too."}] + [
             {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + base64.b64encode(im).decode("ascii"),
@@ -220,7 +295,8 @@ def _ai_read_bid_document(text, images=None):
     try:
         with urllib.request.urlopen(req, timeout=120 if images else 90) as resp:
             data = json.loads(resp.read().decode("utf-8"))
-        return _clean_doc_result(json.loads(data["choices"][0]["message"]["content"]))
+        got = json.loads(data["choices"][0]["message"]["content"])
+        return _clean_addendum_result(got) if addendum else _clean_doc_result(got)
     except Exception as ex:
         print(f"[bid-doc] ai error: {ex}", flush=True)
         return None
@@ -322,8 +398,11 @@ def bid_documents_read():
     if not OPENAI_API_KEY:
         return jsonify({"ok": False, "reason": "ai_unavailable"})
 
+    # "kind": "addendum" reads the same files for what they change instead.
+    addendum = data.get("kind") == "addendum"
+    version = BID_ADDENDUM_READER_VERSION if addendum else BID_DOC_READER_VERSION
     ident = (b"upload:" + b"".join(hashlib.sha256(raw).digest() for _n, raw in upload)) if upload is not None else url.encode()
-    cache_key = _BID_DOC_CACHE_PREFIX + hashlib.sha256(ident).hexdigest()[:32]
+    cache_key = _BID_DOC_CACHE_PREFIX + ("addendum:" if addendum else "") + hashlib.sha256(ident).hexdigest()[:32]
     try:
         hit = kv_backend.get(cache_key, None)
     except Exception:
@@ -331,7 +410,7 @@ def bid_documents_read():
     # A result saved before the reader learned a field (the meeting place,
     # the job site) would hand back the old answer without it for weeks, so
     # only a result read by the current reader counts as a hit.
-    if isinstance(hit, dict) and hit.get("result") and hit.get("v") == BID_DOC_READER_VERSION:
+    if isinstance(hit, dict) and hit.get("result") and hit.get("v") == version:
         try:
             age = time.time() - float(hit.get("at") or 0)
         except (TypeError, ValueError):
@@ -365,13 +444,13 @@ def bid_documents_read():
     if not text.strip() and not images:
         return jsonify({"ok": False, "reason": "no_text",
                         "detail": "This document has no readable text (it may be a scan)."})
-    result = _ai_read_bid_document(text, images)
+    result = _ai_read_bid_document(text, images, addendum=True) if addendum else _ai_read_bid_document(text, images)
     if result is None:
         return jsonify({"ok": False, "reason": "ai_error"}), 502
     result.update({"pages_read": pages, "truncated": truncated, "scanned_pages": len(images),
                    "files": len(docs)})
     try:
-        kv_backend.set(cache_key, {"at": time.time(), "v": BID_DOC_READER_VERSION, "result": result})
+        kv_backend.set(cache_key, {"at": time.time(), "v": version, "result": result})
     except Exception:
         pass
     return jsonify({"ok": True, "cached": False, **result})
@@ -1026,13 +1105,17 @@ _ADDENDUM_RE = re.compile(r"\baddend(?:um|a)\s*(?:no\.?|number|#)?\s*(\d{1,2})\b
 def _watch_fingerprint(url, data, ctype):
     """{docs, addenda, hash} for one fetched posting."""
     if data[:5] == b"%PDF-" or "pdf" in ctype:
-        return {"docs": [], "addenda": [], "hash": hashlib.sha256(data).hexdigest()[:16]}
+        return {"docs": [], "addenda": [], "addendum_docs": [], "hash": hashlib.sha256(data).hexdigest()[:16]}
     html = data.decode("utf-8", "ignore")
     text = _html_to_text(html)
-    docs = [d["name"] for d in bid_sources.detail_documents(html, url, limit=40)]
+    found = bid_sources.detail_documents(html, url, limit=40)
+    docs = [d["name"] for d in found]
     addenda = sorted({int(n) for n in _ADDENDUM_RE.findall(text) if 0 < int(n) < 100})
+    # The addendum documents themselves, so the app can open and read them
+    # rather than only say one exists.
+    addendum_docs = [d for d in found if re.search(r"addend", d["name"] + " " + d["url"], re.I)][:10]
     norm = re.sub(r"\s+", " ", text).strip().lower()
-    return {"docs": docs, "addenda": addenda,
+    return {"docs": docs, "addenda": addenda, "addendum_docs": addendum_docs,
             "hash": hashlib.sha256(norm.encode("utf-8")).hexdigest()[:16]}
 
 
