@@ -4237,7 +4237,7 @@ async function checkSavedBids(){
       // were read, not changes the agency made.
       const prev=bidWatch[id]&&bidWatch[id].at?bidWatch[id]:null;
       const change=prev?diffWatch(prev,cur):"";
-      bidWatch[id]={at:Date.now(),docs:cur.docs||[],addenda:cur.addenda||[],hash:cur.hash||"",
+      bidWatch[id]={at:Date.now(),docs:cur.docs||[],addenda:cur.addenda||[],addendum_docs:cur.addendum_docs||[],hash:cur.hash||"",
         alert:change||(bidWatch[id]&&bidWatch[id].alert)||"",seen:change?false:!!(bidWatch[id]&&bidWatch[id].seen),
         alertAt:change?Date.now():(bidWatch[id]&&bidWatch[id].alertAt)||0,
         edited:!!(bidWatch[id]&&bidWatch[id].hash&&cur.hash&&bidWatch[id].hash!==cur.hash)};
@@ -4424,7 +4424,7 @@ function prepChecklist(b,info){
 // Steps the app can see are done without being told: the documents were
 // read, every line has a price, a concrete quote was saved, the form was
 // filled in, the addenda were recorded.
-function prepAuto(b,p){
+function prepAuto(b,p,id){
   const out={};
   // A reading of a town-wide form (the board volunteer application) says
   // nothing about the bid, so it doesn't count as having the documents.
@@ -4434,14 +4434,19 @@ function prepAuto(b,p){
   const c=p.concrete&&p.concrete.plants;
   if(c&&Object.values(c).some(x=>x&&x.status==="Quoted"))out.concrete="Quote saved";
   if(p.formFilledAt)out.forms="Filled in "+shortDate(new Date(p.formFilledAt));
-  if(String(p.addenda||"").trim())out.addenda="Recorded: "+String(p.addenda).trim();
+  // Recorded counts only once every addendum the app knows of is in it: a
+  // new #3 after "#1, #2" were written down opens the step again.
+  if(String(p.addenda||"").trim()){
+    const missing=id?addendaNotRecorded(id,b,p):[];
+    if(!missing.length)out.addenda="Recorded: "+String(p.addenda).trim();
+  }
   return out;
 }
 function stepDone(p,auto,key){return!!(p.checks[key]||auto[key]);}
 function prepProgress(id,b){
   const p=bidPrep[id];
   if(!p)return null;
-  const auto=prepAuto(b,p);
+  const auto=prepAuto(b,p,id);
   const list=prepChecklist(b,p.docInfo).filter(i=>!i.optional).concat((p.custom||[]).map((c,i)=>({key:"c"+i})));
   const done=list.filter(i=>stepDone(p,auto,i.key)).length;
   return{done,total:list.length};
@@ -4574,6 +4579,236 @@ async function openPrep(city,id,step){
   document.getElementById("modal").classList.add("open");
 }
 
+// ── Addenda ──
+// Everything the app knows of: the addendum documents on the posting (the
+// watch keeps their links), addendum numbers its text mentions, ones the
+// bid links to, ones uploaded or emailed in, and ones already read. Each
+// can be opened and read for what it changes; the numbers fill in the
+// acknowledgment the bid form asks for.
+const ADDENDUM_NO_RE=/addend\w*\s*(?:no\.?|number|#)?\s*(\d{1,2})\b/i;
+function addendumNumber(label){const m=ADDENDUM_NO_RE.exec(String(label||""));return m?Number(m[1]):null;}
+// Addenda known without asking the server: [{key,label,n,url?,phone?}].
+function addendaKnown(id,b,p){
+  const out=[],seen=new Set();
+  const add=(x)=>{if(!seen.has(x.key)){seen.add(x.key);out.push(x);}};
+  const w=bidWatch[id]||{};
+  (w.addendum_docs||[]).forEach(d=>{const url=safeUrl(d&&d.url);if(url)add({key:"u:"+url,label:d.name||"Addendum",n:addendumNumber(d.name),url});});
+  bidDocs(b).filter(d=>/addend/i.test(d.name)).forEach(d=>add({key:"u:"+d.url,label:d.name,n:addendumNumber(d.name),url:d.url}));
+  Object.keys(p.addendaRead||{}).forEach(k=>{const r=p.addendaRead[k];add({key:k,label:r.label||"Addendum",n:Number(r.addendum_number)||addendumNumber(r.label),url:r.url||"",phone:!!r.phone});});
+  const nums=new Set(out.map(x=>x.n).filter(Boolean));
+  (w.addenda||[]).forEach(n=>{if(!nums.has(n))add({key:"n:"+n,label:`Addendum ${n}`,n,mention:true});});
+  return out.sort((x,y)=>(x.n||99)-(y.n||99));
+}
+function addendaNumbers(id,b,p){return[...new Set(addendaKnown(id,b,p).map(x=>x.n).filter(Boolean))].sort((x,y)=>x-y);}
+function recordedAddenda(p){return new Set((String(p.addenda||"").match(/\d{1,2}/g)||[]).map(Number));}
+function addendaNotRecorded(id,b,p){const r=recordedAddenda(p);return addendaNumbers(id,b,p).filter(n=>!r.has(n));}
+function recordAddenda(p,nums){
+  const all=[...new Set([...recordedAddenda(p),...nums])].sort((x,y)=>x-y);
+  p.addenda=all.map(n=>"#"+n).join(", ");
+}
+async function readAddendumDoc(target){
+  try{
+    let d;
+    if(target.files)d=await postDocFiles("/bid-documents/read",target.files,{kind:"addendum"},120000);
+    else{
+      const token=await getSupabaseToken();
+      const r=await fetchWithTimeout(SERVER+"/bid-documents/read",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,url:target.url,kind:"addendum"})},120000);
+      d=await r.json();
+    }
+    if(d&&d.ok)return d;
+    const msg=d&&d.reason==="fetch_failed"?(FETCH_ERRORS[d.detail]||"Couldn't download that addendum.")
+      :(d&&(DOC_ERRORS[d.reason]||d.detail))||"Couldn't read that addendum.";
+    return{ok:false,msg};
+  }catch(e){return{ok:false,msg:offlineOrServer()};}
+}
+// Reads one addendum for what it changes and keeps the result with the bid.
+async function readAddendumAndShow(body,city,id,b,item,target){
+  body.innerHTML=`<div class="account-status"><span class="spin"></span> Reading ${esc(item.label)} for what it changes…</div>`;
+  const res=await readAddendumDoc(target);
+  if(!document.getElementById("prep-body"))return;
+  if(!res.ok){
+    body.innerHTML=`<div class="alert alert-amber"><span>${esc(res.msg)}</span></div><button class="btn-ghost" id="ad-back">Back to addenda</button>`;
+    document.getElementById("ad-back").onclick=()=>renderAddenda(body,city,id,b);
+    return;
+  }
+  const p=prepFor(id);
+  p.addendaRead=p.addendaRead||{};
+  const keep={label:item.label,url:target.url||"",phone:!target.url,read_at:Date.now()};
+  ["addendum_number","issued","bid_due","prebid","quantity_changes","items_added","items_removed","answers","other_changes"]
+    .forEach(k=>keep[k]=res[k]);
+  p.addendaRead[item.key]=keep;
+  savePrep(id,city);
+  renderAddendumReview(body,city,id,b,item.key);
+}
+// The line an addendum's item refers to: same item number, else the same words.
+function lineForItem(lines,it){
+  const no=String(it.item_no||"").trim().toLowerCase(),desc=String(it.description||"").trim().toLowerCase();
+  let i=no?lines.findIndex(l=>splitItemNo(l.name).item_no.toLowerCase()===no):-1;
+  if(i<0&&desc)i=lines.findIndex(l=>{const n=splitItemNo(l.name).description.toLowerCase();return n&&(n===desc||n.includes(desc)||desc.includes(n));});
+  return i;
+}
+function addendumSummary(r){
+  const parts=[];
+  if(r.bid_due)parts.push("new due date");
+  const q=(r.quantity_changes||[]).length,a=(r.items_added||[]).length,d=(r.items_removed||[]).length;
+  if(q)parts.push(plural(q,"quantity change"));
+  if(a)parts.push(plural(a,"item")+" added");
+  if(d)parts.push(plural(d,"item")+" removed");
+  if((r.answers||[]).length)parts.push(plural(r.answers.length,"answer"));
+  if((r.other_changes||[]).length)parts.push(plural(r.other_changes.length,"other change"));
+  return parts.join(", ")||"no changes found";
+}
+function renderAddendumReview(body,city,id,b,key){
+  const p=prepFor(id),r=(p.addendaRead||{})[key];
+  if(!r){renderAddenda(body,city,id,b);return;}
+  const lines=p.lines||[];
+  const n=Number(r.addendum_number)||addendumNumber(r.label);
+  const newDue=r.bid_due&&deadlineDate({deadline:r.bid_due});
+  const dueDiffers=newDue&&String(b.deadline||"")!==r.bid_due&&+newDue!==+(deadlineDate(b)||0);
+  const qc=(r.quantity_changes||[]).map(c=>({...c,line:lineForItem(lines,c)}));
+  const rm=(r.items_removed||[]).map(c=>({...c,line:lineForItem(lines,c)}));
+  const added=r.items_added||[];
+  const canApply=!p.addendaApplied||!p.addendaApplied[key];
+  // Which of the contractor's lines a change lands on, said only when it
+  // isn't simply the same words again.
+  const lineName=(i,c)=>{
+    if(i<0)return"Not in your lines";
+    const nm=String(lines[i].name||""),own=`${c.item_no?c.item_no+". ":""}${c.description}`;
+    return nm.trim().toLowerCase()===own.trim().toLowerCase()?"Matches your line":`Your line: ${esc(nm)}`;
+  };
+  const fmt=(x)=>x==null?"—":esc(Number(x).toLocaleString());
+  body.innerHTML=`<div class="workspace-title">What ${esc(r.label)} changes</div>
+    <div class="rate-note" style="margin-top:0;">${r.issued?`Issued ${esc(r.issued)}. `:""}Read ${esc(shortDate(new Date(r.read_at)))}. Check it against the addendum itself.</div>
+    ${r.bid_due?`<div class="ad-block ad-hot"><small>Bid due date</small><span>${esc(r.bid_due)}</span>
+      ${dueDiffers?`<button class="btn-ghost" id="ad-due">Change the due date to ${esc(shortDate(newDue))}</button>`:`<em>Your bid already shows this date.</em>`}</div>`:""}
+    ${r.prebid?`<div class="ad-block"><small>Pre-bid meeting</small><span>${esc(r.prebid)}</span></div>`:""}
+    ${qc.length?`<div class="detail-label">Quantity changes</div><table class="ps-table"><thead><tr><th>Item</th><th>Was</th><th>Now</th></tr></thead><tbody>
+      ${qc.map(c=>`<tr><td>${esc(`${c.item_no?c.item_no+". ":""}${c.description}`)}<small>${lineName(c.line,c)}</small></td><td>${fmt(c.old_quantity)}</td><td><b>${fmt(c.new_quantity)}</b> ${esc(c.unit||"")}</td></tr>`).join("")}</tbody></table>`:""}
+    ${added.length?`<div class="detail-label">Items added</div><table class="ps-table"><tbody>
+      ${added.map(c=>`<tr><td>${esc(`${c.item_no?c.item_no+". ":""}${c.description}`)}</td><td>${fmt(c.quantity)} ${esc(c.unit||"")}</td></tr>`).join("")}</tbody></table>`:""}
+    ${rm.length?`<div class="detail-label">Items removed</div><table class="ps-table"><tbody>
+      ${rm.map(c=>`<tr><td>${esc(`${c.item_no?c.item_no+". ":""}${c.description}`)}<small>${lineName(c.line,c)}</small></td></tr>`).join("")}</tbody></table>`:""}
+    ${(qc.some(c=>c.line>=0)||added.length||rm.some(c=>c.line>=0))?(canApply
+      ?`<div class="act-primary"><button class="ma-gold" id="ad-apply">Update my lines</button></div>`
+      :`<div class="rate-note">Your lines were updated from this addendum.</div>`):""}
+    ${(r.answers||[]).length?`<div class="detail-label" style="margin-top:1.1rem;">Answers to bidders' questions</div>
+      <div class="ad-qa">${r.answers.map(a=>`<div><b>${esc(a.question)}</b><span>${esc(a.answer)}</span></div>`).join("")}</div>`:""}
+    ${(r.other_changes||[]).length?`<div class="detail-label" style="margin-top:1.1rem;">Other changes</div><ul class="ad-other">${r.other_changes.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:""}
+    ${!r.bid_due&&!r.prebid&&!qc.length&&!added.length&&!rm.length&&!(r.answers||[]).length&&!(r.other_changes||[]).length
+      ?`<div class="alert alert-amber"><span>No changes were found in it. Open it and read it yourself to be sure.</span></div>`:""}
+    ${n&&!recordedAddenda(p).has(n)?`<div class="act-primary"><button class="ma-ghost" id="ad-ack">Record addendum #${n} as read</button></div>`
+      :n?`<div class="rate-note">Addendum #${n} is recorded as read.</div>`:""}
+    <button class="btn-ghost" id="ad-back">Back to addenda</button>`;
+  document.getElementById("ad-back").onclick=()=>renderAddenda(body,city,id,b);
+  const due=document.getElementById("ad-due");
+  if(due)due.onclick=()=>{
+    if(!confirm(`Change this bid's due date to ${r.bid_due}? Your step dates and reminders move with it.`))return;
+    p.deadlineWas=p.deadlineWas||b.deadline||"";
+    b.deadline=r.bid_due;
+    if(saved[id]){saved[id].deadline=r.bid_due;store.set("saved",saved);}
+    const fb=findBid(id);if(fb&&fb!==b)fb.deadline=r.bid_due;
+    savePrep(id,city);
+    toast("Due date updated");
+    renderAddendumReview(body,city,id,b,key);
+  };
+  const ap=document.getElementById("ad-apply");
+  if(ap)ap.onclick=()=>{
+    const nq=qc.filter(c=>c.line>=0).length,nr=rm.filter(c=>c.line>=0).length;
+    const what=[nq&&plural(nq,"quantity","quantities"),added.length&&`add ${plural(added.length,"line")}`,nr&&`remove ${plural(nr,"line")}`].filter(Boolean).join(", ");
+    if(!confirm(`Update your lines from ${r.label}: ${what}?`))return;
+    qc.forEach(c=>{if(c.line>=0){lines[c.line].qty=c.new_quantity;}});
+    const d=rateData[bidState(city,b)];
+    added.forEach(c=>lines.push(lineFromDocItem({...c,quantity:c.quantity},d)));
+    const drop=new Set(rm.map(c=>c.line).filter(i=>i>=0));
+    p.lines=lines.filter((l,i)=>!drop.has(i));
+    (p.addendaApplied=p.addendaApplied||{})[key]=Date.now();
+    savePrep(id,city);
+    toast("Lines updated. Check the prices on any new lines.");
+    renderAddendumReview(body,city,id,b,key);
+  };
+  const ack=document.getElementById("ad-ack");
+  if(ack)ack.onclick=()=>{recordAddenda(p,[n]);savePrep(id,city);renderAddendumReview(body,city,id,b,key);};
+}
+async function renderAddenda(body,city,id,b){
+  const p=prepFor(id);
+  const back=()=>openPrep(city,id,p.step||"steps");
+  const known=addendaKnown(id,b,p);
+  const ups=await bidFiles.list(id,"upload");
+  const phone=ups.filter(f=>/addend/i.test(f.name)&&!known.some(k=>k.label===f.name));
+  let emailed=[];
+  if(inboxAddress()){
+    try{const d=await inboxCall("/inbox/list");emailed=((d&&d.ok&&d.items)||[]).filter(it=>it.addendum&&inboxMatches(it,b));}catch(e){}
+  }
+  if(!document.getElementById("prep-body"))return;
+  const rows=[];
+  // One read earlier from a file still on the phone opens from there.
+  known.forEach(k=>{
+    const up=!k.url&&!k.mention&&ups.find(f=>f.name===k.label);
+    rows.push(up?{...k,kind:"phone",blob:up.blob}:{...k,kind:k.mention?"mention":k.url?"url":"read"});
+  });
+  phone.forEach(f=>rows.push({key:"f:"+f.name,label:f.name,n:addendumNumber(f.name),kind:"phone",blob:f.blob}));
+  emailed.forEach(it=>(it.files||[]).forEach(f=>rows.push({key:`m:${it.id}|${f.n}`,label:f.name,n:addendumNumber(f.name)||addendumNumber(it.subject),kind:"email",it,f})));
+  const missing=addendaNotRecorded(id,b,p);
+  const w=bidWatch[id];
+  const row=(x,i)=>{
+    const read=(p.addendaRead||{})[x.key];
+    const src={url:"on the posting",mention:"mentioned on the posting",phone:"on this phone",email:"from your email",read:"read earlier"}[x.kind];
+    return`<div class="ad-row"><div><b>${esc(x.label)}</b><small>${esc(src)}${read?` · ${esc(addendumSummary(read))}`:""}</small></div>
+      <div class="ad-acts">${x.kind==="url"?`<a class="step-act" href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">Open</a>`:""}
+        ${x.kind==="phone"||x.kind==="email"?`<button type="button" class="step-act" data-ad-open="${i}">Open</button>`:""}
+        ${read?`<button type="button" class="step-act" data-ad-see="${i}">See changes</button>`
+          :x.kind==="mention"?"":`<button type="button" class="step-act" data-ad-read="${i}">What changed</button>`}</div></div>`;
+  };
+  body.innerHTML=`<div class="workspace-title">Addenda</div>
+    <div class="rate-note" style="margin-top:0;">An addendum changes the bid after it's posted. Most bid forms make you list each one you received, and a missing one can get the bid thrown out.</div>
+    ${rows.length?rows.map(row).join(""):`<div class="account-status">No addenda found for this bid yet.</div>`}
+    ${missing.length?`<div class="ad-ack"><span>Not recorded as read yet: ${missing.map(n=>"#"+n).join(", ")}</span>
+      <button class="btn-ghost" id="ad-ackall">I've read ${missing.length>1?"them":"it"}: record ${missing.map(n=>"#"+n).join(", ")}</button></div>`
+      :p.addenda?`<div class="rate-note">Recorded as read: ${esc(p.addenda)}</div>`:""}
+    <button class="btn-ghost doc-pick" id="ad-upload">Upload an addendum</button>
+    ${inboxAddress()?`<button class="btn-ghost doc-pick" id="ad-inbox">Get one from your email</button>`:""}
+    ${safeUrl(b.url)?`<button class="btn-ghost doc-pick" id="ad-check">Check the posting for new ones now</button>`:""}
+    <div class="rate-note">${w&&w.at?`Posting last checked ${esc(new Date(w.at).toLocaleString([],{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}))}. `:""}Agencies that use a plan room may email addenda only to registered plan holders, so check your email too.</div>
+    <button class="btn-ghost" id="ad-back">Back to ${prepBackName(id,"steps")}</button>`;
+  document.getElementById("ad-back").onclick=back;
+  const fileOf=async(x)=>x.kind==="phone"?new File([x.blob],x.label,{type:"application/pdf"}):await inboxFile(x.it,x.f);
+  body.querySelectorAll("[data-ad-open]").forEach(el=>el.onclick=async()=>{
+    const x=rows[Number(el.dataset.adOpen)];
+    try{const f=await fileOf(x);openBlob(f,f.name);}catch(e){toast("Couldn't get that file. It may have expired.");}
+  });
+  body.querySelectorAll("[data-ad-see]").forEach(el=>el.onclick=()=>renderAddendumReview(body,city,id,b,rows[Number(el.dataset.adSee)].key));
+  body.querySelectorAll("[data-ad-read]").forEach(el=>el.onclick=async()=>{
+    const x=rows[Number(el.dataset.adRead)];
+    if(x.kind==="url")return readAddendumAndShow(body,city,id,b,x,{url:x.url});
+    try{
+      const f=await fileOf(x);
+      if(x.kind==="email")await rememberUploads(id,[f]);
+      readAddendumAndShow(body,city,id,b,x,{files:[f]});
+    }catch(e){toast("Couldn't get that file. It may have expired.");}
+  });
+  const all=document.getElementById("ad-ackall");
+  if(all)all.onclick=()=>{recordAddenda(p,missing);savePrep(id,city);renderAddenda(body,city,id,b);};
+  document.getElementById("ad-upload").onclick=async()=>{
+    const files=await pickPdfs(false);
+    if(!files.length)return;
+    const bad=uploadProblem(files);
+    if(bad){toast(bad);return;}
+    await rememberUploads(id,files);
+    readAddendumAndShow(body,city,id,b,{key:"f:"+files[0].name,label:files[0].name},{files});
+  };
+  const ib=document.getElementById("ad-inbox");
+  if(ib)ib.onclick=()=>renderInbox(body,city,id,b);
+  const ck=document.getElementById("ad-check");
+  if(ck)ck.onclick=async()=>{
+    body.querySelector("#ad-check").textContent="Checking…";
+    if(!saved[id]){toast("Save the bid to watch it for addenda");return;}
+    if(bidWatch[id])bidWatch[id].at=0;
+    await checkSavedBids();
+    if(document.getElementById("prep-body"))renderAddenda(body,city,id,b);
+  };
+}
+
 // ── Step reminders on the phone (server: /reminders/sync) ──
 // The steps and their do-by dates live on this phone; when reminders are on,
 // the open ones for every bid being prepared are sent to the server, which
@@ -4589,7 +4824,7 @@ function stepReminderList(){
   for(const id in bidPrep){
     const b=saved[id]||findBid(id);
     if(!b||["won","lost","passed","submitted"].includes(pipeline[id]))continue;
-    const p=prepFor(id),auto=prepAuto(b,p);
+    const p=prepFor(id),auto=prepAuto(b,p,id);
     prepChecklist(b,p.docInfo).filter(i=>!i.optional&&!stepDone(p,auto,i.key)).forEach(i=>{
       const d=stepDue(i,b,p);
       if(!d||d.date<today)return;
@@ -4627,7 +4862,7 @@ async function setStepReminders(on,box){
 
 function renderPrepSteps(body,city,id,b){
   const p=prepFor(id);
-  const items=prepChecklist(b,p.docInfo),auto=prepAuto(b,p);
+  const items=prepChecklist(b,p.docInfo),auto=prepAuto(b,p,id);
   const today=new Date();today.setHours(0,0,0,0);
   const t=prepTotals(p),info=bidInfo(),marks=p.marks||{};
   const canRead=prepDocCandidates(b).length>0;
@@ -4649,11 +4884,13 @@ function renderPrepSteps(body,city,id,b){
         +(!auto.docs&&inboxAddress()?btn("inbox","Get them from your email"):"");
       case"prebid":return(dest?a(`href="${esc(mapUrl(mapQuery(dest,city)))}" target="_blank" rel="noopener noreferrer"`,onSite?"Directions to the site":"Directions"):"")
         +(dates.some(d=>/pre-bid/i.test(d.label))?btn("dates","Add to calendar"):"");
-      case"questions":return b.email?a(`href="${esc(agencyQuestionMail(b))}" data-mark="questions"`,"Email the agency"):"";
+      case"questions":return agencyContact(b,p).email?a(`href="${esc(agencyQuestionMail(b,p))}" data-mark="questions"`,"Email the agency"):"";
       case"site":return job?a(`href="${esc(mapUrl(mapQuery(job,city)))}" target="_blank" rel="noopener noreferrer"`,"Directions"):"";
       case"price":return btn("pricing",t.total?"Open pricing":"Start pricing");
       case"concrete":return btn("concrete","Find plants and get a quote");
       case"bond":return info.bond_email?a(`href="${esc(bondRequestMail(b,p,city))}" data-mark="bond"`,"Email my bonding agent"):btn("bondinfo","Add your bonding agent");
+      case"addenda":return btn("addenda",addendaKnown(id,b,p).length?"Read the addenda":"Find addenda")
+        +(addendaNotRecorded(id,b,p).length?btn("ack",`I've read them: record ${addendaNotRecorded(id,b,p).map(n=>"#"+n).join(", ")}`):"");
       case"forms":return btn("fill","Fill in the agency's forms")+(p.formFilledAt?btn("packet","Make the bid packet"):"");
       case"submit":return dates.length?btn("dates","Add to calendar"):"";
       default:return"";
@@ -4696,7 +4933,10 @@ function renderPrepSteps(body,city,id,b){
         ${i.key==="site"&&!done?jobField():""}
         ${i.key==="addenda"?`<input class="input step-addenda" data-addenda placeholder="Addenda you've read, e.g. #1, #2 (or none)" value="${esc(p.addenda||"")}" aria-label="Addenda you've read">`:""}
         ${!done?`<div class="step-acts">${action(i)}</div>`
-          :i.key==="docs"&&p.docInfo&&p.docInfo.read_at?`<div class="step-acts"><button type="button" class="step-act" data-act="docinfo">See what was read</button><button type="button" class="step-act" data-act="readmore">Read or upload more</button></div>`:""}
+          :i.key==="docs"&&p.docInfo&&p.docInfo.read_at?`<div class="step-acts"><button type="button" class="step-act" data-act="docinfo">See what was read</button><button type="button" class="step-act" data-act="readmore">Read or upload more</button></div>`
+          :i.key==="addenda"?`<div class="step-acts"><button type="button" class="step-act" data-act="addenda">Addenda</button></div>`:""}
+        ${i.key==="addenda"&&addendaKnown(id,b,p).length?`<small class="prep-docs">Known: ${addendaKnown(id,b,p).map(x=>esc(x.label)).join(" · ")}${
+          addendaNotRecorded(id,b,p).length?` · <b class="ad-miss">not recorded: ${addendaNotRecorded(id,b,p).map(n=>"#"+n).join(", ")}</b>`:""}</small>`:""}
         ${i.key==="docs"?`<small class="prep-docs" data-phone-files></small>`:""}</span>
     </div>`;
   };
@@ -4709,7 +4949,7 @@ function renderPrepSteps(body,city,id,b){
     return!(d&&d.fixed&&d.days<0&&i.key!=="submit");
   });
   const prog=prepProgress(id,b),pct=prog.total?Math.round(prog.done/prog.total*100):0;
-  body.innerHTML=`<div class="step-progress"><div class="step-bar"><i style="width:${pct}%"></i></div>
+  body.innerHTML=`${contactCardHTML(b,p)}<div class="step-progress"><div class="step-bar"><i style="width:${pct}%"></i></div>
       <span>${prog.done} of ${prog.total} done</span></div>
     ${next?`<div class="step-next"><div class="step-next-k">Next up</div>
         <b>${esc(next.label)}</b> ${dueChip(next,false)}
@@ -4738,6 +4978,7 @@ function renderPrepSteps(body,city,id,b){
   });
   const rem=document.getElementById("step-remind");
   if(rem)rem.onchange=()=>setStepReminders(rem.checked,rem);
+  wireContactCard(body,city,id,b,reopen);
   // Files uploaded or emailed in sit with the documents the bid links to,
   // a tap to open.
   const pf=body.querySelector("[data-phone-files]");
@@ -4780,6 +5021,8 @@ function renderPrepSteps(body,city,id,b){
     else if(act==="bondinfo")openBidInfo(reopen);
     else if(act==="regdetails")renderRegisterHelp(body,city,id,b);
     else if(act==="docinfo")renderSavedDocInfo(body,city,id,b);
+    else if(act==="addenda")renderAddenda(body,city,id,b);
+    else if(act==="ack"){recordAddenda(p,addendaNotRecorded(id,b,p));savePrep(id,city);reopen();}
     else if(act==="readmore")renderDocPicker(body,city,id,b);
     else if(act==="inbox")renderInbox(body,city,id,b);
     else if(act==="packet")renderPacket(body,city,id,b);
@@ -5043,11 +5286,12 @@ async function renderInbox(body,city,id,b,then){
   if(!document.getElementById("prep-body"))return;
   const mine=items.filter(it=>inboxMatches(it,b)),rest=items.filter(it=>!inboxMatches(it,b));
   const when=(t)=>shortDate(new Date((Number(t)||0)*1000));
-  const card=(it)=>`<div class="ib-item"><b>${esc(it.subject||"(no subject)")}</b>
+  const card=(it)=>`<div class="ib-item"><b>${it.addendum?`<em class="ib-tag">Addendum</em> `:""}${esc(it.subject||"(no subject)")}</b>
       <small>${esc(it.from||"")} · ${esc(when(it.at))}</small>
       ${(it.files||[]).map(f=>`<div class="ib-file"><span>${esc(f.name)}</span>
         <button type="button" class="step-act" data-ib-read="${esc(it.id)}|${f.n}">Read</button>
-        <button type="button" class="step-act" data-ib-fill="${esc(it.id)}|${f.n}">Fill</button></div>`).join("")}
+        ${it.addendum?`<button type="button" class="step-act" data-ib-changes="${esc(it.id)}|${f.n}">What changed</button>`
+          :`<button type="button" class="step-act" data-ib-fill="${esc(it.id)}|${f.n}">Fill</button>`}</div>`).join("")}
       ${(it.files||[]).length>1?`<button type="button" class="step-act" data-ib-readall="${esc(it.id)}">Read all ${it.files.length} together</button>`:""}
       ${(it.links||[]).map(u=>safeUrl(u)?`<a class="ib-link" href="${esc(safeUrl(u))}" target="_blank" rel="noopener noreferrer">${esc(u.replace(/^https?:\/\//,"").slice(0,60))}</a>`:"").join("")}
       <a href="#" class="ib-del" data-ib-del="${esc(it.id)}">Remove</a></div>`;
@@ -5089,6 +5333,11 @@ async function renderInbox(body,city,id,b,then){
   body.querySelectorAll("[data-ib-fill]").forEach(x=>x.onclick=async()=>{
     const files=await bring([find(x.dataset.ibFill)]);
     if(files)fillAndShow(body,city,id,b,[{name:files[0].name,file:files[0]}]);
+  });
+  body.querySelectorAll("[data-ib-changes]").forEach(x=>x.onclick=async()=>{
+    const pick=find(x.dataset.ibChanges);
+    const files=await bring([pick]);
+    if(files)readAddendumAndShow(body,city,id,b,{key:"m:"+x.dataset.ibChanges,label:files[0].name},{files});
   });
   body.querySelectorAll("[data-ib-del]").forEach(x=>x.onclick=async(e)=>{
     e.preventDefault();
@@ -5188,7 +5437,9 @@ function openBlob(blob,name){
 function docInfoRows(info){
   return[["How to submit",info.submission],["Bid security",info.bid_security],["Pre-bid meeting",info.prebid],
     ["Meeting place",info.prebid_place],["Job site",info.project_location],["Questions due",info.questions_due],
-    ["Required forms",(info.required_forms||[]).join("; ")]].filter(r=>String(r[1]||"").trim());
+    ["Required forms",(info.required_forms||[]).join("; ")],
+    ["Contact",info.contact?[info.contact.name,info.contact.title,info.contact.organization,info.contact.phone,info.contact.email].filter(Boolean).join(", "):""]]
+    .filter(r=>String(r[1]||"").trim());
 }
 function renderDocReview(body,city,id,b,doc,res){
   const p=prepFor(id);
@@ -5197,7 +5448,7 @@ function renderDocReview(body,city,id,b,doc,res){
   p.docInfo={source:doc.name,url:doc.url||"",files:(doc.files||[]).map(f=>f.name),
     submission:res.submission||"",bid_security:res.bid_security||"",
     prebid:res.prebid||"",prebid_place:res.prebid_place||"",project_location:res.project_location||"",
-    questions_due:res.questions_due||"",required_forms:res.required_forms||[],
+    questions_due:res.questions_due||"",required_forms:res.required_forms||[],contact:res.contact||{},
     line_items:(res.line_items||[]).slice(0,200),pages_read:res.pages_read||0,scanned_pages:res.scanned_pages||0,
     truncated:!!res.truncated,read_at:Date.now()};
   savePrep(id,city);
@@ -5571,7 +5822,7 @@ function renderPrepSummary(body,city,id,b){
     <div class="ps-steps">
       <a class="btn-ghost" id="ps-bond" href="${esc(bondRequestMail(b,p,city))}">Ask for a bid bond</a>
       <button class="btn-ghost" id="ps-concrete">Get a concrete quote</button>
-      ${b.email?`<a class="btn-ghost" id="ps-question" href="${esc(agencyQuestionMail(b))}">Ask the agency a question</a>`:""}
+      ${agencyContact(b,p).email?`<a class="btn-ghost" id="ps-question" href="${esc(agencyQuestionMail(b,p))}">Ask the agency a question</a>`:""}
       ${dates.length?`<button class="btn-ghost" id="ps-dates">Add ${dates.length>1?`${dates.length} dates`:"the due date"} to my calendar</button>`:""}
     </div>
     <div class="rate-note">${info>=BID_INFO_FIELDS.length?"":`${info?`${info} of ${BID_INFO_FIELDS.length}`:"No"} bid details saved. `}<a href="#" id="ps-profile">${info?"Edit":"Add"} bid details</a>: your address, license, bonding agent and supplier, so these fill themselves in.</div>`;
@@ -6038,16 +6289,17 @@ function placeParts(city){
   const m=/^(.+?),\s*([A-Za-z]{2})\s*$/.exec(String(city||"").trim());
   return m?{city:m[1],state:m[2].toUpperCase()}:null;
 }
-async function loadSuppliers(city,fresh){
+async function loadSuppliers(city,fresh,near){
   const pl=placeParts(city);
   if(!pl)return{ok:false,reason:"bad_place"};
-  const k=`${pl.city},${pl.state}`.toLowerCase();
+  near=String(near||"").trim().slice(0,160);
+  const k=`${pl.city},${pl.state}|${near}`.toLowerCase();
   if(!fresh&&supplierCache.has(k))return supplierCache.get(k);
   if(isOffline())return{ok:false,reason:"offline"};
   try{
     const token=await getSupabaseToken();
     const r=await fetchWithTimeout(SERVER+"/suppliers/nearby",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,...pl})},60000);
+      body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,...pl,near})},75000);
     const d=await r.json();
     if(d&&d.ok)supplierCache.set(k,d);
     return d||{ok:false};
@@ -6060,8 +6312,11 @@ function plantSelect(name,status,i){
 function suppliersHTML(d,b,p,city,waste){
   if(!d||!d.ok){
     const why={not_licensed:"Supplier search is part of a paid plan.",place_not_found:"Couldn't place this town on the map.",
-      rate_limited:"Too many searches today. Try again tomorrow.",offline:"You're offline."}[d&&d.reason]||"Couldn't load plants right now.";
-    return`<div class="account-status">${esc(why)}</div>`;
+      bad_place:"This bid has no town and state to search from. Add the job address on the Steps tab.",
+      rate_limited:"Too many searches today. Try again tomorrow.",offline:"You're offline."}[d&&d.reason]
+      ||"The plant search took too long. The map servers it uses get busy; try again in a minute.";
+    return`<div class="account-status">${esc(why)}</div>${d&&["not_licensed","rate_limited","offline","bad_place"].includes(d.reason)?"":
+      `<button type="button" class="btn-ghost" id="rm-retry">Try again</button>`}`;
   }
   const c=concreteState(p),plants=(d.plants||[]).map((x,i)=>({...x,i,st:(c.plants[x.name]||{}).status||"Not contacted"}));
   // A plant that doesn't deliver here goes to the bottom, out of the way.
@@ -6071,7 +6326,7 @@ function suppliersHTML(d,b,p,city,waste){
   return`${plants.map(x=>{
     const q=c.plants[x.name]||{};
     return`<div class="sup-row${x.st===PLANT_STATUS[4]?" sup-out":""}">
-      <div class="sup-head"><div class="sup-name">${esc(x.name)} <span class="sup-mi">${x.miles} mi</span></div>${plantSelect(x.name,x.st,x.i)}</div>
+      <div class="sup-head"><div class="sup-name">${esc(x.name)} ${x.miles!=null?`<span class="sup-mi">${x.miles} mi</span>`:""}${x.source==="web"?` <span class="sup-mi">found online</span>`:""}</div>${plantSelect(x.name,x.st,x.i)}</div>
       ${q.price>0?`<div class="sup-quote">Quoted ${yd(q.price)} a yard${q.yards?` for ${q.yards} yards`:""}${q.delivery!=null&&q.delivery!==""?`, ${money0(q.delivery)} delivery`:""}</div>`:""}
       ${x.address?`<div class="rate-note">${esc(x.address)}</div>`:""}
       <div class="sup-acts">${x.phone?`<a href="tel:${esc(x.phone.replace(/[^\d+]/g,""))}">Call ${esc(x.phone)}</a>`:""}
@@ -6081,8 +6336,8 @@ function suppliersHTML(d,b,p,city,waste){
     ${web.length?`<div class="rate-note" style="margin-top:0.5rem;">${plants.length?"Also found online":"Found online"}:</div>
       ${web.map(w=>safeUrl(w.url)?`<div class="sup-row"><a href="${esc(safeUrl(w.url))}" target="_blank" rel="noopener noreferrer">${esc(w.site)}</a>
         ${w.snippet?`<div class="rate-note">${esc(w.snippet)}</div>`:""}</div>`:"").join("")}`:""}
-    <div class="rate-note">Plants within ${d.radius_mi} miles. Some may be missing. Call to make sure they deliver to your job.</div>
-    ${plants.length?`<div class="rate-note">Plant data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a></div>`:""}`;
+    <div class="rate-note">Plants within ${d.radius_mi} miles of ${d.near?"the job site":"town"}. Some may be missing. Call to make sure they deliver to your job.</div>
+    ${plants.some(x=>x.source!=="web")?`<div class="rate-note">Plant data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a></div>`:""}`;
 }
 // A quote is saved with the bid (and its plant) every time; it's also sent,
 // anonymously, toward the area's prices unless the contractor says not to.
@@ -6105,10 +6360,70 @@ async function logConcreteQuote(city,form,c){
   }catch(e){toast("Saved with this bid; couldn't add it to local prices right now.");}
   return true;
 }
-function agencyQuestionMail(b){
-  const body=["Hello,","",`Regarding ${b.title||"the bid"}${b.bid_number?` (${b.bid_number})`:""}${b.deadline?`, due ${b.deadline}`:""}:`,"",
+// ── The agency's contact for this bid ──
+// From the posting (the scanner's contact, email and phone), from the bid
+// documents (the purchasing agent or engineer they name), and anything the
+// contractor typed in after a phone call -- in that order of trust, the
+// contractor's own first. Shown at the top of Prepare bid, one tap to call,
+// email or save to the phone's contacts.
+function agencyContact(b,p){
+  const own=(p&&p.contact)||{},doc=(p&&p.docInfo&&p.docInfo.contact)||{};
+  const pick=(...xs)=>xs.map(x=>String(x||"").trim()).find(Boolean)||"";
+  return{name:pick(own.name,doc.name,b&&b.contact),title:pick(own.title,doc.title),
+    org:pick(own.org,doc.organization,b&&b.agency),phone:pick(own.phone,doc.phone,b&&b.phone),
+    email:pick(own.email,doc.email,b&&b.email)};
+}
+function agencyQuestionMail(b,p){
+  const c=agencyContact(b,p);
+  const first=String(c.name||"").split(/\s+/)[0];
+  const body=[first?`Hello ${first},`:"Hello,","",`Regarding ${b.title||"the bid"}${b.bid_number?` (${b.bid_number})`:""}${b.deadline?`, due ${b.deadline}`:""}:`,"",
     "[Your question]","","Thank you,",signOff()].join("\n");
-  return mailtoUrl(b.email,`Question: ${b.title||"bid"}${b.bid_number?` (${b.bid_number})`:""}`,body);
+  return mailtoUrl(c.email,`Question: ${b.title||"bid"}${b.bid_number?` (${b.bid_number})`:""}`,body);
+}
+function vcardFor(c,b){
+  const e=(x)=>String(x||"").replace(/\\/g,"\\\\").replace(/([,;])/g,"\\$1").replace(/\r?\n/g," ");
+  const parts=String(c.name||"").trim().split(/\s+/);
+  const last=parts.length>1?parts.pop():"",first=parts.join(" ");
+  return["BEGIN:VCARD","VERSION:3.0",`N:${e(last)};${e(first||c.org||"Agency contact")};;;`,
+    `FN:${e(c.name||c.org||"Agency contact")}`,c.org?`ORG:${e(c.org)}`:"",c.title?`TITLE:${e(c.title)}`:"",
+    c.phone?`TEL;TYPE=WORK,VOICE:${e(c.phone)}`:"",c.email?`EMAIL;TYPE=WORK:${e(c.email)}`:"",
+    `NOTE:${e(`Contact for ${b.title||"a bid"}${b.bid_number?` (${b.bid_number})`:""}`)}`,"END:VCARD"].filter(Boolean).join("\r\n");
+}
+function contactCardHTML(b,p){
+  const c=agencyContact(b,p);
+  const tel=c.phone?safeUrl("tel:"+c.phone.replace(/(?:ext|x)\.?\s*\d+$/i,"").replace(/[^\d+]/g,"")):"";
+  const has=c.name||c.phone||c.email;
+  return`<div class="agency-card">
+    <div class="agency-who"><small>Agency contact</small>
+      ${has?`<b>${esc(c.name||c.org||"The agency")}</b>${[c.title,c.name?c.org:""].filter(Boolean).length?`<span>${esc([c.title,c.name?c.org:""].filter(Boolean).join(", "))}</span>`:""}`
+        :`<span>None listed on the posting yet. Reading the bid documents usually finds one.</span>`}</div>
+    <div class="agency-acts">${tel?`<a class="step-act" href="${esc(tel)}">Call ${esc(c.phone)}</a>`:""}
+      ${c.email?`<a class="step-act" href="${esc(agencyQuestionMail(b,p))}" data-mark="questions">Email</a>`:""}
+      ${has?`<button type="button" class="step-act" id="ac-save">Save to contacts</button>`:""}
+      <button type="button" class="step-act" id="ac-edit">${has?"Edit":"Add"}</button></div>
+  </div>`;
+}
+function wireContactCard(body,city,id,b,reopen){
+  const p=prepFor(id);
+  const sv=body.querySelector("#ac-save");
+  if(sv)sv.onclick=()=>{
+    const c=agencyContact(b,p);
+    downloadBlob(new Blob([vcardFor(c,b)],{type:"text/vcard"}),String(c.name||c.org||"agency").replace(/[^a-z0-9]+/gi,"_").slice(0,40)+".vcf");
+  };
+  const ed=body.querySelector("#ac-edit");
+  if(ed)ed.onclick=()=>{
+    const c=agencyContact(b,p),card=body.querySelector(".agency-card");
+    card.innerHTML=`<div class="agency-who"><small>Agency contact</small></div>
+      ${[["name","Name",c.name],["title","Title",c.title],["org","Agency",c.org],["phone","Phone",c.phone],["email","Email",c.email]]
+        .map(([k,l,v])=>`<input class="input ac-field" data-ac="${k}" placeholder="${l}" aria-label="${l}" value="${esc(v)}"${k==="phone"?' inputmode="tel"':k==="email"?' inputmode="email"':""}>`).join("")}
+      <div class="agency-acts"><button type="button" class="step-act" id="ac-done">Save</button><button type="button" class="step-act" id="ac-cancel">Cancel</button></div>`;
+    card.querySelector("#ac-cancel").onclick=reopen;
+    card.querySelector("#ac-done").onclick=()=>{
+      const own={};
+      card.querySelectorAll("[data-ac]").forEach(x=>{own[x.dataset.ac]=x.value.trim().slice(0,120);});
+      p.contact=own;savePrep(id,city);reopen();
+    };
+  };
 }
 // Every date the bid's own words give: due, pre-bid meeting, questions.
 function bidDates(b,p){
@@ -6144,6 +6459,8 @@ function renderConcretePanel(body,city,id,b){
   const opt=(v,label,cur)=>`<option value="${esc(String(v))}"${String(v)===String(cur)?" selected":""}>${esc(label)}</option>`;
   const waste=wastePct(),steps=WASTE_STEPS.includes(waste)?WASTE_STEPS:[...WASTE_STEPS,waste].sort((a,z)=>a-z);
   const place=(placeParts(city)||{}).city||city;
+  // Plants are found around the job when the bid has an address for it.
+  const near=jobAddress(p);
   const pickOptions=(w)=>`${y.total?opt("all",`All concrete lines · ${Math.ceil(y.total*(1+w/100))} yards`,c.pick||"all"):""}
     ${y.out.length>1?y.out.map((x,i)=>opt(`line:${i}`,`${x.name} · ${Math.ceil(x.cy*(1+w/100))} yards`,c.pick)).join(""):""}
     ${opt("custom","Type in yards",y.total?c.pick:"custom")}`;
@@ -6151,7 +6468,8 @@ function renderConcretePanel(body,city,id,b){
     <div id="rm-est"></div>
     <div class="act-primary"><a class="ma-gold" id="cq-send" href="${esc(concreteQuoteMail(b,p,city,waste))}">Email my supplier for a quote</a></div>
     ${bidInfo().supplier_email?"":`<div class="rate-note">Save your supplier's email in <a href="#" id="cq-profile">bid details</a> and this goes straight to them.</div>`}
-    <div class="workspace-title" style="margin-top:1rem;">Ready-mix plants near ${esc(place)}</div>
+    <div class="workspace-title" style="margin-top:1rem;">Ready-mix plants near ${near?"the job site":esc(place)}</div>
+    ${near?`<div class="rate-note" style="margin-top:0;">Searching around ${esc(near)}, ${esc(place)}.</div>`:""}
     <div id="rm-sup"><div class="account-status">Looking for plants…</div></div>
     <details class="rm-log" id="rm-log"><summary>Got a quote? Save it</summary>
       <form id="rm-form" class="rm-form">
@@ -6230,10 +6548,14 @@ function renderConcretePanel(body,city,id,b){
   $("cq-waste").onchange=(e)=>{store.set("concrete_waste_pct",Number(e.target.value)||0);redraw();};
   $("cq-psi").onchange=(e)=>{c.psi=e.target.value?Number(e.target.value):"";save();
     $("rm-form").querySelector('[name="psi"]').value=e.target.value;redraw();};
-  const showSuppliers=(fresh)=>loadSuppliers(city,fresh).then(d=>{
+  const showSuppliers=(fresh)=>loadSuppliers(city,fresh,near).then(d=>{
     if(!$("rm-sup"))return;
     sup=d;quotes=d&&d.ok?d.quotes:null;
-    if(!(d&&d.ok)){$("rm-sup").innerHTML=suppliersHTML(d,b,p,city,wastePct());sup=null;}
+    if(!(d&&d.ok)){
+      $("rm-sup").innerHTML=suppliersHTML(d,b,p,city,wastePct());sup=null;
+      const again=$("rm-retry");
+      if(again)again.onclick=()=>{$("rm-sup").innerHTML=`<div class="account-status">Looking for plants…</div>`;showSuppliers(true);};
+    }
     redraw();
   });
   redraw();

@@ -1852,6 +1852,129 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── Addenda: found, read for changes, applied, recorded ──
+  console.log("\nAddenda are found, read for what they change, and recorded");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    page.on("dialog", (d) => d.accept());
+    let addRead = null, watchAddenda = [1, 2];
+    await page.route("**/*", (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      const json = (o) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(o) });
+      if (u.endsWith("/bid-watch/check")) {
+        const urls = JSON.parse(route.request().postData() || "{}").urls || [];
+        const results = {};
+        urls.forEach((x) => { results[x] = { ok: true, docs: ["Bid form", "Addendum No. 1"], addenda: watchAddenda, hash: "h" + watchAddenda.length,
+          addendum_docs: [{ name: "Addendum No. 1", url: "https://e.gov/addendum-1.pdf" }] }; });
+        return json({ ok: true, results });
+      }
+      if (u.endsWith("/bid-documents/read")) {
+        addRead = JSON.parse(route.request().postData() || "{}");
+        return json({ ok: true, cached: false, addendum_number: "1", issued: "October 18, 2099",
+          bid_due: "November 6, 2099 2:00 PM", prebid: "",
+          quantity_changes: [{ item_no: "2", description: "4 in. concrete sidewalk", old_quantity: 1250, new_quantity: 1410, unit: "SY" }],
+          items_added: [{ item_no: "12", description: "Detectable warning panels", quantity: 8, unit: "EA" }],
+          items_removed: [{ item_no: "7", description: "Brick pavers" }],
+          answers: [{ question: "Is night work allowed?", answer: "No." }], other_changes: ["Sheet C-3 replaced."] });
+      }
+      if (u.endsWith("/inbox/address")) return json({ ok: true, address: "docs+abcdef1234@curbcallpro.com" });
+      if (u.endsWith("/inbox/list")) return json({ ok: true, items: [
+        { id: "m9", subject: "Addendum 2: Elm St Sidewalk", from: "Plan Room", at: Date.now() / 1000, snippet: "", links: [],
+          addendum: true, files: [{ n: 0, name: "Elm St Addendum 2.pdf", size: 20 }] }] });
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      if (sessionStorage.getItem("seeded")) return;
+      sessionStorage.setItem("seeded", "1");
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      localStorage.setItem("license_key", JSON.stringify("TEST-KEY"));
+      const bid = { title: "Elm St Sidewalk", scope: "Sidewalk replacement", deadline: "2099-11-01", status: "open",
+        url: "https://e.gov/elm", documents: [{ name: "Bid form", url: "https://e.gov/form.pdf" }] };
+      localStorage.setItem("last_feed", JSON.stringify({ "Aurora, MO": [bid] }));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(800);
+    const id = await page.evaluate(() => {
+      currentUser = { id: "u1", email: "tester@example.com" };
+      window.getSupabaseToken = async () => "tok";
+      store.set("inbox_address", "docs+abcdef1234@curbcallpro.com");
+      const b = bidData["Aurora, MO"][0], i = bidId("Aurora, MO", b);
+      const p = prepFor(i);
+      p.lines = [{ name: "2. 4 in. concrete sidewalk", qty: 1250, unit: "sq yd", price: 60 },
+                 { name: "7. Brick pavers", qty: 40, unit: "sq yd", price: 90 }];
+      savePrep(i, "Aurora, MO");
+      return i;
+    });
+    await page.evaluate(() => checkSavedBids());
+    await page.waitForTimeout(500);
+    await page.evaluate((i) => openPrep("Aurora, MO", i, "steps"), id);
+    await page.waitForTimeout(400);
+    const steps = await page.textContent("#prep-body");
+    check("the addenda step names the addenda the posting has", /Known: Addendum No\. 1 · Addendum 2/.test(steps), steps.slice(0, 600));
+    check("...and which aren't recorded as read", /not recorded: #1, #2/.test(steps));
+    check("...with one tap to record them", (await page.locator('[data-act="ack"]').count()) >= 1);
+
+    await page.click('[data-act="addenda"]');
+    await page.waitForTimeout(600);
+    const list = await page.textContent("#prep-body");
+    check("the addenda list has the posting's document, the one only mentioned, and the emailed one",
+          /Addendum No\. 1/.test(list) && /on the posting/.test(list) && /Addendum 2/.test(list) && /mentioned on the posting/.test(list)
+            && /Elm St Addendum 2\.pdf/.test(list) && /from your email/.test(list), list.slice(0, 600));
+    await page.click('[data-ad-read="0"]');
+    await page.waitForTimeout(600);
+    check("an addendum is read for what it changes", addRead && addRead.kind === "addendum" && addRead.url === "https://e.gov/addendum-1.pdf");
+    const rev = await page.textContent("#prep-body");
+    check("the changes are laid out: due date, quantities, items, answers",
+          /What Addendum No\. 1 changes/.test(rev) && /November 6, 2099/.test(rev) && /1,410/.test(rev) && /Detectable warning panels/.test(rev)
+            && /Brick pavers/.test(rev) && /Is night work allowed\?/.test(rev) && /Sheet C-3 replaced/.test(rev), rev.slice(0, 600));
+    check("...each change matched to the contractor's own line", /Matches your line/.test(await page.textContent(".ps-table td small")));
+    await page.click("#ad-apply");
+    await page.waitForTimeout(300);
+    const lines = await page.evaluate((i) => prepFor(i).lines.map((l) => `${l.name}|${l.qty}`), id);
+    check("updating the lines changes the quantity, adds the new item and drops the deleted one",
+          lines.includes("2. 4 in. concrete sidewalk|1410") && lines.some((x) => /^12\. Detectable warning panels\|8$/.test(x))
+            && !lines.some((x) => /Brick pavers/.test(x)), lines.join(" / "));
+    check("...and only once", (await page.locator("#ad-apply").count()) === 0);
+    await page.click("#ad-due");
+    await page.waitForTimeout(300);
+    check("the due date can follow the addendum", await page.evaluate((i) => saved[i].deadline === "November 6, 2099 2:00 PM", id));
+    await page.click("#ad-ack");
+    await page.waitForTimeout(300);
+    check("reading it records it as read", await page.evaluate((i) => prepFor(i).addenda === "#1", id));
+    await page.click("#ad-back");
+    await page.waitForTimeout(600);
+    check("the list still asks about the one not recorded", /Not recorded as read yet: #2/.test(await page.textContent("#prep-body")));
+    await page.click("#ad-ackall");
+    await page.waitForTimeout(500);
+    check("...until it's recorded too", await page.evaluate((i) => prepFor(i).addenda === "#1, #2", id));
+    check("then the step counts as done",
+          await page.evaluate((i) => { const b = saved[i]; return !!prepAuto(b, prepFor(i), i).addenda; }, id));
+    watchAddenda = [1, 2, 3];
+    await page.evaluate((i) => { bidWatch[i].at = 0; return checkSavedBids(); }, id);
+    await page.waitForTimeout(500);
+    check("a new addendum opens the step again",
+          await page.evaluate((i) => { const b = saved[i]; return !prepAuto(b, prepFor(i), i).addenda
+            && addendaNotRecorded(i, b, prepFor(i)).join() === "3"; }, id));
+    await page.evaluate((i) => openPrep("Aurora, MO", i, "steps"), id);
+    await page.waitForTimeout(400);
+    await page.click('[data-act="inbox"], [data-act="addenda"]');
+    await page.waitForTimeout(600);
+    await page.evaluate((i) => renderInbox(document.getElementById("prep-body"), "Aurora, MO", i, saved[i]), id);
+    await page.waitForTimeout(600);
+    check("emailed addenda are tagged and offer to read what changed",
+          (await page.locator(".ib-tag").count()) === 1 && (await page.locator("[data-ib-changes]").count()) === 1);
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   // ── Phase 3: your own pricing history ──
   console.log("\nPast bids feed your prices: history, copy, won vs lost");
   {
@@ -1998,6 +2121,30 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     }, id);
     await page.waitForTimeout(400);
 
+    // ── The agency contact, a tap away ──
+    const card = await page.textContent(".agency-card");
+    check("the agency contact is at the top, from the posting", /Agency contact/.test(card)
+          && (await page.getAttribute(".agency-card a[data-mark='questions']", "href")).startsWith("mailto:clerk%40e.gov"), card);
+    await page.evaluate((i) => { prepFor(i).docInfo.contact = { name: "Dana Reyes", title: "Purchasing Agent", organization: "City of Aurora",
+      phone: "(417) 678-5551 ext. 3", email: "dreyes@aurora-mo.gov" }; openPrep("Aurora, MO", i, "steps"); }, id);
+    await page.waitForTimeout(400);
+    const card2 = await page.textContent(".agency-card");
+    check("the contact the bid documents name comes first", /Dana Reyes/.test(card2) && /Purchasing Agent, City of Aurora/.test(card2));
+    check("...one tap to call, without the extension", (await page.getAttribute(".agency-card a[href^='tel:']", "href")) === "tel:4176785551");
+    check("...or email them by name", decodeURIComponent(await page.getAttribute(".agency-card a[data-mark='questions']", "href")).startsWith("mailto:dreyes@aurora-mo.gov")
+          && /Hello Dana,/.test(decodeURIComponent(await page.getAttribute(".agency-card a[data-mark='questions']", "href"))));
+    const [vcf] = await Promise.all([page.waitForEvent("download"), page.click("#ac-save")]);
+    const vtext = fs.readFileSync(await vcf.path(), "utf8");
+    check("...or save them to the phone's contacts", /BEGIN:VCARD/.test(vtext) && /FN:Dana Reyes/.test(vtext) && /ORG:City of Aurora/.test(vtext)
+          && /TEL;TYPE=WORK,VOICE:\(417\) 678-5551 ext. 3/.test(vtext) && /\.vcf$/.test(vcf.suggestedFilename()), vtext);
+    await page.click("#ac-edit");
+    await page.fill('[data-ac="name"]', "Sam Ortiz");
+    await page.fill('[data-ac="phone"]', "417-555-0123");
+    await page.click("#ac-done");
+    await page.waitForTimeout(400);
+    check("a contact typed in after a phone call is kept and used", /Sam Ortiz/.test(await page.textContent(".agency-card"))
+          && await page.evaluate((i) => prepFor(i).contact.phone === "417-555-0123", id));
+
     // ── The Steps view: dates worked back from the due date, tools on each step ──
     const steps = await page.textContent("#prep-body");
     check("documents given out to plan holders get a button to register for them",
@@ -2056,7 +2203,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     check("...with the project, the bid and the bond the documents ask for",
           /Hi Sam,/.test(bond) && /Bid due: 2099-11-01/.test(bond) && /Our bid: about \$75,000/.test(bond) && /Bond required: 5% bid bond/.test(bond));
     const q = decodeURIComponent(await page.getAttribute("#ps-question", "href"));
-    check("a question to the agency is addressed to its contact", q.startsWith("mailto:clerk@e.gov") && /B-17/.test(q));
+    check("a question to the agency is addressed to its contact", q.startsWith("mailto:dreyes@aurora-mo.gov") && /Hello Sam,/.test(q) && /B-17/.test(q));
     check("every date the documents give is offered for the calendar", /Add 3 dates/.test(await page.textContent("#ps-dates")));
     const [ics] = await Promise.all([page.waitForEvent("download"), page.click("#ps-dates")]);
     const icsText = fs.readFileSync(await ics.path(), "utf8");
@@ -2083,7 +2230,10 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     const share = await page.textContent("#rm-share");
     check("each line shows what its concrete costs per unit and what share of the price that is",
           /How much of each price is concrete/.test(share) && /\$12\.83–\$20\.42 a sq yd/.test(share) && /28% of your \$60/.test(share), share.slice(0, 300));
-    check("plants are asked for near the bid's town", nearbyBody && nearbyBody.city === "Aurora" && nearbyBody.state === "MO");
+    check("plants are asked for around the job site, in the bid's town", nearbyBody && nearbyBody.city === "Aurora" && nearbyBody.state === "MO"
+            && nearbyBody.near === "Elm St from 1st St to 5th St", JSON.stringify(nearbyBody));
+    check("...and the panel says so", /Ready-mix plants near the job site/.test(await page.textContent("#prep-body"))
+            && /Searching around Elm St from 1st St to 5th St, Aurora/.test(await page.textContent("#prep-body")));
     const sup = await page.textContent("#rm-sup");
     check("nearby plants are listed with distance and a phone number", /Ozark Ready Mix/.test(sup) && /4\.2 mi/.test(sup) && /417-555-0199/.test(sup));
     check("...and web finds the map didn't have", /citymix\.example/.test(sup));

@@ -115,6 +115,7 @@ def _inbox_code(uid):
 def _public_item(it):
     return {"id": it.get("id"), "subject": it.get("subject", ""), "from": it.get("from", ""),
             "at": it.get("at"), "snippet": it.get("snippet", ""), "links": it.get("links", []),
+            "addendum": bool(it.get("addendum")),
             "files": [{"n": i, "name": f.get("name"), "size": f.get("size")}
                       for i, f in enumerate(it.get("files", []))]}
 
@@ -187,13 +188,21 @@ def inbound_email():
                            "sha": hashlib.sha256(body).hexdigest()[:16]})
     if not stored and not links:
         return jsonify({"ok": True, "kept": 0, "reason": "no_documents"})
+    # Addenda sent only to registered plan holders arrive this way, never on
+    # the posting, so they're marked and the contractor is told at once.
+    addendum = bool(re.search(r"addend", " ".join([subject, text[:2000]] + [n for n, _b in files]), re.I))
     items = _inbox_items(uid)
     items.insert(0, {"id": item_id, "at": time.time(), "subject": subject, "from": sender,
-                     "snippet": text[:400], "files": stored, "links": links})
+                     "snippet": text[:400], "files": stored, "links": links, "addendum": addendum})
     for gone in items[INBOX_MAX_ITEMS:]:
         _storage_delete([f["path"] for f in gone.get("files", [])])
     _save_inbox(uid, items)
-    return jsonify({"ok": True, "kept": len(stored), "links": len(links)})
+    try:
+        _notify_user(uid, ("Addendum emailed in: " if addendum else "Bid documents emailed in: ") + (subject or sender)[:90],
+                     "Open the bid in CurbCall to read " + ("what changed." if addendum else "them."), "app.html")
+    except Exception as ex:
+        print(f"[inbox] alert not sent: {ex}", flush=True)
+    return jsonify({"ok": True, "kept": len(stored), "links": len(links), "addendum": addendum})
 
 
 @app.route("/inbox/address", methods=["POST"])

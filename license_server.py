@@ -8865,7 +8865,7 @@ _BID_DOC_RATE_KEY = "bidcaller:bid_doc_rate"
 _BID_DOC_CACHE_PREFIX = "bidcaller:bid_doc:"
 # Bump when the reader starts returning something new, so documents read
 # before the change are read again instead of served from the cache.
-BID_DOC_READER_VERSION = 2
+BID_DOC_READER_VERSION = 3
 BID_DOC_CACHE_TTL_DAYS = 30
 
 
@@ -8992,6 +8992,10 @@ _BID_DOC_PROMPT = (
     "\"required_forms\": names of forms, affidavits or certificates the bid "
     "must include, as stated.\n"
     "\"questions_due\": the deadline for written questions, as stated.\n"
+    "\"contact\": the person bidders are told to contact about this bid "
+    "(purchasing agent, project manager or engineer), as "
+    "{\"name\", \"title\", \"organization\", \"phone\", \"email\"} exactly as printed; "
+    "\"\" for any part not printed.\n"
     "No markdown, nothing outside the object.\n\nDOCUMENT TEXT:\n"
 )
 
@@ -9030,18 +9034,105 @@ def _clean_doc_result(raw):
 
     forms = [re.sub(r"\s+", " ", str(f)).strip()[:160]
              for f in (raw.get("required_forms") or []) if str(f).strip()][:30]
+    c = raw.get("contact") if isinstance(raw.get("contact"), dict) else {}
+
+    def part(k, n):
+        v = c.get(k)
+        return re.sub(r"\s+", " ", v).strip()[:n] if isinstance(v, str) else ""
+    email = part("email", 120)
+    phone = part("phone", 40)
+    contact = {"name": part("name", 80), "title": part("title", 80), "organization": part("organization", 120),
+               # Only a real address and a phone with a full number are kept.
+               "email": email if re.fullmatch(r"[^@\s]+@[^@\s]+\.[A-Za-z]{2,}", email) else "",
+               "phone": phone if len(re.sub(r"\D", "", phone)) >= 10 else ""}
     return {"line_items": items, "submission": text("submission"),
             "bid_security": text("bid_security"), "prebid": text("prebid"),
             "prebid_place": text("prebid_place", 200),
             "project_location": text("project_location", 200),
-            "questions_due": text("questions_due", 300), "required_forms": forms}
+            "questions_due": text("questions_due", 300), "required_forms": forms,
+            "contact": contact if any(contact.values()) else {}}
 
 
-def _ai_read_bid_document(text, images=None):
+# ── Reading an addendum ──
+# An addendum is a few pages of changes in agency language. What a
+# contractor needs from it is the list of changes: a moved due date, changed
+# quantities, added or deleted items, answers to bidders' questions. Same
+# rule as the document reader: copy what it prints, invent nothing.
+BID_ADDENDUM_READER_VERSION = 1
+
+_ADDENDUM_PROMPT = (
+    "You read an ADDENDUM to a public construction bid, for a concrete contractor. "
+    "List only what the addendum changes or answers. Copy facts EXACTLY as printed. "
+    "Never estimate or infer; use \"\" or [] when the addendum does not say.\n\n"
+    "Return ONE JSON object with keys:\n"
+    "\"addendum_number\": the addendum's number as printed (e.g. \"2\"), \"\" if none.\n"
+    "\"issued\": the date the addendum is dated, as printed.\n"
+    "\"bid_due\": the NEW bid due date and time if the addendum changes it, else \"\".\n"
+    "\"prebid\": any change to the pre-bid meeting, as stated, else \"\".\n"
+    "\"quantity_changes\": bid items whose quantity changes, each {\"item_no\", "
+    "\"description\", \"old_quantity\" (as printed or \"\"), \"new_quantity\", \"unit\"}.\n"
+    "\"items_added\": new bid items, each {\"item_no\", \"description\", \"quantity\", \"unit\"}.\n"
+    "\"items_removed\": deleted bid items, each {\"item_no\", \"description\"}.\n"
+    "\"answers\": questions from bidders and the answers given, each {\"question\", \"answer\"}.\n"
+    "\"other_changes\": every other change in a short plain sentence each "
+    "(specifications, drawings, forms, scope).\n"
+    "No markdown, nothing outside the object.\n\nADDENDUM TEXT:\n"
+)
+
+
+def _num_or_none(v):
+    q = str(v if v is not None else "").replace(",", "").strip()
+    try:
+        x = float(q) if q else None
+    except ValueError:
+        return None
+    return x if x is not None and 0 <= x < 1e9 else None
+
+
+def _clean_addendum_result(raw):
+    """Validate the model's addendum object; malformed parts are dropped."""
+    if not isinstance(raw, dict):
+        return None
+
+    def text(v, n=400):
+        return re.sub(r"\s+", " ", v).strip()[:n] if isinstance(v, str) else ""
+
+    def rows(key, n=100):
+        return [r for r in (raw.get(key) or [])[:n] if isinstance(r, dict)]
+
+    def unit(v):
+        u = str(v or "").strip()
+        return u if _UNIT_RE.match(u) else ""
+    changes = [{"item_no": text(r.get("item_no"), 20), "description": text(r.get("description"), 200),
+                "old_quantity": _num_or_none(r.get("old_quantity")),
+                "new_quantity": _num_or_none(r.get("new_quantity")), "unit": unit(r.get("unit"))}
+               for r in rows("quantity_changes")]
+    changes = [c for c in changes if c["new_quantity"] is not None and (c["item_no"] or c["description"])]
+    added = [{"item_no": text(r.get("item_no"), 20), "description": text(r.get("description"), 200),
+              "quantity": _num_or_none(r.get("quantity")), "unit": unit(r.get("unit"))}
+             for r in rows("items_added")]
+    added = [a for a in added if a["description"]]
+    removed = [{"item_no": text(r.get("item_no"), 20), "description": text(r.get("description"), 200)}
+               for r in rows("items_removed")]
+    removed = [r for r in removed if r["item_no"] or r["description"]]
+    answers = [{"question": text(r.get("question"), 400), "answer": text(r.get("answer"), 600)}
+               for r in rows("answers", 40)]
+    answers = [a for a in answers if a["question"] and a["answer"]]
+    other = [text(x, 300) for x in (raw.get("other_changes") or [])[:40] if text(x, 300)]
+    num = text(raw.get("addendum_number"), 40)
+    m = re.search(r"\d{1,2}", num)
+    return {"addendum_number": m.group(0) if m else "", "issued": text(raw.get("issued"), 80),
+            "bid_due": text(raw.get("bid_due"), 200), "prebid": text(raw.get("prebid"), 300),
+            "quantity_changes": changes, "items_added": added, "items_removed": removed,
+            "answers": answers, "other_changes": other}
+
+
+def _ai_read_bid_document(text, images=None, addendum=False):
     images = images or []
     if not OPENAI_API_KEY or not (text.strip() or images):
         return None
-    content = _BID_DOC_PROMPT + (text if text.strip() else "(none: the pages are scanned images, attached)")
+    prompt = _ADDENDUM_PROMPT if addendum else _BID_DOC_PROMPT
+    content = prompt + (text if text.strip() else "(none: the pages are scanned images, attached)")
     if images:
         content = [{"type": "text", "text": content + "\n\nSCANNED PAGES are attached as images; read them too."}] + [
             {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + base64.b64encode(im).decode("ascii"),
@@ -9059,7 +9150,8 @@ def _ai_read_bid_document(text, images=None):
     try:
         with urllib.request.urlopen(req, timeout=120 if images else 90) as resp:
             data = json.loads(resp.read().decode("utf-8"))
-        return _clean_doc_result(json.loads(data["choices"][0]["message"]["content"]))
+        got = json.loads(data["choices"][0]["message"]["content"])
+        return _clean_addendum_result(got) if addendum else _clean_doc_result(got)
     except Exception as ex:
         print(f"[bid-doc] ai error: {ex}", flush=True)
         return None
@@ -9161,8 +9253,11 @@ def bid_documents_read():
     if not OPENAI_API_KEY:
         return jsonify({"ok": False, "reason": "ai_unavailable"})
 
+    # "kind": "addendum" reads the same files for what they change instead.
+    addendum = data.get("kind") == "addendum"
+    version = BID_ADDENDUM_READER_VERSION if addendum else BID_DOC_READER_VERSION
     ident = (b"upload:" + b"".join(hashlib.sha256(raw).digest() for _n, raw in upload)) if upload is not None else url.encode()
-    cache_key = _BID_DOC_CACHE_PREFIX + hashlib.sha256(ident).hexdigest()[:32]
+    cache_key = _BID_DOC_CACHE_PREFIX + ("addendum:" if addendum else "") + hashlib.sha256(ident).hexdigest()[:32]
     try:
         hit = kv_backend.get(cache_key, None)
     except Exception:
@@ -9170,7 +9265,7 @@ def bid_documents_read():
     # A result saved before the reader learned a field (the meeting place,
     # the job site) would hand back the old answer without it for weeks, so
     # only a result read by the current reader counts as a hit.
-    if isinstance(hit, dict) and hit.get("result") and hit.get("v") == BID_DOC_READER_VERSION:
+    if isinstance(hit, dict) and hit.get("result") and hit.get("v") == version:
         try:
             age = time.time() - float(hit.get("at") or 0)
         except (TypeError, ValueError):
@@ -9204,13 +9299,13 @@ def bid_documents_read():
     if not text.strip() and not images:
         return jsonify({"ok": False, "reason": "no_text",
                         "detail": "This document has no readable text (it may be a scan)."})
-    result = _ai_read_bid_document(text, images)
+    result = _ai_read_bid_document(text, images, addendum=True) if addendum else _ai_read_bid_document(text, images)
     if result is None:
         return jsonify({"ok": False, "reason": "ai_error"}), 502
     result.update({"pages_read": pages, "truncated": truncated, "scanned_pages": len(images),
                    "files": len(docs)})
     try:
-        kv_backend.set(cache_key, {"at": time.time(), "v": BID_DOC_READER_VERSION, "result": result})
+        kv_backend.set(cache_key, {"at": time.time(), "v": version, "result": result})
     except Exception:
         pass
     return jsonify({"ok": True, "cached": False, **result})
@@ -9865,13 +9960,17 @@ _ADDENDUM_RE = re.compile(r"\baddend(?:um|a)\s*(?:no\.?|number|#)?\s*(\d{1,2})\b
 def _watch_fingerprint(url, data, ctype):
     """{docs, addenda, hash} for one fetched posting."""
     if data[:5] == b"%PDF-" or "pdf" in ctype:
-        return {"docs": [], "addenda": [], "hash": hashlib.sha256(data).hexdigest()[:16]}
+        return {"docs": [], "addenda": [], "addendum_docs": [], "hash": hashlib.sha256(data).hexdigest()[:16]}
     html = data.decode("utf-8", "ignore")
     text = _html_to_text(html)
-    docs = [d["name"] for d in bid_sources.detail_documents(html, url, limit=40)]
+    found = bid_sources.detail_documents(html, url, limit=40)
+    docs = [d["name"] for d in found]
     addenda = sorted({int(n) for n in _ADDENDUM_RE.findall(text) if 0 < int(n) < 100})
+    # The addendum documents themselves, so the app can open and read them
+    # rather than only say one exists.
+    addendum_docs = [d for d in found if re.search(r"addend", d["name"] + " " + d["url"], re.I)][:10]
     norm = re.sub(r"\s+", " ", text).strip().lower()
-    return {"docs": docs, "addenda": addenda,
+    return {"docs": docs, "addenda": addenda, "addendum_docs": addendum_docs,
             "hash": hashlib.sha256(norm.encode("utf-8")).hexdigest()[:16]}
 
 
@@ -10230,6 +10329,7 @@ def _run_bid_watch():
         state, reminded = {}, {}
     messages = collections.defaultdict(list)   # user_id -> [(title, body, url)]
     by_url = collections.defaultdict(list)
+    due_today = []
     for r in rows:
         if str(r.get("pipeline") or "") in ("won", "lost", "passed", "submitted"):
             continue
@@ -10243,6 +10343,8 @@ def _run_bid_watch():
                 reminded[k] = today.isoformat()
                 messages[r["user_id"]].append((f"Due tomorrow: {title}", f"Bids are due {r.get('deadline')}.", "app.html"))
         url = str(r.get("url") or "").strip()
+        if due == today:
+            due_today.append((r, url))
         if url.startswith(("http://", "https://")):
             by_url[url].append(r)
     fetched, changed = 0, 0
@@ -10272,7 +10374,26 @@ def _run_bid_watch():
                      "Read it before you bid. Missing an addendum can get a bid thrown out.", "app.html"))
     # Step reminders go out in the first run of the contractor's day, not
     # the one that lands at 1 a.m.
-    steps = _due_step_reminders(today, reminded) if 6 <= _now_central().hour < 21 else {}
+    daytime = 6 <= _now_central().hour < 21
+    steps = _due_step_reminders(today, reminded) if daytime else {}
+    # Bid day: one last word on addenda, from the posting as it was just
+    # checked. An addendum missed is a bid thrown out, and "none posted"
+    # is worth knowing too.
+    for r, url in due_today if daytime else []:
+        k = f"dueday|{r.get('user_id')}|{r.get('bid_id')}|{today.isoformat()}"
+        if k in reminded:
+            continue
+        reminded[k] = today.isoformat()
+        seen = state.get(hashlib.sha256(url.encode()).hexdigest()[:24]) if url else None
+        title = str(r.get("title") or "A saved bid")[:80]
+        if isinstance(seen, dict) and seen.get("addenda"):
+            nums = ", ".join(f"#{n}" for n in seen["addenda"])
+            body = f"The posting lists addenda {nums}. Make sure each one is acknowledged on your bid form."
+        elif isinstance(seen, dict):
+            body = "No addenda on the posting. Plan holders can be sent some by email, so check yours before you submit."
+        else:
+            body = "Check the posting and your email for any addenda before you submit."
+        messages[r["user_id"]].append((f"Bids due today: {title}", body, "app.html"))
     # Old reminder stamps go after two weeks.
     cutoff = (today - datetime.timedelta(days=14)).isoformat()
     reminded = {k: v for k, v in reminded.items() if v >= cutoff}
@@ -10334,13 +10455,17 @@ def run_bid_watch():
 # what CurbCall users log after getting quotes, shown only as an area range
 # and only once there are enough of them that no one quote can be picked out.
 #
-#   POST /suppliers/nearby  {city, state}         plants near a town, + area quotes
+#   POST /suppliers/nearby  {city, state, near?}  plants near the job (or town), + area quotes
 #   POST /suppliers/quote   {city, state, price_per_cy, yards, ...}   log a quote
 #
-# Plants come from OpenStreetMap (concrete works, and businesses named ready
-# mix or redi-mix); where it knows fewer than three, a web search for ready
-# mix in that town fills in links. Cached per area for a month: plants don't
-# move, and Overpass and Brave both ask callers not to hammer them.
+# Plants come from three places, asked at once and given a fixed time, so
+# one slow source can't sink the search: OpenStreetMap's map (concrete works
+# and businesses named ready mix), OpenStreetMap's place search (lighter,
+# answers when the map is overloaded), and -- where those know fewer than
+# four -- a web search that names plants with their sites and phones. The
+# public map servers are often slow or refuse busy-hour queries; the search
+# used to wait on them for up to two minutes and the app gave up first.
+# Cached per area for a month when the map answered, a few hours when it didn't.
 # ===========================================================================
 import statistics
 
@@ -10363,35 +10488,186 @@ QUOTE_PRICE_RANGE = (40.0, 600.0)
 QUOTE_YARDS_RANGE = (0.25, 20000.0)
 
 _OVERPASS_URLS = ("https://overpass-api.de/api/interpreter",
-                  "https://overpass.kumi.systems/api/interpreter")
+                  "https://overpass.private.coffee/api/interpreter")
+# Seconds the whole search may take, inside the app's own wait.
+SUPPLIER_TIME_BUDGET = 40
+SUPPLIER_PARTIAL_CACHE_HOURS = 6
 _READY_MIX_NAME = re.compile(
     r"ready[\s-]?mix|redi[\s-]?mix|readi[\s-]?mix|concrete\s+(?:plant|batch|supply|products|materials)"
     r"|batch\s+plant", re.I)
 # Named like a concrete contractor, not a plant: never listed off its name alone.
 _CONTRACTOR_NAME = re.compile(r"construction|contracting|contractors?\b|flatwork|finishing|pumping"
                               r"|repair|leveling|lifting|coatings?|staining|polish", re.I)
+# Concrete things that aren't delivered ready mix: never a plant, even when
+# mapped as a concrete works.
+_NOT_READY_MIX = re.compile(r"siding|\bblocks?\b|pipe|pre-?cast|vault|septic|statuary|countertop|cutting", re.I)
 
 
 def _supplier_query(lat, lon, radius_m):
     a = f"around:{int(radius_m)},{lat:.5f},{lon:.5f}"
-    return ("[out:json][timeout:40];("
+    return ("[out:json][timeout:20];("
             f'nwr["man_made"="works"]["product"~"concrete",i]({a});'
             f'nwr["industrial"~"concrete",i]({a});'
             f'nwr["name"~"ready.?mix|redi.?mix|readi.?mix|concrete (plant|batch|supply|products|materials)|batch plant",i]({a});'
             ");out tags center;")
 
 
-def _overpass(query):
+def _overpass(query, deadline=None):
+    """Elements, or None when no server answered in time."""
     body = urllib.parse.urlencode({"data": query}).encode()
     for url in _OVERPASS_URLS:
+        left = (deadline - time.time()) if deadline else 25
+        if left < 5:
+            break
         try:
             req = urllib.request.Request(url, data=body, method="POST",
                                          headers={"User-Agent": _NOMINATIM_UA})
-            with urllib.request.urlopen(req, timeout=60) as resp:
+            with urllib.request.urlopen(req, timeout=min(25, left)) as resp:
                 return json.loads(resp.read().decode("utf-8")).get("elements") or []
         except Exception as ex:
             print(f"[suppliers] overpass {url}: {ex}", flush=True)
     return None
+
+
+def _nominatim_plants(lat, lon):
+    """Plants from OpenStreetMap's place search: named ready mix (or a
+    concrete works), inside the delivery radius. Never raises."""
+    dlat = SUPPLIER_RADIUS_MI / 69.0
+    dlon = SUPPLIER_RADIUS_MI / max(1.0, 69.0 * math.cos(math.radians(lat)))
+    box = f"{lon - dlon:.4f},{lat + dlat:.4f},{lon + dlon:.4f},{lat - dlat:.4f}"
+    rows = []
+
+    def ask(q):
+        with _nominatim_lock:
+            wait = 1.0 - (time.time() - _nominatim_last[0])
+            if wait > 0:
+                time.sleep(wait)
+            _nominatim_last[0] = time.time()
+        qs = urllib.parse.urlencode({"q": q, "format": "jsonv2", "limit": "40", "extratags": "1",
+                                     "addressdetails": "1", "viewbox": box, "bounded": "1",
+                                     "countrycodes": "us"})
+        return _get_json(f"{_NOMINATIM_URL}?{qs}", headers={"User-Agent": _NOMINATIM_UA,
+                                                             "Accept": "application/json"}, timeout=12)
+    for q in ("ready mix", "redi mix", "concrete"):
+        data = ask(q)
+        if data is None:          # turned away for asking too fast: once more, slower
+            time.sleep(1.5)
+            data = ask(q)
+        for d in data if isinstance(data, list) else []:
+            name = " ".join(str(d.get("name") or "").split())
+            works = d.get("category") == "man_made" and d.get("type") == "works"
+            if not name or _CONTRACTOR_NAME.search(name) or _NOT_READY_MIX.search(name):
+                continue
+            if not (_READY_MIX_NAME.search(name) or (works and re.search(r"concrete", name, re.I))
+                    or (d.get("category") == "landuse" and re.search(r"concrete", name, re.I))):
+                continue
+            try:
+                plat, plon = float(d["lat"]), float(d["lon"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            t = d.get("extratags") or {}
+            a = d.get("address") or {}
+            street = " ".join(x for x in (a.get("house_number"), a.get("road")) if x)
+            town = a.get("city") or a.get("town") or a.get("village") or a.get("hamlet") or ""
+            site = t.get("website") or t.get("contact:website") or ""
+            rows.append({"name": name[:120], "lat": round(plat, 5), "lon": round(plon, 5),
+                         "miles": round(_miles_between(lat, lon, plat, plon), 1),
+                         "phone": str(t.get("phone") or t.get("contact:phone") or "")[:40],
+                         "website": site if re.match(r"^https?://", site, re.I) else "",
+                         "email": str(t.get("email") or t.get("contact:email") or "")[:120],
+                         "address": ", ".join(x for x in (street, town, a.get("state") or "") if x)[:160],
+                         "source": "OpenStreetMap"})
+    return rows
+
+
+# A web search for the plants the map doesn't know. The model may only
+# report businesses its search found, each with its own site or phone; the
+# rest is checked here (a real http link, a town that geocodes inside the
+# delivery radius) before anything is shown.
+_AI_PLANTS_PROMPT = (
+    "Use web search to find ready-mix concrete plants (companies that batch and deliver "
+    "ready-mix concrete) within about {radius} miles of {place}. Not concrete contractors "
+    "who only pour or finish. Return ONLY a JSON array of at most 10 objects with keys "
+    "\"name\", \"address\", \"city\", \"state\" (2 letters), \"phone\", \"website\". "
+    "Only businesses you found in the search results; \"\" for anything not found.")
+
+
+def _ai_plants(place, state, lat, lon, deadline):
+    if not OPENAI_API_KEY:
+        return []
+    prompt = _AI_PLANTS_PROMPT.format(radius=SUPPLIER_RADIUS_MI, place=place)
+    text = ""
+    for tool in ("web_search", "web_search_preview"):
+        left = deadline - time.time()
+        if left < 8:
+            return []
+        body = json.dumps({"model": OPENAI_MODEL, "tools": [{"type": tool}], "input": prompt}).encode()
+        req = urllib.request.Request("https://api.openai.com/v1/responses", data=body, method="POST",
+                                     headers={"Authorization": f"Bearer {OPENAI_API_KEY}",
+                                              "Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=min(35, left)) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            print(f"[suppliers] web search ({tool}) HTTP {e.code}", flush=True)
+            if e.code == 400:
+                continue
+            return []
+        except Exception as ex:
+            print(f"[suppliers] web search: {ex}", flush=True)
+            return []
+        for item in data.get("output") or []:
+            if item.get("type") == "message":
+                for c in item.get("content") or []:
+                    if c.get("type") == "output_text":
+                        text += c.get("text") or ""
+        break
+    m = re.search(r"\[.*\]", text, re.S)
+    try:
+        found = json.loads(m.group(0)) if m else []
+    except ValueError:
+        found = []
+    rows = []
+    for f in found[:10] if isinstance(found, list) else []:
+        if not isinstance(f, dict):
+            continue
+        name = " ".join(str(f.get("name") or "").split())[:120]
+        site = str(f.get("website") or "").strip()
+        site = site if re.match(r"^https?://[^\s/]+\.[a-z]{2,}", site, re.I) else ""
+        phone = re.sub(r"[^\d()+\- .]", "", str(f.get("phone") or ""))[:40].strip()
+        if not name or _CONTRACTOR_NAME.search(name) or _NOT_READY_MIX.search(name) \
+                or not (site or len(re.sub(r"\D", "", phone)) >= 10):
+            continue
+        town = " ".join(str(f.get("city") or "").split())[:60]
+        st = str(f.get("state") or state).strip().upper()[:2]
+        hit = _zippopotam_city(town, st) if town and re.fullmatch(r"[A-Z]{2}", st) else None
+        miles = round(_miles_between(lat, lon, hit[0], hit[1]), 1) if hit else None
+        if miles is not None and miles > SUPPLIER_RADIUS_MI + 10:
+            continue
+        addr = " ".join(str(f.get("address") or "").split())[:120]
+        rows.append({"name": name, "lat": hit[0] if hit else None, "lon": hit[1] if hit else None,
+                     "miles": miles, "phone": phone, "website": site, "email": "",
+                     "address": ", ".join(x for x in (addr, town, st) if x and x not in addr)[:160] or addr,
+                     "source": "web"})
+    return rows
+
+
+def _merge_plants(*lists):
+    """One row per plant: the same name close by (or with no place) is one."""
+    out = []
+    for rows in lists:
+        for r in rows or []:
+            key = re.sub(r"[^a-z0-9]", "", r["name"].lower())
+            dup = next((o for o in out if re.sub(r"[^a-z0-9]", "", o["name"].lower()) == key and (
+                o.get("lat") is None or r.get("lat") is None
+                or _miles_between(o["lat"], o["lon"], r["lat"], r["lon"]) < 5)), None)
+            if dup:
+                for k in ("phone", "website", "email", "address"):
+                    if not dup.get(k) and r.get(k):
+                        dup[k] = r[k]
+                continue
+            out.append(dict(r))
+    return out
 
 
 def _supplier_address(t):
@@ -10413,6 +10689,8 @@ def _supplier_rows(elements, lat, lon):
             continue
         tagged = (t.get("man_made") == "works" and "concrete" in str(t.get("product", "")).lower()) \
             or "concrete" in str(t.get("industrial", "")).lower()
+        if _NOT_READY_MIX.search(name):
+            continue
         if not tagged and (not _READY_MIX_NAME.search(name) or _CONTRACTOR_NAME.search(name)):
             continue
         plat = e.get("lat", (e.get("center") or {}).get("lat"))
@@ -10455,32 +10733,61 @@ def _supplier_web(city, state):
     return out[:6]
 
 
-def _suppliers_near(city, state):
+def _suppliers_near(city, state, near=""):
+    """Plants around the job site when its address places on the map, else
+    around the bid's town."""
     geo = _geo_from_city(city, state)
-    if not geo:
+    where = None
+    if near:
+        hit = _nominatim_place(f"{near}, {city}", state)
+        if hit and (not geo or _miles_between(geo["lat"], geo["lon"], hit[0], hit[1]) < 60):
+            where = {"lat": hit[0], "lon": hit[1]}
+    if where is None and not geo:
         return None
-    cell = f"{round(geo['lat'] * 4) / 4:.2f},{round(geo['lon'] * 4) / 4:.2f}"
+    center = where or geo
+    cell = f"{round(center['lat'] * 4) / 4:.2f},{round(center['lon'] * 4) / 4:.2f}"
     cache_key = _SUPPLIER_CACHE_PREFIX + cell
     try:
         hit = kv_backend.get(cache_key, None)
     except Exception:
         hit = None
-    if isinstance(hit, dict) and time.time() - float(hit.get("at") or 0) < SUPPLIER_CACHE_DAYS * 86400:
+    fresh_for = (SUPPLIER_PARTIAL_CACHE_HOURS * 3600 if isinstance(hit, dict) and hit.get("partial")
+                 else SUPPLIER_CACHE_DAYS * 86400)
+    if isinstance(hit, dict) and time.time() - float(hit.get("at") or 0) < fresh_for:
         plants, web = hit.get("plants") or [], hit.get("web") or []
     else:
-        elements = _overpass(_supplier_query(geo["lat"], geo["lon"], SUPPLIER_RADIUS_MI * 1609.34))
-        plants = _supplier_rows(elements, geo["lat"], geo["lon"]) if elements is not None else []
-        web = _supplier_web(geo["city"], state) if len(plants) < 3 else []
-        if elements is not None:     # a failed map read is retried next time, not cached
-            try:
-                kv_backend.set(cache_key, {"at": time.time(), "plants": plants, "web": web})
-            except Exception:
-                pass
-    # Distances from this town, not the cell's center the cache was filed under.
+        deadline = time.time() + SUPPLIER_TIME_BUDGET
+        place = f"{(geo or {}).get('city') or city}, {state}" + (f" (job site: {near})" if where else "")
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            f_map = pool.submit(lambda: _overpass(
+                _supplier_query(center["lat"], center["lon"], SUPPLIER_RADIUS_MI * 1609.34), deadline))
+            f_osm = pool.submit(_nominatim_plants, center["lat"], center["lon"])
+            f_ai = pool.submit(_ai_plants, place, state, center["lat"], center["lon"], deadline)
+
+            def got(f, dflt):
+                try:
+                    return f.result(timeout=max(1, deadline - time.time() + 5))
+                except Exception:
+                    return dflt
+            elements = got(f_map, None)
+            osm = got(f_osm, [])
+            mapped = _supplier_rows(elements, center["lat"], center["lon"]) if elements is not None else []
+            ai = got(f_ai, []) if len(mapped) + len(osm) < 4 else []
+        plants = _merge_plants(mapped, osm, ai)[:SUPPLIER_MAX]
+        web = _supplier_web((geo or {}).get("city") or city, state) if len(plants) < 3 else []
+        try:
+            kv_backend.set(cache_key, {"at": time.time(), "plants": plants, "web": web,
+                                       "partial": elements is None})
+        except Exception:
+            pass
+    # Distances from here, not the cell's center the cache was filed under.
     for p in plants:
-        p["miles"] = round(_miles_between(geo["lat"], geo["lon"], p["lat"], p["lon"]), 1)
-    plants = sorted((p for p in plants if p["miles"] <= SUPPLIER_RADIUS_MI), key=lambda p: p["miles"])
-    return {"lat": geo["lat"], "lon": geo["lon"], "plants": plants, "web": web}
+        if p.get("lat") is not None:
+            p["miles"] = round(_miles_between(center["lat"], center["lon"], p["lat"], p["lon"]), 1)
+    plants = sorted((p for p in plants if p.get("miles") is None or p["miles"] <= SUPPLIER_RADIUS_MI),
+                    key=lambda p: (p.get("miles") is None, p.get("miles") or 0))
+    return {"lat": center["lat"], "lon": center["lon"], "plants": plants, "web": web,
+            "near_job": bool(where)}
 
 
 def _area_quotes(lat, lon):
@@ -10520,10 +10827,12 @@ def suppliers_nearby():
         return jsonify({"ok": False, "reason": "bad_place"}), 400
     if not _ip_rate_ok(_SUPPLIER_RATE_KEY, key or device or _client_ip(), SUPPLIER_MAX_PER_KEY_PER_DAY):
         return jsonify({"ok": False, "reason": "rate_limited"}), 429
-    found = _suppliers_near(city, state)
+    near = " ".join(str(data.get("near") or "").split())[:160]
+    found = _suppliers_near(city, state, near)
     if not found:
         return jsonify({"ok": False, "reason": "place_not_found"})
     return jsonify({"ok": True, "city": city, "state": state, "radius_mi": SUPPLIER_RADIUS_MI,
+                    "near": near if found.get("near_job") else "",
                     "plants": found["plants"], "web": found["web"],
                     "quotes": _area_quotes(found["lat"], found["lon"])})
 
@@ -10994,6 +11303,7 @@ def _inbox_code(uid):
 def _public_item(it):
     return {"id": it.get("id"), "subject": it.get("subject", ""), "from": it.get("from", ""),
             "at": it.get("at"), "snippet": it.get("snippet", ""), "links": it.get("links", []),
+            "addendum": bool(it.get("addendum")),
             "files": [{"n": i, "name": f.get("name"), "size": f.get("size")}
                       for i, f in enumerate(it.get("files", []))]}
 
@@ -11066,13 +11376,21 @@ def inbound_email():
                            "sha": hashlib.sha256(body).hexdigest()[:16]})
     if not stored and not links:
         return jsonify({"ok": True, "kept": 0, "reason": "no_documents"})
+    # Addenda sent only to registered plan holders arrive this way, never on
+    # the posting, so they're marked and the contractor is told at once.
+    addendum = bool(re.search(r"addend", " ".join([subject, text[:2000]] + [n for n, _b in files]), re.I))
     items = _inbox_items(uid)
     items.insert(0, {"id": item_id, "at": time.time(), "subject": subject, "from": sender,
-                     "snippet": text[:400], "files": stored, "links": links})
+                     "snippet": text[:400], "files": stored, "links": links, "addendum": addendum})
     for gone in items[INBOX_MAX_ITEMS:]:
         _storage_delete([f["path"] for f in gone.get("files", [])])
     _save_inbox(uid, items)
-    return jsonify({"ok": True, "kept": len(stored), "links": len(links)})
+    try:
+        _notify_user(uid, ("Addendum emailed in: " if addendum else "Bid documents emailed in: ") + (subject or sender)[:90],
+                     "Open the bid in CurbCall to read " + ("what changed." if addendum else "them."), "app.html")
+    except Exception as ex:
+        print(f"[inbox] alert not sent: {ex}", flush=True)
+    return jsonify({"ok": True, "kept": len(stored), "links": len(links), "addendum": addendum})
 
 
 @app.route("/inbox/address", methods=["POST"])

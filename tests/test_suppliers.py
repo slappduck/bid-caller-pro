@@ -34,6 +34,10 @@ class PlantTests(unittest.TestCase):
         self.assertEqual(got[0]["website"], "https://ozarkreadymix.com")
         self.assertEqual(got[0]["address"], "12 Kearney St, Springfield")
 
+    def test_concrete_things_that_are_not_ready_mix_are_not_plants(self):
+        self.assertEqual(self.rows(el("ClearCreek Concrete Siding", man_made="works", product="concrete siding"),
+                                   el("Ozark Precast Ready Mix"), el("Midwest Concrete Block")), [])
+
     def test_a_concrete_contractor_is_not_a_plant(self):
         self.assertEqual(self.rows(el("Smith Concrete Construction"), el("Ready Mix Concrete Pumping"),
                                    el("Joe's Concrete Inc")), [])
@@ -53,10 +57,14 @@ class NearbyTests(unittest.TestCase):
     def setUp(self):
         self.store, self.overpass_calls = {}, []
         self.elements = [el("Ozark Ready Mix"), el("Springfield Redi-Mix", lat=37.3)]
+        self.osm, self.ai, self.ai_asked, self.job_geo = [], [], [], None
         self._p = [
             patch.object(ls, "_geo_from_city", return_value={"lat": HERE[0], "lon": HERE[1],
                                                              "city": "Springfield", "state": "MO"}),
-            patch.object(ls, "_overpass", side_effect=lambda q: (self.overpass_calls.append(q), self.elements)[1]),
+            patch.object(ls, "_overpass", side_effect=lambda q, deadline=None: (self.overpass_calls.append(q), self.elements)[1]),
+            patch.object(ls, "_nominatim_plants", side_effect=lambda lat, lon: list(self.osm)),
+            patch.object(ls, "_ai_plants", side_effect=lambda place, st, lat, lon, dl: (self.ai_asked.append(place), list(self.ai))[1]),
+            patch.object(ls, "_nominatim_place", side_effect=lambda place, st: self.job_geo),
             patch.object(ls, "_brave_search", return_value=[
                 {"url": "https://www.yelp.com/x", "content": "list"},
                 {"url": "https://www.citymix.com/", "content": "Ready mix delivered"}]),
@@ -84,11 +92,48 @@ class NearbyTests(unittest.TestCase):
         got = ls._suppliers_near("Springfield", "MO")
         self.assertEqual([w["site"] for w in got["web"]], ["citymix.com"])
 
-    def test_a_failed_map_read_is_not_cached(self):
+    def test_a_failed_map_read_is_tried_again_in_hours_not_a_month(self):
         self.elements = None
         ls._suppliers_near("Springfield", "MO")
         self.elements = [el("Ozark Ready Mix")]
+        self.assertEqual(len(ls._suppliers_near("Springfield", "MO")["plants"]), 0)   # within the hours
+        for v in self.store.values():
+            v["at"] = time.time() - 7 * 3600
         self.assertEqual(len(ls._suppliers_near("Springfield", "MO")["plants"]), 1)
+
+    def test_when_the_map_is_down_the_other_sources_still_answer(self):
+        self.elements = None
+        self.osm = [{"name": "Rost Ready Mix", "lat": 37.25, "lon": -93.1, "miles": 11.0, "phone": "", "website": "",
+                     "email": "", "address": "Rogersville, Missouri", "source": "OpenStreetMap"}]
+        self.ai = [{"name": "Rost Ready-Mix", "lat": None, "lon": None, "miles": None, "phone": "417-555-0142",
+                    "website": "https://rostreadymix.example", "email": "", "address": "Rogersville, MO", "source": "web"},
+                   {"name": "Ozark Mountain Concrete", "lat": 37.3, "lon": -93.4, "miles": 8.0, "phone": "417-555-0199",
+                    "website": "", "email": "", "address": "Springfield, MO", "source": "web"}]
+        got = ls._suppliers_near("Springfield", "MO")
+        names = [p["name"] for p in got["plants"]]
+        self.assertEqual(names, ["Ozark Mountain Concrete", "Rost Ready Mix"])     # the same plant once
+        rost = got["plants"][1]
+        self.assertEqual((rost["phone"], rost["website"]), ("417-555-0142", "https://rostreadymix.example"))
+
+    def test_the_web_search_is_only_asked_when_the_map_knows_few(self):
+        self.elements += [el("Third Ready Mix", lat=37.1), el("Fourth Redi Mix", lat=37.15)]
+        ls._suppliers_near("Springfield", "MO")
+        self.ai = [{"name": "Should Not Show", "lat": None, "lon": None, "miles": None, "phone": "4175550100",
+                    "website": "https://x.example", "email": "", "address": "", "source": "web"}]
+        self.assertNotIn("Should Not Show", [p["name"] for p in ls._suppliers_near("Springfield", "MO")["plants"]])
+
+    def test_plants_are_searched_around_the_job_site_when_it_places(self):
+        self.job_geo = (37.60, -93.30)          # 27 miles north of town
+        got = ls._suppliers_near("Springfield", "MO", near="Elm St from 1st St to 5th St")
+        self.assertTrue(got["near_job"])
+        self.assertEqual((got["lat"], got["lon"]), (37.60, -93.30))
+        self.assertIn("37.60000,-93.30000", self.overpass_calls[0])
+
+    def test_a_job_address_that_lands_far_off_is_ignored(self):
+        self.job_geo = (40.0, -90.0)            # another state's Elm St
+        got = ls._suppliers_near("Springfield", "MO", near="Elm St")
+        self.assertFalse(got["near_job"])
+        self.assertEqual(got["lat"], HERE[0])
 
     def test_an_old_cache_is_read_again(self):
         ls._suppliers_near("Springfield", "MO")
@@ -96,6 +141,34 @@ class NearbyTests(unittest.TestCase):
             v["at"] = time.time() - 40 * 86400
         ls._suppliers_near("Springfield", "MO")
         self.assertEqual(len(self.overpass_calls), 2)
+
+
+class WebPlantTests(unittest.TestCase):
+    """The web search's answer is checked, not trusted."""
+
+    def run_ai(self, text):
+        class Resp:
+            def __enter__(s): return s
+            def __exit__(s, *a): return False
+            def read(s): return ls.json.dumps({"output": [{"type": "web_search_call"}, {"type": "message", "content": [
+                {"type": "output_text", "text": text}]}]}).encode()
+        with patch.object(ls, "OPENAI_API_KEY", "k"), patch.object(ls.urllib.request, "urlopen", return_value=Resp()), \
+             patch.object(ls, "_zippopotam_city", side_effect=lambda c, st: {"Rogersville": (37.117, -93.055),
+                                                                            "Chicago": (41.88, -87.63)}.get(c)):
+            return ls._ai_plants("Springfield, MO", "MO", *HERE, time.time() + 60)
+
+    def test_only_reachable_plants_inside_the_radius_come_back(self):
+        got = self.run_ai('Here you go: [{"name": "Rost Ready Mix", "city": "Rogersville", "state": "MO", '
+                          '"phone": "(417) 753-2101", "website": "https://rostreadymix.example"},'
+                          '{"name": "Windy City Ready Mix", "city": "Chicago", "state": "IL", "website": "https://w.example"},'
+                          '{"name": "No Way To Reach", "city": "Rogersville", "state": "MO"},'
+                          '{"name": "Smith Concrete Construction", "city": "Rogersville", "phone": "4175550100"}]')
+        self.assertEqual([r["name"] for r in got], ["Rost Ready Mix"])
+        self.assertEqual(got[0]["miles"], 14.5)
+        self.assertEqual(got[0]["source"], "web")
+
+    def test_an_answer_that_is_not_a_list_gives_nothing(self):
+        self.assertEqual(self.run_ai("I couldn't find any."), [])
 
 
 class AreaQuoteTests(unittest.TestCase):

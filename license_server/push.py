@@ -310,6 +310,7 @@ def _run_bid_watch():
         state, reminded = {}, {}
     messages = collections.defaultdict(list)   # user_id -> [(title, body, url)]
     by_url = collections.defaultdict(list)
+    due_today = []
     for r in rows:
         if str(r.get("pipeline") or "") in ("won", "lost", "passed", "submitted"):
             continue
@@ -323,6 +324,8 @@ def _run_bid_watch():
                 reminded[k] = today.isoformat()
                 messages[r["user_id"]].append((f"Due tomorrow: {title}", f"Bids are due {r.get('deadline')}.", "app.html"))
         url = str(r.get("url") or "").strip()
+        if due == today:
+            due_today.append((r, url))
         if url.startswith(("http://", "https://")):
             by_url[url].append(r)
     fetched, changed = 0, 0
@@ -352,7 +355,26 @@ def _run_bid_watch():
                      "Read it before you bid. Missing an addendum can get a bid thrown out.", "app.html"))
     # Step reminders go out in the first run of the contractor's day, not
     # the one that lands at 1 a.m.
-    steps = _due_step_reminders(today, reminded) if 6 <= _now_central().hour < 21 else {}
+    daytime = 6 <= _now_central().hour < 21
+    steps = _due_step_reminders(today, reminded) if daytime else {}
+    # Bid day: one last word on addenda, from the posting as it was just
+    # checked. An addendum missed is a bid thrown out, and "none posted"
+    # is worth knowing too.
+    for r, url in due_today if daytime else []:
+        k = f"dueday|{r.get('user_id')}|{r.get('bid_id')}|{today.isoformat()}"
+        if k in reminded:
+            continue
+        reminded[k] = today.isoformat()
+        seen = state.get(hashlib.sha256(url.encode()).hexdigest()[:24]) if url else None
+        title = str(r.get("title") or "A saved bid")[:80]
+        if isinstance(seen, dict) and seen.get("addenda"):
+            nums = ", ".join(f"#{n}" for n in seen["addenda"])
+            body = f"The posting lists addenda {nums}. Make sure each one is acknowledged on your bid form."
+        elif isinstance(seen, dict):
+            body = "No addenda on the posting. Plan holders can be sent some by email, so check yours before you submit."
+        else:
+            body = "Check the posting and your email for any addenda before you submit."
+        messages[r["user_id"]].append((f"Bids due today: {title}", body, "app.html"))
     # Old reminder stamps go after two weeks.
     cutoff = (today - datetime.timedelta(days=14)).isoformat()
     reminded = {k: v for k, v in reminded.items() if v >= cutoff}

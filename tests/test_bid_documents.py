@@ -95,6 +95,16 @@ class CleanResultTests(unittest.TestCase):
         self.assertEqual(ls._clean_doc_result({"project_location": " Elm St  from 1st to 5th "})["project_location"],
                          "Elm St from 1st to 5th")
 
+    def test_the_bid_contact_comes_through_checked(self):
+        got = ls._clean_doc_result({"line_items": [], "contact": {
+            "name": " Dana  Reyes ", "title": "Purchasing Agent", "organization": "City of Aurora",
+            "phone": "(417) 678-5551 ext. 3", "email": "dreyes@aurora-mo.gov"}})
+        self.assertEqual(got["contact"], {"name": "Dana Reyes", "title": "Purchasing Agent",
+                                          "organization": "City of Aurora", "phone": "(417) 678-5551 ext. 3",
+                                          "email": "dreyes@aurora-mo.gov"})
+        bad = ls._clean_doc_result({"line_items": [], "contact": {"name": "", "phone": "ext 3", "email": "see website"}})
+        self.assertEqual(bad["contact"], {})
+
     def test_a_non_object_is_rejected(self):
         self.assertIsNone(ls._clean_doc_result(["a list"]))
 
@@ -595,6 +605,71 @@ class PacketTests(unittest.TestCase):
     def test_an_unlicensed_caller_is_refused(self):
         with patch.object(ls, "_license_is_active", return_value=False):
             self.assertEqual(self.post([]).status_code, 403)
+
+
+class AddendumTests(_UploadSetup, unittest.TestCase):
+    """An addendum read for what it changes: validated, and cached apart
+    from the same file's ordinary reading."""
+    RAW = {"addendum_number": "Addendum No. 2", "issued": "October 18, 2026",
+           "bid_due": "November 6, 2026 at 2:00 PM", "prebid": "",
+           "quantity_changes": [{"item_no": "2", "description": "4 in. concrete sidewalk",
+                                 "old_quantity": "1,250", "new_quantity": "1,410", "unit": "SY"},
+                                {"item_no": "9", "description": "No new number", "new_quantity": ""}, "junk"],
+           "items_added": [{"item_no": "12", "description": "Detectable warning panels", "quantity": "8", "unit": "EA"}],
+           "items_removed": [{"item_no": "7", "description": "Brick pavers"}],
+           "answers": [{"question": "Is night work allowed?", "answer": "No."}, {"question": "Blank answer", "answer": ""}],
+           "other_changes": ["Sheet C-3 replaced.", ""]}
+
+    def test_the_changes_come_through_validated(self):
+        got = ls._clean_addendum_result(self.RAW)
+        self.assertEqual(got["addendum_number"], "2")
+        self.assertEqual(got["bid_due"], "November 6, 2026 at 2:00 PM")
+        self.assertEqual(got["quantity_changes"], [{"item_no": "2", "description": "4 in. concrete sidewalk",
+                                                    "old_quantity": 1250.0, "new_quantity": 1410.0, "unit": "SY"}])
+        self.assertEqual(got["items_added"][0]["quantity"], 8.0)
+        self.assertEqual(got["items_removed"], [{"item_no": "7", "description": "Brick pavers"}])
+        self.assertEqual(got["answers"], [{"question": "Is night work allowed?", "answer": "No."}])
+        self.assertEqual(got["other_changes"], ["Sheet C-3 replaced."])
+        self.assertIsNone(ls._clean_addendum_result("not an object"))
+
+    def test_an_addendum_read_asks_for_changes_and_is_cached_apart(self):
+        asked = []
+
+        def ai(text, images=None, addendum=False):
+            asked.append(addendum)
+            return ls._clean_addendum_result(self.RAW) if addendum else ls._clean_doc_result({"line_items": []})
+        with patch.object(ls, "_ai_read_bid_document", side_effect=ai):
+            d = self.upload("/bid-documents/read", b"%PDF-1.4 addendum", kind="addendum").get_json()
+            self.assertEqual(d["quantity_changes"][0]["new_quantity"], 1410.0)
+            self.assertFalse(self.upload("/bid-documents/read", b"%PDF-1.4 addendum").get_json()["cached"])
+            self.assertTrue(self.upload("/bid-documents/read", b"%PDF-1.4 addendum", kind="addendum").get_json()["cached"])
+        self.assertEqual(asked, [True, False])
+
+
+
+class AddendumPromptTests(unittest.TestCase):
+    def test_the_model_is_given_the_addendum_instructions(self):
+        sent = {}
+
+        class Resp:
+            def __enter__(s): return s
+            def __exit__(s, *a): return False
+            def read(s): return ls.json.dumps({"choices": [{"message": {"content": '{"answers": []}'}}]}).encode()
+
+        def fake_open(req, timeout=None):
+            sent.update(ls.json.loads(req.data))
+            return Resp()
+        with patch.object(ls, "OPENAI_API_KEY", "k"), patch.object(ls.urllib.request, "urlopen", fake_open):
+            got = ls._ai_read_bid_document("Addendum 1 text", addendum=True)
+        self.assertIn("ADDENDUM", sent["messages"][0]["content"])
+        self.assertEqual(got["quantity_changes"], [])
+
+    def test_the_watch_hands_back_the_addendum_documents_with_their_links(self):
+        html = (b'<a href="/files/Bid-Form.pdf">Bid Form</a><a href="/files/Addendum-1.pdf">Addendum No. 1</a>'
+                b'<p>Addendum No. 1 issued.</p>')
+        fp = ls._watch_fingerprint("https://93.184.216.34/bids/12", html, "text/html")
+        self.assertEqual(fp["addenda"], [1])
+        self.assertEqual(fp["addendum_docs"], [{"name": "Addendum No. 1", "url": "https://93.184.216.34/files/Addendum-1.pdf"}])
 
 
 class BidWatchTests(unittest.TestCase):
