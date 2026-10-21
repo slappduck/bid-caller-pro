@@ -1732,6 +1732,76 @@ async function toggleNotifPermission(){
     fireNotification("CurbCall Pro","Alerts are on. You'll hear about addenda, due dates and new bids here.");
   }else if(el)el.textContent=notifPermissionLabel();
 }
+// Asks before turning alerts on, in the app's own words: the browser's
+// permission prompt says nothing about why. Where alerts can't be turned on
+// from here -- an iPhone browser tab, or blocked in settings -- it says what
+// to do instead. Resolves true once this device can get alerts with the app
+// closed.
+function askForAlerts(why){
+  return new Promise(resolve=>{
+    const ios=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+    const box=document.createElement("div");
+    box.className="ask-dlg";
+    box.setAttribute("role","dialog");box.setAttribute("aria-modal","true");box.setAttribute("aria-labelledby","ask-t");
+    const done=(v)=>{box.remove();document.removeEventListener("keydown",esc_);resolve(v);};
+    const esc_=(e)=>{if(e.key==="Escape")done(false);};
+    const card=(title,html,buttons)=>{
+      box.innerHTML=`<div class="ask-card"><h3 id="ask-t">${esc(title)}</h3>${html}<div class="ask-btns">${buttons}</div></div>`;
+      const ok=box.querySelector("#ask-ok"),no=box.querySelector("#ask-no");
+      if(no)no.onclick=()=>done(false);
+      if(ok)ok.focus();
+      return ok;
+    };
+    box.onclick=(e)=>{if(e.target===box)done(false);};
+    document.addEventListener("keydown",esc_);
+    document.body.appendChild(box);
+    if(isIOSBrowserTab()){
+      card("Add CurbCall to your Home Screen",
+        `<p>${esc(why)}</p><p>iPhone only sends alerts from apps on the Home Screen, so it takes one quick step first:</p>
+        <ol><li>Tap the <b>Share</b> button (the square with the arrow) in your browser.</li>
+          <li>Choose <b>Add to Home Screen</b>.</li>
+          <li>Open CurbCall from the new Home Screen icon and turn this on there.</li></ol>
+        <p class="ask-fine">No Add to Home Screen in the Share menu? Open curbcallpro.com/app.html in Safari and do it from there.</p>`,
+        `<button class="ma-gold" id="ask-no">Got it</button>`);
+      return;
+    }
+    if(!pushSupported()||!currentUser){
+      card("Alerts aren't available here",
+        `<p>${!currentUser?"Sign in to turn on phone alerts.":"This browser can't send alerts. Chrome, Edge, Firefox or Safari can."}</p>`,
+        `<button class="ma-gold" id="ask-no">OK</button>`);
+      return;
+    }
+    if(Notification.permission==="denied"){
+      card("Alerts are blocked for CurbCall",
+        `<p>${esc(why)}</p><p>They were turned off for this site earlier. To turn them back on:</p>
+        <ol>${ios?`<li>Open the iPhone's <b>Settings</b>, then <b>Notifications</b>.</li><li>Find <b>CurbCall</b> and turn on <b>Allow Notifications</b>.</li>`
+          :`<li>Tap the lock or settings icon beside the address bar.</li><li>Set <b>Notifications</b> to <b>Allow</b>, then reload.</li>`}</ol>`,
+        `<button class="ma-gold" id="ask-no">OK</button>`);
+      return;
+    }
+    const ok=card("Turn on phone alerts?",
+      `<p>${esc(why)}</p><ul><li>The morning a bid step is due</li><li>An addendum posted on a bid you saved</li><li>The day before a bid is due</li></ul>
+      <p class="ask-fine">Your phone will ask you to allow them next. You can turn them off any time in Account.</p>`,
+      `<button class="ma-gold" id="ask-ok">Turn on alerts</button><button class="ma-ghost" id="ask-no">Not now</button>`);
+    ok.onclick=async()=>{
+      ok.disabled=true;ok.textContent="Turning on…";
+      // Asked from this tap, so the browser shows its prompt.
+      const perm=Notification.permission==="granted"?"granted":await Notification.requestPermission();
+      if(perm!=="granted"){done(false);return;}
+      const pushed=await subscribePush();
+      const el=document.getElementById("notif-status");
+      if(el)el.textContent=notifPermissionLabel();
+      if(!pushed){
+        card("Alerts couldn't be set up",
+          `<p>They'll show while CurbCall is open, but they couldn't be set up for when it's closed. Check your connection and try again.</p>`,
+          `<button class="ma-gold" id="ask-no">OK</button>`);
+        return;
+      }
+      fireNotification("CurbCall Pro","Alerts are on. You'll hear about bid steps, addenda and due dates here.");
+      done(true);
+    };
+  });
+}
 async function fireNotification(title,body){
   if(!("Notification"in window)||Notification.permission!=="granted")return;
   try{
@@ -4848,10 +4918,9 @@ function syncStepReminders(on){
 }
 async function setStepReminders(on,box){
   if(on&&!store.get("push_on",false)){
-    await toggleNotifPermission();
-    if(!store.get("push_on",false)){
+    const ok=await askForAlerts("Step reminders come as phone alerts: one the morning each step is due, for every bid you're preparing.");
+    if(!ok||!store.get("push_on",false)){
       if(box)box.checked=false;
-      toast("Reminders need phone alerts turned on.");
       return;
     }
   }

@@ -2364,10 +2364,36 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await page.click("#reg-back");
     await page.waitForTimeout(300);
 
-    // Phone reminders for the steps.
-    await page.evaluate(() => { store.set("push_on", true); currentUser = { id: "u1", email: "tester@example.com" }; });
+    // Phone reminders for the steps: without alerts on, it asks first.
+    await page.evaluate(() => { store.set("push_on", false); currentUser = { id: "u1", email: "tester@example.com" };
+      window._realPush = pushSupported; pushSupported = () => true; });
     await page.evaluate((i) => openPrep("Aurora, MO", i, "steps"), id);
     await page.waitForTimeout(300);
+    remindBody = null;
+    await page.click("#step-remind");
+    await page.waitForTimeout(300);
+    check("with alerts blocked in the browser it says how to unblock them",
+          /Alerts are blocked for CurbCall/.test(await page.textContent(".ask-dlg")) && /Allow/.test(await page.textContent(".ask-dlg")));
+    await page.click("#ask-no");
+    await page.waitForTimeout(200);
+    // The test browser can't be granted notifications; act as one never asked.
+    await page.evaluate(() => Object.defineProperty(Notification, "permission", { get: () => "default", configurable: true }));
+    await page.click("#step-remind");
+    await page.waitForTimeout(300);
+    check("turning reminders on without alerts asks to turn alerts on",
+          /Turn on phone alerts\?/.test(await page.textContent(".ask-dlg")) && (await page.locator("#ask-ok").count()) === 1);
+    await page.click("#ask-no");
+    await page.waitForTimeout(300);
+    check("...and saying not now leaves reminders off", (await page.locator(".ask-dlg").count()) === 0
+          && !(await page.isChecked("#step-remind")) && remindBody === null);
+    await page.evaluate(() => { window._realIOS = isIOSBrowserTab; isIOSBrowserTab = () => true; });
+    await page.click("#step-remind");
+    await page.waitForTimeout(300);
+    check("on an iPhone browser tab it explains the Home Screen step instead",
+          /Add CurbCall to your Home Screen/.test(await page.textContent(".ask-dlg")) && /Add to Home Screen/.test(await page.textContent(".ask-dlg")));
+    await page.click("#ask-no");
+    await page.waitForTimeout(200);
+    await page.evaluate(() => { isIOSBrowserTab = window._realIOS; pushSupported = window._realPush; store.set("push_on", true); });
     await page.click("#step-remind");
     await page.waitForTimeout(500);
     const bondStep = remindBody && (remindBody.reminders || []).find((r) => r.label === "Ask for your bid bond");
