@@ -34,7 +34,7 @@ footer a{color:var(--text3);}
 <div class="wrap">
   <div class="logo"><a href="index.html">&#x1F6A7; Curb<b>Call</b></a></div>
   <h1>Privacy Policy</h1>
-  <div class="updated">Last updated: October 19, 2026</div>
+  <div class="updated">Last updated: October 21, 2026</div>
   <div class="updated"><a href="legal/index.html">Previous versions</a></div>
 
   <div class="note">Short version: we collect the minimum we need to run the Service — your email for your account, what you search for, your subscription status, and the company and bid details you choose to save so the app can fill in paperwork for you. Concrete prices you share are only ever shown pooled with other contractors' and never with your name. We don't sell your personal information.</div>
@@ -55,6 +55,9 @@ footer a{color:var(--text3);}
     <li><strong>Company bid details, if you add them:</strong> your street address, title, license or registration numbers, years in business, insurance carrier and agent, bonding company, agent and agent's email, and ready-mix supplier and supplier's email. We use them only to fill in your bid forms and write your bond and concrete requests. We never ask for a tax ID, a signature or anything that has to be sworn.</li>
     <li><strong>Phone alerts, if you turn them on:</strong> the address and keys your browser gives us for sending a notification to that device. When a device stops accepting alerts we delete its entry, and the rest go when you delete your account.</li>
     <li><strong>Concrete quotes you save:</strong> the price per yard, yards, delivery and short-load fees and mix strength, kept with the bid you saved them on. If you choose to add a quote to local prices, it is stored with your account and the job's location rounded to about 7 miles, never the exact address.</li>
+    <li><strong>Bid documents you upload:</strong> the PDFs you upload are read or filled in and then discarded by our server. We keep only what was read from them, for up to 30 days, so the same file isn't read twice. Uploaded files and the forms filled from them are also kept on your own phone, with the bid, until you clear them or about four months pass.</li>
+    <li><strong>Documents you email to the app:</strong> if you forward an email to your private CurbCall documents address, we keep the PDFs attached to it, the email's subject, sender and the links in it, and the first lines of its text, so you can use them on your bids. They are deleted after 30 days, or sooner if you remove them.</li>
+    <li><strong>Step reminders, if you turn them on:</strong> the names of the bids you are preparing, their open steps and the dates each is due, so we can send the alert that morning. Turning reminders off deletes them.</li>
     <li><strong>If you sign up for the free weekly bid email:</strong> your email address and ZIP code, and the town that ZIP is in. You don't need an account for it. We send one email with a link to confirm, and nothing weekly is sent until you click it.</li>
     <li><strong>If you leave a review:</strong> the rating, quote, display name and company you enter. Reviews are shown publicly on our website once we approve them, so treat what you write there as public.</li>
   </ul>
@@ -65,7 +68,8 @@ footer a{color:var(--text3);}
     <li>To watch the bids you save. About every six hours we re-read each saved, still-open bid posting for addenda and new documents, and the day before a bid is due we remind you, by phone alert if you turned those on, otherwise by email.</li>
     <li>To send the free weekly bid email, if you signed up: once a week, the open bids within 50 miles of your ZIP. Every one has a one-click unsubscribe.</li>
     <li>To show local concrete prices. A price range for an area appears only once at least three quotes from at least two different contractors are on file there. Quotes are never shown one at a time or with a name.</li>
-    <li>To fill in bid forms. Our server writes your details into the agency's form. To work out which box is which, the form's box labels go to OpenAI; your details do not.</li>
+    <li>To fill in bid forms. Our server writes your details into the agency's form, or types them onto its blank lines when it has no boxes, and can put the filled forms, a checklist and your bid summary into one PDF for you to print. To work out which box or line is which, the form's labels go to OpenAI; your details do not.</li>
+    <li>To remind you of your bid steps, if you turn that on: a phone alert the morning each step is due.</li>
     <li>To manage your account, trial, and subscription.</li>
     <li>To process payments and prevent fraud and abuse.</li>
     <li>To improve and support the Service.</li>
@@ -74,9 +78,9 @@ footer a{color:var(--text3);}
   <h2>3. Service providers we share with</h2>
   <p>We use trusted third parties to run the Service, and share only what's needed:</p>
   <ul>
-    <li><strong>Supabase</strong> — accounts and sign-in (including Google login), saved bids, and your company profile.</li>
+    <li><strong>Supabase</strong> — accounts and sign-in (including Google login), saved bids, your company profile, and documents you email to the app.</li>
     <li><strong>Stripe</strong> — payment processing.</li>
-    <li><strong>OpenAI</strong> — reads the text of public bid postings and bid documents to pull out the details, and matches the boxes on a bid form to the kind of information each one wants. It is not sent your company details.</li>
+    <li><strong>OpenAI</strong> — reads the text of public bid postings and bid documents, including the documents you upload or email in and pictures of their scanned pages, to pull out the details, and matches the boxes and blank lines on a bid form to the kind of information each one wants. It is not sent your company details.</li>
     <li><strong>Tavily</strong>, <strong>Brave Search</strong> and <strong>DuckDuckGo</strong> — web
         searches run on your behalf. These receive the place you are searching for, and Brave
         also the bid's town when we look for ready-mix plants near it.</li>
@@ -89,7 +93,7 @@ footer a{color:var(--text3);}
     <li><strong>SAM.gov</strong> — federal contract opportunities.</li>
     <li><strong>Resend</strong> — sends the email we send you, such as bid alerts and account mail.</li>
     <li><strong>Upstash</strong> — durable storage for scan results and account records.</li>
-    <li><strong>Render</strong> and <strong>Cloudflare</strong> — hosting for the backend and the website.</li>
+    <li><strong>Render</strong> and <strong>Cloudflare</strong> — hosting for the backend and the website. Cloudflare also receives the email you send to your CurbCall documents address and passes it to us.</li>
   </ul>
   <p>We do <strong>not</strong> sell your personal information.</p>
 
@@ -107,8 +111,9 @@ footer a{color:var(--text3);}
 
   <h2>6. Data retention</h2>
   <p>We keep account and subscription data while your account is active. Billing and tax records are kept for seven years after the transaction, which is the period tax authorities can ask about them. You can ask us to delete your account data at any time (see below).</p>
+  <p>Documents you email to the app are deleted 30 days after they arrive. What our server reads from a document is kept up to 30 days.</p>
   <p>If you unsubscribe from the weekly bid email, or from anything else we send, your address comes off the list straight away. We keep the address itself on a do-not-email list, so that nothing we send reaches it again.</p>
-  <p>One record is kept after deletion: the fact that your account accepted these Terms and this Privacy Policy, which versions, when, and the email address that accepted them. We keep it to evidence that agreement if a dispute arises later, which is a purpose the law recognises. We keep it for ten years after you delete your account &mdash; the longest period in which a claim about a written agreement could still be brought in the states where we operate &mdash; and then delete it. Everything else &mdash; your saved bids, notes, pipeline, company profile and bid details, saved searches, concrete quotes, phone alert subscriptions and account itself &mdash; is deleted when you ask.</p>
+  <p>One record is kept after deletion: the fact that your account accepted these Terms and this Privacy Policy, which versions, when, and the email address that accepted them. We keep it to evidence that agreement if a dispute arises later, which is a purpose the law recognises. We keep it for ten years after you delete your account &mdash; the longest period in which a claim about a written agreement could still be brought in the states where we operate &mdash; and then delete it. Everything else &mdash; your saved bids, notes, pipeline, company profile and bid details, saved searches, concrete quotes, documents you emailed in, step reminders, phone alert subscriptions and account itself &mdash; is deleted when you ask.</p>
 
   <h2>7. Your choices</h2>
   <p>You can request access to, correction of, or deletion of your personal information by contacting us. You can cancel your subscription anytime and sign out from the Account screen.</p>

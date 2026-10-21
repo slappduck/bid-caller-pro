@@ -146,5 +146,77 @@ class BidWatchJobTests(unittest.TestCase):
             self.assertEqual(ls.app.test_client().post("/run-bid-watch", json={}).status_code, 403)
 
 
+class StepReminderTests(unittest.TestCase):
+    def setUp(self):
+        self.store, self.sent = {}, []
+        self.today = ls._today_central()
+        self._p = [
+            patch.object(ls, "SUPABASE_URL", "https://sb.example"),
+            patch.object(ls, "SUPABASE_SERVICE_ROLE_KEY", "service"),
+            patch.object(ls, "_license_is_active", return_value=True),
+            patch.object(ls, "_supabase_user", return_value={"id": "u1"}),
+            patch.object(ls, "_supabase_admin_request", side_effect=lambda path, method="GET", data=None:
+                         [] if path.startswith("/rest/v1/saved_bids") else
+                         [{"user_id": "u1", "endpoint": "https://fcm.googleapis.com/x", "p256dh": "k", "auth": "a"}]),
+            patch.object(kv_backend, "get", side_effect=lambda k, d=None: self.store.get(k, d)),
+            patch.object(kv_backend, "set", side_effect=lambda k, v: self.store.__setitem__(k, v)),
+            patch.object(ls, "_send_push", side_effect=lambda sub, msg: (self.sent.append((msg["title"], msg["body"])), "ok")[1]),
+            patch.object(ls, "_now_central", return_value=datetime.datetime(2026, 10, 21, 7, 20)),
+        ]
+        for p in self._p:
+            p.start()
+        self.client = ls.app.test_client()
+
+    def tearDown(self):
+        for p in self._p:
+            p.stop()
+
+    def sync(self, items, on=True):
+        return self.client.post("/reminders/sync", json={"key": "k", "device_id": "d", "supabase_token": "t",
+                                                         "on": on, "reminders": items})
+
+    def day(self, n):
+        return (self.today + datetime.timedelta(days=n)).isoformat()
+
+    def test_a_step_due_today_is_pushed_once(self):
+        d = self.sync([{"bid_id": "b1", "title": "Elm St Sidewalk", "label": "Ask for your bid bond", "date": self.day(0)},
+                       {"bid_id": "b1", "title": "Elm St Sidewalk", "label": "Get a concrete quote", "date": self.day(2)}]).get_json()
+        self.assertEqual(d, {"ok": True, "saved": 2})
+        out = ls._run_bid_watch()
+        self.assertEqual(out["step_reminders"], 1)
+        self.assertEqual(self.sent, [("Today: Ask for your bid bond", "Elm St Sidewalk")])
+        ls._run_bid_watch()
+        self.assertEqual(len(self.sent), 1)
+
+    def test_nothing_goes_out_in_the_middle_of_the_night(self):
+        self.sync([{"bid_id": "b1", "title": "Elm", "label": "Ask for your bid bond", "date": self.day(0)}])
+        with patch.object(ls, "_now_central", return_value=datetime.datetime(2026, 10, 21, 1, 20)):
+            ls._run_bid_watch()
+        self.assertEqual(self.sent, [])
+
+    def test_many_steps_on_one_day_are_one_alert(self):
+        self.sync([{"bid_id": f"b{i}", "title": f"Bid {i}", "label": "Sign the forms", "date": self.day(0)} for i in range(4)])
+        ls._run_bid_watch()
+        self.assertEqual(len(self.sent), 1)
+        self.assertEqual(self.sent[0][0], "Today: 4 bid steps")
+
+    def test_past_far_off_and_junk_items_are_not_kept(self):
+        d = self.sync([{"label": "Old", "date": self.day(-1)}, {"label": "Far", "date": self.day(90)},
+                       {"label": "", "date": self.day(1)}, {"label": "Bad date", "date": "soon"}, "junk"]).get_json()
+        self.assertEqual(d["saved"], 0)
+
+    def test_turning_them_off_clears_them(self):
+        self.sync([{"bid_id": "b1", "title": "Elm", "label": "Ask for your bid bond", "date": self.day(0)}])
+        self.sync([], on=False)
+        ls._run_bid_watch()
+        self.assertEqual(self.sent, [])
+
+    def test_a_caller_who_is_not_signed_in_is_refused(self):
+        with patch.object(ls, "_supabase_user", return_value=None):
+            self.assertEqual(self.sync([]).status_code, 401)
+        with patch.object(ls, "_license_is_active", return_value=False):
+            self.assertEqual(self.sync([]).status_code, 403)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -12,7 +12,8 @@
 # redirect, robots.txt respected, size and time capped. The AI is told to
 # copy what the document prints and leave anything else blank; the result
 # is then validated here rather than trusted.
-# hashlib and socket come from core.py: every file here shares one namespace.
+# hashlib and socket come from core.py, collections from push.py: every file
+# here shares one namespace.
 import io
 import ipaddress
 
@@ -197,12 +198,18 @@ def _clean_doc_result(raw):
             "questions_due": text("questions_due", 300), "required_forms": forms}
 
 
-def _ai_read_bid_document(text):
-    if not OPENAI_API_KEY or not text.strip():
+def _ai_read_bid_document(text, images=None):
+    images = images or []
+    if not OPENAI_API_KEY or not (text.strip() or images):
         return None
+    content = _BID_DOC_PROMPT + (text if text.strip() else "(none: the pages are scanned images, attached)")
+    if images:
+        content = [{"type": "text", "text": content + "\n\nSCANNED PAGES are attached as images; read them too."}] + [
+            {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + base64.b64encode(im).decode("ascii"),
+                                                "detail": "high"}} for im in images]
     body = json.dumps({
         "model": OPENAI_MODEL,
-        "messages": [{"role": "user", "content": _BID_DOC_PROMPT + text}],
+        "messages": [{"role": "user", "content": content}],
         "temperature": 0,
         "response_format": {"type": "json_object"},
     }).encode("utf-8")
@@ -211,7 +218,7 @@ def _ai_read_bid_document(text):
         headers={"Authorization": f"Bearer {OPENAI_API_KEY}",
                  "Content-Type": "application/json"}, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=90) as resp:
+        with urllib.request.urlopen(req, timeout=120 if images else 90) as resp:
             data = json.loads(resp.read().decode("utf-8"))
         return _clean_doc_result(json.loads(data["choices"][0]["message"]["content"]))
     except Exception as ex:
@@ -223,30 +230,81 @@ def _ai_read_bid_document(text):
 # Many agencies hand out the plans, specs and bid form only to registered
 # plan holders, so the server can't download them. The contractor can: they
 # register, download, and upload the PDF here to be read or filled the same
-# way. Multipart, with the file in "file" and everything else as JSON in
-# "json". PDFs only, same size cap as a download. Nothing uploaded is kept
-# except the reading itself (cached by the file's hash, like a URL's).
-def _doc_request():
-    """(data, uploaded bytes or None, error or "")."""
+# way. Multipart, with the files in "file" (several at once for reading: the
+# plans, the bid form and an addendum are read together) and everything else
+# as JSON in "json". PDFs only, each under the same cap as a download.
+# Nothing uploaded is kept except the reading itself (cached by the files'
+# hashes, like a URL's).
+BID_DOC_MAX_FILES = 6
+BID_DOC_MAX_TOTAL = int(os.environ.get("BID_DOC_MAX_TOTAL", str(40 * 1024 * 1024)))
+
+
+def _doc_request(max_files=None):
+    """(data, [(name, bytes)] or None, error or "")."""
     ctype = (request.content_type or "").lower()
     if not ctype.startswith("multipart/form-data"):
         return request.get_json(force=True, silent=True) or {}, None, ""
-    if (request.content_length or 0) > BID_DOC_MAX_BYTES + 1_000_000:
+    if (request.content_length or 0) > BID_DOC_MAX_TOTAL + 1_000_000:
         return {}, None, "too_large"
     try:
         data = json.loads(request.form.get("json") or "{}")
     except ValueError:
         data = {}
     data = data if isinstance(data, dict) else {}
-    f = request.files.get("file")
-    if not f:
+    files = request.files.getlist("file")[:max_files or BID_DOC_MAX_FILES]
+    if not files:
         return data, None, "no_file"
-    raw = f.read(BID_DOC_MAX_BYTES + 1)
-    if len(raw) > BID_DOC_MAX_BYTES:
-        return data, None, "too_large"
-    if raw[:5] != b"%PDF-":
-        return data, None, "not_pdf"
-    return data, raw, ""
+    out = []
+    for f in files:
+        raw = f.read(BID_DOC_MAX_BYTES + 1)
+        if len(raw) > BID_DOC_MAX_BYTES:
+            return data, None, "too_large"
+        if raw[:5] != b"%PDF-":
+            return data, None, "not_pdf"
+        name = re.sub(r"[^\w .()&#,-]+", "", str(f.filename or "document.pdf"))[:120] or "document.pdf"
+        out.append((name, raw))
+    return data, out, ""
+
+
+# ── Scanned pages ──
+# A photocopied bid form has no text layer: every page is a picture. Those
+# pages are drawn as images (pdfium) and read by the same model, looking at
+# them, with the same instructions. Only pages with next to no text are sent,
+# so a typed packet with one scanned affidavit costs one image, not forty.
+BID_DOC_SCAN_PAGES = int(os.environ.get("BID_DOC_SCAN_PAGES", "8"))
+_SCAN_TEXT_CHARS = 40
+
+
+def _scan_page_images(data, limit=None):
+    """JPEG bytes of the pages that are pictures rather than text. Never raises."""
+    limit = BID_DOC_SCAN_PAGES if limit is None else limit
+    out = []
+    try:
+        import pypdfium2 as pdfium
+        pdf = pdfium.PdfDocument(data)
+    except Exception:
+        return out
+    try:
+        for i in range(min(len(pdf), BID_DOC_MAX_PAGES)):
+            if len(out) >= limit:
+                break
+            page = pdf[i]
+            tp = page.get_textpage()
+            if len(re.sub(r"\s+", "", tp.get_text_range() or "")) >= _SCAN_TEXT_CHARS:
+                continue
+            w = page.get_width() or 612
+            img = page.render(scale=max(0.5, min(3.0, 1400.0 / w))).to_pil().convert("L")
+            buf = io.BytesIO()
+            img.save(buf, "JPEG", quality=70)
+            out.append(buf.getvalue())
+    except Exception as ex:
+        print(f"[bid-doc] scan render error: {ex}", flush=True)
+    finally:
+        try:
+            pdf.close()
+        except Exception:
+            pass
+    return out
 
 
 @app.route("/bid-documents/read", methods=["POST"])
@@ -264,7 +322,7 @@ def bid_documents_read():
     if not OPENAI_API_KEY:
         return jsonify({"ok": False, "reason": "ai_unavailable"})
 
-    ident = (b"upload:" + hashlib.sha256(upload).digest()) if upload is not None else url.encode()
+    ident = (b"upload:" + b"".join(hashlib.sha256(raw).digest() for _n, raw in upload)) if upload is not None else url.encode()
     cache_key = _BID_DOC_CACHE_PREFIX + hashlib.sha256(ident).hexdigest()[:32]
     try:
         hit = kv_backend.get(cache_key, None)
@@ -288,20 +346,30 @@ def bid_documents_read():
                         "detail": "Too many documents read today. Try again tomorrow."}), 429
 
     if upload is not None:
-        raw, ctype = upload, "application/pdf"
+        docs = [(name, raw, "application/pdf") for name, raw in upload]
     else:
         raw, ctype, outcome = _fetch_document(url)
         if outcome != "ok":
             return jsonify({"ok": False, "reason": "fetch_failed", "detail": outcome})
-    text, pages, truncated = _document_text(raw, ctype)
-    if not text.strip():
-        # A scanned PDF has no text layer; there is nothing to read without OCR.
+        docs = [("", raw, ctype)]
+    texts, images, pages, truncated = [], [], 0, False
+    for name, raw, ctype in docs:
+        t, n, cut = _document_text(raw, ctype)
+        pages += n
+        truncated = truncated or cut
+        if t.strip():
+            texts.append(f"=== FILE: {name} ===\n{t}" if len(docs) > 1 else t)
+        if raw[:5] == b"%PDF-" and len(images) < BID_DOC_SCAN_PAGES:
+            images += _scan_page_images(raw, BID_DOC_SCAN_PAGES - len(images))
+    text = "\n\n".join(texts)[:BID_DOC_TEXT_CHARS]
+    if not text.strip() and not images:
         return jsonify({"ok": False, "reason": "no_text",
                         "detail": "This document has no readable text (it may be a scan)."})
-    result = _ai_read_bid_document(text)
+    result = _ai_read_bid_document(text, images)
     if result is None:
         return jsonify({"ok": False, "reason": "ai_error"}), 502
-    result.update({"pages_read": pages, "truncated": truncated})
+    result.update({"pages_read": pages, "truncated": truncated, "scanned_pages": len(images),
+                   "files": len(docs)})
     try:
         kv_backend.set(cache_key, {"at": time.time(), "v": BID_DOC_READER_VERSION, "result": result})
     except Exception:
@@ -396,9 +464,17 @@ def _fill_values(data):
                      ("city_state_zip", "City, state, ZIP"), ("license", "License / registration"),
                      ("years", "Years in business")):
         put("company." + k, label, co.get(k))
+    # Affidavits ask for the pieces separately: "of the City of ____,
+    # County of ____, State of ____".
+    m = re.match(r"\s*([^,]+),\s*([A-Za-z .]+?)\s+(\d{5}(?:-\d{4})?)\s*$", str(co.get("city_state_zip") or ""))
+    if m:
+        put("company.city", "Company's city", m.group(1), 80)
+        put("company.state", "Company's state", m.group(2), 40)
+        put("company.zip", "Company's ZIP code", m.group(3), 12)
     bid = data.get("bid") if isinstance(data.get("bid"), dict) else {}
     put("bid.number", "Bid / project number", bid.get("number"), 80)
     put("bid.title", "Project", bid.get("title"))
+    put("bid.agency", "Owner / agency the bid is for", bid.get("agency"), 120)
     put("bid.addenda", "Addenda acknowledged", bid.get("addenda"), 120)
     put("date", "Date", bid.get("date"), 40)
     try:
@@ -495,6 +571,176 @@ def _filled_pdf(reader, values):
     return buf.getvalue()
 
 
+# ── Forms that aren't fillable ──
+# Most small-town bid forms are typed documents with underlined blanks
+# ("Name of Bidder: ________"), not fillable PDFs. pdfium gives the exact
+# position of every character, so each run of underscores is a blank and
+# the words before it on the same line are its label. The same matcher
+# pairs blanks with value names, and the values are then typed onto the page
+# just above each line. Scanned forms have no characters to find and are
+# reported as not fillable.
+_BLANK_MIN = 3
+
+
+def _flat_blanks(data):
+    """[{id, page, x0, x1, y, label, line}] for the underlined blanks. Never raises."""
+    blanks = []
+    try:
+        import pypdfium2 as pdfium
+        pdf = pdfium.PdfDocument(data)
+    except Exception:
+        return blanks
+    try:
+        for pno in range(min(len(pdf), BID_DOC_MAX_PAGES)):
+            tp = pdf[pno].get_textpage()
+            n = tp.count_chars()
+            text = tp.get_text_range() or ""
+            if len(text) != n:
+                text = "".join(tp.get_text_range(i, 1) or " " for i in range(n))
+            # pdfium puts a line break between the lines it finds.
+            lines, cur = [], []
+            for i in range(n):
+                if text[i] in "\r\n":
+                    if cur:
+                        lines.append(cur)
+                    cur = []
+                    continue
+                cur.append((text[i], tp.get_charbox(i)))
+            if cur:
+                lines.append(cur)
+            for line in lines:
+                runs, i = [], 0
+                while i < len(line):
+                    if line[i][0] == "_":
+                        j = i
+                        while j < len(line) and line[j][0] == "_":
+                            j += 1
+                        if j - i >= _BLANK_MIN:
+                            runs.append((i, j))
+                        i = j
+                    else:
+                        i += 1
+                if not runs:
+                    continue
+                marked, prev = [], 0
+                for k, (i, j) in enumerate(runs):
+                    marked.append("".join(c for c, _b in line[prev:i]))
+                    marked.append(f"[B{len(blanks) + k + 1}]")
+                    prev = j
+                marked.append("".join(c for c, _b in line[prev:]))
+                line_text = re.sub(r"\s+", " ", "".join(marked)).strip()[:240]
+                prev = 0
+                for i, j in runs:
+                    label = re.sub(r"\s+", " ", "".join(c for c, _b in line[prev:i]).replace("_", " "))
+                    label = label.strip(" :$#.-").strip()[-80:]
+                    prev = j
+                    xs = [b for _c, b in line[i:j]]
+                    blanks.append({"id": f"B{len(blanks) + 1}", "page": pno,
+                                   "x0": min(b[0] for b in xs), "x1": max(b[2] for b in xs),
+                                   "y": min(b[1] for b in xs), "label": label, "line": line_text})
+                    if len(blanks) >= BID_FILL_MAX_FIELDS:
+                        return blanks
+    except Exception as ex:
+        print(f"[bid-fill] blank scan error: {ex}", flush=True)
+    finally:
+        try:
+            pdf.close()
+        except Exception:
+            pass
+    return blanks
+
+
+def _pdf_str(t):
+    t = str(t).encode("latin-1", "replace").decode("latin-1")
+    return t.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+
+def _text_width(t, size):
+    # Helvetica averages about half an em a character.
+    return len(t) * size * 0.5
+
+
+def _overlay_filled(data, placed):
+    """The original PDF with each value typed onto its blank."""
+    from pypdf import PdfReader, PdfWriter
+    reader = PdfReader(io.BytesIO(data))
+    writer = PdfWriter(clone_from=reader)
+    by_page = collections.defaultdict(list)
+    for b, value in placed:
+        by_page[b["page"]].append((b, value))
+    for pno, items in by_page.items():
+        page = writer.pages[pno]
+        box = page.mediabox
+        ops = []
+        for b, value in items:
+            room = max(20.0, b["x1"] - b["x0"] - 2)
+            size = 10.0
+            while size > 6 and _text_width(value, size) > room:
+                size -= 0.5
+            ops.append(f"BT /CCF {size:.1f} Tf {b['x0'] + 1:.2f} {b['y'] + 1.5:.2f} Td ({_pdf_str(value)}) Tj ET")
+        stream = ("q 0 0 0.55 rg\n" + "\n".join(ops) + "\nQ\n").encode("latin-1", "replace")
+        overlay = _simple_pdf_bytes([stream], [float(box.width), float(box.height)],
+                                    [float(box.left), float(box.bottom)])
+        page.merge_page(PdfReader(io.BytesIO(overlay)).pages[0])
+    buf = io.BytesIO()
+    writer.write(buf)
+    return buf.getvalue()
+
+
+def _simple_pdf_bytes(streams, size=(612.0, 792.0), origin=(0.0, 0.0)):
+    """A PDF with one page per content stream; /CCF is Helvetica, /CCB bold."""
+    w, h = size
+    x0, y0 = origin
+    n = len(streams)
+    font, bold = 3 + 2 * n, 4 + 2 * n
+    objs = [b"<< /Type /Catalog /Pages 2 0 R >>",
+            ("<< /Type /Pages /Kids [%s] /Count %d >>" % (" ".join(f"{3 + 2 * i} 0 R" for i in range(n)), n)).encode()]
+    for i, st in enumerate(streams):
+        objs.append((f"<< /Type /Page /Parent 2 0 R /MediaBox [{x0:.2f} {y0:.2f} {x0 + w:.2f} {y0 + h:.2f}] "
+                     f"/Resources << /Font << /CCF {font} 0 R /CCB {bold} 0 R >> >> /Contents {4 + 2 * i} 0 R >>").encode())
+        objs.append(b"<< /Length %d >>\nstream\n" % len(st) + st + b"\nendstream")
+    objs.append(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>")
+    objs.append(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>")
+    out, offsets = b"%PDF-1.4\n", []
+    for i, o in enumerate(objs, start=1):
+        offsets.append(len(out))
+        out += b"%d 0 obj\n" % i + o + b"\nendobj\n"
+    xref = len(out)
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objs) + 1)
+    out += b"".join(b"%010d 00000 n \n" % o for o in offsets)
+    out += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (len(objs) + 1, xref)
+    return out
+
+
+def _fill_flat(raw, vals):
+    """The flat-form fill: (response dict, status)."""
+    blanks = _flat_blanks(raw)
+    if not blanks:
+        return {"ok": False, "reason": "not_fillable", "detail": "no_blanks"}, 200
+    # The matcher sees each blank with its whole line, so "$ [B4]" after
+    # "Total Base Bid" is still the total; the never-fill rule looks only at
+    # the blank's own label, so "Signature" blocks its blank and not the
+    # date beside it.
+    matched = _ai_match_fields([(b["id"], b["line"]) for b in blanks], vals)
+    if matched is None:
+        return {"ok": False, "reason": "ai_error"}, 502
+    plan = _resolve_fill([(b["id"], b["label"]) for b in blanks], vals, matched)
+    if not plan:
+        return {"ok": False, "reason": "nothing_matched", "fields": len(blanks)}, 200
+    by_id = {b["id"]: b for b in blanks}
+    placed = [(by_id[f], vals[k][1]) for f, k in plan.items()]
+    try:
+        pdf = _overlay_filled(raw, placed)
+    except Exception as ex:
+        print(f"[bid-fill] overlay error: {ex}", flush=True)
+        return {"ok": False, "reason": "not_fillable", "detail": "write_failed"}, 200
+    filled = [{"field": f, "label": by_id[f]["label"] or by_id[f]["line"], "value": vals[k][1], "key": k}
+              for f, k in plan.items()]
+    return {"ok": True, "flat": True, "fields": len(blanks), "filled": filled,
+            "left_blank": len(blanks) - len(filled),
+            "pdf_b64": base64.b64encode(pdf).decode("ascii")}, 200
+
+
 @app.route("/bid-documents/fill", methods=["POST"])
 def bid_documents_fill():
     data, upload, err = _doc_request()
@@ -517,7 +763,7 @@ def bid_documents_fill():
         return jsonify({"ok": False, "reason": "rate_limited"}), 429
 
     if upload is not None:
-        raw = upload
+        raw = upload[0][1]
     else:
         raw, ctype, outcome = _fetch_document(url)
         if outcome != "ok":
@@ -531,7 +777,9 @@ def bid_documents_fill():
     except Exception:
         return jsonify({"ok": False, "reason": "not_fillable", "detail": "unreadable"})
     if not fields:
-        return jsonify({"ok": False, "reason": "not_fillable", "detail": "no_fields"})
+        # No fillable boxes: type onto its underlined blanks instead.
+        out, status = _fill_flat(raw, vals)
+        return jsonify(out), status
 
     matched = _ai_match_fields(fields, vals)
     if matched is None:
@@ -551,6 +799,212 @@ def bid_documents_fill():
     return jsonify({"ok": True, "fields": len(fields), "filled": filled,
                     "left_blank": len(fields) - len(filled),
                     "pdf_b64": base64.b64encode(pdf).decode("ascii")})
+
+
+# ── The bid packet ─────────────────────────────────────────────────────────
+#
+# Everything that goes in the envelope, in one PDF to print: a cover sheet
+# with what to sign, attach and check before sealing; the bid summary; then
+# each filled form. Filled forms are flattened (their typed values become
+# part of the page) so two forms with a box of the same name can't overwrite
+# each other once they're in one file, and so the printout is what was
+# checked. No AI and nothing kept: it is assembled from what the app sends.
+BID_PACKET_MAX_FILES = 10
+
+
+class _PageLayout:
+    """Lays out wrapped lines of Helvetica on letter pages."""
+
+    def __init__(self):
+        self.streams, self.ops, self.y = [], [], 740.0
+
+    def _need(self, h):
+        if self.y - h < 54:
+            self.page()
+
+    def page(self):
+        if self.ops:
+            self.streams.append("\n".join(self.ops).encode("latin-1", "replace"))
+        self.ops, self.y = [], 740.0
+
+    def text(self, t, size=10.5, bold=False, x=54.0, width=504.0, gap=None):
+        gap = size * 0.45 if gap is None else gap
+        words, line, lines = str(t).split(), "", []
+        for w in words:
+            trial = (line + " " + w).strip()
+            if _text_width(trial, size) > width and line:
+                lines.append(line)
+                line = w
+            else:
+                line = trial
+        lines.append(line)
+        self.first_y = None
+        for ln in lines:
+            self._need(size + gap)
+            self.y -= size + gap
+            if self.first_y is None:
+                self.first_y = self.y
+            self.ops.append(f"BT /{'CCB' if bold else 'CCF'} {size:.1f} Tf {x:.1f} {self.y:.1f} Td ({_pdf_str(ln)}) Tj ET")
+
+    def row(self, cells, size=9.0, bold=False):
+        """cells: [(x, width, text, right-aligned)]; one line each, clipped."""
+        self._need(size + 5)
+        self.y -= size + 5
+        for x, width, t, right in cells:
+            t = str(t)
+            while t and _text_width(t, size) > width:
+                t = t[:-1]
+            tx = x + width - _text_width(t, size) if right else x
+            self.ops.append(f"BT /{'CCB' if bold else 'CCF'} {size:.1f} Tf {tx:.1f} {self.y:.1f} Td ({_pdf_str(t)}) Tj ET")
+
+    def check(self, t, size=10.5):
+        """A tick box and its words."""
+        self.space(3)
+        self.text(t, size, x=74, width=480)
+        if self.first_y is not None and self.y <= self.first_y:
+            # On the first line's page unless the words broke across pages.
+            self.ops.append(f"0.8 w 58 {self.first_y - 1:.1f} 9 9 re S")
+
+    def rule(self):
+        self._need(6)
+        self.y -= 4
+        self.ops.append(f"0.6 w 54 {self.y:.1f} m 558 {self.y:.1f} l S")
+
+    def space(self, h=8.0):
+        self.y -= h
+
+    def done(self):
+        self.page()
+        return self.streams
+
+
+def _packet_front(data, names):
+    """Cover sheet and bid summary pages for the packet, as PDF bytes."""
+    def s(v, n=300):
+        return re.sub(r"\s+", " ", str(v if v is not None else "")).strip()[:n]
+    bid = data.get("bid") if isinstance(data.get("bid"), dict) else {}
+    co = data.get("company") if isinstance(data.get("company"), dict) else {}
+    L = _PageLayout()
+    L.text("Bid packet", 20, True)
+    L.text(s(bid.get("title")) or "Bid", 13, True)
+    for label, v in (("Owner", bid.get("agency")), ("Bid number", bid.get("number")),
+                     ("Bids due", bid.get("due")), ("Bidder", co.get("name"))):
+        if s(v):
+            L.text(f"{label}: {s(v)}", 10.5)
+    try:
+        total = float(bid.get("total"))
+    except (TypeError, ValueError):
+        total = 0.0
+    if total > 0:
+        L.text(f"Total bid: ${_money(total)}  ({_dollars_in_words(total)})", 10.5, True)
+    L.space(10)
+    L.rule()
+    L.text("Before you seal the envelope", 13, True)
+    L.space(2)
+    checks = [s(c, 240) for c in (data.get("checklist") or [])[:30] if s(c)]
+    for c in checks:
+        L.check(c)
+    if s(bid.get("submission")):
+        L.space(4)
+        L.text("How to submit: " + s(bid.get("submission"), 600), 10)
+    L.space(10)
+    L.rule()
+    L.text("In this packet", 13, True)
+    L.space(2)
+    L.text("1. This cover sheet (keep it, don't submit it)", 10.5, x=60)
+    L.text("2. Bid summary", 10.5, x=60)
+    for i, n in enumerate(names, start=3):
+        L.text(f"{i}. {n}", 10.5, x=60)
+    lines = [ln for ln in (data.get("lines") or [])[:200] if isinstance(ln, dict)]
+    L.page()
+    L.text("Bid summary", 16, True)
+    L.text(" · ".join(x for x in (s(co.get("name")), s(co.get("phone")), s(co.get("email"))) if x), 10)
+    L.space(6)
+    cols = [(54, 34), (92, 250), (346, 80), (430, 60), (494, 64)]
+    L.row([(cols[0][0], cols[0][1], "Item", False), (cols[1][0], cols[1][1], "Description", False),
+           (cols[2][0], cols[2][1], "Quantity", True), (cols[3][0], cols[3][1], "Unit price", True),
+           (cols[4][0], cols[4][1], "Amount", True)], bold=True)
+    L.rule()
+    for ln in lines:
+        def num(k):
+            try:
+                return float(ln.get(k))
+            except (TypeError, ValueError):
+                return None
+        q, up, amt = num("quantity"), num("unit_price"), num("amount")
+        qty = (f"{q:,.2f}".rstrip("0").rstrip(".") + " " + s(ln.get("unit"), 12)).strip() if q else ""
+        L.row([(cols[0][0], cols[0][1], s(ln.get("item_no"), 10), False),
+               (cols[1][0], cols[1][1], s(ln.get("description"), 120), False),
+               (cols[2][0], cols[2][1], qty, True),
+               (cols[3][0], cols[3][1], _money(up) if up else "", True),
+               (cols[4][0], cols[4][1], _money(amt) if amt else "", True)])
+    if not lines:
+        L.text("No priced lines.", 10)
+    L.rule()
+    if total > 0:
+        L.row([(54, 370, "Total bid", False), (430, 128, "$" + _money(total), True)], size=11, bold=True)
+    if s(bid.get("addenda")):
+        L.space(6)
+        L.text("Addenda acknowledged: " + s(bid.get("addenda"), 120), 10)
+    return _simple_pdf_bytes(L.done())
+
+
+def _flattened(raw):
+    """A filled form with its typed values printed into the page and its
+    form boxes removed. Falls back to the PDF as it came."""
+    from pypdf import PdfReader, PdfWriter
+    from pypdf.generic import DictionaryObject, NameObject
+    reader = PdfReader(io.BytesIO(raw))
+    try:
+        fields = reader.get_fields() or {}
+    except Exception:
+        fields = {}
+    values = {k: str(f.get("/V")) for k, f in fields.items()
+              if isinstance(f, dict) and f.get("/FT") == "/Tx" and f.get("/V")}
+    writer = PdfWriter(clone_from=reader)
+    if values:
+        for page in writer.pages:
+            if "/Resources" not in page:
+                page[NameObject("/Resources")] = DictionaryObject()
+            if page.get("/Annots"):
+                writer.update_page_form_field_values(page, values, auto_regenerate=False, flatten=True)
+    if fields:
+        writer.remove_annotations(subtypes="/Widget")
+        if "/AcroForm" in writer._root_object:
+            del writer._root_object["/AcroForm"]
+    buf = io.BytesIO()
+    writer.write(buf)
+    return buf.getvalue()
+
+
+@app.route("/bid-documents/packet", methods=["POST"])
+def bid_documents_packet():
+    data, uploads, err = _doc_request(BID_PACKET_MAX_FILES)
+    key = data.get("key", "")
+    device = data.get("device_id", "")
+    if not _license_is_active(key, device, data.get("supabase_token", "")):
+        return jsonify({"ok": False, "reason": "not_licensed"}), 403
+    if err and err != "no_file":
+        return jsonify({"ok": False, "reason": err}), 413 if err == "too_large" else 400
+    uploads = uploads or []
+    from pypdf import PdfReader, PdfWriter
+    try:
+        writer = PdfWriter()
+        writer.append(PdfReader(io.BytesIO(_packet_front(data, [n for n, _r in uploads]))))
+        for name, raw in uploads:
+            try:
+                part = _flattened(raw)
+            except Exception as ex:
+                print(f"[bid-packet] flatten failed for {name}: {ex}", flush=True)
+                part = raw
+            writer.append(PdfReader(io.BytesIO(part)))
+        buf = io.BytesIO()
+        writer.write(buf)
+    except Exception as ex:
+        print(f"[bid-packet] build error: {ex}", flush=True)
+        return jsonify({"ok": False, "reason": "packet_failed"}), 500
+    return jsonify({"ok": True, "pages": len(writer.pages),
+                    "pdf_b64": base64.b64encode(buf.getvalue()).decode("ascii")})
 
 
 # ── Watching saved bids for addenda ─────────────────────────────────────────

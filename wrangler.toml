@@ -17,13 +17,28 @@
 
 name = "bid-caller-pro"
 compatibility_date = "2026-08-26"
+
+# The one script: it passes web requests to the static files untouched and
+# receives the documents contractors email to docs+<code>@curbcallpro.com
+# (see worker/index.js). It lives outside the assets directory so it is
+# never published as a file.
+main = "worker/index.js"
 # Not a secret -- just the account this Worker lives in. Set explicitly so
 # wrangler never has to look it up via the Cloudflare API's /memberships
 # endpoint, which needs a User->User Details->Read permission the deploy
 # token doesn't have (and doesn't need for anything else it does).
 account_id = "cb58f659f23046b1768d10167913600e"
 
+[vars]
+# Where emailed documents are posted. Not a secret. The shared secret that
+# proves the post came from here, INBOUND_EMAIL_SECRET, is set in the
+# Cloudflare dashboard (Worker -> Settings -> Variables and secrets), never
+# in this file, with the same value set on Render.
+BACKEND_URL = "https://bid-caller-pro.onrender.com"
+
 [assets]
+# The script reaches the static files through this binding.
+binding = "ASSETS"
 # Everything the browser loads lives here. Note this is NOT the repo root --
 # the root holds the Python backend, the tests and the tooling, none of which
 # should ever be published to the web.

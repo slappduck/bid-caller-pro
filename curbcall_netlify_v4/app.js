@@ -4370,6 +4370,7 @@ function savePrep(id,city){
   }
   clearTimeout(_prepPushTimers[id]);
   _prepPushTimers[id]=setTimeout(()=>pushSavedBid(id,city),1200);
+  if(stepRemindersOn())syncStepReminders();
 }
 // What a public concrete bid usually takes, in the order it gets done.
 // Generic items say "if required": the posting decides, and inventing a
@@ -4568,6 +4569,57 @@ async function openPrep(city,id,step){
   document.getElementById("modal").classList.add("open");
 }
 
+// ── Step reminders on the phone (server: /reminders/sync) ──
+// The steps and their do-by dates live on this phone; when reminders are on,
+// the open ones for every bid being prepared are sent to the server, which
+// pushes an alert the morning each is due. Sent again whenever a bid's prep
+// changes, so a ticked step stops reminding.
+const REMIND_LABEL={bond:"Ask for your bid bond",concrete:"Get your concrete quote",price:"Finish pricing",
+  forms:"Fill out the bid forms",insurance:"Get the insurance certificate",sign:"Sign the bid forms",
+  submit:"Bids are due",prebid:"Pre-bid meeting",questions:"Questions are due"};
+function stepRemindersOn(){return!!store.get("step_reminders_on",false);}
+function stepReminderList(){
+  const out=[],today=new Date();today.setHours(0,0,0,0);
+  const pad=n=>String(n).padStart(2,"0"),ymd=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  for(const id in bidPrep){
+    const b=saved[id]||findBid(id);
+    if(!b||["won","lost","passed","submitted"].includes(pipeline[id]))continue;
+    const p=prepFor(id),auto=prepAuto(b,p);
+    prepChecklist(b,p.docInfo).filter(i=>!i.optional&&!stepDone(p,auto,i.key)).forEach(i=>{
+      const d=stepDue(i,b,p);
+      if(!d||d.date<today)return;
+      out.push({bid_id:id,title:b.title||"A bid",label:REMIND_LABEL[i.key]||i.label,date:ymd(d.date)});
+    });
+  }
+  return out.slice(0,150);
+}
+let _remindTimer=null;
+function syncStepReminders(on){
+  clearTimeout(_remindTimer);
+  _remindTimer=setTimeout(async()=>{
+    if(!currentUser||isOffline())return;
+    try{
+      const token=await getSupabaseToken();
+      await fetchWithTimeout(SERVER+"/reminders/sync",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,on:on!==false,
+          reminders:on===false?[]:stepReminderList()})},20000);
+    }catch(e){}
+  },on===undefined?3000:0);
+}
+async function setStepReminders(on,box){
+  if(on&&!store.get("push_on",false)){
+    await toggleNotifPermission();
+    if(!store.get("push_on",false)){
+      if(box)box.checked=false;
+      toast("Reminders need phone alerts turned on.");
+      return;
+    }
+  }
+  store.set("step_reminders_on",on);
+  syncStepReminders(on);
+  toast(on?"You'll get an alert the morning each step is due":"Step reminders off");
+}
+
 function renderPrepSteps(body,city,id,b){
   const p=prepFor(id);
   const items=prepChecklist(b,p.docInfo),auto=prepAuto(b,p);
@@ -4585,9 +4637,11 @@ function renderPrepSteps(body,city,id,b){
     const a=(attrs,label)=>`<a class="step-act" ${attrs}>${esc(label)}</a>`;
     const btn=(act,label)=>`<button type="button" class="step-act" data-act="${act}">${esc(label)}</button>`;
     switch(i.key){
-      case"docs":return(safeUrl(b.plan_room)?a(`href="${esc(safeUrl(b.plan_room))}" target="_blank" rel="noopener noreferrer"`,"Register to get the documents"):"")
+      case"docs":return(safeUrl(b.plan_room)?a(`href="${esc(safeUrl(b.plan_room))}" target="_blank" rel="noopener noreferrer"`,"Register to get the documents")
+          +btn("regdetails","Copy my details for sign-up"):"")
         +(canRead&&!auto.docs?btn("read","Read them for me"):"")
-        +(!auto.docs?btn("upload","Upload a document"):"");
+        +(!auto.docs?btn("upload","Upload documents"):"")
+        +(!auto.docs&&inboxAddress()?btn("inbox","Get them from your email"):"");
       case"prebid":return(dest?a(`href="${esc(mapUrl(mapQuery(dest,city)))}" target="_blank" rel="noopener noreferrer"`,onSite?"Directions to the site":"Directions"):"")
         +(dates.some(d=>/pre-bid/i.test(d.label))?btn("dates","Add to calendar"):"");
       case"questions":return b.email?a(`href="${esc(agencyQuestionMail(b))}" data-mark="questions"`,"Email the agency"):"";
@@ -4595,7 +4649,7 @@ function renderPrepSteps(body,city,id,b){
       case"price":return btn("pricing",t.total?"Open pricing":"Start pricing");
       case"concrete":return btn("concrete","Find plants and get a quote");
       case"bond":return info.bond_email?a(`href="${esc(bondRequestMail(b,p,city))}" data-mark="bond"`,"Email my bonding agent"):btn("bondinfo","Add your bonding agent");
-      case"forms":return btn("fill","Fill in the agency's form");
+      case"forms":return btn("fill","Fill in the agency's forms")+(p.formFilledAt?btn("packet","Make the bid packet"):"");
       case"submit":return dates.length?btn("dates","Add to calendar"):"";
       default:return"";
     }
@@ -4636,7 +4690,7 @@ function renderPrepSteps(body,city,id,b){
         ${i.key==="prebid"&&!done?placeField():""}
         ${i.key==="site"&&!done?jobField():""}
         ${i.key==="addenda"?`<input class="input step-addenda" data-addenda placeholder="Addenda you've read, e.g. #1, #2 (or none)" value="${esc(p.addenda||"")}" aria-label="Addenda you've read">`:""}
-        ${done?"":action(i)}</span>
+        ${done?"":`<div class="step-acts">${action(i)}</div>`}</span>
     </div>`;
   };
   // Next up: the first required step not done, skipping meetings and
@@ -4666,8 +4720,17 @@ function renderPrepSteps(body,city,id,b){
       ${(p.custom||[]).map((c,i)=>`<label class="prep-check${p.checks["c"+i]?" done":""}">
         <input type="checkbox" data-check="c${i}"${p.checks["c"+i]?" checked":""}>
         <span><b>${esc(c)}</b><button type="button" class="prep-x" data-remove="${i}" aria-label="Remove">×</button></span></label>`).join("")}
-      <div class="prep-add"><input class="input" id="prep-new" placeholder="Add your own step"><button class="btn-ghost" id="prep-add-btn">Add</button></div></div>`;
+      <div class="prep-add"><input class="input" id="prep-new" placeholder="Add your own step"><button class="btn-ghost" id="prep-add-btn">Add</button></div></div>
+    ${currentUser?`<label class="step-remind"><input type="checkbox" id="step-remind"${stepRemindersOn()?" checked":""}>
+      <span><b>Remind me on my phone</b><small>An alert the morning each step is due, for every bid you're preparing.</small></span></label>`:""}`;
   const reopen=()=>openPrep(city,id,"steps");
+  // Whether email-in is set up is asked once a visit; the option appears
+  // when the answer comes back.
+  if(!_inboxChecked&&!inboxAddress())checkInboxAddress().then(addr=>{
+    if(addr&&document.getElementById("prep-body")===body&&prepFor(id).step==="steps")reopen();
+  });
+  const rem=document.getElementById("step-remind");
+  if(rem)rem.onchange=()=>setStepReminders(rem.checked,rem);
   body.querySelectorAll("[data-check]").forEach(cb=>cb.onchange=()=>{
     p.checks[cb.dataset.check]=cb.checked;
     if(!cb.checked)delete p.checks[cb.dataset.check];
@@ -4700,6 +4763,9 @@ function renderPrepSteps(body,city,id,b){
     else if(act==="upload")uploadAndRead(body,city,id,b);
     else if(act==="dates")downloadBidDates(b,p,city,id);
     else if(act==="bondinfo")openBidInfo(reopen);
+    else if(act==="regdetails")renderRegisterHelp(body,city,id,b);
+    else if(act==="inbox")renderInbox(body,city,id,b);
+    else if(act==="packet")renderPacket(body,city,id,b);
   });
   body.querySelectorAll("[data-remove]").forEach(x=>x.onclick=(e)=>{
     e.preventDefault();
@@ -4774,65 +4840,262 @@ const FETCH_ERRORS={robots_disallow:"That site doesn't allow automated reading. 
 // ── A document the contractor uploads ──
 // Plans and bid forms an agency gives out only to registered plan holders
 // can't be fetched by the server. The contractor downloads them after
-// registering and uploads them here; they're read and filled exactly like a
-// linked document. Kept in memory for this visit only (for filling the form
-// after reading it); nothing is stored on the phone or the server but the
-// reading itself.
-const uploadedDocs={};
-const UPLOAD_MAX_MB=15;
+// registering (or forwards the plan room's email, below) and uploads them
+// here; they're read and filled exactly like a linked document. Uploaded
+// PDFs and the filled forms made from them are kept on this phone, per bid,
+// so they're there next time without picking them again. The server keeps
+// nothing but the reading.
+const UPLOAD_MAX_MB=15,UPLOAD_MAX_FILES=6,UPLOAD_TOTAL_MB=40,DOCS_KEEP_DAYS=120;
 DOC_ERRORS.not_pdf="That file isn't a PDF. Upload the PDF the agency gave you.";
-DOC_ERRORS.too_large=`That file is over ${UPLOAD_MAX_MB} MB. Upload just the bid form or specs.`;
+DOC_ERRORS.too_large=`That's too much at once. Each file can be up to ${UPLOAD_MAX_MB} MB, ${UPLOAD_TOTAL_MB} MB in all.`;
 DOC_ERRORS.no_file="No file was picked.";
-function pickPdf(){
+DOC_ERRORS.no_text="This document has no text or pictures the app can read.";
+// The phone's own store for the files (IndexedDB). If the browser won't
+// give us one (private mode), they're kept for this visit only.
+const bidFiles=(()=>{
+  const mem=[];
+  let dbp=null;
+  const open=()=>dbp||(dbp=new Promise((res)=>{
+    try{
+      const rq=indexedDB.open("curbcall_docs",1);
+      rq.onupgradeneeded=()=>{const st=rq.result.createObjectStore("files",{keyPath:"key"});st.createIndex("bid","bid");};
+      rq.onsuccess=()=>res(rq.result);
+      rq.onerror=()=>res(null);
+    }catch(e){res(null);}
+  }));
+  const tx=async(mode,fn)=>{
+    const db=await open();
+    if(!db)return fn(null);
+    return new Promise((res)=>{
+      try{
+        const t=db.transaction("files",mode),st=t.objectStore("files");
+        const out=fn(st);
+        t.oncomplete=()=>res(out&&out.result!==undefined?out.result:out);
+        t.onerror=t.onabort=()=>res(null);
+      }catch(e){res(null);}
+    });
+  };
+  return{
+    // [{key,bid,kind,name,blob,at,meta}], newest first. kind: "upload" | "filled".
+    async list(bid,kind){
+      const rows=await tx("readonly",st=>st?st.index("bid").getAll(bid):null);
+      const all=(Array.isArray(rows)?rows:mem.filter(r=>r.bid===bid));
+      return all.filter(r=>!kind||r.kind===kind).sort((x,y)=>y.at-x.at);
+    },
+    async put(bid,kind,name,blob,meta){
+      const row={key:`${bid}|${kind}|${name}`,bid,kind,name,blob,at:Date.now(),meta:meta||{}};
+      const ok=await tx("readwrite",st=>st?st.put(row):null);
+      if(ok===null){const i=mem.findIndex(r=>r.key===row.key);if(i>=0)mem.splice(i,1);mem.push(row);}
+      return row;
+    },
+    async remove(key){
+      const i=mem.findIndex(r=>r.key===key);if(i>=0)mem.splice(i,1);
+      await tx("readwrite",st=>st?st.delete(key):null);
+    },
+    // Files for bids long gone are cleared out now and then.
+    async prune(){
+      const cutoff=Date.now()-DOCS_KEEP_DAYS*86400000;
+      await tx("readwrite",st=>{
+        if(!st)return null;
+        const c=st.openCursor();
+        c.onsuccess=()=>{const cur=c.result;if(!cur)return;if((cur.value.at||0)<cutoff)cur.delete();cur.continue();};
+        return null;
+      });
+    },
+  };
+})();
+setTimeout(()=>{try{bidFiles.prune();}catch(e){}},5000);
+function pickPdfs(multiple){
   return new Promise(resolve=>{
     const inp=document.createElement("input");
-    inp.type="file";inp.accept="application/pdf,.pdf";inp.style.display="none";
-    inp.onchange=()=>{const f=inp.files&&inp.files[0];inp.remove();resolve(f||null);};
+    inp.type="file";inp.accept="application/pdf,.pdf";inp.multiple=!!multiple;inp.style.display="none";
+    inp.onchange=()=>{const fs=Array.from(inp.files||[]);inp.remove();resolve(fs);};
     document.body.appendChild(inp);inp.click();
   });
 }
-function uploadProblem(f){
-  if(!f)return"";
-  if(!/\.pdf$/i.test(f.name||"")&&f.type!=="application/pdf")return DOC_ERRORS.not_pdf;
-  if(f.size>UPLOAD_MAX_MB*1024*1024)return DOC_ERRORS.too_large;
+function uploadProblem(files){
+  if(!files.length)return"";
+  if(files.length>UPLOAD_MAX_FILES)return`Pick up to ${UPLOAD_MAX_FILES} files at a time.`;
+  for(const f of files){
+    if(!/\.pdf$/i.test(f.name||"")&&f.type!=="application/pdf")return DOC_ERRORS.not_pdf;
+    if(f.size>UPLOAD_MAX_MB*1024*1024)return DOC_ERRORS.too_large;
+  }
+  if(files.reduce((t,f)=>t+f.size,0)>UPLOAD_TOTAL_MB*1024*1024)return DOC_ERRORS.too_large;
   return"";
 }
-function rememberUpload(id,f){
-  const list=uploadedDocs[id]=(uploadedDocs[id]||[]).filter(x=>x.name!==f.name);
-  list.unshift({name:f.name,file:f});
-}
-async function postDocFile(path,f,extra,ms){
+function rememberUploads(id,files){return Promise.all(files.map(f=>bidFiles.put(id,"upload",f.name||"document.pdf",f)));}
+async function postDocFiles(path,files,extra,ms){
   const token=await getSupabaseToken();
   const fd=new FormData();
   fd.append("json",JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,...(extra||{})}));
-  fd.append("file",f,f.name||"document.pdf");
+  files.forEach(f=>fd.append("file",f.blob||f,f.name||"document.pdf"));
   const r=await fetchWithTimeout(SERVER+path,{method:"POST",body:fd},ms);
   return r.json();
 }
-async function readBidDocumentFile(f){
+async function readBidDocumentFiles(files){
   try{
-    const d=await postDocFile("/bid-documents/read",f,{},100000);
+    const d=await postDocFiles("/bid-documents/read",files,{},120000);
     if(d&&d.ok)return d;
     return{ok:false,msg:(d&&(DOC_ERRORS[d.reason]||d.detail))||"Couldn't read that document."};
   }catch(e){return{ok:false,msg:offlineOrServer()};}
 }
-// Pick a PDF, read it, then show what was read -- the same review a linked
-// document gets.
-async function uploadAndRead(body,city,id,b){
-  const f=await pickPdf();
-  if(!f)return;
-  const bad=uploadProblem(f);
-  if(bad){toast(bad);return;}
-  rememberUpload(id,f);
-  body.innerHTML=`<div class="account-status"><span class="spin"></span> Reading ${esc(f.name)}… this can take up to a minute.</div>`;
-  const res=await readBidDocumentFile(f);
+function docsName(files){
+  return files.length===1?files[0].name:`${files.length} files`;
+}
+// Read files already on the phone (picked, or brought in from email), then
+// show what was read -- the same review a linked document gets.
+async function readFilesAndReview(body,city,id,b,files){
+  body.innerHTML=`<div class="account-status"><span class="spin"></span> Reading ${esc(docsName(files))}… this can take up to a minute${files.length>1?" or two":""}.</div>`;
+  const res=await readBidDocumentFiles(files);
   if(!document.getElementById("prep-body"))return;
   if(!res.ok){
     body.innerHTML=`<div class="alert alert-amber"><span>${esc(res.msg)}</span></div><button class="btn-ghost" id="doc-back">Back to ${prepBackName(id,"pricing")}</button>`;
     document.getElementById("doc-back").onclick=()=>openPrep(city,id,prepFor(id).step||"pricing");
     return;
   }
-  renderDocReview(body,city,id,b,{name:f.name,url:""},res);
+  renderDocReview(body,city,id,b,{name:docsName(files),url:"",files},res);
+}
+async function uploadAndRead(body,city,id,b){
+  const files=await pickPdfs(true);
+  if(!files.length)return;
+  const bad=uploadProblem(files);
+  if(bad){toast(bad);return;}
+  await rememberUploads(id,files);
+  readFilesAndReview(body,city,id,b,files);
+}
+
+// ── Documents emailed in (server: /inbox/*) ──
+// Every contractor has a private docs+<code>@ address. Forwarding the plan
+// room's email there puts its PDFs here, ready to read or fill. The address
+// only shows once the server says email-in is set up.
+async function inboxCall(path,extra,raw){
+  const token=await getSupabaseToken();
+  const r=await fetchWithTimeout(SERVER+path,{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,...(extra||{})})},60000);
+  if(raw)return r;
+  return r.json();
+}
+function inboxAddress(){return store.get("inbox_address","");}
+let _inboxChecked=false;
+// Asked once a visit; the answer decides whether the email option shows.
+async function checkInboxAddress(){
+  if(_inboxChecked||!currentUser||isOffline())return inboxAddress();
+  _inboxChecked=true;
+  try{
+    const d=await inboxCall("/inbox/address");
+    if(d&&d.ok&&d.address)store.set("inbox_address",d.address);
+    else if(d&&d.reason==="not_configured")store.set("inbox_address","");
+  }catch(e){}
+  return inboxAddress();
+}
+// Emailed documents that look like this bid's: its number, or most of the
+// words of its title, in the email.
+function inboxMatches(item,b){
+  const hay=`${item.subject||""} ${item.snippet||""} ${(item.files||[]).map(f=>f.name).join(" ")}`.toLowerCase();
+  if(b.bid_number&&String(b.bid_number).length>=3&&hay.includes(String(b.bid_number).toLowerCase()))return true;
+  const words=String(b.title||"").toLowerCase().split(/[^a-z0-9]+/).filter(w=>w.length>3&&!/^(city|county|project|improvements?|bids?|repairs?|replacement|street|avenue|road)$/.test(w));
+  return words.length>0&&words.filter(w=>hay.includes(w)).length>=Math.min(2,words.length);
+}
+async function inboxFile(item,f){
+  const r=await inboxCall("/inbox/file",{id:item.id,n:f.n},true);
+  if(!r.ok)throw new Error("not found");
+  const blob=await r.blob();
+  return new File([blob],f.name||"document.pdf",{type:"application/pdf"});
+}
+async function renderInbox(body,city,id,b,then){
+  const back=()=>openPrep(city,id,prepFor(id).step||"steps");
+  const addr=await checkInboxAddress();
+  if(!document.getElementById("prep-body"))return;
+  if(!addr){
+    body.innerHTML=`<div class="alert alert-amber"><span>Emailing documents in isn't switched on yet. Upload them from your phone instead.</span></div><button class="btn-ghost" id="ib-back">Back to ${prepBackName(id,"steps")}</button>`;
+    document.getElementById("ib-back").onclick=back;
+    return;
+  }
+  body.innerHTML=`<div class="account-status"><span class="spin"></span> Checking for emailed documents…</div>`;
+  let items=[];
+  try{const d=await inboxCall("/inbox/list");items=(d&&d.ok&&d.items)||[];}catch(e){}
+  if(!document.getElementById("prep-body"))return;
+  const mine=items.filter(it=>inboxMatches(it,b)),rest=items.filter(it=>!inboxMatches(it,b));
+  const when=(t)=>shortDate(new Date((Number(t)||0)*1000));
+  const card=(it)=>`<div class="ib-item"><b>${esc(it.subject||"(no subject)")}</b>
+      <small>${esc(it.from||"")} · ${esc(when(it.at))}</small>
+      ${(it.files||[]).map(f=>`<div class="ib-file"><span>${esc(f.name)}</span>
+        <button type="button" class="step-act" data-ib-read="${esc(it.id)}|${f.n}">Read</button>
+        <button type="button" class="step-act" data-ib-fill="${esc(it.id)}|${f.n}">Fill</button></div>`).join("")}
+      ${(it.files||[]).length>1?`<button type="button" class="step-act" data-ib-readall="${esc(it.id)}">Read all ${it.files.length} together</button>`:""}
+      ${(it.links||[]).map(u=>safeUrl(u)?`<a class="ib-link" href="${esc(safeUrl(u))}" target="_blank" rel="noopener noreferrer">${esc(u.replace(/^https?:\/\//,"").slice(0,60))}</a>`:"").join("")}
+      <a href="#" class="ib-del" data-ib-del="${esc(it.id)}">Remove</a></div>`;
+  body.innerHTML=`<div class="workspace-title">Documents from your email</div>
+    <div class="rate-note" style="margin-top:0;">Forward the plan room's email to your CurbCall address. PDFs attached to it show up here within a minute, and links in it are listed. Kept 30 days.</div>
+    <div class="ib-addr"><code>${esc(addr)}</code><button type="button" class="btn-ghost" id="ib-copy">Copy</button></div>
+    ${mine.length?`<div class="detail-label">For this bid</div>${mine.map(card).join("")}`:""}
+    ${rest.length?`<div class="detail-label">${mine.length?"Other emails":"Emails"}</div>${rest.map(card).join("")}`:""}
+    ${items.length?"":`<div class="account-status">Nothing yet. After you forward an email, tap Check again.</div>`}
+    <div class="act-primary"><button class="ma-ghost" id="ib-refresh">Check again</button></div>
+    <button class="btn-ghost" id="ib-back">Back to ${prepBackName(id,"steps")}</button>`;
+  document.getElementById("ib-back").onclick=back;
+  document.getElementById("ib-refresh").onclick=()=>renderInbox(body,city,id,b,then);
+  document.getElementById("ib-copy").onclick=async()=>{
+    try{await navigator.clipboard.writeText(addr);toast("Address copied. Paste it into the To line when you forward.");}
+    catch(e){toast(addr);}
+  };
+  const find=(v)=>{const[iid,n]=v.split("|");const it=items.find(x=>x.id===iid);return{it,f:it&&(it.files||[]).find(x=>String(x.n)===n)};};
+  const bring=async(pairs)=>{
+    body.innerHTML=`<div class="account-status"><span class="spin"></span> Getting ${pairs.length>1?`${pairs.length} files`:esc(pairs[0].f.name)}…</div>`;
+    try{
+      const files=[];
+      for(const{it,f}of pairs)files.push(await inboxFile(it,f));
+      await rememberUploads(id,files);
+      return files;
+    }catch(e){
+      toast("Couldn't get that file. It may have expired.");
+      renderInbox(body,city,id,b,then);
+      return null;
+    }
+  };
+  body.querySelectorAll("[data-ib-read]").forEach(x=>x.onclick=async()=>{
+    const files=await bring([find(x.dataset.ibRead)]);if(files)readFilesAndReview(body,city,id,b,files);
+  });
+  body.querySelectorAll("[data-ib-readall]").forEach(x=>x.onclick=async()=>{
+    const it=items.find(i=>i.id===x.dataset.ibReadall);
+    const files=await bring((it.files||[]).map(f=>({it,f})));if(files)readFilesAndReview(body,city,id,b,files);
+  });
+  body.querySelectorAll("[data-ib-fill]").forEach(x=>x.onclick=async()=>{
+    const files=await bring([find(x.dataset.ibFill)]);
+    if(files)fillAndShow(body,city,id,b,[{name:files[0].name,file:files[0]}]);
+  });
+  body.querySelectorAll("[data-ib-del]").forEach(x=>x.onclick=async(e)=>{
+    e.preventDefault();
+    try{await inboxCall("/inbox/delete",{id:x.dataset.ibDel});}catch(err){}
+    renderInbox(body,city,id,b,then);
+  });
+}
+
+// ── Signing up as a plan holder ──
+// The agency's sign-up page is theirs, so it can't be filled from here; what
+// slows it down on a phone is typing the company details again. Each one is
+// a tap to copy.
+function renderRegisterHelp(body,city,id,b){
+  const c=companyProfile||{},i=bidInfo();
+  const m=/^\s*([^,]+),\s*([A-Za-z .]+?)\s+(\d{5}(?:-\d{4})?)\s*$/.exec(i.city_state_zip||"");
+  const rows=[["Company",c.name],["Contact name",c.contact],["Title",i.title],["Email",c.email],["Phone",c.phone],
+    ["Street address",i.address],["City",m&&m[1]],["State",m&&m[2]],["ZIP",m&&m[3]],
+    ["City, state, ZIP",m?"":i.city_state_zip],["License / registration",i.license]].filter(r=>r[1]);
+  const all=rows.map(r=>`${r[0]}: ${r[1]}`).join("\n");
+  const url=safeUrl(b.plan_room);
+  body.innerHTML=`<div class="workspace-title">Your details for the sign-up form</div>
+    <div class="rate-note" style="margin-top:0;">Tap a detail to copy it, then paste it into the agency's form.</div>
+    ${rows.length?`<div class="reg-rows">${rows.map((r,k)=>`<button type="button" class="reg-row" data-reg="${k}"><small>${esc(r[0])}</small><b>${esc(r[1])}</b></button>`).join("")}</div>
+      <button type="button" class="btn-ghost" id="reg-all">Copy all</button>`
+    :`<div class="alert alert-amber"><span>No company details saved yet.</span></div>`}
+    <button type="button" class="btn-ghost" id="reg-edit">${rows.length?"Edit":"Add"} my details</button>
+    ${url?`<div class="act-primary"><a class="ma-gold" href="${esc(url)}" target="_blank" rel="noopener noreferrer">Open the sign-up page</a></div>`:""}
+    <button class="btn-ghost" id="reg-back">Back to ${prepBackName(id,"steps")}</button>`;
+  const copy=async(t,what)=>{try{await navigator.clipboard.writeText(t);toast(`${what} copied`);}catch(e){toast("Couldn't copy. Press and hold to select it instead.");}};
+  body.querySelectorAll("[data-reg]").forEach(x=>x.onclick=()=>{const r=rows[Number(x.dataset.reg)];copy(String(r[1]),r[0]);});
+  const ra=document.getElementById("reg-all");if(ra)ra.onclick=()=>copy(all,"All details");
+  document.getElementById("reg-edit").onclick=()=>openBidInfo(()=>{openPrep(city,id,"steps").then(()=>{const bd=document.getElementById("prep-body");if(bd)renderRegisterHelp(bd,city,id,b);});});
+  document.getElementById("reg-back").onclick=()=>openPrep(city,id,prepFor(id).step||"steps");
 }
 async function readBidDocument(url){
   try{
@@ -4847,15 +5110,29 @@ async function readBidDocument(url){
     return{ok:false,msg};
   }catch(e){return{ok:false,msg:offlineOrServer()};}
 }
-function renderDocPicker(body,city,id,b){
+async function renderDocPicker(body,city,id,b){
   const docs=prepDocCandidates(b);
+  const ups=await bidFiles.list(id,"upload");
+  if(!document.getElementById("prep-body"))return;
   body.innerHTML=`<div class="rate-note" style="margin-top:0;">Pick the document with the bid form or schedule of items.
       The quantities it lists replace the estimate, after you've checked them.</div>
+    ${ups.length?`<div class="detail-label">On this phone</div>${ups.map((u,i)=>`<button class="btn-ghost doc-pick" data-up="${i}">${esc(u.name)}</button>`).join("")}
+      ${ups.length>1?`<button class="btn-ghost doc-pick" id="doc-upall">Read all ${ups.length} together</button>`:""}`:""}
+    ${docs.length?`<div class="detail-label">Linked to the bid</div>`:""}
     ${docs.map((d,i)=>`<button class="btn-ghost doc-pick" data-doc="${i}">${esc(d.name)}</button>`).join("")}
-    <button class="btn-ghost doc-pick" id="doc-upload">Upload a document from your phone</button>
-    <div class="rate-note">For plans or a bid form you downloaded after registering with the agency. PDF, up to ${UPLOAD_MAX_MB} MB.</div>
+    <button class="btn-ghost doc-pick" id="doc-upload">Upload from your phone</button>
+    ${inboxAddress()?`<button class="btn-ghost doc-pick" id="doc-inbox">Get them from your email</button>`:""}
+    <div class="rate-note">For plans or a bid form you got after registering with the agency. PDFs, up to ${UPLOAD_MAX_FILES} at once; they're read together.</div>
     <button class="btn-ghost" id="doc-cancel">Cancel</button>`;
   document.getElementById("doc-upload").onclick=()=>uploadAndRead(body,city,id,b);
+  const ib=document.getElementById("doc-inbox");
+  if(ib)ib.onclick=()=>renderInbox(body,city,id,b);
+  body.querySelectorAll("[data-up]").forEach(btn=>btn.onclick=()=>{
+    const u=ups[Number(btn.dataset.up)];
+    readFilesAndReview(body,city,id,b,[new File([u.blob],u.name,{type:"application/pdf"})]);
+  });
+  const all=document.getElementById("doc-upall");
+  if(all)all.onclick=()=>readFilesAndReview(body,city,id,b,ups.slice(0,UPLOAD_MAX_FILES).map(u=>new File([u.blob],u.name,{type:"application/pdf"})));
   body.querySelectorAll("[data-doc]").forEach(btn=>btn.onclick=async()=>{
     const d=docs[Number(btn.dataset.doc)];
     body.innerHTML=`<div class="account-status"><span class="spin"></span> Reading ${esc(d.name)}… this can take up to a minute.</div>`;
@@ -4880,8 +5157,11 @@ function renderDocReview(body,city,id,b,doc,res){
   const items=res.line_items||[];
   const found=[res.submission&&"how to submit",res.bid_security&&"bid security",res.prebid&&"the pre-bid meeting",
     (res.required_forms||[]).length&&"required forms"].filter(Boolean);
+  // Right after reading, the same file can be filled in: one upload, both jobs.
+  const fillable=(doc.files&&doc.files.length)||/\.pdf(\?|#|$)/i.test(doc.url||"");
   body.innerHTML=`<div class="workspace-title">Read from ${esc(doc.name)}${res.pages_read?` · ${plural(res.pages_read,"page")}`:""}</div>
     ${res.truncated?`<div class="rate-note">Long document: only the first part was read. Check the rest by hand.</div>`:""}
+    ${res.scanned_pages?`<div class="rate-note">${plural(res.scanned_pages,"scanned page")} read from ${res.scanned_pages>1?"their pictures":"its picture"}. Check the numbers closely.</div>`:""}
     ${items.length?`<div class="rate-note">${plural(items.length,"line item")} found. Check them against the document before relying on them.</div>
       <table class="ps-table"><thead><tr><th>Item</th><th>Qty</th></tr></thead><tbody>
       ${items.slice(0,40).map(it=>`<tr><td>${esc(`${it.item_no?it.item_no+". ":""}${it.description}`)}</td><td>${it.quantity!=null?esc(String(it.quantity)):"—"} ${esc(it.unit||"")}</td></tr>`).join("")}
@@ -4889,7 +5169,15 @@ function renderDocReview(body,city,id,b,doc,res){
       <div class="act-primary"><button class="ma-gold" id="doc-replace">Use these lines</button><button class="ma-ghost" id="doc-add">Add to my lines</button></div>`
     :`<div class="alert alert-amber"><span>No schedule of items found in this document. Try the bid form if there's another document.</span></div>`}
     ${found.length?`<div class="rate-note">Also found ${found.join(", ")}. It's now on your Steps.</div>`:""}
+    ${fillable?`<div class="doc-fillnow"><b>${doc.files&&doc.files.length>1?"Is one of these the bid form?":"Is this the bid form?"}</b>
+      <span>Once your prices are in, it can be filled in with your details and prices.</span>
+      <button class="btn-ghost" id="doc-fill">Fill ${doc.files&&doc.files.length>1?"them":"it"} in now</button></div>`:""}
     <button class="btn-ghost" id="doc-back" style="margin-top:0.5rem;">Back to ${prepBackName(id,"pricing")}</button>`;
+  const df=document.getElementById("doc-fill");
+  if(df)df.onclick=()=>{
+    if(doc.files&&doc.files.length>1)renderFormFill(body,city,id,b);
+    else fillAndShow(body,city,id,b,[doc.files&&doc.files.length?{name:doc.files[0].name,file:doc.files[0]}:{name:doc.name,url:doc.url}]);
+  };
   const take=(replace)=>{
     const d=rateData[bidState(city,b)];
     const lines=items.map(it=>lineFromDocItem(it,d));
@@ -5201,10 +5489,11 @@ function renderPrepSummary(body,city,id,b){
     </div>
     <div class="act-primary">
       <button class="ma-gold" id="ps-fill">Fill in the agency's bid form</button>
+      <button class="ma-ghost" id="ps-packet">Make the bid packet</button>
       <button class="ma-ghost" id="ps-print">Print / save PDF</button>
       <button class="ma-ghost" id="ps-copy">Copy as text</button>
     </div>
-    <div class="rate-note">Most agencies only accept their own form, signed by you. Filling it in puts your details and prices into its boxes; you check it and sign. If the form isn't fillable, print this and copy it over.</div>
+    <div class="rate-note">Most agencies only accept their own form, signed by you. Filling it in puts your details and prices on it; you check it and sign. The packet puts a checklist, this summary and your filled forms in one PDF to print.</div>
     <div class="workspace-title" style="margin-top:1.2rem;">Next steps</div>
     <div class="ps-steps">
       <a class="btn-ghost" id="ps-bond" href="${esc(bondRequestMail(b,p,city))}">Ask for a bid bond</a>
@@ -5220,6 +5509,7 @@ function renderPrepSummary(body,city,id,b){
   };
   document.getElementById("ps-print").onclick=()=>printPrepSummary(prepSummaryData(id,b,city));
   document.getElementById("ps-fill").onclick=()=>renderFormFill(body,city,id,b);
+  document.getElementById("ps-packet").onclick=()=>renderPacket(body,city,id,b);
   document.getElementById("ps-concrete").onclick=()=>renderConcretePanel(body,city,id,b);
   const dl=document.getElementById("ps-dates");
   if(dl)dl.onclick=()=>downloadBidDates(b,p,city,id);
@@ -5305,7 +5595,7 @@ function fillPayload(b,p){
   return{
     company:{name:c.name||"",contact:c.contact||"",phone:c.phone||"",email:c.email||"",
       title:i.title||"",address:i.address||"",city_state_zip:i.city_state_zip||"",license:i.license||"",years:i.years||""},
-    bid:{number:b.bid_number||"",title:b.title||"",addenda:p.addenda||"",total:Math.round(t.total*100)/100,
+    bid:{number:b.bid_number||"",title:b.title||"",agency:b.agency||"",addenda:p.addenda||"",total:Math.round(t.total*100)/100,
       date:`${pad(now.getMonth()+1)}/${pad(now.getDate())}/${now.getFullYear()}`},
     lines:(p.lines||[]).filter(l=>(l.name||"").trim()).map(l=>{
       const s=splitItemNo(l.name),price=Math.round((Number(l.price)||0)*k*100)/100,qty=Number(l.qty)||0;
@@ -5313,7 +5603,7 @@ function fillPayload(b,p){
     }),
   };
 }
-const FILL_ERRORS={not_fillable:"This form isn't a fillable PDF, so it can't be filled in automatically. Print the summary: its item numbers match the form.",
+const FILL_ERRORS={not_fillable:"No fill-in boxes or blank lines were found on this form (it may be a scan). Print the summary: its item numbers match the form.",
   nothing_matched:"None of the form's boxes matched your details. Print the summary and copy it over.",
   nothing_to_fill:"Add your company details and prices first.",rate_limited:"Daily limit for filling forms reached. Try again tomorrow."};
 function fillError(d,what){
@@ -5332,74 +5622,191 @@ async function fillBidForm(url,payload){
 }
 async function fillBidFormFile(f,payload){
   try{
-    const d=await postDocFile("/bid-documents/fill",f,payload,120000);
+    const d=await postDocFiles("/bid-documents/fill",[f],payload,120000);
     if(d&&d.ok)return d;
     return{ok:false,msg:fillError(d,"form")};
   }catch(e){return{ok:false,msg:offlineOrServer()};}
 }
-function downloadBase64Pdf(b64,name){
+function b64ToBlob(b64){
   const bin=atob(b64),bytes=new Uint8Array(bin.length);
   for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
-  const url=URL.createObjectURL(new Blob([bytes],{type:"application/pdf"}));
-  const a=document.createElement("a");
-  a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
-  setTimeout(()=>URL.revokeObjectURL(url),4000);
+  return new Blob([bytes],{type:"application/pdf"});
 }
-function renderFormFill(body,city,id,b){
+function filledName(name){return String(name||"form").replace(/\.pdf$/i,"")+" (filled).pdf";}
+// Forms that look like they're meant to be filled in and handed back, as
+// opposed to plans and specs, are ticked to start with.
+const FORMISH_RE=/form|affidavit|proposal|bid ?sheet|schedule|certif|statement|questionnaire|e-?verify|collusion|acknowledg|declaration|bidder/i;
+async function renderFormFill(body,city,id,b){
   const p=prepFor(id);
-  const docs=prepDocCandidates(b).filter(d=>d.name!=="Original posting");
-  // The document the schedule was read from is most likely the bid form.
-  docs.sort((x,y)=>(y.name===(p.docInfo&&p.docInfo.source))-(x.name===(p.docInfo&&p.docInfo.source)));
-  const ups=uploadedDocs[id]||[];
+  const linked=prepDocCandidates(b).filter(d=>d.name!=="Original posting");
+  const ups=await bidFiles.list(id,"upload");
+  const done=await bidFiles.list(id,"filled");
+  if(!document.getElementById("prep-body"))return;
+  const src=p.docInfo&&p.docInfo.source;
+  // Everything that could be the form: what's on the phone, then what the
+  // bid links to. The document the schedule was read from goes first.
+  const opts=ups.map(u=>({name:u.name,file:new File([u.blob],u.name,{type:"application/pdf"}),phone:true}))
+    .concat(linked.filter(d=>!ups.some(u=>u.name===d.name)).map(d=>({name:d.name,url:d.url})));
+  opts.sort((x,y)=>(y.name===src)-(x.name===src));
+  const pre=new Set(opts.map((o,i)=>(o.name===src||FORMISH_RE.test(o.name)||(o.phone&&opts.length<=2))?i:-1).filter(i=>i>=0));
+  if(!pre.size&&opts.length)pre.add(0);
   const missing=!(companyProfile&&companyProfile.name)||!bidInfoCount();
   const back=()=>openPrep(city,id,p.step||"summary");
-  body.innerHTML=`<div class="rate-note" style="margin-top:0;">Pick the bid form. Your company details and prices go into its boxes; signatures, notary blocks and tax IDs are left for you.</div>
+  body.innerHTML=`<div class="rate-note" style="margin-top:0;">Tick the bid form and any affidavits. Your company details and prices go into their boxes or onto their blank lines; signatures, notary blocks and tax IDs are left for you.</div>
     ${missing?`<div class="alert alert-amber"><span>Add your company and bid details first so there's something to fill in.</span></div>
       <button class="btn-ghost" id="ff-profile">Add bid details</button>`:""}
-    ${ups.map((u,i)=>`<button class="btn-ghost doc-pick" data-up="${i}">${esc(u.name)} (uploaded)</button>`).join("")}
-    ${docs.map((d,i)=>`<button class="btn-ghost doc-pick" data-doc="${i}">${esc(d.name)}</button>`).join("")||
-      (ups.length?"":`<div class="account-status">No documents are linked to this bid.</div>`)}
-    <button class="btn-ghost doc-pick" id="ff-upload">Upload the bid form</button>
-    <div class="rate-note">If the agency gave you the form after you registered, upload that PDF (up to ${UPLOAD_MAX_MB} MB).</div>
+    ${opts.length?`<div class="ff-list">${opts.map((o,i)=>`<label class="ff-opt"><input type="checkbox" data-ff="${i}"${pre.has(i)?" checked":""}>
+        <span>${esc(o.name)}${o.phone?` <em>on this phone</em>`:""}</span></label>`).join("")}</div>
+      <div class="act-primary"><button class="ma-gold" id="ff-go">Fill in the ticked forms</button></div>`
+    :`<div class="account-status">No documents yet. Upload the bid form the agency gave you.</div>`}
+    <button class="btn-ghost doc-pick" id="ff-upload">Upload a form</button>
+    ${inboxAddress()?`<button class="btn-ghost doc-pick" id="ff-inbox">Get a form from your email</button>`:""}
+    ${done.length?`<div class="detail-label" style="margin-top:0.8rem;">Filled in already</div>
+      ${done.map((d,i)=>`<div class="ff-done"><span>${esc(d.name)} <small>${esc(shortDate(new Date(d.at)))}</small></span>
+        <button type="button" class="step-act" data-dl="${i}">Download</button></div>`).join("")}
+      <button class="btn-ghost" id="ff-packet">Make the bid packet</button>`:""}
     <button class="btn-ghost" id="ff-cancel">Back to ${prepBackName(id,"summary")}</button>`;
   const prof=document.getElementById("ff-profile");
   if(prof)prof.onclick=()=>openBidInfo(back);
   document.getElementById("ff-cancel").onclick=back;
-  const fill=async(name,run)=>{
-    body.innerHTML=`<div class="account-status"><span class="spin"></span> Filling in ${esc(name)}…</div>`;
-    const res=await run();
+  const go=document.getElementById("ff-go");
+  if(go)go.onclick=()=>{
+    const picked=[...body.querySelectorAll("[data-ff]:checked")].map(x=>opts[Number(x.dataset.ff)]);
+    if(!picked.length){toast("Tick at least one form");return;}
+    fillAndShow(body,city,id,b,picked);
+  };
+  document.getElementById("ff-upload").onclick=async()=>{
+    const files=await pickPdfs(true);
+    if(!files.length)return;
+    const bad=uploadProblem(files);
+    if(bad){toast(bad);return;}
+    await rememberUploads(id,files);
+    fillAndShow(body,city,id,b,files.map(f=>({name:f.name,file:f})));
+  };
+  const ib=document.getElementById("ff-inbox");
+  if(ib)ib.onclick=()=>renderInbox(body,city,id,b);
+  body.querySelectorAll("[data-dl]").forEach(x=>x.onclick=()=>{
+    const d=done[Number(x.dataset.dl)];
+    downloadBlob(d.blob,d.name);
+  });
+  const pk=document.getElementById("ff-packet");
+  if(pk)pk.onclick=()=>renderPacket(body,city,id,b);
+}
+function downloadBlob(blob,name){
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),4000);
+}
+// Fill one or several forms in turn, keep each filled copy on the phone for
+// the packet, and list every box that was filled so it can be checked.
+async function fillAndShow(body,city,id,b,forms){
+  const p=prepFor(id);
+  const back=()=>openPrep(city,id,p.step||"summary");
+  const results=[];
+  for(let k=0;k<forms.length;k++){
+    const f=forms[k];
+    body.innerHTML=`<div class="account-status"><span class="spin"></span> Filling in ${esc(f.name)}…${forms.length>1?` (${k+1} of ${forms.length})`:""}</div>`;
+    const res=f.file?await fillBidFormFile(f.file,fillPayload(b,p)):await fillBidForm(f.url,fillPayload(b,p));
     if(!document.getElementById("prep-body"))return;
-    if(!res.ok){
-      body.innerHTML=`<div class="alert alert-amber"><span>${esc(res.msg)}</span></div><button class="btn-ghost" id="ff-back">Back to ${prepBackName(id,"summary")}</button>`;
-      document.getElementById("ff-back").onclick=back;
+    if(res.ok){
+      const blob=b64ToBlob(res.pdf_b64);
+      await bidFiles.put(id,"filled",filledName(f.name),blob,{filled:res.filled.length,flat:!!res.flat,from:f.name});
+      res.blob=blob;
+    }
+    results.push({f,res});
+  }
+  const ok=results.filter(r=>r.res.ok);
+  if(ok.length){p.formFilledAt=Date.now();savePrep(id,city);}
+  if(results.length===1&&!ok.length){
+    body.innerHTML=`<div class="alert alert-amber"><span>${esc(results[0].res.msg)}</span></div><button class="btn-ghost" id="ff-back">Back to ${prepBackName(id,"summary")}</button>`;
+    document.getElementById("ff-back").onclick=back;
+    return;
+  }
+  const block=({f,res},i)=>res.ok
+    ?`<div class="ff-result"><div class="workspace-title">Filled ${plural(res.filled.length,"box","boxes")} on ${esc(f.name)}</div>
+      ${res.flat?`<div class="rate-note">This form has no fill-in boxes, so your details were typed onto its blank lines. Check where each one landed before you print.</div>`:""}
+      <table class="ps-table"><thead><tr><th>${res.flat?"Line on the form":"Box on the form"}</th><th>Filled with</th></tr></thead><tbody>
+      ${res.filled.map(x=>`<tr><td>${esc(x.label)}</td><td>${esc(x.value)}</td></tr>`).join("")}</tbody></table>
+      <div class="rate-note">${plural(res.left_blank,res.flat?"blank":"box",res.flat?"blanks":"boxes")} left: signatures, notary, tax ID, and anything you haven't entered. Check every one before you sign.</div>
+      <button class="btn-ghost" data-get="${i}">Download ${esc(filledName(f.name))}</button></div>`
+    :`<div class="ff-result"><div class="workspace-title">${esc(f.name)}</div><div class="alert alert-amber"><span>${esc(res.msg)}</span></div></div>`;
+  body.innerHTML=`${results.map(block).join("")}
+    ${ok.length?`<div class="act-primary">${ok.length===1&&results.length===1?`<button class="ma-gold" id="ff-download">Download filled form</button>`:""}
+      <button class="${ok.length===1&&results.length===1?"ma-ghost":"ma-gold"}" id="ff-packet">Make the bid packet</button></div>
+      <div class="rate-note">The packet puts a checklist, your bid summary and every filled form in one PDF to print and sign.</div>`:""}
+    <button class="btn-ghost" id="ff-back" style="margin-top:0.5rem;">Back to ${prepBackName(id,"summary")}</button>`;
+  const fname=`${String(b.title||"bid").replace(/[^a-z0-9]+/gi,"_").slice(0,40)}_bid_form_filled.pdf`;
+  const dl=document.getElementById("ff-download");
+  if(dl)dl.onclick=()=>downloadBlob(ok[0].res.blob,fname);
+  body.querySelectorAll("[data-get]").forEach(x=>x.onclick=()=>{const r=results[Number(x.dataset.get)];downloadBlob(r.res.blob,filledName(r.f.name));});
+  const pk=document.getElementById("ff-packet");
+  if(pk)pk.onclick=()=>renderPacket(body,city,id,b);
+  document.getElementById("ff-back").onclick=back;
+}
+
+// ── The bid packet (server: /bid-documents/packet) ──
+// Everything that goes in the envelope as one PDF: a cover checklist of what
+// to sign, attach and check, the bid summary, then the filled forms in the
+// order picked here.
+function packetChecklist(b,p,names){
+  const info=p.docInfo||{},out=[];
+  out.push("Sign and date every form where it asks. Nothing in this packet is signed for you.");
+  if(info.bid_security)out.push(`Attach the bid bond: ${info.bid_security}`);
+  else out.push("Attach a bid bond or bid security if the bid asks for one.");
+  const have=names.join(" ").toLowerCase();
+  (info.required_forms||[]).forEach(f=>{
+    const words=String(f).toLowerCase().split(/[^a-z]+/).filter(w=>w.length>4);
+    if(!words.some(w=>have.includes(w)))out.push(`Include: ${f}`);
+  });
+  out.push("Have any affidavit that asks for a notary notarized.");
+  out.push(String(p.addenda||"").trim()?`Write the addenda you received (${String(p.addenda).trim()}) where the form asks.`
+    :"Check for addenda and acknowledge each one on the form.");
+  out.push("Insurance certificate, if the bid asks for one.");
+  out.push(`Seal the envelope and mark it with the project name${b.bid_number?` and bid number ${b.bid_number}`:""}.`);
+  if(b.deadline)out.push(`Deliver it before ${b.deadline}. Late bids are usually returned unopened.`);
+  return out;
+}
+async function renderPacket(body,city,id,b){
+  const p=prepFor(id);
+  const done=await bidFiles.list(id,"filled");
+  if(!document.getElementById("prep-body"))return;
+  const back=()=>openPrep(city,id,p.step||"summary");
+  done.sort((x,y)=>(y.meta&&y.meta.from===(p.docInfo&&p.docInfo.source))-(x.meta&&x.meta.from===(p.docInfo&&p.docInfo.source)));
+  body.innerHTML=`<div class="workspace-title">Bid packet</div>
+    <div class="rate-note" style="margin-top:0;">One PDF to print: a checklist for you, your bid summary, then each form ticked here.</div>
+    ${done.length?`<div class="ff-list">${done.map((d,i)=>`<label class="ff-opt"><input type="checkbox" data-pk="${i}" checked><span>${esc(d.name)}</span></label>`).join("")}</div>`
+      :`<div class="account-status">No filled forms yet. The packet will be the checklist and your bid summary.</div>`}
+    <button class="btn-ghost" id="pk-more">Fill in another form first</button>
+    <div class="act-primary"><button class="ma-gold" id="pk-go">Make the packet PDF</button></div>
+    <button class="btn-ghost" id="pk-back">Back to ${prepBackName(id,"summary")}</button>`;
+  document.getElementById("pk-back").onclick=back;
+  document.getElementById("pk-more").onclick=()=>renderFormFill(body,city,id,b);
+  document.getElementById("pk-go").onclick=async()=>{
+    const picked=[...body.querySelectorAll("[data-pk]:checked")].map(x=>done[Number(x.dataset.pk)]);
+    const pay=fillPayload(b,p);
+    pay.bid.due=b.deadline||"";
+    pay.bid.submission=(p.docInfo&&p.docInfo.submission)||"";
+    pay.checklist=packetChecklist(b,p,picked.map(d=>d.name));
+    body.innerHTML=`<div class="account-status"><span class="spin"></span> Putting the packet together…</div>`;
+    let d=null;
+    try{d=await postDocFiles("/bid-documents/packet",picked.map(x=>({name:x.name,blob:x.blob})),pay,90000);}
+    catch(e){d={ok:false,msg:offlineOrServer()};}
+    if(!document.getElementById("prep-body"))return;
+    if(!d||!d.ok){
+      body.innerHTML=`<div class="alert alert-amber"><span>${esc((d&&(d.msg||DOC_ERRORS[d.reason]))||"Couldn't make the packet. Try again in a minute.")}</span></div><button class="btn-ghost" id="pk-back">Back</button>`;
+      document.getElementById("pk-back").onclick=()=>renderPacket(body,city,id,b);
       return;
     }
-    p.formFilledAt=Date.now();savePrep(id,city);
-    const fname=`${String(b.title||"bid").replace(/[^a-z0-9]+/gi,"_").slice(0,40)}_bid_form_filled.pdf`;
-    body.innerHTML=`<div class="workspace-title">Filled ${plural(res.filled.length,"box","boxes")} on ${esc(name)}</div>
-      <table class="ps-table"><thead><tr><th>Box on the form</th><th>Filled with</th></tr></thead><tbody>
-      ${res.filled.map(f=>`<tr><td>${esc(f.label)}</td><td>${esc(f.value)}</td></tr>`).join("")}</tbody></table>
-      <div class="rate-note">${plural(res.left_blank,"box","boxes")} left blank: signatures, notary, tax ID, and anything you haven't entered. Check every box before you sign.</div>
-      <div class="act-primary"><button class="ma-gold" id="ff-download">Download filled form</button></div>
-      <button class="btn-ghost" id="ff-back" style="margin-top:0.5rem;">Back to ${prepBackName(id,"summary")}</button>`;
-    document.getElementById("ff-download").onclick=()=>downloadBase64Pdf(res.pdf_b64,fname);
-    document.getElementById("ff-back").onclick=back;
-  };
-  body.querySelectorAll("[data-doc]").forEach(btn=>btn.onclick=()=>{
-    const d=docs[Number(btn.dataset.doc)];
-    fill(d.name,()=>fillBidForm(d.url,fillPayload(b,p)));
-  });
-  body.querySelectorAll("[data-up]").forEach(btn=>btn.onclick=()=>{
-    const u=ups[Number(btn.dataset.up)];
-    fill(u.name,()=>fillBidFormFile(u.file,fillPayload(b,p)));
-  });
-  document.getElementById("ff-upload").onclick=async()=>{
-    const f=await pickPdf();
-    if(!f)return;
-    const bad=uploadProblem(f);
-    if(bad){toast(bad);return;}
-    rememberUpload(id,f);
-    fill(f.name,()=>fillBidFormFile(f,fillPayload(b,p)));
+    const name=`${String(b.title||"bid").replace(/[^a-z0-9]+/gi,"_").slice(0,40)}_bid_packet.pdf`;
+    downloadBlob(b64ToBlob(d.pdf_b64),name);
+    body.innerHTML=`<div class="workspace-title">Packet ready: ${plural(d.pages,"page")}</div>
+      <div class="rate-note">It's in your downloads. Print it, work down the checklist on the first page, sign, and seal it.</div>
+      <div class="act-primary"><button class="ma-gold" id="pk-again">Download it again</button></div>
+      <button class="btn-ghost" id="pk-back">Back to ${prepBackName(id,"summary")}</button>`;
+    const blob=b64ToBlob(d.pdf_b64);
+    document.getElementById("pk-again").onclick=()=>downloadBlob(blob,name);
+    document.getElementById("pk-back").onclick=back;
   };
 }
 

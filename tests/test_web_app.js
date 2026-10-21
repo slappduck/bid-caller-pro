@@ -1648,10 +1648,26 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     const pageErrors = [];
     page.on("pageerror", (e) => pageErrors.push(e.message));
     page.on("dialog", (d) => d.accept());
-    let readCalls = 0, readBody = null, uploadBody = null, failNext = false;
+    let readCalls = 0, readBody = null, uploadBody = null, failNext = false, inboxFileAsked = null;
     await page.route("**/*", (route) => {
       const u = route.request().url();
       const host = new URL(u).hostname;
+      if (u.endsWith("/inbox/address")) {
+        return route.fulfill({ status: 200, contentType: "application/json",
+          body: JSON.stringify({ ok: true, address: "docs+abcdef1234@curbcallpro.com", keep_days: 30 }) });
+      }
+      if (u.endsWith("/inbox/list")) {
+        return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, items: [
+          { id: "m1", subject: "Plan holder documents: Elm St Sidewalk", from: "Plan Room <noreply@planroom.example>",
+            at: Date.now() / 1000, snippet: "", links: ["https://planroom.example/download/123"],
+            files: [{ n: 0, name: "Elm St bid form.pdf", size: 20 }] },
+          { id: "m2", subject: "Oak Ave Paving addendum", from: "Clerk", at: Date.now() / 1000, snippet: "", links: [],
+            files: [{ n: 0, name: "Oak addendum.pdf", size: 20 }] }] }) });
+      }
+      if (u.endsWith("/inbox/file")) {
+        inboxFileAsked = JSON.parse(route.request().postData() || "{}");
+        return route.fulfill({ status: 200, contentType: "application/pdf", body: Buffer.from("%PDF-1.4 emailed form") });
+      }
       if (u.endsWith("/bid-documents/read")) {
         readCalls++;
         const raw = route.request().postData() || "{}";
@@ -1663,7 +1679,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
             body: JSON.stringify({ ok: false, reason: "fetch_failed", detail: "robots_disallow" }) });
         }
         return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
-          ok: true, cached: false, pages_read: 6, truncated: false,
+          ok: true, cached: false, pages_read: 6, truncated: false, scanned_pages: uploadBody && readBody === null ? 2 : 0,
           line_items: [
             { item_no: "1", description: "Mobilization", quantity: 1, unit: "LS" },
             { item_no: "2", description: "4 in. concrete sidewalk", quantity: 1250, unit: "SY" },
@@ -1690,8 +1706,11 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await page.evaluate(() => showApp());
     await page.waitForTimeout(800);
     const id = await page.evaluate(() => bidId("Aurora, MO", bidData["Aurora, MO"][0]));
+    await page.evaluate(() => { currentUser = { id: "u1", email: "tester@example.com" }; window.getSupabaseToken = async () => "tok"; });
     await page.evaluate((i) => openPrep("Aurora, MO", i, "steps"), id);
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(500);
+    check("the documents step offers to get them from email once the server has an address",
+          (await page.locator('[data-act="inbox"]').count()) >= 1);
     check("the documents step offers to read them or upload one", (await page.locator('[data-act="read"]').count()) >= 1
             && (await page.locator('[data-act="upload"]').count()) >= 1);
     await page.evaluate((i) => openPrep("Aurora, MO", i, "pricing"), id);
@@ -1749,7 +1768,55 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     check("the uploaded PDF goes to the reader with the license key",
           uploadBody && /name="file"; filename="Plan holder set.pdf"/.test(uploadBody) && /%PDF-1.4 plans/.test(uploadBody)
             && /"key":/.test(uploadBody) && !/"url":/.test(uploadBody), String(uploadBody).slice(0, 300));
-    check("what the upload says is shown for review", /3 line items found/.test(await page.textContent("#prep-body")));
+    const upReview = await page.textContent("#prep-body");
+    check("what the upload says is shown for review", /3 line items found/.test(upReview));
+    check("scanned pages are said to be read from their pictures", /2 scanned pages read from their pictures/.test(upReview));
+    check("an upload can be filled in straight after reading it", (await page.locator("#doc-fill").count()) === 1
+            && /Is this the bid form\?/.test(upReview));
+
+    // Several files at once are read together.
+    await page.click("#doc-back");
+    await page.waitForTimeout(300);
+    await page.click("#pl-read");
+    await page.waitForTimeout(300);
+    [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("#doc-upload")]);
+    await chooser.setFiles([{ name: "Plans.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4 a") },
+                            { name: "Addendum 1.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4 b") }]);
+    await page.waitForTimeout(600);
+    check("several PDFs go to the reader in one request",
+          /filename="Plans.pdf"/.test(uploadBody) && /filename="Addendum 1.pdf"/.test(uploadBody));
+    check("...and the review names how many", /Read from 2 files/.test(await page.textContent("#prep-body")));
+
+    // Uploads stay on the phone for this bid, even after the app is reopened.
+    await page.reload({ waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(800);
+    await page.evaluate(() => { currentUser = { id: "u1", email: "tester@example.com" }; window.getSupabaseToken = async () => "tok"; });
+    await page.evaluate((i) => openPrep("Aurora, MO", i, "pricing"), id);
+    await page.waitForTimeout(300);
+    await page.click("#pl-read");
+    await page.waitForTimeout(500);
+    const kept = await page.textContent("#prep-body");
+    check("uploaded files are still on the phone next time", /On this phone/.test(kept) && /Plan holder set\.pdf/.test(kept)
+            && /Addendum 1\.pdf/.test(kept) && (await page.locator("#doc-upall").count()) === 1, kept.slice(0, 300));
+
+    // Forwarded email: the documents address and what came in.
+    check("the email option shows once the server has an address", (await page.locator("#doc-inbox").count()) === 1);
+    await page.click("#doc-inbox");
+    await page.waitForTimeout(500);
+    const inbox = await page.textContent("#prep-body");
+    check("the private documents address is shown to copy", /docs\+abcdef1234@curbcallpro\.com/.test(inbox));
+    check("emails that look like this bid come first",
+          inbox.indexOf("Elm St bid form.pdf") < inbox.indexOf("Oak addendum.pdf") && /For this bid/.test(inbox));
+    check("download links in the email are listed",
+          (await page.getAttribute(".ib-link", "href")) === "https://planroom.example/download/123");
+    uploadBody = null;
+    await page.click('[data-ib-read="m1|0"]');
+    await page.waitForTimeout(800);
+    check("reading an emailed file fetches it and reads it like an upload",
+          inboxFileAsked && inboxFileAsked.id === "m1" && inboxFileAsked.n === 0
+            && /filename="Elm St bid form.pdf"/.test(uploadBody) && /3 line items found/.test(await page.textContent("#prep-body")));
     check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
     await ctx.close();
   }
@@ -1829,10 +1896,19 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     const page = await ctx.newPage();
     const pageErrors = [];
     page.on("pageerror", (e) => pageErrors.push(e.message));
-    let fillBody = null, fillUpload = null, nearbyBody = null, quoteBody = null, quotesLogged = 0;
+    let fillBody = null, fillUpload = null, nearbyBody = null, quoteBody = null, quotesLogged = 0, packetBody = null, remindBody = null;
     await page.route("**/*", (route) => {
       const u = route.request().url();
       const host = new URL(u).hostname;
+      if (u.endsWith("/bid-documents/packet")) {
+        packetBody = route.request().postData() || "";
+        return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+          ok: true, pages: 4, pdf_b64: Buffer.from("%PDF-1.4 packet").toString("base64") }) });
+      }
+      if (u.endsWith("/reminders/sync")) {
+        remindBody = JSON.parse(route.request().postData() || "{}");
+        return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, saved: 3 }) });
+      }
       if (u.endsWith("/suppliers/nearby")) {
         nearbyBody = JSON.parse(route.request().postData() || "{}");
         return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
@@ -2026,8 +2102,10 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await page.waitForTimeout(300);
 
     await page.click("#ps-fill");
-    await page.waitForTimeout(300);
-    await page.click('[data-doc="0"]');
+    await page.waitForTimeout(400);
+    check("the bid form the schedule came from is ticked to fill",
+          await page.isChecked('[data-ff="0"]') && /Bid form/.test(await page.textContent(".ff-opt")));
+    await page.click("#ff-go");
     await page.waitForTimeout(600);
     check("the form filler is sent the company, the prices and the total",
           fillBody && fillBody.url === "https://e.gov/form.pdf" && fillBody.company.name === "Test Concrete LLC"
@@ -2035,30 +2113,82 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
             && fillBody.lines[0].item_no === "2" && fillBody.lines[0].unit_price === 60 && fillBody.lines[0].amount === 75000,
           JSON.stringify(fillBody && fillBody.lines));
     const filled = await page.textContent("#prep-body");
-    check("every filled box is listed for checking", /Name of bidder/.test(filled) && /75,000\.00/.test(filled) && /7 boxes left blank/.test(filled));
+    check("every filled box is listed for checking", /Name of bidder/.test(filled) && /75,000\.00/.test(filled) && /7 boxes left/.test(filled));
     const [pdf] = await Promise.all([page.waitForEvent("download"), page.click("#ff-download")]);
     check("the filled form downloads", fs.readFileSync(await pdf.path(), "utf8").startsWith("%PDF") && /filled\.pdf$/.test(pdf.suggestedFilename()));
+
     await page.click("#ff-back");
     await page.waitForTimeout(300);
     await page.evaluate((i) => openPrep("Aurora, MO", i, "summary"), id);
     await page.waitForTimeout(300);
     await page.click("#ps-fill");
-    await page.waitForTimeout(300);
-    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("#ff-upload")]);
-    await chooser.setFiles({ name: "Bid form.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4 form") });
-    await page.waitForTimeout(600);
-    check("an uploaded bid form is filled with the same details",
-          fillUpload && /filename="Bid form.pdf"/.test(fillUpload) && /Test Concrete LLC/.test(fillUpload) && /"total":75000/.test(fillUpload),
+    await page.waitForTimeout(400);
+    let [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("#ff-upload")]);
+    await chooser.setFiles({ name: "Affidavit.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4 form") });
+    await page.waitForTimeout(700);
+    check("an uploaded form is filled with the same details",
+          fillUpload && /filename="Affidavit.pdf"/.test(fillUpload) && /Test Concrete LLC/.test(fillUpload) && /"total":75000/.test(fillUpload),
           String(fillUpload).slice(0, 300));
-    check("...and its filled boxes are listed", /Filled 2 boxes on Bid form\.pdf/.test(await page.textContent("#prep-body")));
+    check("...and its filled boxes are listed", /Filled 2 boxes on Affidavit\.pdf/.test(await page.textContent("#prep-body")));
+
     await page.click("#ff-back");
     await page.waitForTimeout(300);
     await page.evaluate((i) => openPrep("Aurora, MO", i, "summary"), id);
     await page.waitForTimeout(300);
     await page.click("#ps-fill");
+    await page.waitForTimeout(400);
+    const list = await page.textContent("#prep-body");
+    check("the uploaded form is offered again without picking it a second time", /Affidavit\.pdf on this phone/.test(list));
+    check("filled forms are kept to download again", /Filled in already/.test(list) && /Bid form \(filled\)\.pdf/.test(list)
+            && /Affidavit \(filled\)\.pdf/.test(list));
+    fillBody = null; fillUpload = null;
+    await page.check('[data-ff="0"]');
+    await page.check('[data-ff="1"]');
+    await page.click("#ff-go");
+    await page.waitForTimeout(900);
+    check("ticked forms are all filled in one go", fillBody && fillUpload && /on Affidavit\.pdf/.test(await page.textContent("#prep-body"))
+            && /on Bid form/.test(await page.textContent("#prep-body")));
+
+    // The packet: checklist, summary, then the filled forms.
+    await page.click("#ff-packet");
+    await page.waitForTimeout(400);
+    check("the packet offers every filled form", (await page.locator("[data-pk]").count()) === 2);
+    const [pk] = await Promise.all([page.waitForEvent("download"), page.click("#pk-go")]);
+    check("the packet is sent the filled forms and a checklist from the documents",
+          /filename="Bid form \(filled\).pdf"/.test(packetBody) && /filename="Affidavit \(filled\).pdf"/.test(packetBody)
+            && /Attach the bid bond: 5% bid bond/.test(packetBody) && /Write the addenda you received \(#1\)/.test(packetBody)
+            && /"due":"2099-11-01"/.test(packetBody), String(packetBody).slice(0, 600));
+    check("the packet downloads as one PDF", /_bid_packet\.pdf$/.test(pk.suggestedFilename())
+            && /Packet ready: 4 pages/.test(await page.textContent("#prep-body")));
+
+    // Signing up as a plan holder: details a tap to copy.
+    await page.evaluate((i) => openPrep("Aurora, MO", i, "steps"), id);
     await page.waitForTimeout(300);
-    check("the uploaded form is offered again without picking it a second time",
-          (await page.locator('[data-up="0"]').count()) === 1 && /Bid form\.pdf \(uploaded\)/.test(await page.textContent("#prep-body")));
+    await page.click('[data-act="regdetails"]');
+    await page.waitForTimeout(300);
+    const reg = await page.textContent("#prep-body");
+    check("the sign-up helper lists the company details to copy",
+          /Test Concrete LLC/.test(reg) && /1 Main St/.test(reg) && /Pat Lee/.test(reg)
+            && (await page.locator(".reg-row").count()) >= 4);
+    check("...with the agency's sign-up page a tap away",
+          (await page.getAttribute("#prep-body a.ma-gold", "href")) === "https://e.gov/Bids/PlanHolders/17?documentId=-1");
+    await page.click("#reg-back");
+    await page.waitForTimeout(300);
+
+    // Phone reminders for the steps.
+    await page.evaluate(() => { store.set("push_on", true); currentUser = { id: "u1", email: "tester@example.com" }; });
+    await page.evaluate((i) => openPrep("Aurora, MO", i, "steps"), id);
+    await page.waitForTimeout(300);
+    await page.click("#step-remind");
+    await page.waitForTimeout(500);
+    const bondStep = remindBody && (remindBody.reminders || []).find((r) => r.label === "Ask for your bid bond");
+    check("turning reminders on sends each open step with its do-by date",
+          remindBody && remindBody.on === true && bondStep && bondStep.date === "2099-10-27" && bondStep.title === "Elm St Sidewalk",
+          JSON.stringify(remindBody && remindBody.reminders && remindBody.reminders.slice(0, 3)));
+    check("...but not the steps already done", !(remindBody.reminders || []).some((r) => r.label === "Fill out the bid forms"));
+    await page.click("#step-remind");
+    await page.waitForTimeout(400);
+    check("turning them off clears them", remindBody.on === false && remindBody.reminders.length === 0);
 
     await page.evaluate(() => { closeModal(); switchScreen("account"); });
     await page.waitForTimeout(500);

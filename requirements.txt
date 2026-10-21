@@ -5,3 +5,4 @@ anthropic==1.11.0
 Pillow==12.3.0
 pypdf==6.19.0
 cryptography==46.0.7
+pypdfium2==5.14.0
