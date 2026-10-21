@@ -26,7 +26,7 @@ _BID_DOC_RATE_KEY = "bidcaller:bid_doc_rate"
 _BID_DOC_CACHE_PREFIX = "bidcaller:bid_doc:"
 # Bump when the reader starts returning something new, so documents read
 # before the change are read again instead of served from the cache.
-BID_DOC_READER_VERSION = 2
+BID_DOC_READER_VERSION = 3
 BID_DOC_CACHE_TTL_DAYS = 30
 
 
@@ -153,6 +153,10 @@ _BID_DOC_PROMPT = (
     "\"required_forms\": names of forms, affidavits or certificates the bid "
     "must include, as stated.\n"
     "\"questions_due\": the deadline for written questions, as stated.\n"
+    "\"contact\": the person bidders are told to contact about this bid "
+    "(purchasing agent, project manager or engineer), as "
+    "{\"name\", \"title\", \"organization\", \"phone\", \"email\"} exactly as printed; "
+    "\"\" for any part not printed.\n"
     "No markdown, nothing outside the object.\n\nDOCUMENT TEXT:\n"
 )
 
@@ -191,11 +195,23 @@ def _clean_doc_result(raw):
 
     forms = [re.sub(r"\s+", " ", str(f)).strip()[:160]
              for f in (raw.get("required_forms") or []) if str(f).strip()][:30]
+    c = raw.get("contact") if isinstance(raw.get("contact"), dict) else {}
+
+    def part(k, n):
+        v = c.get(k)
+        return re.sub(r"\s+", " ", v).strip()[:n] if isinstance(v, str) else ""
+    email = part("email", 120)
+    phone = part("phone", 40)
+    contact = {"name": part("name", 80), "title": part("title", 80), "organization": part("organization", 120),
+               # Only a real address and a phone with a full number are kept.
+               "email": email if re.fullmatch(r"[^@\s]+@[^@\s]+\.[A-Za-z]{2,}", email) else "",
+               "phone": phone if len(re.sub(r"\D", "", phone)) >= 10 else ""}
     return {"line_items": items, "submission": text("submission"),
             "bid_security": text("bid_security"), "prebid": text("prebid"),
             "prebid_place": text("prebid_place", 200),
             "project_location": text("project_location", 200),
-            "questions_due": text("questions_due", 300), "required_forms": forms}
+            "questions_due": text("questions_due", 300), "required_forms": forms,
+            "contact": contact if any(contact.values()) else {}}
 
 
 # ── Reading an addendum ──

@@ -95,6 +95,16 @@ class CleanResultTests(unittest.TestCase):
         self.assertEqual(ls._clean_doc_result({"project_location": " Elm St  from 1st to 5th "})["project_location"],
                          "Elm St from 1st to 5th")
 
+    def test_the_bid_contact_comes_through_checked(self):
+        got = ls._clean_doc_result({"line_items": [], "contact": {
+            "name": " Dana  Reyes ", "title": "Purchasing Agent", "organization": "City of Aurora",
+            "phone": "(417) 678-5551 ext. 3", "email": "dreyes@aurora-mo.gov"}})
+        self.assertEqual(got["contact"], {"name": "Dana Reyes", "title": "Purchasing Agent",
+                                          "organization": "City of Aurora", "phone": "(417) 678-5551 ext. 3",
+                                          "email": "dreyes@aurora-mo.gov"})
+        bad = ls._clean_doc_result({"line_items": [], "contact": {"name": "", "phone": "ext 3", "email": "see website"}})
+        self.assertEqual(bad["contact"], {})
+
     def test_a_non_object_is_rejected(self):
         self.assertIsNone(ls._clean_doc_result(["a list"]))
 
