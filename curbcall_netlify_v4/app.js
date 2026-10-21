@@ -4884,7 +4884,7 @@ function renderPrepSteps(body,city,id,b){
         +(!auto.docs&&inboxAddress()?btn("inbox","Get them from your email"):"");
       case"prebid":return(dest?a(`href="${esc(mapUrl(mapQuery(dest,city)))}" target="_blank" rel="noopener noreferrer"`,onSite?"Directions to the site":"Directions"):"")
         +(dates.some(d=>/pre-bid/i.test(d.label))?btn("dates","Add to calendar"):"");
-      case"questions":return b.email?a(`href="${esc(agencyQuestionMail(b))}" data-mark="questions"`,"Email the agency"):"";
+      case"questions":return agencyContact(b,p).email?a(`href="${esc(agencyQuestionMail(b,p))}" data-mark="questions"`,"Email the agency"):"";
       case"site":return job?a(`href="${esc(mapUrl(mapQuery(job,city)))}" target="_blank" rel="noopener noreferrer"`,"Directions"):"";
       case"price":return btn("pricing",t.total?"Open pricing":"Start pricing");
       case"concrete":return btn("concrete","Find plants and get a quote");
@@ -4949,7 +4949,7 @@ function renderPrepSteps(body,city,id,b){
     return!(d&&d.fixed&&d.days<0&&i.key!=="submit");
   });
   const prog=prepProgress(id,b),pct=prog.total?Math.round(prog.done/prog.total*100):0;
-  body.innerHTML=`<div class="step-progress"><div class="step-bar"><i style="width:${pct}%"></i></div>
+  body.innerHTML=`${contactCardHTML(b,p)}<div class="step-progress"><div class="step-bar"><i style="width:${pct}%"></i></div>
       <span>${prog.done} of ${prog.total} done</span></div>
     ${next?`<div class="step-next"><div class="step-next-k">Next up</div>
         <b>${esc(next.label)}</b> ${dueChip(next,false)}
@@ -4978,6 +4978,7 @@ function renderPrepSteps(body,city,id,b){
   });
   const rem=document.getElementById("step-remind");
   if(rem)rem.onchange=()=>setStepReminders(rem.checked,rem);
+  wireContactCard(body,city,id,b,reopen);
   // Files uploaded or emailed in sit with the documents the bid links to,
   // a tap to open.
   const pf=body.querySelector("[data-phone-files]");
@@ -5436,7 +5437,9 @@ function openBlob(blob,name){
 function docInfoRows(info){
   return[["How to submit",info.submission],["Bid security",info.bid_security],["Pre-bid meeting",info.prebid],
     ["Meeting place",info.prebid_place],["Job site",info.project_location],["Questions due",info.questions_due],
-    ["Required forms",(info.required_forms||[]).join("; ")]].filter(r=>String(r[1]||"").trim());
+    ["Required forms",(info.required_forms||[]).join("; ")],
+    ["Contact",info.contact?[info.contact.name,info.contact.title,info.contact.organization,info.contact.phone,info.contact.email].filter(Boolean).join(", "):""]]
+    .filter(r=>String(r[1]||"").trim());
 }
 function renderDocReview(body,city,id,b,doc,res){
   const p=prepFor(id);
@@ -5445,7 +5448,7 @@ function renderDocReview(body,city,id,b,doc,res){
   p.docInfo={source:doc.name,url:doc.url||"",files:(doc.files||[]).map(f=>f.name),
     submission:res.submission||"",bid_security:res.bid_security||"",
     prebid:res.prebid||"",prebid_place:res.prebid_place||"",project_location:res.project_location||"",
-    questions_due:res.questions_due||"",required_forms:res.required_forms||[],
+    questions_due:res.questions_due||"",required_forms:res.required_forms||[],contact:res.contact||{},
     line_items:(res.line_items||[]).slice(0,200),pages_read:res.pages_read||0,scanned_pages:res.scanned_pages||0,
     truncated:!!res.truncated,read_at:Date.now()};
   savePrep(id,city);
@@ -5819,7 +5822,7 @@ function renderPrepSummary(body,city,id,b){
     <div class="ps-steps">
       <a class="btn-ghost" id="ps-bond" href="${esc(bondRequestMail(b,p,city))}">Ask for a bid bond</a>
       <button class="btn-ghost" id="ps-concrete">Get a concrete quote</button>
-      ${b.email?`<a class="btn-ghost" id="ps-question" href="${esc(agencyQuestionMail(b))}">Ask the agency a question</a>`:""}
+      ${agencyContact(b,p).email?`<a class="btn-ghost" id="ps-question" href="${esc(agencyQuestionMail(b,p))}">Ask the agency a question</a>`:""}
       ${dates.length?`<button class="btn-ghost" id="ps-dates">Add ${dates.length>1?`${dates.length} dates`:"the due date"} to my calendar</button>`:""}
     </div>
     <div class="rate-note">${info>=BID_INFO_FIELDS.length?"":`${info?`${info} of ${BID_INFO_FIELDS.length}`:"No"} bid details saved. `}<a href="#" id="ps-profile">${info?"Edit":"Add"} bid details</a>: your address, license, bonding agent and supplier, so these fill themselves in.</div>`;
@@ -6286,16 +6289,17 @@ function placeParts(city){
   const m=/^(.+?),\s*([A-Za-z]{2})\s*$/.exec(String(city||"").trim());
   return m?{city:m[1],state:m[2].toUpperCase()}:null;
 }
-async function loadSuppliers(city,fresh){
+async function loadSuppliers(city,fresh,near){
   const pl=placeParts(city);
   if(!pl)return{ok:false,reason:"bad_place"};
-  const k=`${pl.city},${pl.state}`.toLowerCase();
+  near=String(near||"").trim().slice(0,160);
+  const k=`${pl.city},${pl.state}|${near}`.toLowerCase();
   if(!fresh&&supplierCache.has(k))return supplierCache.get(k);
   if(isOffline())return{ok:false,reason:"offline"};
   try{
     const token=await getSupabaseToken();
     const r=await fetchWithTimeout(SERVER+"/suppliers/nearby",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,...pl})},60000);
+      body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,...pl,near})},75000);
     const d=await r.json();
     if(d&&d.ok)supplierCache.set(k,d);
     return d||{ok:false};
@@ -6308,8 +6312,11 @@ function plantSelect(name,status,i){
 function suppliersHTML(d,b,p,city,waste){
   if(!d||!d.ok){
     const why={not_licensed:"Supplier search is part of a paid plan.",place_not_found:"Couldn't place this town on the map.",
-      rate_limited:"Too many searches today. Try again tomorrow.",offline:"You're offline."}[d&&d.reason]||"Couldn't load plants right now.";
-    return`<div class="account-status">${esc(why)}</div>`;
+      bad_place:"This bid has no town and state to search from. Add the job address on the Steps tab.",
+      rate_limited:"Too many searches today. Try again tomorrow.",offline:"You're offline."}[d&&d.reason]
+      ||"The plant search took too long. The map servers it uses get busy; try again in a minute.";
+    return`<div class="account-status">${esc(why)}</div>${d&&["not_licensed","rate_limited","offline","bad_place"].includes(d.reason)?"":
+      `<button type="button" class="btn-ghost" id="rm-retry">Try again</button>`}`;
   }
   const c=concreteState(p),plants=(d.plants||[]).map((x,i)=>({...x,i,st:(c.plants[x.name]||{}).status||"Not contacted"}));
   // A plant that doesn't deliver here goes to the bottom, out of the way.
@@ -6319,7 +6326,7 @@ function suppliersHTML(d,b,p,city,waste){
   return`${plants.map(x=>{
     const q=c.plants[x.name]||{};
     return`<div class="sup-row${x.st===PLANT_STATUS[4]?" sup-out":""}">
-      <div class="sup-head"><div class="sup-name">${esc(x.name)} <span class="sup-mi">${x.miles} mi</span></div>${plantSelect(x.name,x.st,x.i)}</div>
+      <div class="sup-head"><div class="sup-name">${esc(x.name)} ${x.miles!=null?`<span class="sup-mi">${x.miles} mi</span>`:""}${x.source==="web"?` <span class="sup-mi">found online</span>`:""}</div>${plantSelect(x.name,x.st,x.i)}</div>
       ${q.price>0?`<div class="sup-quote">Quoted ${yd(q.price)} a yard${q.yards?` for ${q.yards} yards`:""}${q.delivery!=null&&q.delivery!==""?`, ${money0(q.delivery)} delivery`:""}</div>`:""}
       ${x.address?`<div class="rate-note">${esc(x.address)}</div>`:""}
       <div class="sup-acts">${x.phone?`<a href="tel:${esc(x.phone.replace(/[^\d+]/g,""))}">Call ${esc(x.phone)}</a>`:""}
@@ -6329,8 +6336,8 @@ function suppliersHTML(d,b,p,city,waste){
     ${web.length?`<div class="rate-note" style="margin-top:0.5rem;">${plants.length?"Also found online":"Found online"}:</div>
       ${web.map(w=>safeUrl(w.url)?`<div class="sup-row"><a href="${esc(safeUrl(w.url))}" target="_blank" rel="noopener noreferrer">${esc(w.site)}</a>
         ${w.snippet?`<div class="rate-note">${esc(w.snippet)}</div>`:""}</div>`:"").join("")}`:""}
-    <div class="rate-note">Plants within ${d.radius_mi} miles. Some may be missing. Call to make sure they deliver to your job.</div>
-    ${plants.length?`<div class="rate-note">Plant data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a></div>`:""}`;
+    <div class="rate-note">Plants within ${d.radius_mi} miles of ${d.near?"the job site":"town"}. Some may be missing. Call to make sure they deliver to your job.</div>
+    ${plants.some(x=>x.source!=="web")?`<div class="rate-note">Plant data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a></div>`:""}`;
 }
 // A quote is saved with the bid (and its plant) every time; it's also sent,
 // anonymously, toward the area's prices unless the contractor says not to.
@@ -6353,10 +6360,70 @@ async function logConcreteQuote(city,form,c){
   }catch(e){toast("Saved with this bid; couldn't add it to local prices right now.");}
   return true;
 }
-function agencyQuestionMail(b){
-  const body=["Hello,","",`Regarding ${b.title||"the bid"}${b.bid_number?` (${b.bid_number})`:""}${b.deadline?`, due ${b.deadline}`:""}:`,"",
+// ── The agency's contact for this bid ──
+// From the posting (the scanner's contact, email and phone), from the bid
+// documents (the purchasing agent or engineer they name), and anything the
+// contractor typed in after a phone call -- in that order of trust, the
+// contractor's own first. Shown at the top of Prepare bid, one tap to call,
+// email or save to the phone's contacts.
+function agencyContact(b,p){
+  const own=(p&&p.contact)||{},doc=(p&&p.docInfo&&p.docInfo.contact)||{};
+  const pick=(...xs)=>xs.map(x=>String(x||"").trim()).find(Boolean)||"";
+  return{name:pick(own.name,doc.name,b&&b.contact),title:pick(own.title,doc.title),
+    org:pick(own.org,doc.organization,b&&b.agency),phone:pick(own.phone,doc.phone,b&&b.phone),
+    email:pick(own.email,doc.email,b&&b.email)};
+}
+function agencyQuestionMail(b,p){
+  const c=agencyContact(b,p);
+  const first=String(c.name||"").split(/\s+/)[0];
+  const body=[first?`Hello ${first},`:"Hello,","",`Regarding ${b.title||"the bid"}${b.bid_number?` (${b.bid_number})`:""}${b.deadline?`, due ${b.deadline}`:""}:`,"",
     "[Your question]","","Thank you,",signOff()].join("\n");
-  return mailtoUrl(b.email,`Question: ${b.title||"bid"}${b.bid_number?` (${b.bid_number})`:""}`,body);
+  return mailtoUrl(c.email,`Question: ${b.title||"bid"}${b.bid_number?` (${b.bid_number})`:""}`,body);
+}
+function vcardFor(c,b){
+  const e=(x)=>String(x||"").replace(/\\/g,"\\\\").replace(/([,;])/g,"\\$1").replace(/\r?\n/g," ");
+  const parts=String(c.name||"").trim().split(/\s+/);
+  const last=parts.length>1?parts.pop():"",first=parts.join(" ");
+  return["BEGIN:VCARD","VERSION:3.0",`N:${e(last)};${e(first||c.org||"Agency contact")};;;`,
+    `FN:${e(c.name||c.org||"Agency contact")}`,c.org?`ORG:${e(c.org)}`:"",c.title?`TITLE:${e(c.title)}`:"",
+    c.phone?`TEL;TYPE=WORK,VOICE:${e(c.phone)}`:"",c.email?`EMAIL;TYPE=WORK:${e(c.email)}`:"",
+    `NOTE:${e(`Contact for ${b.title||"a bid"}${b.bid_number?` (${b.bid_number})`:""}`)}`,"END:VCARD"].filter(Boolean).join("\r\n");
+}
+function contactCardHTML(b,p){
+  const c=agencyContact(b,p);
+  const tel=c.phone?safeUrl("tel:"+c.phone.replace(/(?:ext|x)\.?\s*\d+$/i,"").replace(/[^\d+]/g,"")):"";
+  const has=c.name||c.phone||c.email;
+  return`<div class="agency-card">
+    <div class="agency-who"><small>Agency contact</small>
+      ${has?`<b>${esc(c.name||c.org||"The agency")}</b>${[c.title,c.name?c.org:""].filter(Boolean).length?`<span>${esc([c.title,c.name?c.org:""].filter(Boolean).join(", "))}</span>`:""}`
+        :`<span>None listed on the posting yet. Reading the bid documents usually finds one.</span>`}</div>
+    <div class="agency-acts">${tel?`<a class="step-act" href="${esc(tel)}">Call ${esc(c.phone)}</a>`:""}
+      ${c.email?`<a class="step-act" href="${esc(agencyQuestionMail(b,p))}" data-mark="questions">Email</a>`:""}
+      ${has?`<button type="button" class="step-act" id="ac-save">Save to contacts</button>`:""}
+      <button type="button" class="step-act" id="ac-edit">${has?"Edit":"Add"}</button></div>
+  </div>`;
+}
+function wireContactCard(body,city,id,b,reopen){
+  const p=prepFor(id);
+  const sv=body.querySelector("#ac-save");
+  if(sv)sv.onclick=()=>{
+    const c=agencyContact(b,p);
+    downloadBlob(new Blob([vcardFor(c,b)],{type:"text/vcard"}),String(c.name||c.org||"agency").replace(/[^a-z0-9]+/gi,"_").slice(0,40)+".vcf");
+  };
+  const ed=body.querySelector("#ac-edit");
+  if(ed)ed.onclick=()=>{
+    const c=agencyContact(b,p),card=body.querySelector(".agency-card");
+    card.innerHTML=`<div class="agency-who"><small>Agency contact</small></div>
+      ${[["name","Name",c.name],["title","Title",c.title],["org","Agency",c.org],["phone","Phone",c.phone],["email","Email",c.email]]
+        .map(([k,l,v])=>`<input class="input ac-field" data-ac="${k}" placeholder="${l}" aria-label="${l}" value="${esc(v)}"${k==="phone"?' inputmode="tel"':k==="email"?' inputmode="email"':""}>`).join("")}
+      <div class="agency-acts"><button type="button" class="step-act" id="ac-done">Save</button><button type="button" class="step-act" id="ac-cancel">Cancel</button></div>`;
+    card.querySelector("#ac-cancel").onclick=reopen;
+    card.querySelector("#ac-done").onclick=()=>{
+      const own={};
+      card.querySelectorAll("[data-ac]").forEach(x=>{own[x.dataset.ac]=x.value.trim().slice(0,120);});
+      p.contact=own;savePrep(id,city);reopen();
+    };
+  };
 }
 // Every date the bid's own words give: due, pre-bid meeting, questions.
 function bidDates(b,p){
@@ -6392,6 +6459,8 @@ function renderConcretePanel(body,city,id,b){
   const opt=(v,label,cur)=>`<option value="${esc(String(v))}"${String(v)===String(cur)?" selected":""}>${esc(label)}</option>`;
   const waste=wastePct(),steps=WASTE_STEPS.includes(waste)?WASTE_STEPS:[...WASTE_STEPS,waste].sort((a,z)=>a-z);
   const place=(placeParts(city)||{}).city||city;
+  // Plants are found around the job when the bid has an address for it.
+  const near=jobAddress(p);
   const pickOptions=(w)=>`${y.total?opt("all",`All concrete lines · ${Math.ceil(y.total*(1+w/100))} yards`,c.pick||"all"):""}
     ${y.out.length>1?y.out.map((x,i)=>opt(`line:${i}`,`${x.name} · ${Math.ceil(x.cy*(1+w/100))} yards`,c.pick)).join(""):""}
     ${opt("custom","Type in yards",y.total?c.pick:"custom")}`;
@@ -6399,7 +6468,8 @@ function renderConcretePanel(body,city,id,b){
     <div id="rm-est"></div>
     <div class="act-primary"><a class="ma-gold" id="cq-send" href="${esc(concreteQuoteMail(b,p,city,waste))}">Email my supplier for a quote</a></div>
     ${bidInfo().supplier_email?"":`<div class="rate-note">Save your supplier's email in <a href="#" id="cq-profile">bid details</a> and this goes straight to them.</div>`}
-    <div class="workspace-title" style="margin-top:1rem;">Ready-mix plants near ${esc(place)}</div>
+    <div class="workspace-title" style="margin-top:1rem;">Ready-mix plants near ${near?"the job site":esc(place)}</div>
+    ${near?`<div class="rate-note" style="margin-top:0;">Searching around ${esc(near)}, ${esc(place)}.</div>`:""}
     <div id="rm-sup"><div class="account-status">Looking for plants…</div></div>
     <details class="rm-log" id="rm-log"><summary>Got a quote? Save it</summary>
       <form id="rm-form" class="rm-form">
@@ -6478,10 +6548,14 @@ function renderConcretePanel(body,city,id,b){
   $("cq-waste").onchange=(e)=>{store.set("concrete_waste_pct",Number(e.target.value)||0);redraw();};
   $("cq-psi").onchange=(e)=>{c.psi=e.target.value?Number(e.target.value):"";save();
     $("rm-form").querySelector('[name="psi"]').value=e.target.value;redraw();};
-  const showSuppliers=(fresh)=>loadSuppliers(city,fresh).then(d=>{
+  const showSuppliers=(fresh)=>loadSuppliers(city,fresh,near).then(d=>{
     if(!$("rm-sup"))return;
     sup=d;quotes=d&&d.ok?d.quotes:null;
-    if(!(d&&d.ok)){$("rm-sup").innerHTML=suppliersHTML(d,b,p,city,wastePct());sup=null;}
+    if(!(d&&d.ok)){
+      $("rm-sup").innerHTML=suppliersHTML(d,b,p,city,wastePct());sup=null;
+      const again=$("rm-retry");
+      if(again)again.onclick=()=>{$("rm-sup").innerHTML=`<div class="account-status">Looking for plants…</div>`;showSuppliers(true);};
+    }
     redraw();
   });
   redraw();

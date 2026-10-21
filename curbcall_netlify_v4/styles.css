@@ -471,6 +471,13 @@ body{font-family:var(--ui);background:radial-gradient(ellipse 120% 60% at 50% -1
 .ad-other li{margin-bottom:0.3rem;}
 .ad-miss{color:var(--accent);font-weight:700;}
 .ib-tag{display:inline-block;font-style:normal;font-size:var(--fs-xs);font-weight:800;color:#10131c;background:var(--accent);border-radius:4px;padding:0.05rem 0.35rem;vertical-align:middle;}
+.agency-card{margin:0 0 0.9rem;padding:0.7rem 0.85rem;border:1px solid var(--border);border-radius:var(--r);background:var(--card);}
+.agency-who small{display:block;color:var(--text3);font-size:var(--fs-xs);font-weight:700;text-transform:uppercase;letter-spacing:0.05em;}
+.agency-who b{display:block;color:var(--text);margin-top:0.1rem;overflow-wrap:anywhere;}
+.agency-who span{display:block;color:var(--text2);font-size:var(--fs-sm);margin-top:0.1rem;}
+.agency-acts{display:flex;flex-wrap:wrap;gap:0.4rem;margin-top:0.5rem;}
+.agency-acts .step-act{margin:0;}
+.ac-field{display:block;width:100%;margin-top:0.4rem;font-size:var(--fs-base);padding:0.5rem 0.7rem;}
 .ff-list{margin:0.4rem 0 0.2rem;}
 .ff-opt{display:flex;gap:0.65rem;align-items:center;padding:0.6rem 0;border-bottom:1px solid var(--border);cursor:pointer;min-height:44px;}
 .ff-opt input{width:1.15rem;height:1.15rem;accent-color:var(--accent);flex-shrink:0;}

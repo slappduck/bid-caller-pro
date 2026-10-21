@@ -2121,6 +2121,30 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     }, id);
     await page.waitForTimeout(400);
 
+    // ── The agency contact, a tap away ──
+    const card = await page.textContent(".agency-card");
+    check("the agency contact is at the top, from the posting", /Agency contact/.test(card)
+          && (await page.getAttribute(".agency-card a[data-mark='questions']", "href")).startsWith("mailto:clerk%40e.gov"), card);
+    await page.evaluate((i) => { prepFor(i).docInfo.contact = { name: "Dana Reyes", title: "Purchasing Agent", organization: "City of Aurora",
+      phone: "(417) 678-5551 ext. 3", email: "dreyes@aurora-mo.gov" }; openPrep("Aurora, MO", i, "steps"); }, id);
+    await page.waitForTimeout(400);
+    const card2 = await page.textContent(".agency-card");
+    check("the contact the bid documents name comes first", /Dana Reyes/.test(card2) && /Purchasing Agent, City of Aurora/.test(card2));
+    check("...one tap to call, without the extension", (await page.getAttribute(".agency-card a[href^='tel:']", "href")) === "tel:4176785551");
+    check("...or email them by name", decodeURIComponent(await page.getAttribute(".agency-card a[data-mark='questions']", "href")).startsWith("mailto:dreyes@aurora-mo.gov")
+          && /Hello Dana,/.test(decodeURIComponent(await page.getAttribute(".agency-card a[data-mark='questions']", "href"))));
+    const [vcf] = await Promise.all([page.waitForEvent("download"), page.click("#ac-save")]);
+    const vtext = fs.readFileSync(await vcf.path(), "utf8");
+    check("...or save them to the phone's contacts", /BEGIN:VCARD/.test(vtext) && /FN:Dana Reyes/.test(vtext) && /ORG:City of Aurora/.test(vtext)
+          && /TEL;TYPE=WORK,VOICE:\(417\) 678-5551 ext. 3/.test(vtext) && /\.vcf$/.test(vcf.suggestedFilename()), vtext);
+    await page.click("#ac-edit");
+    await page.fill('[data-ac="name"]', "Sam Ortiz");
+    await page.fill('[data-ac="phone"]', "417-555-0123");
+    await page.click("#ac-done");
+    await page.waitForTimeout(400);
+    check("a contact typed in after a phone call is kept and used", /Sam Ortiz/.test(await page.textContent(".agency-card"))
+          && await page.evaluate((i) => prepFor(i).contact.phone === "417-555-0123", id));
+
     // ── The Steps view: dates worked back from the due date, tools on each step ──
     const steps = await page.textContent("#prep-body");
     check("documents given out to plan holders get a button to register for them",
@@ -2179,7 +2203,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     check("...with the project, the bid and the bond the documents ask for",
           /Hi Sam,/.test(bond) && /Bid due: 2099-11-01/.test(bond) && /Our bid: about \$75,000/.test(bond) && /Bond required: 5% bid bond/.test(bond));
     const q = decodeURIComponent(await page.getAttribute("#ps-question", "href"));
-    check("a question to the agency is addressed to its contact", q.startsWith("mailto:clerk@e.gov") && /B-17/.test(q));
+    check("a question to the agency is addressed to its contact", q.startsWith("mailto:dreyes@aurora-mo.gov") && /Hello Sam,/.test(q) && /B-17/.test(q));
     check("every date the documents give is offered for the calendar", /Add 3 dates/.test(await page.textContent("#ps-dates")));
     const [ics] = await Promise.all([page.waitForEvent("download"), page.click("#ps-dates")]);
     const icsText = fs.readFileSync(await ics.path(), "utf8");
@@ -2206,7 +2230,10 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     const share = await page.textContent("#rm-share");
     check("each line shows what its concrete costs per unit and what share of the price that is",
           /How much of each price is concrete/.test(share) && /\$12\.83–\$20\.42 a sq yd/.test(share) && /28% of your \$60/.test(share), share.slice(0, 300));
-    check("plants are asked for near the bid's town", nearbyBody && nearbyBody.city === "Aurora" && nearbyBody.state === "MO");
+    check("plants are asked for around the job site, in the bid's town", nearbyBody && nearbyBody.city === "Aurora" && nearbyBody.state === "MO"
+            && nearbyBody.near === "Elm St from 1st St to 5th St", JSON.stringify(nearbyBody));
+    check("...and the panel says so", /Ready-mix plants near the job site/.test(await page.textContent("#prep-body"))
+            && /Searching around Elm St from 1st St to 5th St, Aurora/.test(await page.textContent("#prep-body")));
     const sup = await page.textContent("#rm-sup");
     check("nearby plants are listed with distance and a phone number", /Ozark Ready Mix/.test(sup) && /4\.2 mi/.test(sup) && /417-555-0199/.test(sup));
     check("...and web finds the map didn't have", /citymix\.example/.test(sup));
