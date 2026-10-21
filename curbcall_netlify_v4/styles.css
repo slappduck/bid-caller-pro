@@ -445,6 +445,9 @@ body{font-family:var(--ui);background:radial-gradient(ellipse 120% 60% at 50% -1
 .doc-fillnow b{display:block;color:var(--text);}
 .doc-fillnow span{display:block;color:var(--text2);font-size:var(--fs-sm);margin-top:0.15rem;}
 .doc-fillnow .btn-ghost{margin-top:0.55rem;}
+.doc-facts{display:grid;gap:0.55rem;margin:0.6rem 0 0.8rem;padding:0.75rem 0.85rem;border:1px solid var(--border);border-radius:var(--r);background:var(--card);}
+.doc-facts small{display:block;color:var(--text3);font-size:var(--fs-xs);font-weight:700;text-transform:uppercase;letter-spacing:0.05em;}
+.doc-facts span{display:block;color:var(--text);font-size:var(--fs-sm);line-height:1.45;overflow-wrap:anywhere;}
 .ff-list{margin:0.4rem 0 0.2rem;}
 .ff-opt{display:flex;gap:0.65rem;align-items:center;padding:0.6rem 0;border-bottom:1px solid var(--border);cursor:pointer;min-height:44px;}
 .ff-opt input{width:1.15rem;height:1.15rem;accent-color:var(--accent);flex-shrink:0;}

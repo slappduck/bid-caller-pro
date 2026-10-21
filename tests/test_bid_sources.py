@@ -507,3 +507,27 @@ class DetailDeadlineTests(unittest.TestCase):
         for bad in ("", None, 12345):
             with self.subTest(bad=bad):
                 self.assertEqual(bs.detail_deadline(bad), "")
+
+
+class DetailPrebidTests(unittest.TestCase):
+    """A missed mandatory meeting disqualifies a bid, so the flag matters --
+    and "non-mandatory" contains the word that sets it."""
+
+    def prebid(self, text):
+        return bs.detail_prebid("<p>%s on Oct 3 at City Hall.</p>" % text)
+
+    def test_a_mandatory_meeting_is_flagged(self):
+        for t in ("A mandatory pre-bid meeting", "Pre-bid conference attendance is required",
+                  "Bidders must attend the pre-bid meeting"):
+            with self.subTest(t=t):
+                self.assertEqual(self.prebid(t), "mandatory")
+
+    def test_a_meeting_said_not_to_be_mandatory_is_not(self):
+        for t in ("A non-mandatory pre-bid meeting will be held", "Pre-bid meeting: Non-Mandatory",
+                  "The pre-bid meeting is not mandatory", "Attendance at the pre-bid meeting is not required",
+                  "An optional pre-bid meeting"):
+            with self.subTest(t=t):
+                self.assertEqual(self.prebid(t), "yes")
+
+    def test_no_meeting_is_blank(self):
+        self.assertEqual(self.prebid("Bids are due at City Hall"), "")

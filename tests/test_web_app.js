@@ -1751,6 +1751,23 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     check("...how to submit", /Sealed envelope to the City Clerk/.test(cl));
     check("...and the required forms", /Non-collusion affidavit; E-Verify affidavit/.test(cl));
 
+    // What was read can be looked at again, not only right after reading.
+    check("the read documents step still offers a look at what was read",
+          (await page.locator('[data-act="docinfo"]').count()) === 1 && (await page.locator('[data-act="readmore"]').count()) === 1);
+    await page.click('[data-act="docinfo"]');
+    await page.waitForTimeout(400);
+    const again = await page.textContent("#prep-body");
+    check("...with everything it found, the line items included",
+          /What was read from Bid form/.test(again) && /Bid security/.test(again) && /5% bid bond/.test(again)
+            && /Sealed envelope to the City Clerk/.test(again) && /4 in\. concrete sidewalk/.test(again)
+            && /3 line items found/.test(again), again.slice(0, 400));
+    check("...and the linked document a tap away", (await page.getAttribute(".ff-done a.step-act", "href")) === "https://e.gov/form.pdf");
+    await page.click("#doc-back");
+    await page.waitForTimeout(300);
+    await page.evaluate((i) => openPrep("Aurora, MO", i, "pricing"), id);
+    await page.waitForTimeout(300);
+    check("pricing offers the reading again too", /See what was read from Bid form/.test(await page.textContent("#pl-docinfo")));
+
     // A plan holder's PDF, uploaded from the phone, is read the same way.
     await page.evaluate((i) => openPrep("Aurora, MO", i, "pricing"), id);
     await page.waitForTimeout(300);
@@ -1800,6 +1817,20 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     const kept = await page.textContent("#prep-body");
     check("uploaded files are still on the phone next time", /On this phone/.test(kept) && /Plan holder set\.pdf/.test(kept)
             && /Addendum 1\.pdf/.test(kept) && (await page.locator("#doc-upall").count()) === 1, kept.slice(0, 300));
+
+    await page.click("#doc-cancel");
+    await page.waitForTimeout(300);
+    await page.evaluate((i) => openPrep("Aurora, MO", i, "steps"), id);
+    await page.waitForTimeout(600);
+    check("files on the phone are listed under the documents step to open",
+          /On this phone: .*Plan holder set\.pdf/.test(await page.textContent("[data-phone-files]")));
+    await page.click('[data-act="docinfo"]');
+    await page.waitForTimeout(500);
+    check("...and on the saved reading, with an Open button each", (await page.locator("[data-open]").count()) >= 3);
+    await page.evaluate((i) => openPrep("Aurora, MO", i, "pricing"), id);
+    await page.waitForTimeout(300);
+    await page.click("#pl-read");
+    await page.waitForTimeout(500);
 
     // Forwarded email: the documents address and what came in.
     check("the email option shows once the server has an address", (await page.locator("#doc-inbox").count()) === 1);
@@ -1972,6 +2003,14 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     check("documents given out to plan holders get a button to register for them",
           (await page.getAttribute("a.step-act >> text=Register to get the documents", "href")) === "https://e.gov/Bids/PlanHolders/17?documentId=-1"
             && /after you register as a plan holder/.test(steps));
+    check("a town's board volunteer form saved on an older bid isn't offered as a bid document",
+          await page.evaluate(() => bidDocs({ documents: [{ name: "Application for Boards", url: "https://e.gov/DocumentCenter/View/88" },
+            { name: "Bid form", url: "https://e.gov/form.pdf" }, { name: "x", url: "https://e.gov/%E0%A4%A" }] }).map((d) => d.name).join("|") === "Bid form|x"));
+    check("...and reading one doesn't count as having the documents",
+          await page.evaluate(() => !prepAuto({}, { docInfo: { source: "Application for Boards", read_at: 1 }, lines: [] }).docs));
+    check("a meeting the documents call non-mandatory is not flagged MANDATORY",
+          await page.evaluate(() => !isMandatory("Non-mandatory pre-bid meeting October 24") && !isMandatory("Attendance is not mandatory")
+            && isMandatory("Mandatory pre-bid meeting October 20")));
     check("...and a button to upload them once they have them", (await page.locator('[data-act="upload"]').count()) >= 1);
     const short = (m, d) => new Date(2099, m, d).toLocaleDateString(undefined, { month: "short", day: "numeric" });
     check("the bond step says when to ask, five days before the bid is due", steps.includes(`Do by ${short(9, 27)}`), steps.slice(0, 300));
