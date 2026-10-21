@@ -10093,6 +10093,95 @@ def push_vapid_public_key():
         return jsonify({"ok": False, "reason": "unavailable"}), 503
 
 
+# ── Step reminders ──
+# The Prepare-bid steps each have a do-by date worked back from the due date
+# (ask for the bond 5 days out, get the concrete quote 3 days out...). Bid
+# prep lives on the phone, so the app sends its open steps here when the
+# contractor turns reminders on, and the saved-bid watch pushes the ones due
+# today. Kept per user, replaced whole on every sync, never more than a few
+# weeks out.
+STEP_REMINDERS_MAX = 150
+_STEP_REMINDERS_PREFIX = "bidcaller:step_reminders:"
+_STEP_REMINDER_USERS_KEY = "bidcaller:step_reminder_users"
+
+
+def _now_central():
+    try:
+        from zoneinfo import ZoneInfo
+        return datetime.datetime.now(ZoneInfo("America/Chicago"))
+    except Exception:
+        return datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=6)
+
+
+def _clean_step_reminders(items, today):
+    out, last = [], today + datetime.timedelta(days=60)
+    for it in (items if isinstance(items, list) else [])[:STEP_REMINDERS_MAX * 2]:
+        if not isinstance(it, dict):
+            continue
+        try:
+            day = datetime.date.fromisoformat(str(it.get("date") or "")[:10])
+        except ValueError:
+            continue
+        label = re.sub(r"\s+", " ", str(it.get("label") or "")).strip()[:80]
+        if not label or not (today <= day <= last):
+            continue
+        out.append({"bid_id": str(it.get("bid_id") or "")[:80],
+                    "title": re.sub(r"\s+", " ", str(it.get("title") or "")).strip()[:90] or "A bid",
+                    "label": label, "date": day.isoformat()})
+        if len(out) >= STEP_REMINDERS_MAX:
+            break
+    return out
+
+
+@app.route("/reminders/sync", methods=["POST"])
+def reminders_sync():
+    data = request.get_json(force=True, silent=True) or {}
+    token = data.get("supabase_token", "")
+    if not _license_is_active(data.get("key", ""), data.get("device_id", ""), token):
+        return jsonify({"ok": False, "reason": "not_licensed"}), 403
+    user = _supabase_user(token) or {}
+    uid = str(user.get("id") or "")
+    if not uid:
+        return jsonify({"ok": False, "reason": "not_signed_in"}), 401
+    items = _clean_step_reminders(data.get("reminders"), _today_central()) if data.get("on", True) else []
+    try:
+        users = kv_backend.get(_STEP_REMINDER_USERS_KEY, None) or []
+        users = [u for u in users if u != uid]
+        if items:
+            kv_backend.set(_STEP_REMINDERS_PREFIX + uid, {"at": time.time(), "items": items})
+            users.append(uid)
+        else:
+            kv_backend.set(_STEP_REMINDERS_PREFIX + uid, {})
+        kv_backend.set(_STEP_REMINDER_USERS_KEY, users[-5000:])
+    except Exception as ex:
+        print(f"[reminders] not saved: {ex}", flush=True)
+        return jsonify({"ok": False, "reason": "storage"}), 503
+    return jsonify({"ok": True, "saved": len(items)})
+
+
+def _due_step_reminders(today, reminded):
+    """{user_id: [(title, body, url)]} for steps due today not yet sent."""
+    out = collections.defaultdict(list)
+    try:
+        users = kv_backend.get(_STEP_REMINDER_USERS_KEY, None) or []
+    except Exception:
+        return out
+    for uid in users:
+        try:
+            rec = kv_backend.get(_STEP_REMINDERS_PREFIX + uid, None) or {}
+        except Exception:
+            continue
+        for it in rec.get("items") or []:
+            if it.get("date") != today.isoformat():
+                continue
+            k = f"step|{uid}|{it.get('bid_id')}|{it.get('label')}|{it.get('date')}"
+            if k in reminded:
+                continue
+            reminded[k] = today.isoformat()
+            out[uid].append((f"Today: {it['label']}", it.get("title") or "A bid", "app.html"))
+    return out
+
+
 # ── The saved-bid watch (/run-bid-watch, every few hours) ──
 # For every user's saved, still-open bids: tell them the day before one is
 # due, and when its posting gains an addendum or document. Postings are
@@ -10181,6 +10270,9 @@ def _run_bid_watch():
                 messages[r["user_id"]].append(
                     (f"{str(r.get('title') or 'A saved bid')[:80]}: {change}",
                      "Read it before you bid. Missing an addendum can get a bid thrown out.", "app.html"))
+    # Step reminders go out in the first run of the contractor's day, not
+    # the one that lands at 1 a.m.
+    steps = _due_step_reminders(today, reminded) if 6 <= _now_central().hour < 21 else {}
     # Old reminder stamps go after two weeks.
     cutoff = (today - datetime.timedelta(days=14)).isoformat()
     reminded = {k: v for k, v in reminded.items() if v >= cutoff}
@@ -10190,7 +10282,16 @@ def _run_bid_watch():
     except Exception as ex:
         print(f"[bid-watch] state not saved: {ex}", flush=True)
 
-    pushed = emailed = 0
+    pushed = emailed = step_pushed = 0
+    # Steps are push only: the contractor turned them on from the phone.
+    for user_id, msgs in steps.items():
+        subs = _push_subscriptions(user_id)
+        if not subs:
+            continue
+        if len(msgs) > 2:
+            msgs = [(f"Today: {len(msgs)} bid steps", "; ".join(f"{t[7:]} ({b})" for t, b, _ in msgs)[:240], "app.html")]
+        for title, body, link in msgs:
+            step_pushed += 1 if _notify_user(user_id, title, body, link, subs=subs) else 0
     for user_id, msgs in messages.items():
         subs = _push_subscriptions(user_id)
         got = 0
@@ -10208,7 +10309,8 @@ def _run_bid_watch():
                                      + "\n\nOpen CurbCall Pro to see the details: https://curbcallpro.com/app.html"):
                 emailed += 1
     return {"ok": True, "bids": len(rows), "postings_checked": fetched, "changed": changed,
-            "users_notified": len(messages), "pushed": pushed, "emailed": emailed}
+            "users_notified": len(messages), "pushed": pushed, "emailed": emailed,
+            "step_reminders": step_pushed}
 
 
 @app.route("/run-bid-watch", methods=["POST"])
