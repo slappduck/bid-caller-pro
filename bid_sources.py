@@ -2077,6 +2077,50 @@ def detail_documents(html, base_url="", limit=5):
     return out
 
 
+# Where the agency gives out the plans and specs only after a contractor
+# registers as a plan holder. CivicPlus sites link "View Document(s)" to a
+# /Bids/PlanHolders/ form ("Please fill out this form to view bid details"),
+# and the plan-room platforms want an account before a download. The files
+# themselves can't be fetched, so the link to register is what the app can
+# offer -- and registering is also how the agency knows to send addenda.
+_PLAN_ROOM_HOSTS = ("questcdn.com", "bonfirehub.com", "bidnetdirect.com",
+                    "demandstar.com", "planetbids.com", "publicpurchase.com",
+                    "civcastusa.com", "bidexpress.com", "procurenow.com",
+                    "ionwave.net", "negometrix.com", "periscopeholdings.com")
+_PLAN_ROOM_PATH_RE = re.compile(r"/Bids/PlanHolders/|plan[-_ ]?holders?|plan[-_ ]?room", re.I)
+_PLAN_ROOM_TEXT_RE = re.compile(
+    r"view (?:the )?document\(?s?\)?|plan ?holders?|plan ?room|register to (?:download|view|obtain)"
+    r"|(?:download|obtain|view) (?:the )?(?:bid |project )?(?:documents|plans|specifications|specs)", re.I)
+_ANY_ANCHOR_RE = re.compile(r'<a\b[^>]*?href="([^"]+)"[^>]*>(.*?)</a>', re.I | re.S)
+
+
+def _plan_room_host(url):
+    host = urllib.parse.urlparse(url).netloc.lower()
+    return any(host == h or host.endswith("." + h) for h in _PLAN_ROOM_HOSTS)
+
+
+def detail_plan_room(html, base_url=""):
+    """The link where a contractor registers to get this bid's documents, or "".
+
+    A posting that IS a plan-room page (a QuestCDN or Bonfire listing) is
+    its own answer. Otherwise a link counts when its address is a plan-holder
+    form, or it goes to a plan-room platform AND its words say documents or
+    plans -- a platform named in a site footer for vendor sign-up is not this
+    bid's documents.
+    """
+    if base_url and _plan_room_host(base_url):
+        return base_url
+    for href, anchor in _ANY_ANCHOR_RE.findall(str(html or "")):
+        url = urllib.parse.urljoin(base_url, _unescape(href)) if base_url else _unescape(href)
+        if not url.lower().startswith(("http://", "https://")):
+            continue
+        text = _clean(_unescape(re.sub(r"<[^>]+>", " ", anchor)))
+        if _PLAN_ROOM_PATH_RE.search(urllib.parse.urlparse(url).path) or \
+                (_plan_room_host(url) and _PLAN_ROOM_TEXT_RE.search(text)):
+            return url
+    return ""
+
+
 def detail_scope(html):
     """The project description from a posting page, or "" if none is labelled."""
     blob = _clean(_unescape(html))

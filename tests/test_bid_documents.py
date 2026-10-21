@@ -312,6 +312,74 @@ class FillEndpointTests(unittest.TestCase):
         self.assertEqual(self.post(url="http://10.0.0.1/f.pdf").status_code, 400)
 
 
+class UploadTests(unittest.TestCase):
+    """A PDF the contractor got by registering as a plan holder, uploaded
+    from the phone: read and filled like a linked one, never fetched."""
+
+    def setUp(self):
+        self.client = ls.app.test_client()
+        self.store = {}
+        self._p = [
+            patch.object(ls, "_license_is_active", return_value=True),
+            patch.object(ls, "OPENAI_API_KEY", "k"),
+            patch.object(ls, "_ip_rate_ok", return_value=True),
+            patch.object(kv_backend, "get", side_effect=lambda k, d=None: self.store.get(k, d)),
+            patch.object(kv_backend, "set", side_effect=lambda k, v: self.store.__setitem__(k, v)),
+            patch.object(ls, "_fetch_document", side_effect=AssertionError("an upload was fetched")),
+            patch.object(ls, "_document_text", return_value=("Item 1 sidewalk 100 SY", 3, False)),
+            patch.object(ls, "_ai_read_bid_document", return_value={
+                "line_items": [{"item_no": "1", "description": "Sidewalk", "quantity": 100.0, "unit": "SY"}],
+                "submission": "", "bid_security": "5% bid bond", "prebid": "", "required_forms": []}),
+            patch.object(ls, "_ai_match_fields", return_value={"Bidder Name": "company.name"}),
+        ]
+        for p in self._p:
+            p.start()
+
+    def tearDown(self):
+        for p in self._p:
+            p.stop()
+
+    def upload(self, path, raw, **over):
+        body = {"key": "k", "device_id": "d"}
+        body.update(over)
+        return self.client.post(path, content_type="multipart/form-data", data={
+            "json": ls.json.dumps(body), "file": (ls.io.BytesIO(raw), "plans.pdf")})
+
+    def test_an_uploaded_pdf_is_read_without_fetching_anything(self):
+        d = self.upload("/bid-documents/read", b"%PDF-1.4 plans").get_json()
+        self.assertTrue(d["ok"], d)
+        self.assertEqual(d["bid_security"], "5% bid bond")
+
+    def test_the_same_file_uploaded_again_comes_from_cache(self):
+        self.upload("/bid-documents/read", b"%PDF-1.4 plans")
+        with patch.object(ls, "_ai_read_bid_document", side_effect=AssertionError("read twice")):
+            self.assertTrue(self.upload("/bid-documents/read", b"%PDF-1.4 plans").get_json()["cached"])
+
+    def test_a_file_that_is_not_a_pdf_is_refused(self):
+        r = self.upload("/bid-documents/read", b"<html>hi</html>")
+        self.assertEqual((r.status_code, r.get_json()["reason"]), (400, "not_pdf"))
+
+    def test_a_file_over_the_cap_is_refused(self):
+        with patch.object(ls, "BID_DOC_MAX_BYTES", 10):
+            r = self.upload("/bid-documents/read", b"%PDF-1.4 " + b"x" * 50)
+        self.assertEqual((r.status_code, r.get_json()["reason"]), (413, "too_large"))
+
+    def test_a_multipart_post_with_no_file_is_refused(self):
+        r = self.client.post("/bid-documents/read", content_type="multipart/form-data",
+                             data={"json": ls.json.dumps({"key": "k", "device_id": "d"})})
+        self.assertEqual((r.status_code, r.get_json()["reason"]), (400, "no_file"))
+
+    def test_an_unlicensed_upload_is_refused(self):
+        with patch.object(ls, "_license_is_active", return_value=False):
+            self.assertEqual(self.upload("/bid-documents/read", b"%PDF-1.4 plans").status_code, 403)
+
+    def test_an_uploaded_form_is_filled(self):
+        d = self.upload("/bid-documents/fill", fillable_pdf(["Bidder Name"]),
+                        company={"name": "Test Concrete LLC"}, bid={"total": 1000}).get_json()
+        self.assertTrue(d["ok"], d)
+        self.assertEqual(d["filled"][0]["value"], "Test Concrete LLC")
+
+
 class BidWatchTests(unittest.TestCase):
     URL = "https://93.184.216.34/bids/elm-st"
     PAGE = (b"<html><body><h1>Elm St Sidewalk</h1><p>Addendum No. 1 issued 9/30. See Addendum #2.</p>"
@@ -396,3 +464,34 @@ class DocumentPickerTests(unittest.TestCase):
         html = ('<a href="/d/location-map.pdf">Project location map</a>'
                 '<a href="/d/prevailing-wage.pdf">Prevailing wage ordinance</a>')
         self.assertEqual(len(self.B.detail_documents(html, "https://t.gov/")), 2)
+
+
+class PlanRoomTests(unittest.TestCase):
+    """Bids whose documents the agency gives out only to registered plan
+    holders. The files can't be fetched; the link to register can."""
+
+    import bid_sources as B
+
+    def test_a_civicplus_view_documents_link_is_the_plan_room(self):
+        # Bensenville, IL: "View Document(s)" leads to "Please fill out this
+        # form to view bid details. Plan Holders Form".
+        html = ('<a href="/DocumentView.aspx?DID=1925">Board &amp; Committee Meeting Schedule</a>'
+                '<a href="/Bids/PlanHolders/181?documentId=-1">View Document(s)</a>')
+        self.assertEqual(self.B.detail_plan_room(html, "https://bensenville.gov/bids.aspx?bidID=181"),
+                         "https://bensenville.gov/Bids/PlanHolders/181?documentId=-1")
+
+    def test_a_plan_room_platform_counts_when_the_link_says_documents(self):
+        html = '<a href="https://qcpi.questcdn.com/cdn/posting/?provider=123">Download the bid documents</a>'
+        self.assertIn("questcdn.com", self.B.detail_plan_room(html, "https://town.gov/bids/7"))
+
+    def test_a_platform_in_the_footer_for_vendor_sign_up_does_not(self):
+        html = '<a href="https://vendor.bonfirehub.com/register">Vendor registration</a>'
+        self.assertEqual(self.B.detail_plan_room(html, "https://town.gov/bids.aspx?bidID=1"), "")
+
+    def test_a_posting_on_a_plan_room_platform_is_its_own_plan_room(self):
+        url = "https://cityx.bonfirehub.com/opportunities/12345"
+        self.assertEqual(self.B.detail_plan_room("", url), url)
+
+    def test_ordinary_document_links_are_not_a_plan_room(self):
+        html = '<a href="/DocumentCenter/View/88/Bid-Form">Bid Form</a>'
+        self.assertEqual(self.B.detail_plan_room(html, "https://city.gov/bids.aspx?bidID=1"), "")

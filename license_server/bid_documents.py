@@ -219,20 +219,53 @@ def _ai_read_bid_document(text):
         return None
 
 
+# ── A document the contractor uploads ──
+# Many agencies hand out the plans, specs and bid form only to registered
+# plan holders, so the server can't download them. The contractor can: they
+# register, download, and upload the PDF here to be read or filled the same
+# way. Multipart, with the file in "file" and everything else as JSON in
+# "json". PDFs only, same size cap as a download. Nothing uploaded is kept
+# except the reading itself (cached by the file's hash, like a URL's).
+def _doc_request():
+    """(data, uploaded bytes or None, error or "")."""
+    ctype = (request.content_type or "").lower()
+    if not ctype.startswith("multipart/form-data"):
+        return request.get_json(force=True, silent=True) or {}, None, ""
+    if (request.content_length or 0) > BID_DOC_MAX_BYTES + 1_000_000:
+        return {}, None, "too_large"
+    try:
+        data = json.loads(request.form.get("json") or "{}")
+    except ValueError:
+        data = {}
+    data = data if isinstance(data, dict) else {}
+    f = request.files.get("file")
+    if not f:
+        return data, None, "no_file"
+    raw = f.read(BID_DOC_MAX_BYTES + 1)
+    if len(raw) > BID_DOC_MAX_BYTES:
+        return data, None, "too_large"
+    if raw[:5] != b"%PDF-":
+        return data, None, "not_pdf"
+    return data, raw, ""
+
+
 @app.route("/bid-documents/read", methods=["POST"])
 def bid_documents_read():
-    data = request.get_json(force=True, silent=True) or {}
+    data, upload, err = _doc_request()
     key = data.get("key", "")
     device = data.get("device_id", "")
     if not _license_is_active(key, device, data.get("supabase_token", "")):
         return jsonify({"ok": False, "reason": "not_licensed"}), 403
+    if err:
+        return jsonify({"ok": False, "reason": err}), 413 if err == "too_large" else 400
     url = str(data.get("url") or "").strip()
-    if not _public_http_url(url):
+    if upload is None and not _public_http_url(url):
         return jsonify({"ok": False, "reason": "bad_url"}), 400
     if not OPENAI_API_KEY:
         return jsonify({"ok": False, "reason": "ai_unavailable"})
 
-    cache_key = _BID_DOC_CACHE_PREFIX + hashlib.sha256(url.encode()).hexdigest()[:32]
+    ident = (b"upload:" + hashlib.sha256(upload).digest()) if upload is not None else url.encode()
+    cache_key = _BID_DOC_CACHE_PREFIX + hashlib.sha256(ident).hexdigest()[:32]
     try:
         hit = kv_backend.get(cache_key, None)
     except Exception:
@@ -254,9 +287,12 @@ def bid_documents_read():
         return jsonify({"ok": False, "reason": "rate_limited",
                         "detail": "Too many documents read today. Try again tomorrow."}), 429
 
-    raw, ctype, outcome = _fetch_document(url)
-    if outcome != "ok":
-        return jsonify({"ok": False, "reason": "fetch_failed", "detail": outcome})
+    if upload is not None:
+        raw, ctype = upload, "application/pdf"
+    else:
+        raw, ctype, outcome = _fetch_document(url)
+        if outcome != "ok":
+            return jsonify({"ok": False, "reason": "fetch_failed", "detail": outcome})
     text, pages, truncated = _document_text(raw, ctype)
     if not text.strip():
         # A scanned PDF has no text layer; there is nothing to read without OCR.
@@ -461,13 +497,15 @@ def _filled_pdf(reader, values):
 
 @app.route("/bid-documents/fill", methods=["POST"])
 def bid_documents_fill():
-    data = request.get_json(force=True, silent=True) or {}
+    data, upload, err = _doc_request()
     key = data.get("key", "")
     device = data.get("device_id", "")
     if not _license_is_active(key, device, data.get("supabase_token", "")):
         return jsonify({"ok": False, "reason": "not_licensed"}), 403
+    if err:
+        return jsonify({"ok": False, "reason": err}), 413 if err == "too_large" else 400
     url = str(data.get("url") or "").strip()
-    if not _public_http_url(url):
+    if upload is None and not _public_http_url(url):
         return jsonify({"ok": False, "reason": "bad_url"}), 400
     vals = _fill_values(data)
     if not vals:
@@ -478,9 +516,12 @@ def bid_documents_fill():
                        BID_FILL_MAX_PER_KEY_PER_DAY):
         return jsonify({"ok": False, "reason": "rate_limited"}), 429
 
-    raw, ctype, outcome = _fetch_document(url)
-    if outcome != "ok":
-        return jsonify({"ok": False, "reason": "fetch_failed", "detail": outcome})
+    if upload is not None:
+        raw = upload
+    else:
+        raw, ctype, outcome = _fetch_document(url)
+        if outcome != "ok":
+            return jsonify({"ok": False, "reason": "fetch_failed", "detail": outcome})
     if raw[:5] != b"%PDF-":
         return jsonify({"ok": False, "reason": "not_fillable", "detail": "not_pdf"})
     try:
