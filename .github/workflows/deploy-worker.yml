@@ -23,6 +23,7 @@ on:
     paths:
       - "curbcall_netlify_v4/**"
       - "wrangler.toml"
+      - "worker/**"
       - ".github/workflows/deploy-worker.yml"
   workflow_dispatch: {}
 
