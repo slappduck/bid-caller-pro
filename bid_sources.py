@@ -1979,6 +1979,10 @@ _PREBID_RE = re.compile(r"pre-?bid\s+(?:meeting|conference)", re.I)
 _MANDATORY_RE = re.compile(
     r"(mandatory|required|must\s+attend)[^.]{0,80}?pre-?bid|"
     r"pre-?bid[^.]{0,80}?(mandatory|is\s+required|must\s+attend)", re.I)
+# "Non-mandatory", "not mandatory", "is not required": said of a meeting
+# that is NOT mandatory, and each contains the word that otherwise flags one.
+_NOT_MANDATORY_RE = re.compile(
+    r"\b(?:non[\s-]*mandatory|not\s+(?:be\s+)?(?:mandatory|required)|optional)\b", re.I)
 _ADDENDA_RE = re.compile(r"\baddend(?:um|a)\b", re.I)
 # CivicPlus serves packets from /DocumentCenter, not as plain .pdf links --
 # looking only for ".pdf" found none of them.
@@ -2015,7 +2019,7 @@ def detail_prebid(html):
     text = _clean(_unescape(str(html or "")))
     if not _PREBID_RE.search(text):
         return ""
-    return "mandatory" if _MANDATORY_RE.search(text) else "yes"
+    return "mandatory" if _MANDATORY_RE.search(_NOT_MANDATORY_RE.sub(" ", text)) else "yes"
 
 
 def detail_has_addenda(html):
