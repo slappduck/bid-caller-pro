@@ -312,10 +312,7 @@ class FillEndpointTests(unittest.TestCase):
         self.assertEqual(self.post(url="http://10.0.0.1/f.pdf").status_code, 400)
 
 
-class UploadTests(unittest.TestCase):
-    """A PDF the contractor got by registering as a plan holder, uploaded
-    from the phone: read and filled like a linked one, never fetched."""
-
+class _UploadSetup:
     def setUp(self):
         self.client = ls.app.test_client()
         self.store = {}
@@ -344,6 +341,10 @@ class UploadTests(unittest.TestCase):
         body.update(over)
         return self.client.post(path, content_type="multipart/form-data", data={
             "json": ls.json.dumps(body), "file": (ls.io.BytesIO(raw), "plans.pdf")})
+
+class UploadTests(_UploadSetup, unittest.TestCase):
+    """A PDF the contractor got by registering as a plan holder, uploaded
+    from the phone: read and filled like a linked one, never fetched."""
 
     def test_an_uploaded_pdf_is_read_without_fetching_anything(self):
         d = self.upload("/bid-documents/read", b"%PDF-1.4 plans").get_json()
@@ -378,6 +379,222 @@ class UploadTests(unittest.TestCase):
                         company={"name": "Test Concrete LLC"}, bid={"total": 1000}).get_json()
         self.assertTrue(d["ok"], d)
         self.assertEqual(d["filled"][0]["value"], "Test Concrete LLC")
+
+
+def text_pdf(lines, size=(612, 792)):
+    """A one-page typed PDF (Helvetica): [(x, y, font size, text)]."""
+    st = "".join(f"BT /F1 {sz} Tf {x} {y} Td ({t}) Tj ET\n" for x, y, sz, t in lines).encode()
+    objs = [b"<< /Type /Catalog /Pages 2 0 R >>", b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 %d %d] /Resources << /Font << /F1 5 0 R >> >> "
+            b"/Contents 4 0 R >>" % size,
+            b"<< /Length %d >>\nstream\n" % len(st) + st + b"endstream",
+            b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"]
+    out, offsets = b"%PDF-1.4\n", []
+    for i, o in enumerate(objs, start=1):
+        offsets.append(len(out))
+        out += b"%d 0 obj\n" % i + o + b"\nendobj\n"
+    xref = len(out)
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objs) + 1)
+    out += b"".join(b"%010d 00000 n \n" % o for o in offsets)
+    out += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (len(objs) + 1, xref)
+    return out
+
+
+def scanned_pdf():
+    """A PDF whose only page is a picture, the way a photocopied form comes."""
+    from PIL import Image, ImageDraw
+    img = Image.new("L", (850, 1100), 255)
+    ImageDraw.Draw(img).text((80, 100), "BID FORM  Item 1  Sidewalk  100 SY", fill=0)
+    buf = ls.io.BytesIO()
+    img.save(buf, "PDF")
+    return buf.getvalue()
+
+
+FLAT_FORM = text_pdf([(72, 700, 12, "BID FORM"),
+                      (72, 660, 11, "Name of Bidder: ______________________________"),
+                      (72, 630, 11, "Address: _______________________  Phone: ______________"),
+                      (72, 600, 11, "Total Base Bid $ ____________________"),
+                      (72, 560, 11, "Signature: ______________________   Date: __________")])
+
+
+def page_text(pdf, n=0):
+    import pypdfium2 as pdfium
+    return pdfium.PdfDocument(pdf)[n].get_textpage().get_text_range()
+
+
+class MoreThanOneUploadTests(_UploadSetup, unittest.TestCase):
+    """The plans, the bid form and an addendum, read together."""
+
+    def test_several_files_are_read_together_with_their_names(self):
+        seen = []
+        with patch.object(ls, "_ai_read_bid_document",
+                          side_effect=lambda t, im=None: (seen.append(t), ls._clean_doc_result({"line_items": []}))[1]):
+            r = self.client.post("/bid-documents/read", content_type="multipart/form-data", data={
+                "json": ls.json.dumps({"key": "k", "device_id": "d"}),
+                "file": [(ls.io.BytesIO(b"%PDF-1.4 a"), "Bid form.pdf"), (ls.io.BytesIO(b"%PDF-1.4 b"), "Addendum 1.pdf")]})
+        d = r.get_json()
+        self.assertTrue(d["ok"], d)
+        self.assertEqual(d["files"], 2)
+        self.assertIn("=== FILE: Bid form.pdf ===", seen[0])
+        self.assertIn("=== FILE: Addendum 1.pdf ===", seen[0])
+
+    def test_the_same_files_in_another_set_are_read_again(self):
+        self.upload("/bid-documents/read", b"%PDF-1.4 plans")
+        r = self.client.post("/bid-documents/read", content_type="multipart/form-data", data={
+            "json": ls.json.dumps({"key": "k", "device_id": "d"}),
+            "file": [(ls.io.BytesIO(b"%PDF-1.4 plans"), "a.pdf"), (ls.io.BytesIO(b"%PDF-1.4 more"), "b.pdf")]})
+        self.assertFalse(r.get_json()["cached"])
+
+
+class ScannedPageTests(unittest.TestCase):
+    def test_only_picture_pages_are_drawn(self):
+        self.assertEqual(ls._scan_page_images(FLAT_FORM), [])
+        imgs = ls._scan_page_images(scanned_pdf())
+        self.assertEqual(len(imgs), 1)
+        self.assertEqual(imgs[0][:2], b"\xff\xd8")   # a JPEG
+
+    def test_a_broken_pdf_draws_nothing_rather_than_raising(self):
+        self.assertEqual(ls._scan_page_images(b"%PDF-1.4 not really"), [])
+
+    def test_a_scanned_upload_is_read_from_its_pictures(self):
+        client = ls.app.test_client()
+        got = []
+        with patch.object(ls, "_license_is_active", return_value=True), \
+             patch.object(ls, "OPENAI_API_KEY", "k"), patch.object(ls, "_ip_rate_ok", return_value=True), \
+             patch.object(kv_backend, "get", return_value=None), patch.object(kv_backend, "set"), \
+             patch.object(ls, "_ai_read_bid_document", side_effect=lambda t, im=None: (
+                 got.append((t, im)), ls._clean_doc_result({"line_items": [
+                     {"item_no": "1", "description": "Sidewalk", "quantity": "100", "unit": "SY"}]}))[1]):
+            d = client.post("/bid-documents/read", content_type="multipart/form-data", data={
+                "json": ls.json.dumps({"key": "k", "device_id": "d"}),
+                "file": (ls.io.BytesIO(scanned_pdf()), "scan.pdf")}).get_json()
+        self.assertTrue(d["ok"], d)
+        self.assertEqual(d["scanned_pages"], 1)
+        self.assertEqual(got[0][0].strip(), "")
+        self.assertEqual(len(got[0][1]), 1)
+
+    def test_the_model_is_shown_the_pages(self):
+        sent = {}
+
+        class Resp:
+            def __enter__(s): return s
+            def __exit__(s, *a): return False
+            def read(s): return ls.json.dumps({"choices": [{"message": {"content": '{"line_items": []}'}}]}).encode()
+
+        def fake_open(req, timeout=None):
+            sent.update(ls.json.loads(req.data))
+            return Resp()
+        with patch.object(ls, "OPENAI_API_KEY", "k"), patch.object(ls.urllib.request, "urlopen", fake_open):
+            self.assertIsNotNone(ls._ai_read_bid_document("", [b"\xff\xd8jpeg"]))
+        parts = sent["messages"][0]["content"]
+        self.assertEqual(parts[1]["type"], "image_url")
+        self.assertTrue(parts[1]["image_url"]["url"].startswith("data:image/jpeg;base64,"))
+
+
+class FlatFormTests(unittest.TestCase):
+    VALS = ls._fill_values({"company": {"name": "Test Concrete LLC", "address": "1 Main St", "contact": "Pat Lee"},
+                            "bid": {"total": 75000, "date": "10/21/2026"}})
+
+    def test_each_underlined_blank_is_found_with_its_label(self):
+        blanks = ls._flat_blanks(FLAT_FORM)
+        self.assertEqual([b["label"] for b in blanks],
+                         ["Name of Bidder", "Address", "Phone", "Total Base Bid", "Signature", "Date"])
+        self.assertEqual(blanks[1]["line"], "Address: [B2] Phone: [B3]")
+        self.assertLess(blanks[1]["x1"], blanks[2]["x0"])
+
+    def test_values_are_typed_onto_their_blanks_and_the_signature_is_left(self):
+        matched = {"B1": "company.name", "B4": "total", "B5": "company.contact", "B6": "date"}
+        with patch.object(ls, "_ai_match_fields", return_value=matched):
+            out, status = ls._fill_flat(FLAT_FORM, self.VALS)
+        self.assertTrue(out["ok"], out)
+        self.assertTrue(out["flat"])
+        self.assertEqual({f["field"]: f["value"] for f in out["filled"]},
+                         {"B1": "Test Concrete LLC", "B4": "75,000.00", "B6": "10/21/2026"})
+        text = page_text(ls.base64.b64decode(out["pdf_b64"]))
+        self.assertIn("Test Concrete LLC", text)
+        self.assertNotIn("Pat Lee", text)
+
+    def test_the_matcher_cannot_place_a_value_on_a_blank_that_does_not_exist(self):
+        with patch.object(ls, "_ai_match_fields", return_value={"B99": "company.name"}):
+            out, _ = ls._fill_flat(FLAT_FORM, self.VALS)
+        self.assertEqual(out["reason"], "nothing_matched")
+
+    def test_a_scan_has_no_blanks_to_fill(self):
+        out, _ = ls._fill_flat(scanned_pdf(), self.VALS)
+        self.assertEqual((out["ok"], out["reason"]), (False, "not_fillable"))
+
+    def test_the_fill_endpoint_falls_back_to_the_blanks(self):
+        client = ls.app.test_client()
+        with patch.object(ls, "_license_is_active", return_value=True), \
+             patch.object(ls, "OPENAI_API_KEY", "k"), patch.object(ls, "_ip_rate_ok", return_value=True), \
+             patch.object(ls, "_ai_match_fields", return_value={"B1": "company.name"}):
+            d = client.post("/bid-documents/fill", content_type="multipart/form-data", data={
+                "json": ls.json.dumps({"key": "k", "device_id": "d", "company": {"name": "Test Concrete LLC"}}),
+                "file": (ls.io.BytesIO(FLAT_FORM), "form.pdf")}).get_json()
+        self.assertTrue(d["ok"], d)
+        self.assertEqual(d["filled"][0]["label"], "Name of Bidder")
+
+    def test_affidavit_values_are_split_from_the_city_line(self):
+        vals = ls._fill_values({"company": {"city_state_zip": "Aurora, MO 65605"}, "bid": {"agency": "City of Aurora"}})
+        self.assertEqual((vals["company.city"][1], vals["company.state"][1], vals["company.zip"][1]),
+                         ("Aurora", "MO", "65605"))
+        self.assertEqual(vals["bid.agency"][1], "City of Aurora")
+
+
+class PacketTests(unittest.TestCase):
+    BODY = {"key": "k", "device_id": "d",
+            "bid": {"title": "Elm St Sidewalk", "agency": "City of Aurora", "number": "B-17",
+                    "total": 75000, "submission": "Sealed envelope to the City Clerk", "addenda": "#1"},
+            "company": {"name": "Test Concrete LLC"},
+            "checklist": ["Sign the bid form", "Attach the 5% bid bond"],
+            "lines": [{"item_no": "2", "description": "4 in. concrete sidewalk", "quantity": 1250,
+                       "unit": "SY", "unit_price": 60, "amount": 75000}]}
+
+    def setUp(self):
+        self.client = ls.app.test_client()
+        self._p = patch.object(ls, "_license_is_active", return_value=True)
+        self._p.start()
+
+    def tearDown(self):
+        self._p.stop()
+
+    def post(self, files):
+        return self.client.post("/bid-documents/packet", content_type="multipart/form-data",
+                                data={"json": ls.json.dumps(self.BODY), "file": files})
+
+    def test_cover_summary_then_each_form_in_order(self):
+        from pypdf import PdfReader
+        form = ls._filled_pdf(PdfReader(ls.io.BytesIO(fillable_pdf(["Bidder Name"]))),
+                              {"Bidder Name": "Test Concrete LLC"})
+        d = self.post([(ls.io.BytesIO(form), "Bid form.pdf"), (ls.io.BytesIO(FLAT_FORM), "Affidavit.pdf")]).get_json()
+        self.assertTrue(d["ok"], d)
+        pdf = ls.base64.b64decode(d["pdf_b64"])
+        self.assertEqual(d["pages"], 4)
+        cover = page_text(pdf, 0)
+        for want in ("Bid packet", "Elm St Sidewalk", "Sign the bid form", "Attach the 5% bid bond",
+                     "Sealed envelope to the City Clerk", "3. Bid form.pdf", "4. Affidavit.pdf",
+                     "Seventy-five thousand dollars"):
+            self.assertIn(want, cover)
+        self.assertIn("4 in. concrete sidewalk", page_text(pdf, 1))
+        self.assertIn("75,000.00", page_text(pdf, 1))
+        # The filled form's value is printed into the page, not a box that
+        # could clash with another form's box of the same name.
+        self.assertIn("Test Concrete LLC", page_text(pdf, 2))
+        self.assertFalse(PdfReader(ls.io.BytesIO(pdf)).get_fields())
+        self.assertIn("Name of Bidder", page_text(pdf, 3))
+
+    def test_a_packet_with_no_forms_is_just_the_cover_and_summary(self):
+        d = self.client.post("/bid-documents/packet", content_type="multipart/form-data",
+                             data={"json": ls.json.dumps(self.BODY)}).get_json()
+        self.assertEqual((d["ok"], d["pages"]), (True, 2))
+
+    def test_only_pdfs_go_in(self):
+        r = self.post([(ls.io.BytesIO(b"<html>"), "x.pdf")])
+        self.assertEqual(r.get_json()["reason"], "not_pdf")
+
+    def test_an_unlicensed_caller_is_refused(self):
+        with patch.object(ls, "_license_is_active", return_value=False):
+            self.assertEqual(self.post([]).status_code, 403)
 
 
 class BidWatchTests(unittest.TestCase):
