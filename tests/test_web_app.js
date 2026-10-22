@@ -1861,6 +1861,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     page.on("pageerror", (e) => pageErrors.push(e.message));
     page.on("dialog", (d) => d.accept());
     let addRead = null, watchAddenda = [1, 2];
+    const addendumReads = [];
     await page.route("**/*", (route) => {
       const u = route.request().url();
       const host = new URL(u).hostname;
@@ -1874,6 +1875,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
       }
       if (u.endsWith("/bid-documents/read")) {
         addRead = JSON.parse(route.request().postData() || "{}");
+        addendumReads.push(addRead);
         return json({ ok: true, cached: false, addendum_number: "1", issued: "October 18, 2099",
           bid_due: "November 6, 2099 2:00 PM", prebid: "",
           quantity_changes: [{ item_no: "2", description: "4 in. concrete sidewalk", old_quantity: 1250, new_quantity: 1410, unit: "SY" }],
@@ -1928,9 +1930,11 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     check("the addenda list has the posting's document, the one only mentioned, and the emailed one",
           /Addendum No\. 1/.test(list) && /on the posting/.test(list) && /Addendum 2/.test(list) && /mentioned on the posting/.test(list)
             && /Elm St Addendum 2\.pdf/.test(list) && /from your email/.test(list), list.slice(0, 600));
-    await page.click('[data-ad-read="0"]');
+    // Opening the bid already read the posting's addendum for what it changes.
+    check("an addendum on the posting is read for what it changes by itself", addendumReads.some((r) => r.kind === "addendum"
+          && r.url === "https://e.gov/addendum-1.pdf") && (await page.locator('[data-ad-see="0"]').count()) === 1, JSON.stringify(addendumReads));
+    await page.click('[data-ad-see="0"]');
     await page.waitForTimeout(600);
-    check("an addendum is read for what it changes", addRead && addRead.kind === "addendum" && addRead.url === "https://e.gov/addendum-1.pdf");
     const rev = await page.textContent("#prep-body");
     check("the changes are laid out: due date, quantities, items, answers",
           /What Addendum No\. 1 changes/.test(rev) && /November 6, 2099/.test(rev) && /1,410/.test(rev) && /Detectable warning panels/.test(rev)
@@ -1971,6 +1975,92 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await page.waitForTimeout(600);
     check("emailed addenda are tagged and offer to read what changed",
           (await page.locator(".ib-tag").count()) === 1 && (await page.locator("[data-ib-changes]").count()) === 1);
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
+  // ── Opening Prepare bid fills itself in ──
+  console.log("\nOpening Prepare bid reads the documents and fills itself in");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    const reads = [];
+    await page.route("**/*", (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      const json = (o) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(o) });
+      if (u.endsWith("/bid-documents/read")) {
+        const body = JSON.parse(route.request().postData() || "{}");
+        reads.push(body);
+        if (body.kind === "addendum") return json({ ok: true, addendum_number: "1", bid_due: "", quantity_changes: [],
+          items_added: [], items_removed: [], answers: [{ question: "Night work?", answer: "No." }], other_changes: [] });
+        return json({ ok: true, cached: false, pages_read: 4,
+          line_items: [{ item_no: "1", description: "Mobilization", quantity: 1, unit: "LS" },
+                       { item_no: "2", description: "4 in. concrete sidewalk", quantity: 900, unit: "SY" },
+                       { item_no: "3", description: "Curb and gutter", quantity: 400, unit: "LF" }],
+          submission: "Sealed envelope to the City Clerk", bid_security: "5% bid bond", prebid: "Pre-bid meeting October 30, 2099 at 10 AM",
+          prebid_place: "City Hall, 200 E Main St", project_location: "Oak St from 2nd to 6th", questions_due: "",
+          required_forms: ["Non-collusion affidavit"],
+          contact: { name: "Dana Reyes", title: "Purchasing Agent", organization: "City of Aurora", phone: "(417) 678-5551", email: "dreyes@aurora-mo.gov" } });
+      }
+      if (u.endsWith("/bid/locate")) return json({ ok: false, reason: "place_not_found" });
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      if (sessionStorage.getItem("seeded")) return;
+      sessionStorage.setItem("seeded", "1");
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      localStorage.setItem("license_key", JSON.stringify("TEST-KEY"));
+      localStorage.setItem("last_feed", JSON.stringify({ "Aurora, MO": [
+        { title: "Oak St Sidewalks", scope: "Sidewalk replacement", deadline: "2099-11-10", status: "open", url: "https://e.gov/oak",
+          documents: [{ name: "Plans", url: "https://e.gov/plans.pdf" }, { name: "Bid Form", url: "https://e.gov/bidform.pdf" },
+                      { name: "Addendum 1", url: "https://e.gov/add1.pdf" }] },
+        { title: "Pine Ave Ramps", scope: "Ramps", deadline: "2099-11-12", status: "open", url: "https://e.gov/pine",
+          documents: [{ name: "Bid Form", url: "https://e.gov/pineform.pdf" }] }] }));
+      localStorage.setItem("price_district", JSON.stringify("SW"));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(800);
+    const [oak, pine] = await page.evaluate(() => bidData["Aurora, MO"].map((b) => bidId("Aurora, MO", b)));
+    await page.evaluate((i) => { window.getSupabaseToken = async () => "tok"; return openPrep("Aurora, MO", i, "steps"); }, oak);
+    await page.waitForTimeout(1500);
+    check("the likeliest bid form is read without a tap", reads.length >= 1 && reads[0].url === "https://e.gov/bidform.pdf", JSON.stringify(reads));
+    check("...and the addendum on the posting is read for what it changes",
+          reads.some((r) => r.kind === "addendum" && r.url === "https://e.gov/add1.pdf"));
+    const p1 = await page.evaluate((i) => prepFor(i), oak);
+    check("untouched lines become the bid form's items", p1.linesFrom === "documents" && p1.lines.length === 3
+          && p1.lines.some((l) => /4 in\. concrete sidewalk/.test(l.name) && l.qty === 900), JSON.stringify(p1.lines));
+    check("...the meeting, job site, contact and bond are filled in",
+          p1.docInfo.prebid_place === "City Hall, 200 E Main St" && p1.docInfo.project_location === "Oak St from 2nd to 6th"
+            && p1.docInfo.contact.name === "Dana Reyes" && p1.docInfo.bid_security === "5% bid bond");
+    const steps = await page.textContent("#prep-body");
+    check("the top of Steps says what was filled in and from where",
+          /Filled in for you from Bid Form:/.test(steps) && /3 line items/.test(steps) && /the agency contact/.test(steps)
+            && /1 addendum read/.test(steps), steps.slice(0, 500));
+    check("...the contact card and job site show it", /Dana Reyes/.test(await page.textContent(".agency-card")) && /Oak St from 2nd to 6th/.test(steps));
+    await page.click('[data-act="undolines"]');
+    await page.waitForTimeout(300);
+    check("the lines can be put back", await page.evaluate((i) => { const p = prepFor(i); return p.linesFrom === "ballpark"
+          && !p.lines.some((l) => /Mobilization/.test(l.name)); }, oak));
+    const before = reads.length;
+    await page.evaluate((i) => openPrep("Aurora, MO", i, "pricing"), oak);
+    await page.waitForTimeout(500);
+    check("documents already read aren't read again", reads.length === before);
+
+    // A bid whose lines the contractor already changed keeps them.
+    await page.evaluate((i) => { const b = bidData["Aurora, MO"][1], p = prepFor(i);
+      p.lines = [{ name: "My own line", qty: 5, unit: "each", price: 100 }]; p.linesFrom = "you"; savePrep(i, "Aurora, MO");
+      return openPrep("Aurora, MO", i, "steps"); }, pine);
+    await page.waitForTimeout(1200);
+    const p2 = await page.evaluate((i) => prepFor(i), pine);
+    check("lines the contractor changed are never replaced", p2.lines.length === 1 && p2.lines[0].name === "My own line"
+          && p2.docInfo && p2.docInfo.read_at, JSON.stringify(p2.lines));
     check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
     await ctx.close();
   }

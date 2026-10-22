@@ -4675,7 +4675,7 @@ async function openPrep(city,id,step){
   const st=bidState(city,b);
   await Promise.all([loadRates(st),loadBidResults(st)]);
   const p=prepFor(id);
-  if(!p.lines)p.lines=defaultPrepLines(b,city);
+  if(!p.lines){p.lines=defaultPrepLines(b,city);p.linesFrom="ballpark";}
   savePrep(id,city);
   // "checklist" is what the Steps tab was called before; a saved bid may
   // still remember it.
@@ -4704,6 +4704,7 @@ async function openPrep(city,id,step){
   else renderPrepSummary(body,city,id,b);
   document.getElementById("modal-back").classList.add("open");
   document.getElementById("modal").classList.add("open");
+  autoPrepare(id,city,b);
 }
 
 // ── Addenda ──
@@ -4845,6 +4846,7 @@ function renderAddendumReview(body,city,id,b,key){
     const what=[nq&&plural(nq,"quantity","quantities"),added.length&&`add ${plural(added.length,"line")}`,nr&&`remove ${plural(nr,"line")}`].filter(Boolean).join(", ");
     if(!confirm(`Update your lines from ${r.label}: ${what}?`))return;
     qc.forEach(c=>{if(c.line>=0){lines[c.line].qty=c.new_quantity;}});
+    if(p.linesFrom==="ballpark")p.linesFrom="documents";
     const d=rateData[bidState(city,b)];
     added.forEach(c=>lines.push(lineFromDocItem({...c,quantity:c.quantity},d)));
     const drop=new Set(rm.map(c=>c.line).filter(i=>i>=0));
@@ -4934,6 +4936,129 @@ async function renderAddenda(body,city,id,b){
     await checkSavedBids();
     if(document.getElementById("prep-body"))renderAddenda(body,city,id,b);
   };
+}
+
+// ── Filling in by itself ──
+// Opening Prepare bid starts the work a contractor would otherwise tap
+// through: where the job is, the bid documents read (the likeliest bid form
+// linked, else the posting itself, else a matching email they forwarded),
+// the pricing lines from the bid form when they haven't been touched, and
+// any addendum on the posting read for what it changes. Each is tried once
+// (a failure again after a day), and what was filled in is said at the top
+// of Steps, with the lines undoable. Nothing is acknowledged, signed, sent
+// or submitted for them.
+const BID_DOC_NAME_RE=/bid ?form|proposal|bid ?sheet|schedule of (?:items|prices|values)|price ?sheet|bid ?documents?|bid ?packet|specifications?|invitation|\bitb\b|\brfp\b|\bifb\b|\brfq\b/i;
+function bestDocToRead(b){
+  const docs=prepDocCandidates(b);
+  const named=docs.filter(d=>d.name!=="Original posting"&&BID_DOC_NAME_RE.test(d.name));
+  const pdfs=docs.filter(d=>d.name!=="Original posting"&&/\.pdf(\?|#|$)/i.test(d.url));
+  return named[0]||pdfs[0]||docs.find(d=>d.name!=="Original posting")||docs.find(d=>d.name==="Original posting")||null;
+}
+// Lines never edited: the ballpark they started as. Bids from before this
+// was tracked count as edited, unless they're still exactly the ballpark.
+function linesUntouched(p,b,city){
+  if(p.linesFrom==="ballpark")return true;
+  if(p.linesFrom)return false;
+  const key=(ls)=>JSON.stringify((ls||[]).map(l=>[l.name||"",String(l.qty??""),l.unit||"",String(l.price??"")]));
+  return key(p.lines)===key(defaultPrepLines(b,city));
+}
+const _autoRunning={};
+function autoDue(p,k){const t=p.autoTried&&p.autoTried[k];return!t||Date.now()-t>86400000;}
+async function autoPrepare(id,city,b){
+  const p=prepFor(id);
+  if(_autoRunning[id]||isOffline()||!licenseKey())return;
+  const docsNeeded=!(p.docInfo&&p.docInfo.read_at&&!SITEWIDE_DOC_RE.test(p.docInfo.source||""))&&autoDue(p,"docs");
+  const w=bidWatch[id]||{};
+  const seen=new Set();
+  const addDocs=(w.addendum_docs||[]).concat(bidDocs(b).filter(d=>/addend/i.test(d.name)))
+    .filter(d=>{const u=safeUrl(d&&d.url);if(!u||seen.has(u))return false;seen.add(u);d.url=u;return true;})
+    .filter(d=>!(p.addendaRead||{})["u:"+d.url]&&autoDue(p,"u:"+d.url)).slice(0,2);
+  const locateNeeded=needsLocate(p)&&autoDue(p,"locate");
+  if(!docsNeeded&&!addDocs.length&&!locateNeeded)return;
+  _autoRunning[id]=true;
+  const strip=document.getElementById("auto-strip");
+  if(strip&&(docsNeeded||addDocs.length)){strip.className="auto-strip";strip.innerHTML=`<span class="spin"></span> Filling in from the bid documents…`;}
+  p.autoTried=p.autoTried||{};
+  const filled=[];
+  try{
+    let changed=false;
+    if(locateNeeded){
+      p.autoTried.locate=Date.now();
+      const loc=await locateBid(id,city,b);
+      changed=!!(loc&&loc.how!=="town");
+    }
+    if(docsNeeded){
+      p.autoTried.docs=Date.now();
+      let doc=bestDocToRead(b),res=null;
+      if(doc)res=await readBidDocument(doc.url);
+      // Nothing linked could be read: a forwarded email for this bid.
+      if((!res||!res.ok)&&inboxAddress()){
+        try{
+          const d=await inboxCall("/inbox/list");
+          const it=((d&&d.ok&&d.items)||[]).find(x=>(x.files||[]).length&&inboxMatches(x,b));
+          if(it){
+            const files=[];
+            for(const f of it.files.slice(0,UPLOAD_MAX_FILES))files.push(await inboxFile(it,f));
+            await rememberUploads(id,files);
+            const r2=await readBidDocumentFiles(files);
+            if(r2.ok){res=r2;doc={name:docsName(files),url:"",files};}
+          }
+        }catch(e){}
+      }
+      if(res&&res.ok){
+        const before=p.lines,beforeFrom=p.linesFrom;
+        const untouched=linesUntouched(p,b,city);
+        saveDocReading(p,doc,res);
+        const items=res.line_items||[];
+        if(items.length&&untouched){
+          const d=rateData[bidState(city,b)];
+          p.autoUndo={lines:before,linesFrom:beforeFrom||"ballpark"};
+          p.lines=items.map(it=>lineFromDocItem(it,d));
+          p.linesFrom="documents";
+          filled.push(plural(items.length,"line item"));
+        }
+        const info=p.docInfo;
+        [[info.prebid,"the pre-bid meeting"],[info.prebid_place,"the meeting place"],[info.project_location,"the job site"],
+         [info.contact&&(info.contact.name||info.contact.email||info.contact.phone),"the agency contact"],
+         [info.bid_security,"the bond"],[(info.required_forms||[]).length,"required forms"],[info.submission,"how to submit"],
+         [info.questions_due,"the questions deadline"]].forEach(([v,label])=>{if(v)filled.push(label);});
+        p.autoFilled={at:Date.now(),source:doc.name,what:filled.slice(),lines:p.linesFrom==="documents"&&!!p.autoUndo};
+      }else p.autoFilled={at:Date.now(),failed:true,source:doc&&doc.name};
+      changed=true;
+    }
+    for(const a of addDocs){
+      p.autoTried["u:"+a.url]=Date.now();
+      const r=await readAddendumDoc({url:a.url});
+      if(!r.ok)continue;
+      p.addendaRead=p.addendaRead||{};
+      const keep={label:a.name||"Addendum",url:a.url,phone:false,read_at:Date.now()};
+      ["addendum_number","issued","bid_due","prebid","quantity_changes","items_added","items_removed","answers","other_changes"].forEach(k=>keep[k]=r[k]);
+      p.addendaRead["u:"+a.url]=keep;
+      p.autoFilled=p.autoFilled||{at:Date.now(),what:[]};
+      p.autoFilled.addenda=(p.autoFilled.addenda||0)+1;
+      changed=true;
+    }
+    savePrep(id,city);
+    if(!changed)return;
+  }finally{
+    delete _autoRunning[id];
+  }
+  const body=document.getElementById("prep-body");
+  if(!body||!document.getElementById("modal").classList.contains("open"))return;
+  // Never pull the page out from under someone typing.
+  const typing=document.activeElement&&/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)&&body.contains(document.activeElement);
+  if(!typing&&["steps","summary"].includes(prepFor(id).step))openPrep(city,id,prepFor(id).step);
+  else if(p.autoFilled&&p.autoFilled.lines)toast("Lines filled in from the bid form. They're on the Pricing tab.");
+}
+function autoStripHTML(p){
+  const a=p.autoFilled;
+  if(!a||Date.now()-a.at>3*86400000)return`<div id="auto-strip"></div>`;
+  if(a.failed&&!a.addenda)return`<div class="auto-strip" id="auto-strip">Couldn't read the bid documents by itself${a.source?` (${esc(a.source)})`:""}. Upload them, or forward the plan room's email, and they'll be read.</div>`;
+  const what=(a.what||[]).concat(a.addenda?[plural(a.addenda,"addendum read","addenda read")]:[]);
+  if(!what.length)return`<div id="auto-strip"></div>`;
+  return`<div class="auto-strip done" id="auto-strip"><b>Filled in for you${a.source?` from ${esc(a.source)}`:""}:</b> ${esc(what.join(", "))}. Check it before you rely on it.
+    <span class="auto-acts">${p.docInfo&&p.docInfo.read_at?`<button type="button" class="step-act" data-act="docinfo">See what was read</button>`:""}
+    ${a.lines&&p.autoUndo?`<button type="button" class="step-act" data-act="undolines">Undo the lines</button>`:""}</span></div>`;
 }
 
 // ── Step reminders on the phone (server: /reminders/sync) ──
@@ -5076,7 +5201,7 @@ function renderPrepSteps(body,city,id,b){
     return!(d&&d.fixed&&d.days<0&&i.key!=="submit");
   });
   const prog=prepProgress(id,b),pct=prog.total?Math.round(prog.done/prog.total*100):0;
-  body.innerHTML=`${contactCardHTML(b,p)}<div class="step-progress"><div class="step-bar"><i style="width:${pct}%"></i></div>
+  body.innerHTML=`${autoStripHTML(p)}${contactCardHTML(b,p)}<div class="step-progress"><div class="step-bar"><i style="width:${pct}%"></i></div>
       <span>${prog.done} of ${prog.total} done</span></div>
     ${next?`<div class="step-next"><div class="step-next-k">Next up</div>
         <b>${esc(next.label)}</b> ${dueChip(next,false)}
@@ -5152,6 +5277,10 @@ function renderPrepSteps(body,city,id,b){
     else if(act==="regdetails")renderRegisterHelp(body,city,id,b);
     else if(act==="docinfo")renderSavedDocInfo(body,city,id,b);
     else if(act==="addenda")renderAddenda(body,city,id,b);
+    else if(act==="undolines"){
+      if(p.autoUndo){p.lines=p.autoUndo.lines;p.linesFrom=p.autoUndo.linesFrom||"ballpark";delete p.autoUndo;
+        if(p.autoFilled)p.autoFilled.lines=false;savePrep(id,city);toast("Lines put back");reopen();}
+    }
     else if(act==="ack"){recordAddenda(p,addendaNotRecorded(id,b,p));savePrep(id,city);reopen();}
     else if(act==="readmore")renderDocPicker(body,city,id,b);
     else if(act==="inbox")renderInbox(body,city,id,b);
@@ -5571,16 +5700,19 @@ function docInfoRows(info){
     ["Contact",info.contact?[info.contact.name,info.contact.title,info.contact.organization,info.contact.phone,info.contact.email].filter(Boolean).join(", "):""]]
     .filter(r=>String(r[1]||"").trim());
 }
-function renderDocReview(body,city,id,b,doc,res){
-  const p=prepFor(id);
-  // Everything read is kept with the bid -- the lines too, not only what
-  // feeds the steps -- so it can be looked at again later.
+// Everything read is kept with the bid -- the lines too, not only what
+// feeds the steps -- so it can be looked at again later.
+function saveDocReading(p,doc,res){
   p.docInfo={source:doc.name,url:doc.url||"",files:(doc.files||[]).map(f=>f.name),
     submission:res.submission||"",bid_security:res.bid_security||"",
     prebid:res.prebid||"",prebid_place:res.prebid_place||"",project_location:res.project_location||"",
     questions_due:res.questions_due||"",required_forms:res.required_forms||[],contact:res.contact||{},
     line_items:(res.line_items||[]).slice(0,200),pages_read:res.pages_read||0,scanned_pages:res.scanned_pages||0,
     truncated:!!res.truncated,read_at:Date.now()};
+}
+function renderDocReview(body,city,id,b,doc,res){
+  const p=prepFor(id);
+  saveDocReading(p,doc,res);
   savePrep(id,city);
   renderDocResult(body,city,id,b,doc,p.docInfo,true);
 }
@@ -5626,6 +5758,7 @@ async function renderDocResult(body,city,id,b,doc,info,fresh){
     const d=rateData[bidState(city,b)];
     const lines=items.map(it=>lineFromDocItem(it,d));
     p.lines=replace?lines:(p.lines||[]).filter(l=>(l.name||"").trim()||l.qty||l.price).concat(lines);
+    p.linesFrom=replace?"documents":"you";
     if(!p.lines.length)p.lines.push({name:"",qty:"",unit:"",price:"",ref:null});
     savePrep(id,city);openPrep(city,id,"pricing");
   };
@@ -5702,6 +5835,7 @@ function renderPastBidPicker(body,city,id,b){
     (bidPrep[btn.dataset.prices].lines||[]).forEach(l=>{const k=lineKey(l);if(k&&Number(l.price)>0)src[k]=Number(l.price);});
     let n=0;
     (p.lines||[]).forEach(l=>{const k=lineKey(l);if(k&&src[k]!=null){l.price=src[k];n++;}});
+    if(n)p.linesFrom="you";
     savePrep(id,city);
     toast(n?`Copied ${plural(n,"price")}`:"No lines here match that bid");
     openPrep(city,id,"pricing");
@@ -5711,6 +5845,7 @@ function renderPastBidPicker(body,city,id,b){
       .filter(l=>(l.name||"").trim())
       .map(l=>({name:l.name,qty:"",unit:l.unit||"",price:l.price,ref:l.ref||null,item:l.item,st:l.st}));
     p.lines=(p.lines||[]).filter(l=>(l.name||"").trim()||l.qty||l.price).concat(copied);
+    p.linesFrom="you";
     savePrep(id,city);
     toast(`Added ${plural(copied.length,"line")}. Fill in this job's quantities.`);
     openPrep(city,id,"pricing");
@@ -5860,16 +5995,19 @@ function renderPrepPricing(body,city,id,b){
     let v=inp.value;
     if(f==="qty"||f==="price")v=v.replace(/[^0-9.]/g,"");
     p.lines[i][f]=v;
+    p.linesFrom="you";
     savePrep(id,city);refresh();
   });
   body.querySelectorAll("[data-pick]").forEach(sel=>sel.onchange=()=>{
     const i=Number(sel.dataset.pick);
     applyLineChoice(p.lines[i],sel.value,stRates);
+    p.linesFrom="you";
     savePrep(id,city);openPrep(city,id,"pricing");
     if(sel.value==="custom")setTimeout(()=>{const inp=document.querySelector(`.prep-line[data-i="${i}"] .pl-name`);if(inp)inp.focus();},0);
   });
   body.querySelectorAll("[data-del]").forEach(x=>x.onclick=()=>{
     p.lines.splice(Number(x.dataset.del),1);
+    p.linesFrom="you";
     if(!p.lines.length)p.lines.push({name:"",qty:"",unit:"",price:"",ref:null});
     savePrep(id,city);openPrep(city,id,"pricing");
   });
@@ -5881,11 +6019,12 @@ function renderPrepPricing(body,city,id,b){
   if(di)di.onclick=()=>renderSavedDocInfo(body,city,id,b);
   document.getElementById("pl-add").onclick=()=>{
     p.lines.push({name:"",qty:"",unit:"",price:"",ref:null});
+    p.linesFrom="you";
     savePrep(id,city);openPrep(city,id,"pricing");
   };
   document.getElementById("pl-reset").onclick=()=>{
     if(!confirm("Replace your lines with the ballpark from the posting?"))return;
-    p.lines=defaultPrepLines(b,city);
+    p.lines=defaultPrepLines(b,city);p.linesFrom="ballpark";
     savePrep(id,city);openPrep(city,id,"pricing");
   };
   document.getElementById("pt-mk").oninput=(e)=>{
