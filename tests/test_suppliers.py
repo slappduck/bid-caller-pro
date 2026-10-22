@@ -143,6 +143,73 @@ class NearbyTests(unittest.TestCase):
         self.assertEqual(len(self.overpass_calls), 2)
 
 
+class JobLocationTests(unittest.TestCase):
+    """A statewide bid is placed by the site its own name gives."""
+    EDMOND = (35.66, -97.46)
+
+    def setUp(self):
+        self.store, self.asked = {}, []
+        self._p = [
+            patch.object(ls, "OPENAI_API_KEY", "k"),
+            patch.object(kv_backend, "get", side_effect=lambda k, d=None: self.store.get(k, d)),
+            patch.object(kv_backend, "set", side_effect=lambda k, v: self.store.__setitem__(k, v)),
+            patch.object(ls, "_geo_from_city", side_effect=lambda c, st: {"lat": 35.65, "lon": -97.48, "city": c, "state": st}
+                         if c in ("Edmond", "Aurora") else None),
+            patch.object(ls, "_nominatim_place", side_effect=lambda place, st: (self.asked.append(place), {
+                "Kickingbird Golf Course, Edmond": self.EDMOND, "Elm St, Aurora": (35.651, -97.481)}.get(place))[1]),
+        ]
+        for p in self._p:
+            p.start()
+
+    def tearDown(self):
+        for p in self._p:
+            p.stop()
+
+    def model_says(self, found):
+        class Resp:
+            def __enter__(s): return s
+            def __exit__(s, *a): return False
+            def read(s): return ls.json.dumps({"choices": [{"message": {"content": ls.json.dumps(found)}}]}).encode()
+        return patch.object(ls.urllib.request, "urlopen", return_value=Resp())
+
+    def test_a_statewide_bid_is_placed_at_the_site_its_name_gives(self):
+        with self.model_says({"place": "Kickingbird Golf Course", "city": "Edmond", "state": "OK"}):
+            got = ls._job_location("", "OK", title="Kickingbird Golf Course Parking Lot Bid",
+                                   url="https://www.edmondok.gov/Bids.aspx?bidID=88")
+        self.assertEqual(got, {"lat": 35.66, "lon": -97.46, "label": "Kickingbird Golf Course, Edmond, OK", "how": "bid"})
+
+    def test_the_answer_is_kept_so_the_bid_is_only_read_once(self):
+        with self.model_says({"place": "Kickingbird Golf Course", "city": "Edmond"}):
+            ls._job_location("", "OK", title="Kickingbird Golf Course Parking Lot Bid")
+        with patch.object(ls.urllib.request, "urlopen", side_effect=AssertionError("asked twice")):
+            self.assertEqual(ls._job_location("", "OK", title="Kickingbird Golf Course Parking Lot Bid")["how"], "bid")
+
+    def test_only_the_town_known_places_the_job_in_that_town(self):
+        with self.model_says({"place": "", "city": "Edmond", "state": "OK"}):
+            got = ls._job_location("", "OK", title="Parking lot overlay", url="https://edmondok.gov/x")
+        self.assertEqual((got["label"], got["how"]), ("Edmond, OK", "bid"))
+
+    def test_another_state_from_the_model_is_not_used(self):
+        with self.model_says({"place": "Kickingbird Golf Course", "city": "Edmond", "state": "TX"}):
+            self.assertIsNone(ls._job_location("", "OK", title="Kickingbird Golf Course Parking Lot Bid"))
+
+    def test_an_address_the_contractor_gave_comes_first(self):
+        with patch.object(ls.urllib.request, "urlopen", side_effect=AssertionError("model asked")):
+            got = ls._job_location("Aurora", "OK", near="Elm St", title="Sidewalks")
+        self.assertEqual((got["label"], got["how"]), ("Elm St, Aurora", "job"))
+
+    def test_a_whole_state_is_not_a_town(self):
+        self.assertEqual(ls._supplier_where({"city": "Oklahoma", "state": ""}), ("", "OK"))
+        self.assertEqual(ls._supplier_where({"city": "Edmond", "state": "ok"}), ("Edmond", "OK"))
+        self.assertEqual(ls._supplier_where({"city": "Edmond", "state": "Nowhere"}), ("Edmond", ""))
+
+    def test_the_locate_endpoint_answers_for_a_statewide_bid(self):
+        with patch.object(ls, "_license_is_active", return_value=True), patch.object(ls, "_ip_rate_ok", return_value=True), \
+             self.model_says({"place": "Kickingbird Golf Course", "city": "Edmond"}):
+            d = ls.app.test_client().post("/bid/locate", json={"city": "Oklahoma", "title": "Kickingbird Golf Course Parking Lot Bid"}).get_json()
+        self.assertEqual((d["ok"], d["how"], d["label"]), (True, "bid", "Kickingbird Golf Course, Edmond, OK"))
+
+
 class WebPlantTests(unittest.TestCase):
     """The web search's answer is checked, not trusted."""
 

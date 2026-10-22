@@ -478,6 +478,20 @@ body{font-family:var(--ui);background:radial-gradient(ellipse 120% 60% at 50% -1
 .agency-acts{display:flex;flex-wrap:wrap;gap:0.4rem;margin-top:0.5rem;}
 .agency-acts .step-act{margin:0;}
 .ac-field{display:block;width:100%;margin-top:0.4rem;font-size:var(--fs-base);padding:0.5rem 0.7rem;}
+/* A question that needs an answer before going on (above the sheet). */
+.ask-dlg{position:fixed;inset:0;z-index:70;background:rgba(var(--shadow-rgb),0.65);display:flex;align-items:center;justify-content:center;padding:1rem;animation:fade 0.2s;}
+.ask-card{width:100%;max-width:420px;max-height:85dvh;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:1.1rem 1.1rem 1rem;box-shadow:var(--shadow-lg);}
+.ask-card h3{color:var(--text);font-size:var(--fs-md);margin:0 0 0.6rem;}
+.ask-card p,.ask-card li{color:var(--text2);font-size:var(--fs-base);line-height:1.45;}
+.ask-card p{margin:0 0 0.6rem;}
+.ask-card ol,.ask-card ul{margin:0 0 0.7rem 1.2rem;padding:0;}
+.ask-card li{margin-bottom:0.35rem;}
+.ask-card b{color:var(--text);}
+.ask-fine{font-size:var(--fs-sm)!important;color:var(--text3)!important;}
+.ask-btns{display:grid;gap:0.5rem;margin-top:0.4rem;}
+.ask-btns button{width:100%;min-height:44px;padding:0.7rem;border-radius:var(--r);border:1px solid var(--border);font-weight:700;font-size:var(--fs-md);font-family:var(--ui);cursor:pointer;}
+.ask-btns .ma-gold{border-color:var(--accent);}
+.ask-btns button:disabled{opacity:0.7;cursor:default;}
 .ff-list{margin:0.4rem 0 0.2rem;}
 .ff-opt{display:flex;gap:0.65rem;align-items:center;padding:0.6rem 0;border-bottom:1px solid var(--border);cursor:pointer;min-height:44px;}
 .ff-opt input{width:1.15rem;height:1.15rem;accent-color:var(--accent);flex-shrink:0;}

@@ -1732,6 +1732,76 @@ async function toggleNotifPermission(){
     fireNotification("CurbCall Pro","Alerts are on. You'll hear about addenda, due dates and new bids here.");
   }else if(el)el.textContent=notifPermissionLabel();
 }
+// Asks before turning alerts on, in the app's own words: the browser's
+// permission prompt says nothing about why. Where alerts can't be turned on
+// from here -- an iPhone browser tab, or blocked in settings -- it says what
+// to do instead. Resolves true once this device can get alerts with the app
+// closed.
+function askForAlerts(why){
+  return new Promise(resolve=>{
+    const ios=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+    const box=document.createElement("div");
+    box.className="ask-dlg";
+    box.setAttribute("role","dialog");box.setAttribute("aria-modal","true");box.setAttribute("aria-labelledby","ask-t");
+    const done=(v)=>{box.remove();document.removeEventListener("keydown",esc_);resolve(v);};
+    const esc_=(e)=>{if(e.key==="Escape")done(false);};
+    const card=(title,html,buttons)=>{
+      box.innerHTML=`<div class="ask-card"><h3 id="ask-t">${esc(title)}</h3>${html}<div class="ask-btns">${buttons}</div></div>`;
+      const ok=box.querySelector("#ask-ok"),no=box.querySelector("#ask-no");
+      if(no)no.onclick=()=>done(false);
+      if(ok)ok.focus();
+      return ok;
+    };
+    box.onclick=(e)=>{if(e.target===box)done(false);};
+    document.addEventListener("keydown",esc_);
+    document.body.appendChild(box);
+    if(isIOSBrowserTab()){
+      card("Add CurbCall to your Home Screen",
+        `<p>${esc(why)}</p><p>iPhone only sends alerts from apps on the Home Screen, so it takes one quick step first:</p>
+        <ol><li>Tap the <b>Share</b> button (the square with the arrow) in your browser.</li>
+          <li>Choose <b>Add to Home Screen</b>.</li>
+          <li>Open CurbCall from the new Home Screen icon and turn this on there.</li></ol>
+        <p class="ask-fine">No Add to Home Screen in the Share menu? Open curbcallpro.com/app.html in Safari and do it from there.</p>`,
+        `<button class="ma-gold" id="ask-no">Got it</button>`);
+      return;
+    }
+    if(!pushSupported()||!currentUser){
+      card("Alerts aren't available here",
+        `<p>${!currentUser?"Sign in to turn on phone alerts.":"This browser can't send alerts. Chrome, Edge, Firefox or Safari can."}</p>`,
+        `<button class="ma-gold" id="ask-no">OK</button>`);
+      return;
+    }
+    if(Notification.permission==="denied"){
+      card("Alerts are blocked for CurbCall",
+        `<p>${esc(why)}</p><p>They were turned off for this site earlier. To turn them back on:</p>
+        <ol>${ios?`<li>Open the iPhone's <b>Settings</b>, then <b>Notifications</b>.</li><li>Find <b>CurbCall</b> and turn on <b>Allow Notifications</b>.</li>`
+          :`<li>Tap the lock or settings icon beside the address bar.</li><li>Set <b>Notifications</b> to <b>Allow</b>, then reload.</li>`}</ol>`,
+        `<button class="ma-gold" id="ask-no">OK</button>`);
+      return;
+    }
+    const ok=card("Turn on phone alerts?",
+      `<p>${esc(why)}</p><ul><li>The morning a bid step is due</li><li>An addendum posted on a bid you saved</li><li>The day before a bid is due</li></ul>
+      <p class="ask-fine">Your phone will ask you to allow them next. You can turn them off any time in Account.</p>`,
+      `<button class="ma-gold" id="ask-ok">Turn on alerts</button><button class="ma-ghost" id="ask-no">Not now</button>`);
+    ok.onclick=async()=>{
+      ok.disabled=true;ok.textContent="Turning on…";
+      // Asked from this tap, so the browser shows its prompt.
+      const perm=Notification.permission==="granted"?"granted":await Notification.requestPermission();
+      if(perm!=="granted"){done(false);return;}
+      const pushed=await subscribePush();
+      const el=document.getElementById("notif-status");
+      if(el)el.textContent=notifPermissionLabel();
+      if(!pushed){
+        card("Alerts couldn't be set up",
+          `<p>They'll show while CurbCall is open, but they couldn't be set up for when it's closed. Check your connection and try again.</p>`,
+          `<button class="ma-gold" id="ask-no">OK</button>`);
+        return;
+      }
+      fireNotification("CurbCall Pro","Alerts are on. You'll hear about bid steps, addenda and due dates here.");
+      done(true);
+    };
+  });
+}
 async function fireNotification(title,body){
   if(!("Notification"in window)||Notification.permission!=="granted")return;
   try{
@@ -4460,7 +4530,46 @@ function prepBackName(id,dflt){
 // the documents say. A bid in the feed only knows its town -- for state jobs
 // that "town" is the whole state -- so these are what a map can actually use.
 function meetingPlace(p){return String((p&&p.meetingPlace)||(p&&p.docInfo&&p.docInfo.prebid_place)||"").trim();}
-function jobAddress(p){return String((p&&p.jobAddress)||(p&&p.docInfo&&p.docInfo.project_location)||"").trim();}
+function jobAddress(p){
+  const located=p&&p.located&&p.located.how!=="town"?p.located.label:"";
+  return String((p&&p.jobAddress)||(p&&p.docInfo&&p.docInfo.project_location)||located||"").trim();
+}
+// Where the job is, worked out by the server from the bid itself when no
+// address was given or read: "Kickingbird Golf Course Parking Lot" on a
+// statewide Oklahoma search is the golf course in Edmond. Asked once per bid.
+const STATE_CODES={alabama:"AL",alaska:"AK",arizona:"AZ",arkansas:"AR",california:"CA",colorado:"CO",connecticut:"CT",
+  delaware:"DE","district of columbia":"DC",florida:"FL",georgia:"GA",hawaii:"HI",idaho:"ID",illinois:"IL",indiana:"IN",
+  iowa:"IA",kansas:"KS",kentucky:"KY",louisiana:"LA",maine:"ME",maryland:"MD",massachusetts:"MA",michigan:"MI",
+  minnesota:"MN",mississippi:"MS",missouri:"MO",montana:"MT",nebraska:"NE",nevada:"NV","new hampshire":"NH",
+  "new jersey":"NJ","new mexico":"NM","new york":"NY","north carolina":"NC","north dakota":"ND",ohio:"OH",oklahoma:"OK",
+  oregon:"OR",pennsylvania:"PA","rhode island":"RI","south carolina":"SC","south dakota":"SD",tennessee:"TN",texas:"TX",
+  utah:"UT",vermont:"VT",virginia:"VA",washington:"WA","west virginia":"WV",wisconsin:"WI",wyoming:"WY"};
+// {city, state} to search from: "Aurora, MO" is a town; "Oklahoma" from a
+// statewide search is only a state.
+function searchPlace(city,b){
+  const pp=placeParts(city);
+  if(pp)return pp;
+  const st=STATE_CODES[String(city||"").trim().toLowerCase()]||bidState(city,b);
+  return st?{city:"",state:st}:null;
+}
+const _locating={};
+async function locateBid(id,city,b){
+  const p=prepFor(id);
+  if(p.located||p.jobAddress||(p.docInfo&&p.docInfo.project_location)||_locating[id]||isOffline())return null;
+  const pl=searchPlace(city,b);
+  if(!pl)return null;
+  _locating[id]=true;
+  try{
+    const token=await getSupabaseToken();
+    const r=await fetchWithTimeout(SERVER+"/bid/locate",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,...pl,
+        title:b.title||"",scope:String(b.scope||"").slice(0,1500),url:b.url||""})},45000);
+    const d=await r.json();
+    if(d&&d.ok){p.located={label:d.label,how:d.how,at:Date.now()};savePrep(id,city);return p.located;}
+  }catch(e){}
+  finally{delete _locating[id];}
+  return null;
+}
 // Many pre-bid meetings are a walk of the job itself ("pre-bid meeting at
 // the project site"). Then the place to drive to is the job site, and a
 // "meeting place" of "the project site" is no address at all.
@@ -4490,6 +4599,14 @@ function mapQuery(addr,city){
   // the map may pick an Aurora in another state.
   if(pp&&a.toLowerCase().includes(pp.city.toLowerCase()))return`${a}, ${pp.state}`;
   return`${a}, ${c}`;
+}
+// The best words for where the job is, for anything that names it: the job
+// address (typed, read from the documents, or found from the bid's name)
+// with its town when it doesn't carry one, else the bid's town. One place
+// so a summary, an email and a map never disagree.
+function jobPlace(p,city){
+  const job=jobAddress(p);
+  return job?mapQuery(job,city):String(city||"");
 }
 // Apple Maps on an iPhone or iPad, Google Maps everywhere else: each opens
 // the phone's own maps app with directions one tap away.
@@ -4848,10 +4965,9 @@ function syncStepReminders(on){
 }
 async function setStepReminders(on,box){
   if(on&&!store.get("push_on",false)){
-    await toggleNotifPermission();
-    if(!store.get("push_on",false)){
+    const ok=await askForAlerts("Step reminders come as phone alerts: one the morning each step is due, for every bid you're preparing.");
+    if(!ok||!store.get("push_on",false)){
       if(box)box.checked=false;
-      toast("Reminders need phone alerts turned on.");
       return;
     }
   }
@@ -4909,8 +5025,9 @@ function renderPrepSteps(body,city,id,b){
     :place&&!p.editPlace
     ?`<small class="step-place">Meeting place: <b>${esc(place)}</b> <a href="#" data-edit-place>Change</a></small>`
     :`<input class="input step-addenda" data-place placeholder="Meeting address, e.g. City Hall, 200 E Main St" value="${esc(place)}" aria-label="Meeting address">`;
+  const fromName=!p.jobAddress&&!(p.docInfo&&p.docInfo.project_location)&&p.located&&p.located.how==="bid";
   const jobField=()=>job&&!p.editJob
-    ?`<small class="step-place">Job site: <b>${esc(job)}</b> <a href="#" data-edit-job>Change</a></small>`
+    ?`<small class="step-place">Job site${fromName?", from the bid's name":""}: <b>${esc(job)}</b> <a href="#" data-edit-job>Change</a></small>`
     :`<input class="input step-addenda" data-job placeholder="Job address or streets, from the plans" value="${esc(job)}" aria-label="Job address">`;
   const dueChip=(i,done)=>{
     const d=dueOf(i);if(!d||done)return"";
@@ -4973,6 +5090,9 @@ function renderPrepSteps(body,city,id,b){
   const reopen=()=>openPrep(city,id,"steps");
   // Whether email-in is set up is asked once a visit; the option appears
   // when the answer comes back.
+  if(!p.located&&!job)locateBid(id,city,b).then(loc=>{
+    if(loc&&loc.how!=="town"&&document.getElementById("prep-body")===body&&prepFor(id).step==="steps")reopen();
+  });
   if(!_inboxChecked&&!inboxAddress())checkInboxAddress().then(addr=>{
     if(addr&&document.getElementById("prep-body")===body&&prepFor(id).step==="steps")reopen();
   });
@@ -5769,12 +5889,12 @@ function renderPrepPricing(body,city,id,b){
 function prepSummaryData(id,b,city){
   const p=prepFor(id);
   const lines=(p.lines||[]).filter(l=>(l.name||"").trim()||Number(l.qty)||Number(l.price));
-  return{company:companyProfile||{},b,city,lines,t:prepTotals(p),markup:Number(p.markup)||0,addenda:p.addenda||""};
+  return{company:companyProfile||{},b,city,place:jobPlace(p,city),lines,t:prepTotals(p),markup:Number(p.markup)||0,addenda:p.addenda||""};
 }
 function prepSummaryText(s){
   const c=s.company,out=[];
   out.push(`BID SUMMARY: ${s.b.title||""}`);
-  if(s.city)out.push(`Location: ${s.city}`);
+  if(s.place)out.push(`Location: ${s.place}`);
   if(s.b.bid_number)out.push(`Bid number: ${s.b.bid_number}`);
   if(s.b.deadline)out.push(`Due: ${s.b.deadline}`);
   out.push("");
@@ -5847,7 +5967,7 @@ function printPrepSummary(s){
 th{background:#f0f0f0;}td:nth-child(n+2),th:nth-child(n+2){text-align:right;}.t{margin-top:12px;text-align:right;}.t div{margin:3px 0;}
 .g{font-size:16px;font-weight:bold;}.n{margin-top:24px;color:#666;font-size:11px;}</style></head><body>
 <h1>Bid summary: ${esc(s.b.title||"")}</h1>
-${s.city?`<div class="m">Location: ${esc(s.city)}</div>`:""}${s.b.bid_number?`<div class="m">Bid number: ${esc(s.b.bid_number)}</div>`:""}
+${s.place?`<div class="m">Location: ${esc(s.place)}</div>`:""}${s.b.bid_number?`<div class="m">Bid number: ${esc(s.b.bid_number)}</div>`:""}
 ${s.b.deadline?`<div class="m">Due: ${esc(s.b.deadline)}</div>`:""}
 <p><b>${esc(c.name||"")}</b><br>${[c.contact,c.phone,c.email].filter(Boolean).map(esc).join(" &middot; ")}</p>
 <table><thead><tr><th>#</th><th>Item</th><th>Quantity</th><th>Unit price</th><th>Amount</th></tr></thead><tbody>
@@ -5910,7 +6030,7 @@ function splitItemNo(name){
   const m=/^\s*([A-Za-z0-9-]{1,6})\.\s+(.+)$/.exec(String(name||""));
   return m?{item_no:m[1],description:m[2]}:{item_no:"",description:String(name||"").trim()};
 }
-function fillPayload(b,p){
+function fillPayload(b,p,city){
   const c=companyProfile||{},i=bidInfo(),t=prepTotals(p);
   const now=new Date(),pad=n=>String(n).padStart(2,"0");
   // Lines carry the markup the way the total does, so the form's unit
@@ -5919,7 +6039,7 @@ function fillPayload(b,p){
   return{
     company:{name:c.name||"",contact:c.contact||"",phone:c.phone||"",email:c.email||"",
       title:i.title||"",address:i.address||"",city_state_zip:i.city_state_zip||"",license:i.license||"",years:i.years||""},
-    bid:{number:b.bid_number||"",title:b.title||"",agency:b.agency||"",addenda:p.addenda||"",total:Math.round(t.total*100)/100,
+    bid:{number:b.bid_number||"",title:b.title||"",agency:b.agency||"",location:jobPlace(p,city||b._city||""),addenda:p.addenda||"",total:Math.round(t.total*100)/100,
       date:`${pad(now.getMonth()+1)}/${pad(now.getDate())}/${now.getFullYear()}`},
     lines:(p.lines||[]).filter(l=>(l.name||"").trim()).map(l=>{
       const s=splitItemNo(l.name),price=Math.round((Number(l.price)||0)*k*100)/100,qty=Number(l.qty)||0;
@@ -6031,7 +6151,7 @@ async function fillAndShow(body,city,id,b,forms){
   for(let k=0;k<forms.length;k++){
     const f=forms[k];
     body.innerHTML=`<div class="account-status"><span class="spin"></span> Filling in ${esc(f.name)}…${forms.length>1?` (${k+1} of ${forms.length})`:""}</div>`;
-    const res=f.file?await fillBidFormFile(f.file,fillPayload(b,p)):await fillBidForm(f.url,fillPayload(b,p));
+    const res=f.file?await fillBidFormFile(f.file,fillPayload(b,p,city)):await fillBidForm(f.url,fillPayload(b,p,city));
     if(!document.getElementById("prep-body"))return;
     if(res.ok){
       const blob=b64ToBlob(res.pdf_b64);
@@ -6108,7 +6228,7 @@ async function renderPacket(body,city,id,b){
   document.getElementById("pk-more").onclick=()=>renderFormFill(body,city,id,b);
   document.getElementById("pk-go").onclick=async()=>{
     const picked=[...body.querySelectorAll("[data-pk]:checked")].map(x=>done[Number(x.dataset.pk)]);
-    const pay=fillPayload(b,p);
+    const pay=fillPayload(b,p,city);
     pay.bid.due=b.deadline||"";
     pay.bid.submission=(p.docInfo&&p.docInfo.submission)||"";
     pay.checklist=packetChecklist(b,p,picked.map(d=>d.name));
@@ -6149,7 +6269,7 @@ function bondRequestMail(b,p,city){
   const first=String(i.bond_agent||"").trim().split(/\s+/)[0];
   const body=[`${first?`Hi ${first},`:"Hello,"}`,"",
     "We're bidding the project below and need a bid bond.","",
-    `Project: ${b.title||""}`,city?`Location: ${city}`:"",b.bid_number?`Bid number: ${b.bid_number}`:"",
+    `Project: ${b.title||""}`,jobPlace(p,city)?`Location: ${jobPlace(p,city)}`:"",b.bid_number?`Bid number: ${b.bid_number}`:"",
     b.deadline?`Bid due: ${b.deadline}`:"",t.total?`Our bid: about ${money0(t.total)}`:"",
     `Bond required: ${(p.docInfo&&p.docInfo.bid_security)||"see the bid documents"}`,
     b.url?`Bid documents: ${b.url}`:"","","Thanks,",signOff()].filter((x,k,a)=>x!==""||a[k-1]!=="").join("\n");
@@ -6175,7 +6295,8 @@ function concreteQuoteMail(b,p,city,waste,to){
   const i=bidInfo(),y=concreteYards(p.lines);
   const k=1+(Number(waste)||0)/100;
   const body=["Hello,","",
-    `We're bidding ${b.title||"a concrete job"}${city?` in ${city}`:""}${b.deadline?` (bids due ${b.deadline})`:""} and would like a price on ready-mix.`,"",
+    `We're bidding ${b.title||"a concrete job"}${b.deadline?` (bids due ${b.deadline})`:""} and would like a price on ready-mix.`,
+    jobPlace(p,city)?`Delivery to: ${jobPlace(p,city)}`:"","",
     ...y.out.map(x=>`- ${x.name}: ${Math.round(x.qty).toLocaleString()} ${x.unit}, about ${x.cy.toFixed(1)} CY`),
     ...y.other.map(x=>`- ${x.name}: ${Math.round(x.qty).toLocaleString()} ${x.unit} (volume from the plans)`),
     "",y.total?`Total: about ${Math.ceil(y.total*k)} CY including ${Number(waste)||0}% waste.`:"",
@@ -6289,17 +6410,18 @@ function placeParts(city){
   const m=/^(.+?),\s*([A-Za-z]{2})\s*$/.exec(String(city||"").trim());
   return m?{city:m[1],state:m[2].toUpperCase()}:null;
 }
-async function loadSuppliers(city,fresh,near){
-  const pl=placeParts(city);
+async function loadSuppliers(city,fresh,near,b){
+  const pl=searchPlace(city,b);
   if(!pl)return{ok:false,reason:"bad_place"};
   near=String(near||"").trim().slice(0,160);
-  const k=`${pl.city},${pl.state}|${near}`.toLowerCase();
+  const k=`${pl.city},${pl.state}|${near}|${(b&&b.title)||""}`.toLowerCase();
   if(!fresh&&supplierCache.has(k))return supplierCache.get(k);
   if(isOffline())return{ok:false,reason:"offline"};
   try{
     const token=await getSupabaseToken();
     const r=await fetchWithTimeout(SERVER+"/suppliers/nearby",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,...pl,near})},75000);
+      body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,...pl,near,
+        title:(b&&b.title)||"",scope:String((b&&b.scope)||"").slice(0,1500),url:(b&&b.url)||""})},75000);
     const d=await r.json();
     if(d&&d.ok)supplierCache.set(k,d);
     return d||{ok:false};
@@ -6312,7 +6434,8 @@ function plantSelect(name,status,i){
 function suppliersHTML(d,b,p,city,waste){
   if(!d||!d.ok){
     const why={not_licensed:"Supplier search is part of a paid plan.",place_not_found:"Couldn't place this town on the map.",
-      bad_place:"This bid has no town and state to search from. Add the job address on the Steps tab.",
+      bad_place:"Couldn't tell where this job is. Add the job address on the Steps tab.",
+      place_not_found:"Couldn't tell where this job is. Add the job address on the Steps tab.",
       rate_limited:"Too many searches today. Try again tomorrow.",offline:"You're offline."}[d&&d.reason]
       ||"The plant search took too long. The map servers it uses get busy; try again in a minute.";
     return`<div class="account-status">${esc(why)}</div>${d&&["not_licensed","rate_limited","offline","bad_place"].includes(d.reason)?"":
@@ -6468,8 +6591,8 @@ function renderConcretePanel(body,city,id,b){
     <div id="rm-est"></div>
     <div class="act-primary"><a class="ma-gold" id="cq-send" href="${esc(concreteQuoteMail(b,p,city,waste))}">Email my supplier for a quote</a></div>
     ${bidInfo().supplier_email?"":`<div class="rate-note">Save your supplier's email in <a href="#" id="cq-profile">bid details</a> and this goes straight to them.</div>`}
-    <div class="workspace-title" style="margin-top:1rem;">Ready-mix plants near ${near?"the job site":esc(place)}</div>
-    ${near?`<div class="rate-note" style="margin-top:0;">Searching around ${esc(near)}, ${esc(place)}.</div>`:""}
+    <div class="workspace-title" style="margin-top:1rem;">Ready-mix plants near ${near||placeParts(city)?"the job":esc(place)}</div>
+    <div class="rate-note" id="rm-near" style="margin-top:0;${near?"":"display:none;"}">${near?`Searching around ${esc(near)}${placeParts(city)&&!near.toLowerCase().includes(String(place).toLowerCase())?`, ${esc(place)}`:""}.`:""}</div>
     <div id="rm-sup"><div class="account-status">Looking for plants…</div></div>
     <details class="rm-log" id="rm-log"><summary>Got a quote? Save it</summary>
       <form id="rm-form" class="rm-form">
@@ -6548,8 +6671,12 @@ function renderConcretePanel(body,city,id,b){
   $("cq-waste").onchange=(e)=>{store.set("concrete_waste_pct",Number(e.target.value)||0);redraw();};
   $("cq-psi").onchange=(e)=>{c.psi=e.target.value?Number(e.target.value):"";save();
     $("rm-form").querySelector('[name="psi"]').value=e.target.value;redraw();};
-  const showSuppliers=(fresh)=>loadSuppliers(city,fresh,near).then(d=>{
+  const showSuppliers=(fresh)=>loadSuppliers(city,fresh,near,b).then(d=>{
     if(!$("rm-sup"))return;
+    // Where the server found the job, when the bid didn't say in an address.
+    const nn=$("rm-near");
+    if(nn&&d&&d.ok&&d.near){nn.textContent=`Searching around ${d.near}.`;nn.style.display="";}
+    if(d&&d.ok&&d.how==="bid"&&d.near&&!p.located&&!jobAddress(p)){p.located={label:d.near,how:"bid",at:Date.now()};save();}
     sup=d;quotes=d&&d.ok?d.quotes:null;
     if(!(d&&d.ok)){
       $("rm-sup").innerHTML=suppliersHTML(d,b,p,city,wastePct());sup=null;
@@ -6943,7 +7070,7 @@ function subQuoteText(b,p,city,to){
   const total=lines.reduce((s,l)=>s+l.qty*l.price,0);
   const first=String((to&&to.contact)||"").trim().split(/\s+/)[0];
   return[`${first?`Hi ${first},`:"Hello,"}`,"",
-    `${c.name||"We"} would like to quote the concrete flatwork on ${b.title||"this job"}${b.bid_number?` (${b.bid_number})`:""}${city?`, ${city}`:""}${b.deadline?`, bids due ${b.deadline}`:""}.`,"",
+    `${c.name||"We"} would like to quote the concrete flatwork on ${b.title||"this job"}${b.bid_number?` (${b.bid_number})`:""}${jobPlace(p,city)?`, ${jobPlace(p,city)}`:""}${b.deadline?`, bids due ${b.deadline}`:""}.`,"",
     ...lines.map(l=>`- ${l.name}: ${l.qty?`${l.qty.toLocaleString()} ${l.unit} at `:""}${money2(l.price)}${l.unit?`/${l.unit}`:""}${l.qty?` = ${money2(l.qty*l.price)}`:""}`),
     "",total?`Total for the items listed: ${money2(total)}`:"","",
     p.subTerms||SUB_QUOTE_TERMS,"","Happy to adjust to your item list. Thanks,",signOff()]
@@ -7115,6 +7242,8 @@ function openDetail(city,b){
     ${row("Scope of Work",b.scope)}
     <div id="detail-rates"></div>
     <div class="detail-grid">
+      ${(()=>{const pp=bidPrep[id],j=pp?jobAddress(pp):"";
+        return j?row(pp.jobAddress||(pp.docInfo&&pp.docInfo.project_location)?"Job Site":"Job Site (from the bid's name)",mapQuery(j,city),mapUrl(mapQuery(j,city))):"";})()}
       ${row("Posted",b.published)}
       ${row("Bid Number",b.bid_number)}
       ${row("Contact",b.contact)}

@@ -9409,6 +9409,7 @@ def _fill_values(data):
     put("bid.number", "Bid / project number", bid.get("number"), 80)
     put("bid.title", "Project", bid.get("title"))
     put("bid.agency", "Owner / agency the bid is for", bid.get("agency"), 120)
+    put("bid.location", "Project location / job site", bid.get("location"), 160)
     put("bid.addenda", "Addenda acknowledged", bid.get("addenda"), 120)
     put("date", "Date", bid.get("date"), 40)
     try:
@@ -9821,7 +9822,7 @@ def _packet_front(data, names):
     L = _PageLayout()
     L.text("Bid packet", 20, True)
     L.text(s(bid.get("title")) or "Bid", 13, True)
-    for label, v in (("Owner", bid.get("agency")), ("Bid number", bid.get("number")),
+    for label, v in (("Owner", bid.get("agency")), ("Job site", bid.get("location")), ("Bid number", bid.get("number")),
                      ("Bids due", bid.get("due")), ("Bidder", co.get("name"))):
         if s(v):
             L.text(f"{label}: {s(v)}", 10.5)
@@ -10733,18 +10734,129 @@ def _supplier_web(city, state):
     return out[:6]
 
 
-def _suppliers_near(city, state, near=""):
-    """Plants around the job site when its address places on the map, else
-    around the bid's town."""
-    geo = _geo_from_city(city, state)
-    where = None
+# ── Where the job is ──
+# A bid in the feed knows only the place its search was for, and for a
+# statewide search that's the whole state ("Oklahoma"). The job itself is
+# usually named in the bid: "Kickingbird Golf Course Parking Lot" is in
+# Edmond, the agency's web address says edmondok.gov. So the job is placed
+# from, in order: an address the contractor or the documents gave; a site
+# the model picks out of the bid's own title, description and web address
+# (it may only copy what's there, never guess); the bid's town.
+BID_LOCATE_CACHE_DAYS = 30
+_BID_LOCATE_PREFIX = "bidcaller:bid_locate:"
+_LOCATE_PROMPT = (
+    "Where is the work for this public construction bid? Use ONLY the text and web address "
+    "below. Return ONE JSON object: {\"place\": the street address, intersection, or named "
+    "site (park, school, golf course, building) where the work is, as written, else \"\"; "
+    "\"city\": the city or town the work is in, if the text or the agency's web address "
+    "makes it clear, else \"\"; \"state\": 2-letter code if clear, else \"\"}. "
+    "Never guess. No markdown.\n\n")
+
+
+def _ai_bid_place(title, scope, url):
+    """{place, city, state} the bid itself names, cached. {} when unknown."""
+    text = f"TITLE: {title}\nDESCRIPTION: {scope}\nWEB ADDRESS: {url}"[:3000]
+    key = _BID_LOCATE_PREFIX + hashlib.sha256(text.encode()).hexdigest()[:32]
+    try:
+        hit = kv_backend.get(key, None)
+    except Exception:
+        hit = None
+    if isinstance(hit, dict) and time.time() - float(hit.get("at") or 0) < BID_LOCATE_CACHE_DAYS * 86400:
+        return hit.get("found") or {}
+    if not OPENAI_API_KEY or not (title or scope):
+        return {}
+    body = json.dumps({"model": OPENAI_MODEL, "temperature": 0, "response_format": {"type": "json_object"},
+                       "messages": [{"role": "user", "content": _LOCATE_PROMPT + text}]}).encode()
+    req = urllib.request.Request("https://api.openai.com/v1/chat/completions", data=body, method="POST",
+                                 headers={"Authorization": f"Bearer {OPENAI_API_KEY}",
+                                          "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=25) as resp:
+            got = json.loads(json.loads(resp.read().decode("utf-8"))["choices"][0]["message"]["content"])
+    except Exception as ex:
+        print(f"[locate] model: {ex}", flush=True)
+        return {}
+    found = {}
+    if isinstance(got, dict):
+        for k, n in (("place", 160), ("city", 80), ("state", 20)):
+            v = got.get(k)
+            if isinstance(v, str) and v.strip():
+                found[k] = " ".join(v.split())[:n]
+    try:
+        kv_backend.set(key, {"at": time.time(), "found": found})
+    except Exception:
+        pass
+    return found
+
+
+def _job_location(city, state, near="", title="", scope="", url=""):
+    """{lat, lon, label, how} -- how is "job" (an address given), "bid" (a
+    site the bid names) or "town" -- or None when nothing places."""
+    geo = _geo_from_city(city, state) if city else None
+
+    def close(hit):
+        # A place miles from the bid's own town is another one of the same name.
+        return hit and (not geo or _miles_between(geo["lat"], geo["lon"], hit[0], hit[1]) < 60)
     if near:
-        hit = _nominatim_place(f"{near}, {city}", state)
-        if hit and (not geo or _miles_between(geo["lat"], geo["lon"], hit[0], hit[1]) < 60):
-            where = {"lat": hit[0], "lon": hit[1]}
-    if where is None and not geo:
+        hit = _nominatim_place(f"{near}, {city}" if city else near, state)
+        if close(hit):
+            return {"lat": hit[0], "lon": hit[1], "label": f"{near}, {city}" if city else near, "how": "job"}
+    if title or scope:
+        found = _ai_bid_place(title, scope, url)
+        st = _normalize_state(found.get("state", "")) or state
+        if st == state:
+            town = found.get("city") or city
+            place = found.get("place", "")
+            if place:
+                hit = _nominatim_place(f"{place}, {town}" if town else place, state)
+                if close(hit):
+                    return {"lat": hit[0], "lon": hit[1], "how": "bid",
+                            "label": ", ".join(x for x in (place, town, state) if x)}
+            if town and town.lower() != str(city).lower():
+                tg = _geo_from_city(town, state)
+                if tg and close((tg["lat"], tg["lon"])):
+                    return {"lat": tg["lat"], "lon": tg["lon"], "label": f"{tg['city']}, {state}", "how": "bid"}
+    if geo:
+        return {"lat": geo["lat"], "lon": geo["lon"], "label": f"{geo['city']}, {state}", "how": "town"}
+    return None
+
+
+def _supplier_where(data):
+    """(city, state) for a search: the city may be blank, or a whole state
+    ("Oklahoma") from a statewide search, as long as the state is known."""
+    city = " ".join(str(data.get("city") or "").split())[:80]
+    state = _normalize_state(data.get("state", "")) or _normalize_state(city)
+    if _normalize_state(city):
+        city = ""
+    return city, state
+
+
+@app.route("/bid/locate", methods=["POST"])
+def bid_locate():
+    data = request.get_json(force=True, silent=True) or {}
+    if not _license_is_active(data.get("key", ""), data.get("device_id", ""), data.get("supabase_token", "")):
+        return jsonify({"ok": False, "reason": "not_licensed"}), 403
+    city, state = _supplier_where(data)
+    if not state:
+        return jsonify({"ok": False, "reason": "bad_place"}), 400
+    if not _ip_rate_ok(_SUPPLIER_RATE_KEY, data.get("key") or data.get("device_id") or _client_ip(),
+                       SUPPLIER_MAX_PER_KEY_PER_DAY):
+        return jsonify({"ok": False, "reason": "rate_limited"}), 429
+    t = lambda k, n: " ".join(str(data.get(k) or "").split())[:n]
+    where = _job_location(city, state, t("near", 160), t("title", 300), t("scope", 1500), t("url", 300))
+    if not where:
+        return jsonify({"ok": False, "reason": "place_not_found"})
+    return jsonify({"ok": True, **where})
+
+
+def _suppliers_near(city, state, near="", title="", scope="", url=""):
+    """Plants around the job: its address, else the site the bid names, else
+    the bid's town."""
+    geo = _geo_from_city(city, state) if city else None
+    loc = _job_location(city, state, near, title, scope, url)
+    if not loc:
         return None
-    center = where or geo
+    center = loc
     cell = f"{round(center['lat'] * 4) / 4:.2f},{round(center['lon'] * 4) / 4:.2f}"
     cache_key = _SUPPLIER_CACHE_PREFIX + cell
     try:
@@ -10757,7 +10869,7 @@ def _suppliers_near(city, state, near=""):
         plants, web = hit.get("plants") or [], hit.get("web") or []
     else:
         deadline = time.time() + SUPPLIER_TIME_BUDGET
-        place = f"{(geo or {}).get('city') or city}, {state}" + (f" (job site: {near})" if where else "")
+        place = loc["label"] if loc["how"] != "town" else f"{(geo or {}).get('city') or city}, {state}"
         with ThreadPoolExecutor(max_workers=3) as pool:
             f_map = pool.submit(lambda: _overpass(
                 _supplier_query(center["lat"], center["lon"], SUPPLIER_RADIUS_MI * 1609.34), deadline))
@@ -10774,7 +10886,7 @@ def _suppliers_near(city, state, near=""):
             mapped = _supplier_rows(elements, center["lat"], center["lon"]) if elements is not None else []
             ai = got(f_ai, []) if len(mapped) + len(osm) < 4 else []
         plants = _merge_plants(mapped, osm, ai)[:SUPPLIER_MAX]
-        web = _supplier_web((geo or {}).get("city") or city, state) if len(plants) < 3 else []
+        web = _supplier_web((geo or {}).get("city") or city or loc["label"], state) if len(plants) < 3 else []
         try:
             kv_backend.set(cache_key, {"at": time.time(), "plants": plants, "web": web,
                                        "partial": elements is None})
@@ -10787,7 +10899,7 @@ def _suppliers_near(city, state, near=""):
     plants = sorted((p for p in plants if p.get("miles") is None or p["miles"] <= SUPPLIER_RADIUS_MI),
                     key=lambda p: (p.get("miles") is None, p.get("miles") or 0))
     return {"lat": center["lat"], "lon": center["lon"], "plants": plants, "web": web,
-            "near_job": bool(where)}
+            "near_job": loc["how"] != "town", "where": loc["label"], "how": loc["how"]}
 
 
 def _area_quotes(lat, lon):
@@ -10822,17 +10934,17 @@ def suppliers_nearby():
     key, device = data.get("key", ""), data.get("device_id", "")
     if not _license_is_active(key, device, data.get("supabase_token", "")):
         return jsonify({"ok": False, "reason": "not_licensed"}), 403
-    city, state = _supplier_place(data)
-    if not city:
+    city, state = _supplier_where(data)
+    if not state:
         return jsonify({"ok": False, "reason": "bad_place"}), 400
     if not _ip_rate_ok(_SUPPLIER_RATE_KEY, key or device or _client_ip(), SUPPLIER_MAX_PER_KEY_PER_DAY):
         return jsonify({"ok": False, "reason": "rate_limited"}), 429
-    near = " ".join(str(data.get("near") or "").split())[:160]
-    found = _suppliers_near(city, state, near)
+    t = lambda k, n: " ".join(str(data.get(k) or "").split())[:n]
+    found = _suppliers_near(city, state, t("near", 160), t("title", 300), t("scope", 1500), t("url", 300))
     if not found:
         return jsonify({"ok": False, "reason": "place_not_found"})
     return jsonify({"ok": True, "city": city, "state": state, "radius_mi": SUPPLIER_RADIUS_MI,
-                    "near": near if found.get("near_job") else "",
+                    "near": found["where"] if found.get("near_job") else "", "how": found.get("how"),
                     "plants": found["plants"], "web": found["web"],
                     "quotes": _area_quotes(found["lat"], found["lon"])})
 

@@ -1975,6 +1975,70 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── A statewide bid is placed by its own name ──
+  console.log("\nA bid from a statewide search is placed by the site its name gives");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    let locateBody = null, nearbyBody = null;
+    await page.route("**/*", (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      const json = (o) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(o) });
+      if (u.endsWith("/bid/locate")) {
+        locateBody = JSON.parse(route.request().postData() || "{}");
+        return json({ ok: true, lat: 35.66, lon: -97.46, label: "Kickingbird Golf Course, Edmond, OK", how: "bid" });
+      }
+      if (u.endsWith("/suppliers/nearby")) {
+        nearbyBody = JSON.parse(route.request().postData() || "{}");
+        return json({ ok: true, city: "", state: "OK", radius_mi: 50, near: "Kickingbird Golf Course, Edmond, OK", how: "bid",
+          plants: [{ name: "Edmond Ready Mix", miles: 3.1, phone: "405-555-0100", address: "Edmond, OK", source: "OpenStreetMap" }],
+          web: [], quotes: { enough: false, count: 0 } });
+      }
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      localStorage.setItem("last_feed", JSON.stringify({ "Oklahoma": [
+        { title: "Kickingbird Golf Course Parking Lot Bid", scope: "Mill and overlay, new curb", deadline: "2099-10-26",
+          status: "open", url: "https://www.edmondok.gov/Bids.aspx?bidID=88" }] }));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(800);
+    const id = await page.evaluate(() => { window.getSupabaseToken = async () => "tok"; return bidId("Oklahoma", bidData["Oklahoma"][0]); });
+    await page.evaluate((i) => openPrep("Oklahoma", i, "steps"), id);
+    await page.waitForTimeout(800);
+    check("the server is asked where a statewide bid is, with the bid's own words",
+          locateBody && locateBody.state === "OK" && locateBody.city === "" && /Kickingbird/.test(locateBody.title)
+            && /edmondok\.gov/.test(locateBody.url), JSON.stringify(locateBody));
+    const steps = await page.textContent("#prep-body");
+    check("the site step shows where the job is, and says it came from the bid's name",
+          /Job site, from the bid's name: Kickingbird Golf Course, Edmond, OK/.test(steps), steps.slice(0, 800));
+    check("...with directions to it", /Kickingbird%20Golf%20Course%2C%20Edmond%2C%20OK/.test(
+          await page.getAttribute('a.step-act[href*="Kickingbird"]', "href")));
+    await page.evaluate((i) => renderConcretePanel(document.getElementById("prep-body"), "Oklahoma", i, bidData["Oklahoma"][0]), id);
+    await page.waitForTimeout(800);
+    check("plants are searched around that site, not the whole state",
+          nearbyBody && nearbyBody.state === "OK" && nearbyBody.near === "Kickingbird Golf Course, Edmond, OK", JSON.stringify(nearbyBody));
+    check("...and the panel lists them", /Edmond Ready Mix/.test(await page.textContent("#rm-sup"))
+          && /Searching around Kickingbird Golf Course, Edmond, OK/.test(await page.textContent("#prep-body")));
+    const sumText = await page.evaluate((i) => { const b = bidData["Oklahoma"][0]; return prepSummaryText(prepSummaryData(i, b, "Oklahoma")); }, id);
+    check("the summary names the job site, not the state", /Location: Kickingbird Golf Course, Edmond, OK/.test(sumText), sumText.slice(0, 200));
+    await page.evaluate(() => { closeModal(); openDetail("Oklahoma", bidData["Oklahoma"][0]); });
+    await page.waitForTimeout(400);
+    const det = await page.textContent("#modal-content");
+    check("the bid's details show the job site with a map link", /Job Site \(from the bid's name\)Kickingbird Golf Course, Edmond, OK/.test(det)
+          && (await page.locator('.detail-val a[href*="Kickingbird"]').count()) === 1, det.slice(0, 500));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   // ── Phase 3: your own pricing history ──
   console.log("\nPast bids feed your prices: history, copy, won vs lost");
   {
@@ -2202,6 +2266,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     check("the bond request goes to the bonding agent", bond.startsWith("mailto:sam@surety.example"), bond.slice(0, 60));
     check("...with the project, the bid and the bond the documents ask for",
           /Hi Sam,/.test(bond) && /Bid due: 2099-11-01/.test(bond) && /Our bid: about \$75,000/.test(bond) && /Bond required: 5% bid bond/.test(bond));
+    check("...and where the job is, not just the town", /Location: Elm St from 1st St to 5th St, Aurora, MO/.test(bond));
     const q = decodeURIComponent(await page.getAttribute("#ps-question", "href"));
     check("a question to the agency is addressed to its contact", q.startsWith("mailto:dreyes@aurora-mo.gov") && /Hello Sam,/.test(q) && /B-17/.test(q));
     check("every date the documents give is offered for the calendar", /Add 3 dates/.test(await page.textContent("#ps-dates")));
@@ -2219,6 +2284,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     check("...and curb is left to size from the plans, not guessed", /Not counted, size from the plans: 3\. Curb and gutter/.test(conc));
     const quote = decodeURIComponent(await page.getAttribute("#cq-send", "href"));
     check("the quote request goes to the supplier", quote.startsWith("mailto:orders@mix.example") && /about 146 CY/.test(quote));
+    check("...and says where to deliver", /Delivery to: Elm St from 1st St to 5th St, Aurora, MO/.test(quote), quote.slice(0, 400));
 
     // ── Ready-mix plants near the job, and what the concrete should cost ──
     await page.waitForTimeout(500);
@@ -2232,7 +2298,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
           /How much of each price is concrete/.test(share) && /\$12\.83–\$20\.42 a sq yd/.test(share) && /28% of your \$60/.test(share), share.slice(0, 300));
     check("plants are asked for around the job site, in the bid's town", nearbyBody && nearbyBody.city === "Aurora" && nearbyBody.state === "MO"
             && nearbyBody.near === "Elm St from 1st St to 5th St", JSON.stringify(nearbyBody));
-    check("...and the panel says so", /Ready-mix plants near the job site/.test(await page.textContent("#prep-body"))
+    check("...and the panel says so", /Ready-mix plants near the job/.test(await page.textContent("#prep-body"))
             && /Searching around Elm St from 1st St to 5th St, Aurora/.test(await page.textContent("#prep-body")));
     const sup = await page.textContent("#rm-sup");
     check("nearby plants are listed with distance and a phone number", /Ozark Ready Mix/.test(sup) && /4\.2 mi/.test(sup) && /417-555-0199/.test(sup));
@@ -2299,7 +2365,8 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     check("the form filler is sent the company, the prices and the total",
           fillBody && fillBody.url === "https://e.gov/form.pdf" && fillBody.company.name === "Test Concrete LLC"
             && fillBody.company.title === "Owner" && fillBody.bid.total === 75000 && fillBody.bid.addenda === "#1"
-            && fillBody.lines[0].item_no === "2" && fillBody.lines[0].unit_price === 60 && fillBody.lines[0].amount === 75000,
+            && fillBody.lines[0].item_no === "2" && fillBody.lines[0].unit_price === 60 && fillBody.lines[0].amount === 75000
+            && fillBody.bid.location === "Elm St from 1st St to 5th St, Aurora, MO",
           JSON.stringify(fillBody && fillBody.lines));
     const filled = await page.textContent("#prep-body");
     check("every filled box is listed for checking", /Name of bidder/.test(filled) && /75,000\.00/.test(filled) && /7 boxes left/.test(filled));
@@ -2364,10 +2431,36 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await page.click("#reg-back");
     await page.waitForTimeout(300);
 
-    // Phone reminders for the steps.
-    await page.evaluate(() => { store.set("push_on", true); currentUser = { id: "u1", email: "tester@example.com" }; });
+    // Phone reminders for the steps: without alerts on, it asks first.
+    await page.evaluate(() => { store.set("push_on", false); currentUser = { id: "u1", email: "tester@example.com" };
+      window._realPush = pushSupported; pushSupported = () => true; });
     await page.evaluate((i) => openPrep("Aurora, MO", i, "steps"), id);
     await page.waitForTimeout(300);
+    remindBody = null;
+    await page.click("#step-remind");
+    await page.waitForTimeout(300);
+    check("with alerts blocked in the browser it says how to unblock them",
+          /Alerts are blocked for CurbCall/.test(await page.textContent(".ask-dlg")) && /Allow/.test(await page.textContent(".ask-dlg")));
+    await page.click("#ask-no");
+    await page.waitForTimeout(200);
+    // The test browser can't be granted notifications; act as one never asked.
+    await page.evaluate(() => Object.defineProperty(Notification, "permission", { get: () => "default", configurable: true }));
+    await page.click("#step-remind");
+    await page.waitForTimeout(300);
+    check("turning reminders on without alerts asks to turn alerts on",
+          /Turn on phone alerts\?/.test(await page.textContent(".ask-dlg")) && (await page.locator("#ask-ok").count()) === 1);
+    await page.click("#ask-no");
+    await page.waitForTimeout(300);
+    check("...and saying not now leaves reminders off", (await page.locator(".ask-dlg").count()) === 0
+          && !(await page.isChecked("#step-remind")) && remindBody === null);
+    await page.evaluate(() => { window._realIOS = isIOSBrowserTab; isIOSBrowserTab = () => true; });
+    await page.click("#step-remind");
+    await page.waitForTimeout(300);
+    check("on an iPhone browser tab it explains the Home Screen step instead",
+          /Add CurbCall to your Home Screen/.test(await page.textContent(".ask-dlg")) && /Add to Home Screen/.test(await page.textContent(".ask-dlg")));
+    await page.click("#ask-no");
+    await page.waitForTimeout(200);
+    await page.evaluate(() => { isIOSBrowserTab = window._realIOS; pushSupported = window._realPush; store.set("push_on", true); });
     await page.click("#step-remind");
     await page.waitForTimeout(500);
     const bondStep = remindBody && (remindBody.reminders || []).find((r) => r.label === "Ask for your bid bond");
