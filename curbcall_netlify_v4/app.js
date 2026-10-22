@@ -4553,9 +4553,19 @@ function searchPlace(city,b){
   return st?{city:"",state:st}:null;
 }
 const _locating={};
+// Bump when the server's way of placing a job gets better, so bids it
+// couldn't place before are asked about again. Ones it placed only at their
+// town are asked again after a day too: that can be a passing failure.
+const LOCATE_V=2;
+function needsLocate(p){
+  if(p.jobAddress||(p.docInfo&&p.docInfo.project_location))return false;
+  const l=p.located;
+  if(!l||l.v!==LOCATE_V)return true;
+  return l.how==="town"&&Date.now()-(l.at||0)>86400000;
+}
 async function locateBid(id,city,b){
   const p=prepFor(id);
-  if(p.located||p.jobAddress||(p.docInfo&&p.docInfo.project_location)||_locating[id]||isOffline())return null;
+  if(!needsLocate(p)||_locating[id]||isOffline())return null;
   const pl=searchPlace(city,b);
   if(!pl)return null;
   _locating[id]=true;
@@ -4565,7 +4575,7 @@ async function locateBid(id,city,b){
       body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,...pl,
         title:b.title||"",scope:String(b.scope||"").slice(0,1500),url:b.url||""})},45000);
     const d=await r.json();
-    if(d&&d.ok){p.located={label:d.label,how:d.how,at:Date.now()};savePrep(id,city);return p.located;}
+    if(d&&d.ok){p.located={label:d.label,how:d.how,at:Date.now(),v:LOCATE_V};savePrep(id,city);return p.located;}
   }catch(e){}
   finally{delete _locating[id];}
   return null;
@@ -5090,7 +5100,7 @@ function renderPrepSteps(body,city,id,b){
   const reopen=()=>openPrep(city,id,"steps");
   // Whether email-in is set up is asked once a visit; the option appears
   // when the answer comes back.
-  if(!p.located&&!job)locateBid(id,city,b).then(loc=>{
+  if(needsLocate(p))locateBid(id,city,b).then(loc=>{
     if(loc&&loc.how!=="town"&&document.getElementById("prep-body")===body&&prepFor(id).step==="steps")reopen();
   });
   if(!_inboxChecked&&!inboxAddress())checkInboxAddress().then(addr=>{
@@ -6676,7 +6686,7 @@ function renderConcretePanel(body,city,id,b){
     // Where the server found the job, when the bid didn't say in an address.
     const nn=$("rm-near");
     if(nn&&d&&d.ok&&d.near){nn.textContent=`Searching around ${d.near}.`;nn.style.display="";}
-    if(d&&d.ok&&d.how==="bid"&&d.near&&!p.located&&!jobAddress(p)){p.located={label:d.near,how:"bid",at:Date.now()};save();}
+    if(d&&d.ok&&d.how==="bid"&&d.near&&needsLocate(p)){p.located={label:d.near,how:"bid",at:Date.now(),v:LOCATE_V};save();}
     sup=d;quotes=d&&d.ok?d.quotes:null;
     if(!(d&&d.ok)){
       $("rm-sup").innerHTML=suppliersHTML(d,b,p,city,wastePct());sup=null;

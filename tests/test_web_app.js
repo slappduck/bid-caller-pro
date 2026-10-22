@@ -2022,6 +2022,19 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
           /Job site, from the bid's name: Kickingbird Golf Course, Edmond, OK/.test(steps), steps.slice(0, 800));
     check("...with directions to it", /Kickingbird%20Golf%20Course%2C%20Edmond%2C%20OK/.test(
           await page.getAttribute('a.step-act[href*="Kickingbird"]', "href")));
+    // A bid placed only at its town earlier (an older lookup) is asked again.
+    const again = await page.evaluate(async (i) => {
+      const p = prepFor(i), keep = p.located;
+      p.located = { label: "Edmond, OK", how: "town", at: Date.now(), v: 1 };
+      const asked = needsLocate(p);
+      p.located = { label: "Edmond, OK", how: "town", at: Date.now(), v: LOCATE_V };
+      const fresh = needsLocate(p);
+      p.located = { label: "Edmond, OK", how: "town", at: Date.now() - 2 * 86400000, v: LOCATE_V };
+      const stale = needsLocate(p);
+      p.located = keep;
+      return [asked, fresh, stale].join();
+    }, id);
+    check("a bid placed only at its town is looked up again (new lookup, or a day later)", again === "true,false,true", again);
     await page.evaluate((i) => renderConcretePanel(document.getElementById("prep-body"), "Oklahoma", i, bidData["Oklahoma"][0]), id);
     await page.waitForTimeout(800);
     check("plants are searched around that site, not the whole state",
