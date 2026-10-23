@@ -4452,6 +4452,31 @@ function isMandatory(t){
   const x=String(t||"");
   return/mandatory/i.test(x)&&!/\b(non|not)[\s-]*mandatory/i.test(x);
 }
+// ── Bids submitted online ──
+// More agencies take bids only through a portal. A bid's own link, its
+// plan room, or what the documents say about submitting tells which; the
+// Submit step then says so, links the portal, and the packet checklist
+// says upload instead of seal.
+const PORTALS=[["bonfirehub.com","Bonfire"],["bidnetdirect.com","BidNet Direct"],["planetbids.com","PlanetBids"],
+  ["questcdn.com","QuestCDN"],["demandstar.com","DemandStar"],["publicpurchase.com","Public Purchase"],
+  ["civcastusa.com","CivCast"],["bidexpress.com","Bid Express"],["procurenow.com","OpenGov Procurement"],
+  ["opengov.com","OpenGov Procurement"],["ionwave.net","IonWave"],["periscopeholdings.com","Periscope"],["bidsync.com","BidSync"]];
+function portalOf(url){
+  let host="";
+  try{host=new URL(url).hostname.toLowerCase();}catch(e){return null;}
+  const hit=PORTALS.find(([h])=>host===h||host.endsWith("."+h));
+  return hit?{name:hit[1],url}:null;
+}
+function onlineSubmission(b,p){
+  const sub=String((p&&p.docInfo&&p.docInfo.submission)||"");
+  const named=PORTALS.find(([,n])=>new RegExp(n.split(" ")[0],"i").test(sub));
+  const says=/electronic(ally)?|online|e-?bid|upload|portal|submitted through|via the/i.test(sub)&&!/sealed envelope|hand[- ]deliver|mail(ed)? to/i.test(sub);
+  // A posting that lives on a portal is bid there; a plan room only hands
+  // out documents unless the documents say bids go in through it too.
+  const link=portalOf(safeUrl(b&&b.url)||"")||(says||named?portalOf(safeUrl(b&&b.plan_room)||""):null);
+  if(!link&&!named&&!says)return null;
+  return{name:(link&&link.name)||(named&&named[1])||"the agency's online portal",url:link?link.url:""};
+}
 const PREP_PHASES=[["before","Before you price"],["price","Price it"],["paper","Paperwork"],["submit","Submit"]];
 function prepChecklist(b,info){
   info=info||{};
@@ -4486,8 +4511,9 @@ function prepChecklist(b,info){
         ?` Required by the bid documents: ${info.required_forms.join("; ")}.`:"")},
     {key:"insurance",phase:"paper",label:"Insurance certificate, if requested",detail:"Check the posting for limits and who to name as additional insured."},
     {key:"sign",phase:"paper",label:"Sign, and notarize if required",detail:"Done by you, outside the app."},
-    {key:"submit",phase:"submit",label:"Submit before the deadline",
-      detail:`${b&&b.deadline?`Due ${b.deadline}. `:""}${info.submission?fromDocs(info.submission).trim():"Sealed envelope or online, as the posting says."} Late bids are usually returned unopened.`,urgent:true},
+    (()=>{const on=onlineSubmission(b,{docInfo:info});return{key:"submit",phase:"submit",label:on?`Submit online before the deadline`:"Submit before the deadline",
+      detail:`${b&&b.deadline?`Due ${b.deadline}. `:""}${on?`This bid is submitted through ${on.name}. Upload the packet and each signed form where it asks, submit a day early (portals slow down near the deadline), and save the confirmation.`
+        :info.submission?fromDocs(info.submission).trim():"Sealed envelope or online, as the posting says."}${on&&info.submission?fromDocs(info.submission):""} Late bids are usually ${on?"locked out":"returned unopened"}.`,urgent:true};})(),
   ];
   return items.filter(Boolean);
 }
@@ -5143,7 +5169,9 @@ function renderPrepSteps(body,city,id,b){
       case"addenda":return btn("addenda",addendaKnown(id,b,p).length?"Read the addenda":"Find addenda")
         +(addendaNotRecorded(id,b,p).length?btn("ack",`I've read them: record ${addendaNotRecorded(id,b,p).map(n=>"#"+n).join(", ")}`):"");
       case"forms":return btn("fill","Fill in the agency's forms")+(p.formFilledAt?btn("packet","Make the bid packet"):"");
-      case"submit":return dates.length?btn("dates","Add to calendar"):"";
+      case"submit":{const on=onlineSubmission(b,p);
+        return(on&&on.url?a(`href="${esc(on.url)}" target="_blank" rel="noopener noreferrer"`,`Open ${on.name}`):"")
+          +(p.formFilledAt?btn("packet",on?"Make the packet to upload":"Make the bid packet"):"")+(dates.length?btn("dates","Add to calendar"):"");}
       default:return"";
     }
   };
@@ -5938,6 +5966,170 @@ function applyLineChoice(l,v,d){
   }
 }
 
+// ── Will this price make money? ──
+// The going rate says what wins; only the contractor's own costs say
+// whether winning pays. Entered once (crew, wage, how much they place a
+// day, equipment, materials, overhead) and kept with the bid details, they
+// give each line a cost and the bid a profit. The starting numbers are
+// rough guesses, said so until the contractor sets their own.
+const COST_DEFAULTS={crew:4,wage:35,hours:8,equip:250,sf_day:800,lf_day:300,ea_day:2,
+  mat_sf:0.75,mat_lf:2,curb_cy_ft:0.07,ramp_cy:2.5,overhead:10};
+const COST_FIELDS=[["crew","Crew size","people"],["wage","Labor cost per hour, with taxes and insurance","$"],
+  ["hours","Hours a day",""],["equip","Equipment and truck per day","$"],
+  ["sf_day","Sidewalk and slabs placed per day","sq ft"],["lf_day","Curb and gutter placed per day","ft"],
+  ["ea_day","ADA ramps per day","each"],["mat_sf","Base, forms and rebar per sq ft","$"],["mat_lf","Forms and base per ft of curb","$"],
+  ["curb_cy_ft","Concrete per ft of curb and gutter","cu yd"],["ramp_cy","Concrete per ramp","cu yd"],["overhead","Overhead","%"]];
+function myCosts(){const c=(bidInfo().costs)||{};return{...COST_DEFAULTS,...c};}
+function costsAreMine(){return!!(bidInfo().costs&&Object.keys(bidInfo().costs).length);}
+// The concrete price this bid is costed at: a quote logged on it, else the
+// middle of the typical range.
+function concretePriceFor(p){
+  const plants=(p.concrete&&p.concrete.plants)||{};
+  const quoted=Object.values(plants).map(x=>Number(x&&x.price)).filter(x=>x>0);
+  return quoted.length?Math.min(...quoted):(READY_MIX.low+READY_MIX.high)/2;
+}
+// {cost, perUnit, basis} for one line, or null where there's no way to know.
+function lineCost(l,p){
+  const c=myCosts(),qty=Number(l.qty)||0,name=String(l.name||"");
+  if(!qty)return null;
+  const dayCost=c.crew*c.wage*c.hours+c.equip,cy=concretePriceFor(p)*(1+wastePct()/100);
+  let days=0,yards=0,mat=0,kind="";
+  const area=l.unit==="sq yd"?qty*9:l.unit==="sq ft"?qty:0;
+  if(area){
+    const m=/(\d+(?:\.\d+)?)\s*(?:in\b|in\.|inch|")/i.exec(name),tIn=m?Number(m[1]):4;
+    days=area/Math.max(1,c.sf_day);yards=area*tIn/12/27;mat=area*c.mat_sf;kind="flat";
+  }else if(l.unit==="ft"&&/curb|gutter/i.test(name)){
+    days=qty/Math.max(1,c.lf_day);yards=qty*c.curb_cy_ft;mat=qty*c.mat_lf;kind="curb";
+  }else if(l.unit==="each"&&/ramp/i.test(name)){
+    days=qty/Math.max(0.1,c.ea_day);yards=qty*c.ramp_cy;kind="ramp";
+  }else return null;
+  const cost=(days*dayCost+yards*cy+mat)*(1+c.overhead/100);
+  return{cost,perUnit:cost/qty,days};
+}
+function lineProfitHTML(l,p){
+  const lc=lineCost(l,p),price=Number(l.price)||0;
+  if(!lc)return"";
+  const k=1+(Number(p.markup)||0)/100,rev=(Number(l.qty)||0)*price*k,profit=rev-lc.cost;
+  const pct=rev>0?Math.round(profit/rev*100):null;
+  return`Your cost about ${money2(lc.perUnit)}/${esc(l.unit)}${price>0?` · <b class="pc ${profit<0?"pc-hi":pct<10?"pc-lo":"pc-ok"}">${profit<0?"loses":"makes"} ${money0(Math.abs(profit))}${pct!=null?` (${pct}%)`:""}</b>`:""}`;
+}
+function profitSummaryHTML(p){
+  let cost=0,rev=0,n=0;
+  const k=1+(Number(p.markup)||0)/100;
+  (p.lines||[]).forEach(l=>{const lc=lineCost(l,p);if(!lc)return;n++;cost+=lc.cost;rev+=(Number(l.qty)||0)*(Number(l.price)||0)*k;});
+  if(!n)return"";
+  const profit=rev-cost,pct=rev>0?Math.round(profit/rev*100):0;
+  return`<div class="profit-box${profit<0?" loss":""}"><div><span>Estimated cost of the lines it can cost</span><b>${money0(cost)}</b></div>
+    <div><span>${profit<0?"Loss":"Profit"} on those lines</span><b>${money0(Math.abs(profit))} (${pct}%)</b></div>
+    <small>${costsAreMine()?"From your costs.":"From starting guesses, not your numbers yet."} Lump-sum lines and anything it can't size are left out. Concrete at ${money0(concretePriceFor(p))} a yard${Object.values((p.concrete&&p.concrete.plants)||{}).some(x=>Number(x&&x.price)>0)?", your quote":", typical price"}.</small></div>`;
+}
+function costsEditorHTML(){
+  const c=myCosts();
+  return`<details class="rm-log" id="cost-edit"><summary>${costsAreMine()?"Your costs":"Set your costs (now using starting guesses)"}</summary>
+    <div class="rate-note" style="margin-top:0.3rem;">Used on every bid to show what each line costs you and what it makes. Saved with your bid details.</div>
+    <div class="cost-grid">${COST_FIELDS.map(([k,label,u])=>`<label><span>${esc(label)}</span>
+      <span class="cost-in">${u==="$"?"$":""}<input class="input" inputmode="decimal" data-cost-k="${k}" value="${esc(String(c[k]))}">${u&&u!=="$"?` ${esc(u)}`:""}</span></label>`).join("")}</div>
+  </details>`;
+}
+function wireCostsEditor(body,refresh){
+  body.querySelectorAll("[data-cost-k]").forEach(inp=>inp.oninput=()=>{
+    const v=Number(String(inp.value).replace(/[^0-9.]/g,""));
+    if(!(v>=0))return;
+    const info={...bidInfo()};
+    info.costs={...(info.costs||{}),[inp.dataset.costK]:v};
+    companyProfile.bid_info=info;
+    store.set("company_profile",companyProfile);
+    clearTimeout(wireCostsEditor._t);
+    wireCostsEditor._t=setTimeout(()=>{if(currentUser)pushCompanyProfile();},1500);
+    refresh();
+  });
+}
+
+// ── Measuring from the plans (server: /bid-documents/read, kind "takeoff") ──
+// For a job with drawings and no schedule of items. The server reads the
+// sheets and returns quantities, each with how it was worked out; they're
+// shown for checking before they become lines, and each line keeps its
+// basis as a note.
+async function readTakeoff(target){
+  try{
+    let d;
+    if(target.files)d=await postDocFiles("/bid-documents/read",target.files,{kind:"takeoff"},150000);
+    else{
+      const token=await getSupabaseToken();
+      const r=await fetchWithTimeout(SERVER+"/bid-documents/read",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,url:target.url,kind:"takeoff"})},150000);
+      d=await r.json();
+    }
+    if(d&&d.ok)return d;
+    const msg=d&&d.reason==="fetch_failed"?(FETCH_ERRORS[d.detail]||"Couldn't download the plans.")
+      :(d&&(DOC_ERRORS[d.reason]||d.detail))||"Couldn't read the plans.";
+    return{ok:false,msg};
+  }catch(e){return{ok:false,msg:offlineOrServer()};}
+}
+async function renderTakeoff(body,city,id,b){
+  const p=prepFor(id);
+  const back=()=>openPrep(city,id,"pricing");
+  const linked=prepDocCandidates(b).filter(d=>d.name!=="Original posting");
+  linked.sort((x,y)=>(/plan|drawing|sheet|civil/i.test(y.name))-(/plan|drawing|sheet|civil/i.test(x.name)));
+  const ups=await bidFiles.list(id,"upload");
+  if(!document.getElementById("prep-body"))return;
+  body.innerHTML=`<div class="workspace-title">Measure from the plans</div>
+    <div class="rate-note" style="margin-top:0;">Pick the plan set. Sidewalk area, curb length, ramps and slabs are worked out from the quantity tables and dimensions on the sheets, each with how it was measured, for you to check.</div>
+    ${ups.map((u,i)=>`<button class="btn-ghost doc-pick" data-tu="${i}">${esc(u.name)} <small>on this phone</small></button>`).join("")}
+    ${linked.map((d,i)=>`<button class="btn-ghost doc-pick" data-tl="${i}">${esc(d.name)}</button>`).join("")}
+    <button class="btn-ghost doc-pick" id="to-upload">Upload the plans</button>
+    <button class="btn-ghost" id="to-back">Back to pricing</button>`;
+  document.getElementById("to-back").onclick=back;
+  const run=async(label,target)=>{
+    body.innerHTML=`<div class="account-status"><span class="spin"></span> Measuring ${esc(label)}… plan sets can take a couple of minutes.</div>`;
+    const res=await readTakeoff(target);
+    if(!document.getElementById("prep-body"))return;
+    if(!res.ok){
+      body.innerHTML=`<div class="alert alert-amber"><span>${esc(res.msg)}</span></div><button class="btn-ghost" id="to-back">Back to pricing</button>`;
+      document.getElementById("to-back").onclick=back;return;
+    }
+    p.takeoff={source:label,at:Date.now(),items:res.line_items||[],notes:res.notes||""};
+    savePrep(id,city);
+    renderTakeoffReview(body,city,id,b);
+  };
+  body.querySelectorAll("[data-tu]").forEach(x=>x.onclick=()=>{const u=ups[Number(x.dataset.tu)];
+    run(u.name,{files:[new File([u.blob],u.name,{type:"application/pdf"})]});});
+  body.querySelectorAll("[data-tl]").forEach(x=>x.onclick=()=>{const d=linked[Number(x.dataset.tl)];run(d.name,{url:d.url});});
+  document.getElementById("to-upload").onclick=async()=>{
+    const files=await pickPdfs(true);
+    if(!files.length)return;
+    const bad=uploadProblem(files);
+    if(bad){toast(bad);return;}
+    await rememberUploads(id,files);
+    run(docsName(files),{files});
+  };
+}
+function renderTakeoffReview(body,city,id,b){
+  const p=prepFor(id),t=p.takeoff||{items:[]};
+  const back=()=>openPrep(city,id,"pricing");
+  body.innerHTML=`<div class="workspace-title">Measured from ${esc(t.source||"the plans")}</div>
+    <div class="alert alert-amber"><span>These are estimates from the drawings. Check each one against the sheets before you bid on it.</span></div>
+    ${t.items.length?`<table class="ps-table"><thead><tr><th>Item</th><th>Qty</th></tr></thead><tbody>
+      ${t.items.map(it=>`<tr><td>${esc(it.description)}<small>${esc(it.basis)}</small></td><td>${esc(Number(it.quantity).toLocaleString())} ${esc(it.unit||"")}</td></tr>`).join("")}</tbody></table>
+      <div class="act-primary"><button class="ma-gold" id="to-use">Use these lines</button><button class="ma-ghost" id="to-add">Add to my lines</button></div>`
+      :`<div class="account-status">No quantities could be worked out from these sheets.</div>`}
+    ${t.notes?`<div class="rate-note"><b>To check by hand:</b> ${esc(t.notes)}</div>`:""}
+    <button class="btn-ghost" id="to-again" style="margin-top:0.5rem;">Measure from other sheets</button>
+    <button class="btn-ghost" id="to-back">Back to pricing</button>`;
+  document.getElementById("to-back").onclick=back;
+  document.getElementById("to-again").onclick=()=>renderTakeoff(body,city,id,b);
+  const take=(replace)=>{
+    const d=rateData[bidState(city,b)];
+    const lines=t.items.map(it=>({...lineFromDocItem(it,d),note:`Measured from the plans: ${it.basis}. Check it.`}));
+    p.lines=replace?lines:(p.lines||[]).filter(l=>(l.name||"").trim()||l.qty||l.price).concat(lines);
+    p.linesFrom=replace?"documents":"you";
+    savePrep(id,city);back();
+  };
+  const u=document.getElementById("to-use"),a=document.getElementById("to-add");
+  if(u)u.onclick=()=>{if(confirm("Replace your current lines with the measured quantities?"))take(true);};
+  if(a)a.onclick=()=>take(false);
+}
+
 function renderPrepPricing(body,city,id,b){
   const p=prepFor(id);
   const hist=priceHistory(id);
@@ -5952,6 +6144,7 @@ function renderPrepPricing(body,city,id,b){
         <button type="button" class="prep-x" data-del="${i}" aria-label="Delete line">×</button>
       </div>
       <small class="pl-ref" data-pc="${i}">${priceCheckHTML(l)}</small>
+      <small class="pl-ref" data-cost="${i}">${lineProfitHTML(l,p)}</small>
       ${l.note?`<small class="pl-ref rate-thin">${esc(l.note)}</small>`:""}
       ${historyHint(hist[lineKey(l)])}
     </div>`;
@@ -5965,6 +6158,7 @@ function renderPrepPricing(body,city,id,b){
   body.innerHTML=`<button class="btn-primary" id="pl-read" style="margin-bottom:0.6rem;">${canRead?"Read quantities from the bid form":"Read quantities from a bid form you upload"}</button>
     ${p.docInfo&&p.docInfo.read_at?`<button class="btn-ghost" id="pl-docinfo" style="margin:0 0 0.6rem;">See what was read from ${esc(p.docInfo.source||"the documents")}</button>`:""}
     ${hasPast?`<button class="btn-ghost" id="pl-past" style="margin:0 0 0.6rem;">Use a past bid</button>`:""}
+    <button class="btn-ghost" id="pl-takeoff" style="margin:0 0 0.6rem;">${p.takeoff?"See what was measured from the plans":"No item list? Measure from the plans"}</button>
     <div class="rate-note" style="margin-top:0;">${p.docInfo&&p.docInfo.source?`Bid documents read: ${esc(p.docInfo.source)}. `:""}${startNote} Change anything to your own numbers.</div>
     <div id="prep-lines">${p.lines.map(lineRow).join("")}</div>
     <div class="prep-add"><button class="btn-ghost" id="pl-add">+ Add line</button><button class="btn-ghost" id="pl-reset">Start over from ballpark</button></div>
@@ -5974,6 +6168,8 @@ function renderPrepPricing(body,city,id,b){
       <div><span>Markup <input class="input pt-mk" id="pt-mk" inputmode="decimal" value="${esc(String(p.markup||0))}" aria-label="Markup percent">%</span><b id="pt-mkv">${money0(t.markup)}</b></div>
       <div class="pt-grand"><span>Your bid</span><b id="pt-total">${money0(t.total)}</b></div>
     </div>
+    <div id="pt-profit">${profitSummaryHTML(p)}</div>
+    ${costsEditorHTML()}
     ${b.value?`<div class="rate-note">Posted value: <b>${esc(b.value)}</b></div>`:""}
     <div class="rate-note">Add lines the posting doesn't list: removal, mobilization, traffic control, testing.</div>`;
   const refresh=()=>{
@@ -5981,7 +6177,9 @@ function renderPrepPricing(body,city,id,b){
     p.lines.forEach((l,i)=>{
       const el=body.querySelector(`[data-total="${i}"]`);if(el)el.textContent=money0((Number(l.qty)||0)*(Number(l.price)||0));
       const pc=body.querySelector(`[data-pc="${i}"]`);if(pc)pc.innerHTML=priceCheckHTML(l);
+      const cc=body.querySelector(`[data-cost="${i}"]`);if(cc)cc.innerHTML=lineProfitHTML(l,p);
     });
+    const pp=document.getElementById("pt-profit");if(pp)pp.innerHTML=profitSummaryHTML(p);
     document.getElementById("pt-sub").textContent=money0(tt.sub);
     document.getElementById("pt-mkv").textContent=money0(tt.markup);
     document.getElementById("pt-total").textContent=money0(tt.total);
@@ -6017,6 +6215,7 @@ function renderPrepPricing(body,city,id,b){
   if(rd)rd.onclick=()=>renderDocPicker(body,city,id,b);
   const di=document.getElementById("pl-docinfo");
   if(di)di.onclick=()=>renderSavedDocInfo(body,city,id,b);
+  document.getElementById("pl-takeoff").onclick=()=>p.takeoff?renderTakeoffReview(body,city,id,b):renderTakeoff(body,city,id,b);
   document.getElementById("pl-add").onclick=()=>{
     p.lines.push({name:"",qty:"",unit:"",price:"",ref:null});
     p.linesFrom="you";
@@ -6031,6 +6230,7 @@ function renderPrepPricing(body,city,id,b){
     p.markup=e.target.value.replace(/[^0-9.]/g,"");
     savePrep(id,city);refresh();
   };
+  wireCostsEditor(body,refresh);
 }
 
 // Plain text of the summary -- what "Copy" puts on the clipboard and the
@@ -6142,6 +6342,7 @@ const BID_INFO_FIELDS=[
   ["license","License / registration numbers","State or city contractor numbers"],
   ["years","Years in business","12"],
   ["insurance","Insurance carrier and agent","Carrier, agent name and phone"],
+  ["insurance_email","Insurance agent's email","agent@example.com"],
   ["bond_company","Bonding company (surety)","Surety name"],
   ["bond_agent","Bonding agent","Agent's name"],
   ["bond_email","Bonding agent's email","agent@example.com"],
@@ -6162,6 +6363,8 @@ function openBidInfo(after){
   document.getElementById("bi-save").onclick=()=>{
     const next={};
     mc.querySelectorAll(".bi-field").forEach(f=>{const v=f.value.trim().slice(0,300);if(v)next[f.dataset.k]=v;});
+    // Costs live alongside, edited on the Pricing tab.
+    if(info.costs)next.costs=info.costs;
     companyProfile.bid_info=next;
     store.set("company_profile",companyProfile);
     pushCompanyProfile();
@@ -6356,8 +6559,14 @@ function packetChecklist(b,p,names){
   out.push(String(p.addenda||"").trim()?`Write the addenda you received (${String(p.addenda).trim()}) where the form asks.`
     :"Check for addenda and acknowledge each one on the form.");
   out.push("Insurance certificate, if the bid asks for one.");
-  out.push(`Seal the envelope and mark it with the project name${b.bid_number?` and bid number ${b.bid_number}`:""}.`);
-  if(b.deadline)out.push(`Deliver it before ${b.deadline}. Late bids are usually returned unopened.`);
+  const on=onlineSubmission(b,p);
+  if(on){
+    out.push(`Scan each signed page and upload it with this packet through ${on.name}, in the places it asks for each.`);
+    if(b.deadline)out.push(`Submit at least a day before ${b.deadline}; portals slow down and lock at the deadline. Save the confirmation.`);
+  }else{
+    out.push(`Seal the envelope and mark it with the project name${b.bid_number?` and bid number ${b.bid_number}`:""}.`);
+    if(b.deadline)out.push(`Deliver it before ${b.deadline}. Late bids are usually returned unopened.`);
+  }
   return out;
 }
 async function renderPacket(body,city,id,b){
@@ -6439,6 +6648,25 @@ function concreteYards(lines){
     else if(/concrete|curb|gutter|ramp|sidewalk|walk|driveway|approach|median|slab|flatwork/i.test(name))other.push({name,qty,unit:l.unit});
   });
   return{out,other,total:out.reduce((s,x)=>s+x.cy,0)};
+}
+// The same request to several plants at once, blind-copied.
+function concreteQuoteMailAll(b,p,city,waste,emails){
+  const one=concreteQuoteMail(b,p,city,waste,"plant@example.com");
+  return one.replace(/^mailto:[^?]*\?/,`mailto:?bcc=${encodeURIComponent(emails.join(","))}&`);
+}
+// Quotes logged on this bid, cheapest delivered cost for the job first.
+function quoteCompareHTML(p,waste){
+  const c=concreteState(p),y=concreteYards(p.lines),yards=pickedYards(y,c,waste).yards;
+  const rows=Object.entries(c.plants).filter(([,q])=>Number(q&&q.price)>0).map(([name,q])=>{
+    const total=Number(q.price)*yards+(Number(q.delivery)||0)+(Number(q.short)||0);
+    return{name,q,total};
+  }).sort((a,z)=>a.total-z.total);
+  if(rows.length<2)return"";
+  return`<div class="workspace-title" style="margin-top:0.3rem;">Your quotes, side by side</div>
+    <table class="ps-table"><thead><tr><th>Plant</th><th>A yard</th><th>For ${Math.round(yards)} yd</th></tr></thead><tbody>
+    ${rows.map((r,i)=>`<tr><td>${esc(r.name)}${i===0?` <b class="pc pc-ok">cheapest</b>`:""}<small>${[r.q.delivery?`${money0(r.q.delivery)} delivery`:"",r.q.short?`${money0(r.q.short)} short-load`:""].filter(Boolean).join(", ")}</small></td>
+      <td>${money2(r.q.price)}</td><td><b>${money0(r.total)}</b></td></tr>`).join("")}</tbody></table>
+    <div class="rate-note">Delivered cost for this job's yards, with each plant's delivery and short-load charges. Pricing costs your concrete at the lowest price a yard.</div>`;
 }
 function concreteQuoteMail(b,p,city,waste,to){
   const i=bidInfo(),y=concreteYards(p.lines);
@@ -6582,7 +6810,7 @@ function plantSelect(name,status,i){
 }
 function suppliersHTML(d,b,p,city,waste){
   if(!d||!d.ok){
-    const why={not_licensed:"Supplier search is part of a paid plan.",place_not_found:"Couldn't place this town on the map.",
+    const why={not_licensed:"Supplier search is part of a paid plan.",
       bad_place:"Couldn't tell where this job is. Add the job address on the Steps tab.",
       place_not_found:"Couldn't tell where this job is. Add the job address on the Steps tab.",
       rate_limited:"Too many searches today. Try again tomorrow.",offline:"You're offline."}[d&&d.reason]
@@ -6595,7 +6823,12 @@ function suppliersHTML(d,b,p,city,waste){
   plants.sort((a,z)=>(a.st===PLANT_STATUS[4])-(z.st===PLANT_STATUS[4])||a.miles-z.miles);
   const web=d.web||[];
   if(!plants.length&&!web.length)return`<div class="account-status">No ready-mix plants found within ${d.radius_mi} miles.</div>`;
-  return`${plants.map(x=>{
+  // Every plant with an email, in one message (each sees only their own
+  // address), and the quotes that come back side by side.
+  const emails=plants.filter(x=>x.st!==PLANT_STATUS[4]&&/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(x.email||"")).map(x=>x.email);
+  const mailAll=emails.length>1?`<div class="act-primary" style="margin-top:0;"><a class="ma-ghost" id="rm-mailall" href="${esc(concreteQuoteMailAll(b,p,city,waste,emails))}">Email all ${emails.length} plants for a quote</a></div>
+    <div class="rate-note" style="margin-top:0;">One email, each plant blind-copied so none sees the others.</div>`:"";
+  return`${quoteCompareHTML(p,waste)}${mailAll}${plants.map(x=>{
     const q=c.plants[x.name]||{};
     return`<div class="sup-row${x.st===PLANT_STATUS[4]?" sup-out":""}">
       <div class="sup-head"><div class="sup-name">${esc(x.name)} ${x.miles!=null?`<span class="sup-mi">${x.miles} mi</span>`:""}${x.source==="web"?` <span class="sup-mi">found online</span>`:""}</div>${plantSelect(x.name,x.st,x.i)}</div>
@@ -6805,6 +7038,14 @@ function renderConcretePanel(body,city,id,b){
         }
         redraw();
       };
+    });
+    const all=document.getElementById("rm-mailall");
+    if(all)all.addEventListener("click",()=>{
+      (sup.plants||[]).forEach(x=>{
+        const cur=c.plants[x.name]||{};
+        if(x.email&&(!cur.status||cur.status==="Not contacted"))c.plants[x.name]={...cur,status:"Emailed"};
+      });
+      save();setTimeout(redraw,0);
     });
     document.querySelectorAll("#rm-sup [data-mailed]").forEach(a=>{
       a.addEventListener("click",()=>{

@@ -2065,6 +2065,108 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── Bidding helpers: profit, plants, portals, plans ──
+  console.log("\nWill it make money, quote every plant, portals, measuring from plans");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    page.on("dialog", (d) => d.accept());
+    let takeoffBody = null;
+    await page.route("**/*", (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      const json = (o) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(o) });
+      if (u.endsWith("/bid-documents/read")) {
+        const body = JSON.parse(route.request().postData() || "{}");
+        if (body.kind === "takeoff") {
+          takeoffBody = body;
+          return json({ ok: true, line_items: [{ item_no: "", description: "4 in. concrete sidewalk", quantity: 6200, unit: "SF",
+            basis: "5 ft wide x 1,240 ft, sta 10+00 to 22+40", estimated: true }], notes: "Count driveway approaches on sheet C-4." });
+        }
+        return json({ ok: false, reason: "ai_error" });
+      }
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      localStorage.setItem("last_feed", JSON.stringify({ "Aurora, MO": [
+        { title: "Elm St Sidewalk", scope: "Sidewalk", deadline: "2099-11-01", status: "open", url: "https://city.bonfirehub.com/opportunities/123",
+          documents: [{ name: "Plan Set", url: "https://e.gov/plans.pdf" }] }] }));
+      localStorage.setItem("price_district", JSON.stringify("SW"));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(800);
+    const id = await page.evaluate(() => {
+      window.getSupabaseToken = async () => "tok";
+      const b = bidData["Aurora, MO"][0], i = bidId("Aurora, MO", b), p = prepFor(i);
+      p.lines = [{ name: "4 in. concrete sidewalk", qty: 1000, unit: "sq yd", price: 60 },
+                 { name: "Curb and gutter", qty: 300, unit: "ft", price: 12 }, { name: "Mobilization", qty: 1, unit: "lump sum", price: 5000 }];
+      p.linesFrom = "you";
+      savePrep(i, "Aurora, MO");
+      return i;
+    });
+    await page.evaluate((i) => openPrep("Aurora, MO", i, "pricing"), id);
+    await page.waitForTimeout(400);
+    const pricing = await page.textContent("#prep-body");
+    check("each line it can cost shows your cost and what it makes", /Your cost about \$\d/.test(pricing) && /makes \$|loses \$/.test(pricing), pricing.slice(0, 600));
+    check("...and the bid shows a profit from starting guesses until costs are set",
+          /Profit on those lines|Loss on those lines/.test(pricing) && /starting guesses/.test(pricing));
+    const before = await page.evaluate((i) => lineCost(prepFor(i).lines[0], prepFor(i)).perUnit, id);
+    await page.click("#cost-edit summary");
+    await page.fill('[data-cost-k="sf_day"]', "1600");
+    await page.waitForTimeout(300);
+    const after = await page.evaluate((i) => lineCost(prepFor(i).lines[0], prepFor(i)).perUnit, id);
+    check("your own production rate lowers the cost, and is saved with your bid details",
+          after < before && await page.evaluate(() => JSON.parse(localStorage.getItem("company_profile")).bid_info.costs.sf_day === 1600));
+    check("lump-sum lines aren't guessed at", await page.evaluate((i) => lineCost(prepFor(i).lines[2], prepFor(i)) === null, id));
+
+    // Every plant at once, and quotes side by side.
+    const all = await page.evaluate((i) => decodeURIComponent(concreteQuoteMailAll(saved[i] || bidData["Aurora, MO"][0], prepFor(i), "Aurora, MO", 5,
+      ["a@mix.example", "b@mix.example"])), id);
+    check("one email blind-copies every plant", all.startsWith("mailto:?bcc=a@mix.example,b@mix.example&subject=") && /Ready-mix quote/.test(all), all.slice(0, 120));
+    const cmp = await page.evaluate((i) => { const p = prepFor(i);
+      concreteState(p).plants = { "Ozark Mix": { price: 150, status: "Quoted", delivery: 0 }, "City Mix": { price: 138, status: "Quoted", delivery: 250 } };
+      return quoteCompareHTML(p, 5); }, id);
+    check("quotes are compared by delivered cost for the job", /Your quotes, side by side/.test(cmp) && cmp.indexOf("City Mix") < cmp.indexOf("Ozark Mix")
+          && /cheapest/.test(cmp), cmp.replace(/<[^>]+>/g, " ").slice(0, 300));
+
+    // A bid posted on a portal is submitted there.
+    await page.evaluate((i) => openPrep("Aurora, MO", i, "steps"), id);
+    await page.waitForTimeout(400);
+    const steps = await page.textContent("#prep-body");
+    check("a bid posted on Bonfire is submitted through Bonfire", /Submit online before the deadline/.test(steps) && /submitted through Bonfire/.test(steps)
+          && (await page.getAttribute('a.step-act[href^="https://city.bonfirehub.com"]', "href")) === "https://city.bonfirehub.com/opportunities/123", steps.slice(-900));
+    const list = await page.evaluate((i) => packetChecklist(bidData["Aurora, MO"][0], prepFor(i), []).join(" | "), id);
+    check("...and its packet checklist says upload, not seal", /upload it with this packet through Bonfire/.test(list) && !/Seal the envelope/.test(list), list);
+    check("a sealed-envelope bid stays one", await page.evaluate(() => onlineSubmission({ url: "https://e.gov/bids/1" },
+      { docInfo: { submission: "Sealed envelope to the City Clerk, 100 Main St" } }) === null));
+
+    // Measuring from the plans.
+    await page.evaluate((i) => openPrep("Aurora, MO", i, "pricing"), id);
+    await page.waitForTimeout(400);
+    await page.click("#pl-takeoff");
+    await page.waitForTimeout(300);
+    await page.click('[data-tl="0"]');
+    await page.waitForTimeout(600);
+    check("the plan set is read for quantities", takeoffBody && takeoffBody.kind === "takeoff" && takeoffBody.url === "https://e.gov/plans.pdf");
+    const rev = await page.textContent("#prep-body");
+    check("each quantity shows how it was measured, with what to check by hand",
+          /6,200 SF/.test(rev) && /5 ft wide x 1,240 ft/.test(rev) && /driveway approaches on sheet C-4/.test(rev) && /estimates from the drawings/.test(rev));
+    await page.click("#to-use");
+    await page.waitForTimeout(400);
+    const lines = await page.evaluate((i) => prepFor(i).lines, id);
+    check("used lines keep how they were measured", lines.length === 1 && lines[0].qty === 6200 && lines[0].unit === "sq ft"
+          && /Measured from the plans: 5 ft wide/.test(lines[0].note), JSON.stringify(lines));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   // ── A statewide bid is placed by its own name ──
   console.log("\nA bid from a statewide search is placed by the site its name gives");
   {
@@ -2577,7 +2679,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
 
     await page.evaluate(() => { closeModal(); switchScreen("account"); });
     await page.waitForTimeout(500);
-    check("Account shows how much of the bid paperwork is saved", /5 of 11 saved/.test(await page.textContent("#screen-account")));
+    check("Account shows how much of the bid paperwork is saved", /5 of 12 saved/.test(await page.textContent("#screen-account")));
     await page.click("#bi-edit-btn");
     await page.waitForTimeout(300);
     await page.fill('.bi-field[data-k="license"]', "MO-12345");
