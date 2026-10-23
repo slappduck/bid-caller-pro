@@ -10789,35 +10789,81 @@ def _ai_bid_place(title, scope, url):
     return found
 
 
+_CENSUS_URL = "https://geocoding.geo.census.gov/geocoder/locations/onelineaddress"
+
+
+def _census_address(address, state):
+    """(lat, lon) for a US street address, from the Census Bureau's
+    geocoder, or None. It knows house numbers OpenStreetMap often lacks, and
+    "1017 S Ash, Ottawa" without the "St" that OpenStreetMap needs."""
+    qs = urllib.parse.urlencode({"address": f"{address}, {state}", "benchmark": "Public_AR_Current",
+                                 "format": "json"})
+    data = _get_json(f"{_CENSUS_URL}?{qs}", timeout=12)
+    try:
+        m = data["result"]["addressMatches"][0]["coordinates"]
+        return float(m["y"]), float(m["x"])
+    except (TypeError, KeyError, IndexError, ValueError):
+        return None
+
+
+def _geocode_place(text, state):
+    """A street address goes to the Census geocoder first; a named place
+    (a park, a golf course) to OpenStreetMap."""
+    if re.match(r"\s*\d+[A-Za-z]?\s+\S", text):
+        hit = _census_address(text, state)
+        if hit:
+            return hit
+    return _nominatim_place(text, state)
+
+
 def _job_location(city, state, near="", title="", scope="", url=""):
-    """{lat, lon, label, how} -- how is "job" (an address given), "bid" (a
-    site the bid names) or "town" -- or None when nothing places."""
+    """{lat, lon, label, how, approx} -- how is "job" (an address given),
+    "bid" (a site the bid names) or "town" -- or None when nothing places.
+
+    The words of an address are kept even when no map can place them
+    exactly: they're what a maps app, an email and a form need. The point is
+    then the town's, marked approx, good enough for finding plants."""
     geo = _geo_from_city(city, state) if city else None
 
     def close(hit):
         # A place miles from the bid's own town is another one of the same name.
         return hit and (not geo or _miles_between(geo["lat"], geo["lon"], hit[0], hit[1]) < 60)
+
+    def label(*parts):
+        out = []
+        for x in parts:
+            if x and not any(x.lower() in o.lower() for o in out):
+                out.append(x)
+        return ", ".join(out)
     if near:
-        hit = _nominatim_place(f"{near}, {city}" if city else near, state)
+        hit = _geocode_place(f"{near}, {city}" if city else near, state)
         if close(hit):
-            return {"lat": hit[0], "lon": hit[1], "label": f"{near}, {city}" if city else near, "how": "job"}
+            return {"lat": hit[0], "lon": hit[1], "label": label(near, city), "how": "job", "approx": False}
+        if geo:
+            return {"lat": geo["lat"], "lon": geo["lon"], "label": label(near, city), "how": "job", "approx": True}
     if title or scope:
         found = _ai_bid_place(title, scope, url)
         st = _normalize_state(found.get("state", "")) or state
         if st == state:
             town = found.get("city") or city
             place = found.get("place", "")
+            tg = geo if not town or town.lower() == str(city).lower() else _geo_from_city(town, state)
+            tg = tg if tg and close((tg["lat"], tg["lon"])) else None
             if place:
-                hit = _nominatim_place(f"{place}, {town}" if town else place, state)
+                hit = _geocode_place(f"{place}, {town}" if town else place, state)
                 if close(hit):
-                    return {"lat": hit[0], "lon": hit[1], "how": "bid",
-                            "label": ", ".join(x for x in (place, town, state) if x)}
-            if town and town.lower() != str(city).lower():
-                tg = _geo_from_city(town, state)
-                if tg and close((tg["lat"], tg["lon"])):
-                    return {"lat": tg["lat"], "lon": tg["lon"], "label": f"{tg['city']}, {state}", "how": "bid"}
+                    return {"lat": hit[0], "lon": hit[1], "how": "bid", "approx": False,
+                            "label": label(place, town, state)}
+                base = tg or geo
+                if base:
+                    return {"lat": base["lat"], "lon": base["lon"], "how": "bid", "approx": True,
+                            "label": label(place, town or city, state)}
+            if tg and tg is not geo:
+                return {"lat": tg["lat"], "lon": tg["lon"], "label": f"{tg['city']}, {state}", "how": "bid",
+                        "approx": True}
     if geo:
-        return {"lat": geo["lat"], "lon": geo["lon"], "label": f"{geo['city']}, {state}", "how": "town"}
+        return {"lat": geo["lat"], "lon": geo["lon"], "label": f"{geo['city']}, {state}", "how": "town",
+                "approx": True}
     return None
 
 

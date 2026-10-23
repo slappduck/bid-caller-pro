@@ -492,6 +492,11 @@ body{font-family:var(--ui);background:radial-gradient(ellipse 120% 60% at 50% -1
 .ask-btns button{width:100%;min-height:44px;padding:0.7rem;border-radius:var(--r);border:1px solid var(--border);font-weight:700;font-size:var(--fs-md);font-family:var(--ui);cursor:pointer;}
 .ask-btns .ma-gold{border-color:var(--accent);}
 .ask-btns button:disabled{opacity:0.7;cursor:default;}
+.auto-strip{margin:0 0 0.8rem;padding:0.65rem 0.8rem;border:1px dashed var(--border);border-radius:var(--r);color:var(--text2);font-size:var(--fs-sm);line-height:1.45;}
+.auto-strip.done{border-style:solid;border-color:var(--accent);background:rgba(245,158,11,0.06);}
+.auto-strip b{color:var(--text);}
+.auto-acts{display:flex;flex-wrap:wrap;gap:0.4rem;margin-top:0.45rem;}
+.auto-acts .step-act{margin:0;}
 .ff-list{margin:0.4rem 0 0.2rem;}
 .ff-opt{display:flex;gap:0.65rem;align-items:center;padding:0.6rem 0;border-bottom:1px solid var(--border);cursor:pointer;min-height:44px;}
 .ff-opt input{width:1.15rem;height:1.15rem;accent-color:var(--accent);flex-shrink:0;}

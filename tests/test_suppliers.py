@@ -65,6 +65,7 @@ class NearbyTests(unittest.TestCase):
             patch.object(ls, "_nominatim_plants", side_effect=lambda lat, lon: list(self.osm)),
             patch.object(ls, "_ai_plants", side_effect=lambda place, st, lat, lon, dl: (self.ai_asked.append(place), list(self.ai))[1]),
             patch.object(ls, "_nominatim_place", side_effect=lambda place, st: self.job_geo),
+            patch.object(ls, "_census_address", return_value=None),
             patch.object(ls, "_brave_search", return_value=[
                 {"url": "https://www.yelp.com/x", "content": "list"},
                 {"url": "https://www.citymix.com/", "content": "Ready mix delivered"}]),
@@ -129,11 +130,10 @@ class NearbyTests(unittest.TestCase):
         self.assertEqual((got["lat"], got["lon"]), (37.60, -93.30))
         self.assertIn("37.60000,-93.30000", self.overpass_calls[0])
 
-    def test_a_job_address_that_lands_far_off_is_ignored(self):
+    def test_a_job_address_that_lands_far_off_is_searched_from_town(self):
         self.job_geo = (40.0, -90.0)            # another state's Elm St
         got = ls._suppliers_near("Springfield", "MO", near="Elm St")
-        self.assertFalse(got["near_job"])
-        self.assertEqual(got["lat"], HERE[0])
+        self.assertEqual((got["lat"], got["where"]), (HERE[0], "Elm St, Springfield"))
 
     def test_an_old_cache_is_read_again(self):
         ls._suppliers_near("Springfield", "MO")
@@ -157,6 +157,7 @@ class JobLocationTests(unittest.TestCase):
                          if c in ("Edmond", "Aurora") else None),
             patch.object(ls, "_nominatim_place", side_effect=lambda place, st: (self.asked.append(place), {
                 "Kickingbird Golf Course, Edmond": self.EDMOND, "Elm St, Aurora": (35.651, -97.481)}.get(place))[1]),
+            patch.object(ls, "_census_address", side_effect=lambda a, st: {"1017 S Ash, Aurora": (35.652, -97.47)}.get(a)),
         ]
         for p in self._p:
             p.start()
@@ -176,7 +177,8 @@ class JobLocationTests(unittest.TestCase):
         with self.model_says({"place": "Kickingbird Golf Course", "city": "Edmond", "state": "OK"}):
             got = ls._job_location("", "OK", title="Kickingbird Golf Course Parking Lot Bid",
                                    url="https://www.edmondok.gov/Bids.aspx?bidID=88")
-        self.assertEqual(got, {"lat": 35.66, "lon": -97.46, "label": "Kickingbird Golf Course, Edmond, OK", "how": "bid"})
+        self.assertEqual(got, {"lat": 35.66, "lon": -97.46, "label": "Kickingbird Golf Course, Edmond, OK", "how": "bid",
+                               "approx": False})
 
     def test_the_answer_is_kept_so_the_bid_is_only_read_once(self):
         with self.model_says({"place": "Kickingbird Golf Course", "city": "Edmond"}):
@@ -198,6 +200,21 @@ class JobLocationTests(unittest.TestCase):
             got = ls._job_location("Aurora", "OK", near="Elm St", title="Sidewalks")
         self.assertEqual((got["label"], got["how"]), ("Elm St, Aurora", "job"))
 
+    def test_a_street_address_in_the_name_is_placed_by_the_census_geocoder(self):
+        with self.model_says({"place": "1017 S Ash", "city": "Aurora", "state": "OK"}):
+            got = ls._job_location("Aurora", "OK", title="RFP for Demolition of 1017 S Ash")
+        self.assertEqual(got, {"lat": 35.652, "lon": -97.47, "label": "1017 S Ash, Aurora, OK", "how": "bid", "approx": False})
+
+    def test_an_address_no_map_can_place_is_kept_at_the_town(self):
+        with self.model_says({"place": "Lot 4, North Industrial Park", "city": "Aurora"}):
+            got = ls._job_location("Aurora", "OK", title="Paving at Lot 4, North Industrial Park")
+        self.assertEqual((got["label"], got["how"], got["approx"], got["lat"]),
+                         ("Lot 4, North Industrial Park, Aurora, OK", "bid", True, 35.65))
+
+    def test_a_typed_address_is_kept_even_when_it_does_not_place(self):
+        got = ls._job_location("Aurora", "OK", near="behind the water tower")
+        self.assertEqual((got["label"], got["how"], got["approx"]), ("behind the water tower, Aurora", "job", True))
+
     def test_a_whole_state_is_not_a_town(self):
         self.assertEqual(ls._supplier_where({"city": "Oklahoma", "state": ""}), ("", "OK"))
         self.assertEqual(ls._supplier_where({"city": "Edmond", "state": "ok"}), ("Edmond", "OK"))
@@ -208,6 +225,25 @@ class JobLocationTests(unittest.TestCase):
              self.model_says({"place": "Kickingbird Golf Course", "city": "Edmond"}):
             d = ls.app.test_client().post("/bid/locate", json={"city": "Oklahoma", "title": "Kickingbird Golf Course Parking Lot Bid"}).get_json()
         self.assertEqual((d["ok"], d["how"], d["label"]), (True, "bid", "Kickingbird Golf Course, Edmond, OK"))
+
+
+class CensusGeocoderTests(unittest.TestCase):
+    def test_a_match_gives_its_point_and_no_match_gives_none(self):
+        hit = {"result": {"addressMatches": [{"matchedAddress": "1017 S ASH ST, OTTAWA, KS, 66067",
+                                              "coordinates": {"x": -95.27696, "y": 38.60247}}]}}
+        with patch.object(ls, "_get_json", return_value=hit):
+            self.assertEqual(ls._census_address("1017 S Ash, Ottawa", "KS"), (38.60247, -95.27696))
+        with patch.object(ls, "_get_json", return_value={"result": {"addressMatches": []}}):
+            self.assertIsNone(ls._census_address("1017 S Ash, Ottawa", "KS"))
+        with patch.object(ls, "_get_json", return_value=None):
+            self.assertIsNone(ls._census_address("x", "KS"))
+
+    def test_only_street_addresses_go_to_the_census(self):
+        with patch.object(ls, "_census_address", return_value=(1.0, 2.0)) as census, \
+             patch.object(ls, "_nominatim_place", return_value=(3.0, 4.0)):
+            self.assertEqual(ls._geocode_place("1017 S Ash, Ottawa", "KS"), (1.0, 2.0))
+            self.assertEqual(ls._geocode_place("Kickingbird Golf Course, Edmond", "OK"), (3.0, 4.0))
+        self.assertEqual(census.call_count, 1)
 
 
 class WebPlantTests(unittest.TestCase):
