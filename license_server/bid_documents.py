@@ -26,7 +26,7 @@ _BID_DOC_RATE_KEY = "bidcaller:bid_doc_rate"
 _BID_DOC_CACHE_PREFIX = "bidcaller:bid_doc:"
 # Bump when the reader starts returning something new, so documents read
 # before the change are read again instead of served from the cache.
-BID_DOC_READER_VERSION = 3
+BID_DOC_READER_VERSION = 4
 BID_DOC_CACHE_TTL_DAYS = 30
 
 
@@ -153,6 +153,11 @@ _BID_DOC_PROMPT = (
     "\"required_forms\": names of forms, affidavits or certificates the bid "
     "must include, as stated.\n"
     "\"questions_due\": the deadline for written questions, as stated.\n"
+    "\"retainage\": the retainage withheld from progress payments, as stated.\n"
+    "\"completion\": the time allowed or completion date, and any liquidated damages, as stated.\n"
+    "\"prevailing_wage\": whether prevailing wage or Davis-Bacon wages apply, as stated; \"\" if not mentioned.\n"
+    "\"testing\": concrete testing and inspection required (cylinders, slump, air, "
+    "who pays, notice to the inspector), as stated.\n"
     "\"contact\": the person bidders are told to contact about this bid "
     "(purchasing agent, project manager or engineer), as "
     "{\"name\", \"title\", \"organization\", \"phone\", \"email\"} exactly as printed; "
@@ -211,7 +216,9 @@ def _clean_doc_result(raw):
             "prebid_place": text("prebid_place", 200),
             "project_location": text("project_location", 200),
             "questions_due": text("questions_due", 300), "required_forms": forms,
-            "contact": contact if any(contact.values()) else {}}
+            "contact": contact if any(contact.values()) else {},
+            "retainage": text("retainage", 200), "completion": text("completion", 300),
+            "prevailing_wage": text("prevailing_wage", 200), "testing": text("testing", 400)}
 
 
 # ── Reading an addendum ──
@@ -288,11 +295,50 @@ def _clean_addendum_result(raw):
             "answers": answers, "other_changes": other}
 
 
-def _ai_read_bid_document(text, images=None, addendum=False):
+# ── Measuring from the plans ──
+# A lump-sum job often comes with drawings and no schedule of items. The
+# quantities a concrete contractor prices -- sidewalk area, curb length,
+# ramp count -- are on the sheets as dimensions, callouts and quantity
+# tables. The model may only work them out from what's printed, and must
+# say how (the basis), so the contractor can check each one.
+BID_TAKEOFF_READER_VERSION = 1
+_TAKEOFF_PROMPT = (
+    "You measure concrete flatwork quantities from construction PLANS for a concrete contractor. "
+    "Use ONLY quantity tables, dimensions, stationing and callouts printed on the sheets. "
+    "Never guess a dimension that isn't shown; leave out anything you can't work out.\n\n"
+    "Return ONE JSON object: {\"items\": [{\"description\" (e.g. \"4 in. concrete sidewalk\"), "
+    "\"quantity\" (number), \"unit\" (SY, SF, LF, EA or CY), \"basis\" (how you got it, e.g. "
+    "\"Quantity table, sheet C-2\" or \"5 ft wide x 1,240 ft, sta 10+00 to 22+40\")}], "
+    "\"notes\": anything the contractor should check by hand}. "
+    "Sidewalk, curb and gutter, ADA ramps, driveway approaches, flatwork slabs only. No markdown.\n\nPLAN TEXT:\n"
+)
+
+
+def _clean_takeoff_result(raw):
+    if not isinstance(raw, dict):
+        return None
+    items = []
+    for it in (raw.get("items") or [])[:60]:
+        if not isinstance(it, dict):
+            continue
+        desc = re.sub(r"\s+", " ", str(it.get("description") or "")).strip()[:200]
+        qty = _num_or_none(it.get("quantity"))
+        unit = str(it.get("unit") or "").strip()
+        basis = re.sub(r"\s+", " ", str(it.get("basis") or "")).strip()[:300]
+        if not desc or not qty or not basis:
+            continue
+        items.append({"item_no": "", "description": desc, "quantity": qty,
+                      "unit": unit if _UNIT_RE.match(unit) else "", "basis": basis, "estimated": True})
+    notes = raw.get("notes")
+    return {"line_items": items, "notes": re.sub(r"\s+", " ", notes).strip()[:600] if isinstance(notes, str) else ""}
+
+
+def _ai_read_bid_document(text, images=None, addendum=False, kind=None):
     images = images or []
     if not OPENAI_API_KEY or not (text.strip() or images):
         return None
-    prompt = _ADDENDUM_PROMPT if addendum else _BID_DOC_PROMPT
+    kind = kind or ("addendum" if addendum else "doc")
+    prompt = {"addendum": _ADDENDUM_PROMPT, "takeoff": _TAKEOFF_PROMPT}.get(kind, _BID_DOC_PROMPT)
     content = prompt + (text if text.strip() else "(none: the pages are scanned images, attached)")
     if images:
         content = [{"type": "text", "text": content + "\n\nSCANNED PAGES are attached as images; read them too."}] + [
@@ -312,7 +358,7 @@ def _ai_read_bid_document(text, images=None, addendum=False):
         with urllib.request.urlopen(req, timeout=120 if images else 90) as resp:
             data = json.loads(resp.read().decode("utf-8"))
         got = json.loads(data["choices"][0]["message"]["content"])
-        return _clean_addendum_result(got) if addendum else _clean_doc_result(got)
+        return {"addendum": _clean_addendum_result, "takeoff": _clean_takeoff_result}.get(kind, _clean_doc_result)(got)
     except Exception as ex:
         print(f"[bid-doc] ai error: {ex}", flush=True)
         return None
@@ -367,8 +413,9 @@ BID_DOC_SCAN_PAGES = int(os.environ.get("BID_DOC_SCAN_PAGES", "8"))
 _SCAN_TEXT_CHARS = 40
 
 
-def _scan_page_images(data, limit=None):
-    """JPEG bytes of the pages that are pictures rather than text. Never raises."""
+def _scan_page_images(data, limit=None, every_page=False, width=1400):
+    """JPEG bytes of the pages that are pictures rather than text (or of
+    every page, for plan sheets whose drawings matter). Never raises."""
     limit = BID_DOC_SCAN_PAGES if limit is None else limit
     out = []
     try:
@@ -382,10 +429,10 @@ def _scan_page_images(data, limit=None):
                 break
             page = pdf[i]
             tp = page.get_textpage()
-            if len(re.sub(r"\s+", "", tp.get_text_range() or "")) >= _SCAN_TEXT_CHARS:
+            if not every_page and len(re.sub(r"\s+", "", tp.get_text_range() or "")) >= _SCAN_TEXT_CHARS:
                 continue
             w = page.get_width() or 612
-            img = page.render(scale=max(0.5, min(3.0, 1400.0 / w))).to_pil().convert("L")
+            img = page.render(scale=max(0.3, min(3.0, float(width) / w))).to_pil().convert("L")
             buf = io.BytesIO()
             img.save(buf, "JPEG", quality=70)
             out.append(buf.getvalue())
@@ -415,10 +462,11 @@ def bid_documents_read():
         return jsonify({"ok": False, "reason": "ai_unavailable"})
 
     # "kind": "addendum" reads the same files for what they change instead.
-    addendum = data.get("kind") == "addendum"
-    version = BID_ADDENDUM_READER_VERSION if addendum else BID_DOC_READER_VERSION
+    kind = data.get("kind") if data.get("kind") in ("addendum", "takeoff") else "doc"
+    addendum = kind == "addendum"
+    version = {"addendum": BID_ADDENDUM_READER_VERSION, "takeoff": BID_TAKEOFF_READER_VERSION}.get(kind, BID_DOC_READER_VERSION)
     ident = (b"upload:" + b"".join(hashlib.sha256(raw).digest() for _n, raw in upload)) if upload is not None else url.encode()
-    cache_key = _BID_DOC_CACHE_PREFIX + ("addendum:" if addendum else "") + hashlib.sha256(ident).hexdigest()[:32]
+    cache_key = _BID_DOC_CACHE_PREFIX + ("" if kind == "doc" else kind + ":") + hashlib.sha256(ident).hexdigest()[:32]
     try:
         hit = kv_backend.get(cache_key, None)
     except Exception:
@@ -455,12 +503,17 @@ def bid_documents_read():
         if t.strip():
             texts.append(f"=== FILE: {name} ===\n{t}" if len(docs) > 1 else t)
         if raw[:5] == b"%PDF-" and len(images) < BID_DOC_SCAN_PAGES:
-            images += _scan_page_images(raw, BID_DOC_SCAN_PAGES - len(images))
+            # Plan sheets are read as drawings, every page: a dimension on a
+            # detail is only on the picture.
+            images += (_scan_page_images(raw, BID_DOC_SCAN_PAGES - len(images), every_page=True, width=2000)
+                       if kind == "takeoff" else _scan_page_images(raw, BID_DOC_SCAN_PAGES - len(images)))
     text = "\n\n".join(texts)[:BID_DOC_TEXT_CHARS]
     if not text.strip() and not images:
         return jsonify({"ok": False, "reason": "no_text",
                         "detail": "This document has no readable text (it may be a scan)."})
-    result = _ai_read_bid_document(text, images, addendum=True) if addendum else _ai_read_bid_document(text, images)
+    result = (_ai_read_bid_document(text, images, addendum=True) if addendum
+              else _ai_read_bid_document(text, images, kind="takeoff") if kind == "takeoff"
+              else _ai_read_bid_document(text, images))
     if result is None:
         return jsonify({"ok": False, "reason": "ai_error"}), 502
     result.update({"pages_read": pages, "truncated": truncated, "scanned_pages": len(images),

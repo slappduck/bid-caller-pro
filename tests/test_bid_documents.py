@@ -674,6 +674,53 @@ class AddendumPromptTests(unittest.TestCase):
         self.assertEqual(fp["addendum_docs"], [{"name": "Addendum No. 1", "url": "https://93.184.216.34/files/Addendum-1.pdf"}])
 
 
+class JobTermsTests(unittest.TestCase):
+    def test_retainage_completion_wages_and_testing_come_through(self):
+        got = ls._clean_doc_result({"line_items": [], "retainage": "5% retained until final acceptance",
+                                    "completion": "60 calendar days; $500/day liquidated damages",
+                                    "prevailing_wage": "Missouri prevailing wage applies", "testing": 42})
+        self.assertEqual((got["retainage"], got["completion"], got["prevailing_wage"], got["testing"]),
+                         ("5% retained until final acceptance", "60 calendar days; $500/day liquidated damages",
+                          "Missouri prevailing wage applies", ""))
+
+
+class TakeoffTests(_UploadSetup, unittest.TestCase):
+    """Quantities measured from plan sheets: each with how it was worked out."""
+    RAW = {"items": [{"description": "4 in. concrete sidewalk", "quantity": "6,200", "unit": "SF",
+                      "basis": "5 ft wide x 1,240 ft, sta 10+00 to 22+40"},
+                     {"description": "Curb and gutter", "quantity": "400", "unit": "LF", "basis": ""},
+                     {"description": "Ramps", "quantity": "", "unit": "EA", "basis": "Sheet C-3"}, "junk"],
+           "notes": "Driveway approaches not dimensioned; count them on sheet C-4."}
+
+    def test_only_quantities_with_a_basis_are_kept(self):
+        got = ls._clean_takeoff_result(self.RAW)
+        self.assertEqual(got["line_items"], [{"item_no": "", "description": "4 in. concrete sidewalk", "quantity": 6200.0,
+                                              "unit": "SF", "basis": "5 ft wide x 1,240 ft, sta 10+00 to 22+40",
+                                              "estimated": True}])
+        self.assertIn("sheet C-4", got["notes"])
+
+    def test_a_takeoff_reads_every_plan_page_and_is_cached_apart(self):
+        asked = []
+
+        def ai(text, images=None, addendum=False, kind=None):
+            asked.append(kind)
+            return ls._clean_takeoff_result(self.RAW) if kind == "takeoff" else ls._clean_doc_result({"line_items": []})
+        with patch.object(ls, "_ai_read_bid_document", side_effect=ai), \
+             patch.object(ls, "_scan_page_images", side_effect=lambda raw, n, every_page=False, width=1400:
+                          [b"img"] * (2 if every_page else 0)) as scan:
+            d = self.upload("/bid-documents/read", b"%PDF-1.4 plans", kind="takeoff").get_json()
+            self.assertTrue(d["ok"], d)
+            self.assertEqual(d["line_items"][0]["quantity"], 6200.0)
+            self.assertEqual(d["scanned_pages"], 2)
+            self.assertFalse(self.upload("/bid-documents/read", b"%PDF-1.4 plans").get_json()["cached"])
+            self.assertTrue(self.upload("/bid-documents/read", b"%PDF-1.4 plans", kind="takeoff").get_json()["cached"])
+        self.assertEqual(asked, ["takeoff", None])
+        self.assertTrue(scan.call_args_list[0].kwargs.get("every_page"))
+
+    def test_every_page_is_drawn_for_plans(self):
+        self.assertEqual(len(ls._scan_page_images(FLAT_FORM, 4, every_page=True)), 1)
+
+
 class BidWatchTests(unittest.TestCase):
     URL = "https://93.184.216.34/bids/elm-st"
     PAGE = (b"<html><body><h1>Elm St Sidewalk</h1><p>Addendum No. 1 issued 9/30. See Addendum #2.</p>"
