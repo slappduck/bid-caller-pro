@@ -4696,6 +4696,9 @@ function prepTotals(p){
 function money0(n){return"$"+Math.round(n).toLocaleString();}
 function money2(n){return"$"+(Number(n)||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});}
 
+// The bid whose prep sheet is on screen: a read finishing in the background
+// redraws only its own bid, never one the contractor has moved on from.
+let prepShownId=null;
 async function openPrep(city,id,step){
   const b=findBid(id)||saved[id];
   if(!b){toast("That bid isn't available any more");return;}
@@ -4712,6 +4715,7 @@ async function openPrep(city,id,step){
   if(step==="job"&&!won)step="steps";
   p.step=step;
   const mc=document.getElementById("modal-content");
+  prepShownId=id;
   const prog=prepProgress(id,b);
   const t=prepTotals(p);
   const dleft=daysUntil(b);
@@ -4979,6 +4983,22 @@ async function renderAddenda(body,city,id,b){
 // of Steps, with the lines undoable. Nothing is acknowledged, signed, sent
 // or submitted for them.
 const BID_DOC_NAME_RE=/bid ?form|proposal|bid ?sheet|schedule of (?:items|prices|values)|price ?sheet|bid ?documents?|bid ?packet|specifications?|invitation|\bitb\b|\brfp\b|\bifb\b|\brfq\b/i;
+// Every link worth reading for the bid, best first, the posting last: up
+// to four, which the server reads in one go. Addenda are read on their own.
+function docsToRead(b){
+  const best=bestDocToRead(b);
+  const rest=prepDocCandidates(b).filter(d=>(!best||d.url!==best.url)&&!/addend/i.test(d.name));
+  rest.sort((x,y)=>(x.name==="Original posting")-(y.name==="Original posting"));
+  return(best?[best]:[]).concat(rest).slice(0,4);
+}
+// What a read of several links says it read: "Bid Form and Specs".
+function readSourceName(docs,res){
+  const n=((res&&res.sources)||[]).filter(Boolean);
+  if(n.length>2)return`${n[0]} and ${n.length-1} more`;
+  if(n.length)return n.join(" and ");
+  // A server from before it named what it read.
+  return docs[0].name;
+}
 function bestDocToRead(b){
   const docs=prepDocCandidates(b);
   const named=docs.filter(d=>d.name!=="Original posting"&&BID_DOC_NAME_RE.test(d.name));
@@ -4992,6 +5012,21 @@ function linesUntouched(p,b,city){
   if(p.linesFrom)return false;
   const key=(ls)=>JSON.stringify((ls||[]).map(l=>[l.name||"",String(l.qty??""),l.unit||"",String(l.price??"")]));
   return key(p.lines)===key(defaultPrepLines(b,city));
+}
+// Starring a bid starts reading its documents, so by the time it's opened
+// the schedule, the meeting and the bond are already filled in. Same daily
+// limit as opening it: autoPrepare runs once a day per bid at most.
+async function preReadBid(city,id){
+  try{
+    const b=findBid(id);
+    if(!b||!licenseKey()||isOffline())return;
+    const p=prepFor(id);
+    if(p.docInfo&&p.docInfo.read_at)return;
+    const st=bidState(city,b);
+    await Promise.all([loadRates(st),loadBidResults(st)]);
+    if(!p.lines){p.lines=defaultPrepLines(b,city);p.linesFrom="ballpark";savePrep(id,city);}
+    await autoPrepare(id,city,b);
+  }catch(e){}
 }
 const _autoRunning={};
 function autoDue(p,k){const t=p.autoTried&&p.autoTried[k];return!t||Date.now()-t>86400000;}
@@ -5020,8 +5055,12 @@ async function autoPrepare(id,city,b){
     }
     if(docsNeeded){
       p.autoTried.docs=Date.now();
-      let doc=bestDocToRead(b),res=null;
-      if(doc)res=await readBidDocument(doc.url);
+      const links=docsToRead(b);
+      let doc=links[0]||null,res=null;
+      if(doc){
+        res=await readBidDocument(doc.url,links.slice(1).map(d=>d.url));
+        if(res&&res.ok)doc={name:readSourceName(links,res),url:doc.url};
+      }
       // Nothing linked could be read: a forwarded email for this bid.
       if((!res||!res.ok)&&inboxAddress()){
         try{
@@ -5075,7 +5114,7 @@ async function autoPrepare(id,city,b){
     delete _autoRunning[id];
   }
   const body=document.getElementById("prep-body");
-  if(!body||!document.getElementById("modal").classList.contains("open"))return;
+  if(!body||prepShownId!==id||!document.getElementById("modal").classList.contains("open"))return;
   // Never pull the page out from under someone typing.
   const typing=document.activeElement&&/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)&&body.contains(document.activeElement);
   if(!typing&&["steps","summary"].includes(prepFor(id).step))openPrep(city,id,prepFor(id).step);
@@ -5084,7 +5123,7 @@ async function autoPrepare(id,city,b){
 function autoStripHTML(p){
   const a=p.autoFilled;
   if(!a||Date.now()-a.at>3*86400000)return`<div id="auto-strip"></div>`;
-  if(a.failed&&!a.addenda)return`<div class="auto-strip" id="auto-strip">Couldn't read the bid documents by itself${a.source?` (${esc(a.source)})`:""}. Upload them, or forward the plan room's email, and they'll be read.</div>`;
+  if(a.failed&&!a.addenda)return`<div class="auto-strip" id="auto-strip">Couldn't get the bid documents by itself${a.source?` (${esc(a.source)})`:""}. It tries again tomorrow. If the agency sends them once you register, forward that email to your CurbCall address and they're read on their own.</div>`;
   const what=(a.what||[]).concat(a.addenda?[plural(a.addenda,"addendum read","addenda read")]:[]);
   if(!what.length)return`<div id="auto-strip"></div>`;
   return`<div class="auto-strip done" id="auto-strip"><b>Filled in for you${a.source?` from ${esc(a.source)}`:""}:</b> ${esc(what.join(", "))}. Check it before you rely on it.
@@ -5397,7 +5436,8 @@ const DOC_ERRORS={
   ai_error:"Couldn't read that document. Try again in a minute.",
 };
 const FETCH_ERRORS={robots_disallow:"That site doesn't allow automated reading. Open it and enter the items by hand.",
-  too_large:"That file is too large to read.",http_404:"That document isn't there any more.",http_403:"That site refused the request."};
+  too_large:"That file is too large to read.",http_404:"That document isn't there any more.",http_403:"That site refused the request.",
+  timeout:"That site took too long to answer. Try again in a while.",not_public:"That link can't be read."};
 // ── A document the contractor uploads ──
 // Plans and bid forms an agency gives out only to registered plan holders
 // can't be fetched by the server. The contractor downloads them after
@@ -6070,12 +6110,14 @@ function renderRegisterHelp(body,city,id,b){
   document.getElementById("reg-edit").onclick=()=>openBidInfo(()=>{openPrep(city,id,"steps").then(()=>{const bd=document.getElementById("prep-body");if(bd)renderRegisterHelp(bd,city,id,b);});});
   document.getElementById("reg-back").onclick=()=>openPrep(city,id,prepFor(id).step||"steps");
 }
-async function readBidDocument(url){
+// More than one link is read together: the server follows a posting page
+// to the files it links, opens zips and Word forms, and reads them as one.
+async function readBidDocument(url,urls){
   try{
     const token=await getSupabaseToken();
     const r=await fetchWithTimeout(SERVER+"/bid-documents/read",{method:"POST",
       headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,url})},100000);
+      body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,url,...(urls&&urls.length?{urls}:{})})},150000);
     const d=await r.json();
     if(d&&d.ok)return d;
     const msg=d&&d.reason==="fetch_failed"?(FETCH_ERRORS[d.detail]||"Couldn't download that document.")
@@ -6092,6 +6134,7 @@ async function renderDocPicker(body,city,id,b){
     ${ups.length?`<div class="detail-label">On this phone</div>${ups.map((u,i)=>`<button class="btn-ghost doc-pick" data-up="${i}">${esc(u.name)}</button>`).join("")}
       ${ups.length>1?`<button class="btn-ghost doc-pick" id="doc-upall">Read all ${ups.length} together</button>`:""}`:""}
     ${docs.length?`<div class="detail-label">Linked to the bid</div>`:""}
+    ${docs.length>1?`<button class="btn-ghost doc-pick" id="doc-all">Read all of them together</button>`:""}
     ${docs.map((d,i)=>`<button class="btn-ghost doc-pick" data-doc="${i}">${esc(d.name)}</button>`).join("")}
     <button class="btn-ghost doc-pick" id="doc-upload">Upload from your phone</button>
     ${inboxAddress()?`<button class="btn-ghost doc-pick" id="doc-inbox">Get them from your email</button>`:""}
@@ -6118,6 +6161,19 @@ async function renderDocPicker(body,city,id,b){
     }
     renderDocReview(body,city,id,b,d,res);
   });
+  const allLinked=document.getElementById("doc-all");
+  if(allLinked)allLinked.onclick=async()=>{
+    const links=docsToRead(b);
+    body.innerHTML=`<div class="account-status"><span class="spin"></span> Reading ${plural(links.length,"document")} together… this can take a minute or two.</div>`;
+    const res=await readBidDocument(links[0].url,links.slice(1).map(d=>d.url));
+    if(!document.getElementById("prep-body"))return;
+    if(!res.ok){
+      body.innerHTML=`<div class="alert alert-amber"><span>${esc(res.msg)}</span></div><button class="btn-ghost" id="doc-back">Back to ${prepBackName(id,"pricing")}</button>`;
+      document.getElementById("doc-back").onclick=()=>openPrep(city,id,prepFor(id).step||"pricing");
+      return;
+    }
+    renderDocReview(body,city,id,b,{name:readSourceName(links,res),url:links[0].url},res);
+  };
   document.getElementById("doc-cancel").onclick=()=>openPrep(city,id,prepFor(id).step||"pricing");
 }
 // Opens a PDF kept on the phone in the phone's own viewer.
@@ -7776,7 +7832,7 @@ function findBid(id){
 }
 function toggleSave(city,id){
   if(saved[id]){delete saved[id];deleteSavedBidCloud(id);}
-  else{const b=findBid(id);if(b){saved[id]={...b,_city:city};pushSavedBid(id,city);}}
+  else{const b=findBid(id);if(b){saved[id]={...b,_city:city};pushSavedBid(id,city);preReadBid(city,id);}}
   store.set("saved",saved);
   renderFeed();
   if(document.getElementById("screen-saved").classList.contains("active"))renderSaved();

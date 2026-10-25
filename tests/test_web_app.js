@@ -2286,6 +2286,75 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── Documents fetched without being asked ──
+  console.log("\nStarring a bid reads all its documents in the background");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    const reads = [];
+    let release = null;
+    const gate = new Promise((r) => { release = r; });
+    await page.route("**/*", async (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      if (u.endsWith("/bid-documents/read")) {
+        reads.push(JSON.parse(route.request().postData() || "{}"));
+        await gate;
+        return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true,
+          line_items: [{ item_no: "1", description: "4 in. concrete sidewalk", quantity: 1250, unit: "SY" },
+                       { item_no: "2", description: "Curb and gutter", quantity: 400, unit: "LF" }],
+          submission: "Sealed bids to the City Clerk", bid_security: "5% bid bond", sources: ["Bid Form", "Project Manual.pdf"],
+          pages_read: 46, files: 3 }) });
+      }
+      if (u.endsWith("/bid/locate")) return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: false }) });
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      localStorage.setItem("license_key", JSON.stringify("k"));
+      localStorage.setItem("last_feed", JSON.stringify({ "Aurora, MO": [
+        { title: "Elm St Sidewalk", scope: "Sidewalk", deadline: "2099-11-01", status: "open", url: "https://e.gov/bids/17",
+          documents: [{ name: "Plans", url: "https://e.gov/plans.pdf" }, { name: "Bid Form", url: "https://e.gov/bid-form.pdf" },
+                      { name: "Specifications", url: "https://e.gov/specs.zip" }, { name: "Addendum 1", url: "https://e.gov/add1.pdf" }] },
+        { title: "Oak Ave Curb", scope: "Curb", deadline: "2099-11-03", status: "open", url: "https://e.gov/bids/18" }] }));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(800);
+    const [a, b2] = await page.evaluate(() => { window.getSupabaseToken = async () => "tok"; window.isOffline = () => false;
+      return bidData["Aurora, MO"].map((b) => bidId("Aurora, MO", b)); });
+    await page.evaluate((i) => toggleSave("Aurora, MO", i), a);
+    await page.waitForTimeout(800);
+    const docReads = () => reads.filter((r) => r.kind !== "addendum" && r.url === "https://e.gov/bid-form.pdf");
+    check("starring a bid starts reading its documents", docReads().length === 1);
+    check("...every link at once, bid form first, posting last, addenda left for their own read",
+          docReads()[0] && docReads()[0].url === "https://e.gov/bid-form.pdf"
+          && JSON.stringify(docReads()[0].urls) === JSON.stringify(["https://e.gov/plans.pdf", "https://e.gov/specs.zip", "https://e.gov/bids/17"]),
+          JSON.stringify(docReads()[0]));
+    // Meanwhile the contractor opens a different bid.
+    await page.evaluate((i) => openPrep("Aurora, MO", i, "steps"), b2);
+    await page.waitForTimeout(300);
+    release();
+    await page.waitForTimeout(800);
+    check("a read finishing in the background doesn't take over the bid on screen",
+          (await page.textContent(".sheet-sub")).includes("Oak Ave Curb"), await page.textContent(".sheet-sub"));
+    const p = await page.evaluate((i) => prepFor(i), a);
+    check("the starred bid is filled in by the time it's opened", p.linesFrom === "documents" && p.lines.length === 2
+          && p.docInfo.bid_security === "5% bid bond", JSON.stringify(p).slice(0, 300));
+    await page.evaluate((i) => openPrep("Aurora, MO", i, "steps"), a);
+    await page.waitForTimeout(500);
+    const strip = await page.textContent("#auto-strip");
+    check("...and says which documents it read", /Filled in for you from Bid Form and Project Manual\.pdf/.test(strip), strip);
+    check("opening it doesn't read them again", docReads().length === 1);
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   // ── A statewide bid is placed by its own name ──
   console.log("\nA bid from a statewide search is placed by the site its name gives");
   {
