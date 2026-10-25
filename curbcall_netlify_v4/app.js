@@ -2363,7 +2363,7 @@ function onbCheckCoverage(){
   el.textContent="Checking...";
   onbCovTimer=setTimeout(async()=>{
     try{
-      const r=await fetchWithTimeout(SERVER+"/coverage",{
+      const r=await fetchRetry(SERVER+"/coverage",{
         method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({location:loc.trim(),radius:onbRadius})},20000);
       const d=await r.json();
@@ -4294,7 +4294,7 @@ async function checkSavedBids(){
   try{
     const urls=ids.map(id=>safeUrl(saved[id].url));
     const token=await getSupabaseToken();
-    const r=await fetchWithTimeout(SERVER+"/bid-watch/check",{method:"POST",headers:{"Content-Type":"application/json"},
+    const r=await fetchRetry(SERVER+"/bid-watch/check",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,urls})},90000);
     const d=await r.json();
     if(!d||!d.ok)return;
@@ -4598,7 +4598,7 @@ async function locateBid(id,city,b){
   _locating[id]=true;
   try{
     const token=await getSupabaseToken();
-    const r=await fetchWithTimeout(SERVER+"/bid/locate",{method:"POST",headers:{"Content-Type":"application/json"},
+    const r=await fetchRetry(SERVER+"/bid/locate",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,...pl,
         title:b.title||"",scope:String(b.scope||"").slice(0,1500),url:b.url||""})},45000);
     const d=await r.json();
@@ -4775,7 +4775,7 @@ async function readAddendumDoc(target){
     if(target.files)d=await postDocFiles("/bid-documents/read",target.files,{kind:"addendum"},120000);
     else{
       const token=await getSupabaseToken();
-      const r=await fetchWithTimeout(SERVER+"/bid-documents/read",{method:"POST",headers:{"Content-Type":"application/json"},
+      const r=await fetchRetry(SERVER+"/bid-documents/read",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,url:target.url,kind:"addendum"})},120000);
       d=await r.json();
     }
@@ -5026,6 +5026,9 @@ async function preReadBid(city,id){
     await Promise.all([loadRates(st),loadBidResults(st)]);
     if(!p.lines){p.lines=defaultPrepLines(b,city);p.linesFrom="ballpark";savePrep(id,city);}
     await autoPrepare(id,city,b);
+    // The plants near the job, found after the job site is: the concrete
+    // panel opens on them instead of a 30-second map search.
+    loadSuppliers(city,false,jobAddress(p),b).catch(()=>{});
   }catch(e){}
 }
 const _autoRunning={};
@@ -5936,7 +5939,7 @@ async function postDocFiles(path,files,extra,ms){
   const fd=new FormData();
   fd.append("json",JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,...(extra||{})}));
   files.forEach(f=>fd.append("file",f.blob||f,f.name||"document.pdf"));
-  const r=await fetchWithTimeout(SERVER+path,{method:"POST",body:fd},ms);
+  const r=await fetchRetry(SERVER+path,{method:"POST",body:fd},ms);
   return r.json();
 }
 async function readBidDocumentFiles(files){
@@ -5977,7 +5980,7 @@ async function uploadAndRead(body,city,id,b){
 // only shows once the server says email-in is set up.
 async function inboxCall(path,extra,raw){
   const token=await getSupabaseToken();
-  const r=await fetchWithTimeout(SERVER+path,{method:"POST",headers:{"Content-Type":"application/json"},
+  const r=await fetchRetry(SERVER+path,{method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,...(extra||{})})},60000);
   if(raw)return r;
   return r.json();
@@ -6115,7 +6118,7 @@ function renderRegisterHelp(body,city,id,b){
 async function readBidDocument(url,urls){
   try{
     const token=await getSupabaseToken();
-    const r=await fetchWithTimeout(SERVER+"/bid-documents/read",{method:"POST",
+    const r=await fetchRetry(SERVER+"/bid-documents/read",{method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,url,...(urls&&urls.length?{urls}:{})})},150000);
     const d=await r.json();
@@ -6523,8 +6526,9 @@ async function readTakeoff(target){
     if(target.files)d=await postDocFiles("/bid-documents/read",target.files,{kind:"takeoff"},150000);
     else{
       const token=await getSupabaseToken();
-      const r=await fetchWithTimeout(SERVER+"/bid-documents/read",{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,url:target.url,kind:"takeoff"})},150000);
+      const r=await fetchRetry(SERVER+"/bid-documents/read",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,url:target.url,
+          ...(target.urls&&target.urls.length?{urls:target.urls}:{}),kind:"takeoff"})},180000);
       d=await r.json();
     }
     if(d&&d.ok)return d;
@@ -6536,12 +6540,17 @@ async function readTakeoff(target){
 async function renderTakeoff(body,city,id,b){
   const p=prepFor(id);
   const back=()=>openPrep(city,id,"pricing");
-  const linked=prepDocCandidates(b).filter(d=>d.name!=="Original posting");
+  let linked=prepDocCandidates(b).filter(d=>d.name!=="Original posting");
   linked.sort((x,y)=>(/plan|drawing|sheet|civil/i.test(y.name))-(/plan|drawing|sheet|civil/i.test(x.name)));
+  // Only the posting: the server follows it to the plan files it links.
+  const post=prepDocCandidates(b).find(d=>d.name==="Original posting");
+  if(!linked.length&&post)linked=[{name:"The plans on the posting page",url:post.url}];
+  const plansish=linked.filter(d=>!/addend/i.test(d.name)).slice(0,4);
   const ups=await bidFiles.list(id,"upload");
   if(!document.getElementById("prep-body"))return;
   body.innerHTML=`<div class="workspace-title">Measure from the plans</div>
     <div class="rate-note" style="margin-top:0;">Pick the plan set. Sidewalk area, curb length, ramps and slabs are worked out from the quantity tables and dimensions on the sheets, each with how it was measured, for you to check.</div>
+    ${plansish.length>1?`<button class="btn-ghost doc-pick" id="to-all">All ${plansish.length} linked files together</button>`:""}
     ${ups.map((u,i)=>`<button class="btn-ghost doc-pick" data-tu="${i}">${esc(u.name)} <small>on this phone</small></button>`).join("")}
     ${linked.map((d,i)=>`<button class="btn-ghost doc-pick" data-tl="${i}">${esc(d.name)}</button>`).join("")}
     <button class="btn-ghost doc-pick" id="to-upload">Upload the plans</button>
@@ -6562,6 +6571,8 @@ async function renderTakeoff(body,city,id,b){
   body.querySelectorAll("[data-tu]").forEach(x=>x.onclick=()=>{const u=ups[Number(x.dataset.tu)];
     run(u.name,{files:[new File([u.blob],u.name,{type:"application/pdf"})]});});
   body.querySelectorAll("[data-tl]").forEach(x=>x.onclick=()=>{const d=linked[Number(x.dataset.tl)];run(d.name,{url:d.url});});
+  const all=document.getElementById("to-all");
+  if(all)all.onclick=()=>run(`${plural(plansish.length,"linked file")}`,{url:plansish[0].url,urls:plansish.slice(1).map(d=>d.url)});
   document.getElementById("to-upload").onclick=async()=>{
     const files=await pickPdfs(true);
     if(!files.length)return;
@@ -6876,7 +6887,7 @@ function fillError(d,what){
 async function fillBidForm(url,payload){
   try{
     const token=await getSupabaseToken();
-    const r=await fetchWithTimeout(SERVER+"/bid-documents/fill",{method:"POST",headers:{"Content-Type":"application/json"},
+    const r=await fetchRetry(SERVER+"/bid-documents/fill",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,url,...payload})},120000);
     const d=await r.json();
     if(d&&d.ok)return d;
@@ -6910,6 +6921,9 @@ async function renderFormFill(body,city,id,b){
   // bid links to. The document the schedule was read from goes first.
   const opts=ups.map(u=>({name:u.name,file:new File([u.blob],u.name,{type:"application/pdf"}),phone:true}))
     .concat(linked.filter(d=>!ups.some(u=>u.name===d.name)).map(d=>({name:d.name,url:d.url})));
+  // Nothing linked but the posting: the server finds the bid form on it.
+  const post=prepDocCandidates(b).find(d=>d.name==="Original posting");
+  if(!opts.length&&post)opts.push({name:"The bid form on the posting page",url:post.url,posting:true});
   opts.sort((x,y)=>(y.name===src)-(x.name===src));
   const pre=new Set(opts.map((o,i)=>(o.name===src||FORMISH_RE.test(o.name)||(o.phone&&opts.length<=2))?i:-1).filter(i=>i>=0));
   if(!pre.size&&opts.length)pre.add(0);
@@ -6973,6 +6987,8 @@ async function fillAndShow(body,city,id,b,forms){
     const res=f.file?await fillBidFormFile(f.file,fillPayload(b,p,city)):await fillBidForm(f.url,fillPayload(b,p,city));
     if(!document.getElementById("prep-body"))return;
     if(res.ok){
+      // Found behind a page or in a zip: named after the form itself.
+      if(res.form_name&&(f.posting||!/\.pdf$/i.test(f.url||"")))f.name=res.form_name.replace(/\.pdf$/i,"");
       const blob=b64ToBlob(res.pdf_b64);
       await bidFiles.put(id,"filled",filledName(f.name),blob,{filled:res.filled.length,flat:!!res.flat,from:f.name});
       res.blob=blob;
@@ -7263,7 +7279,7 @@ async function loadSuppliers(city,fresh,near,b){
   if(isOffline())return{ok:false,reason:"offline"};
   try{
     const token=await getSupabaseToken();
-    const r=await fetchWithTimeout(SERVER+"/suppliers/nearby",{method:"POST",headers:{"Content-Type":"application/json"},
+    const r=await fetchRetry(SERVER+"/suppliers/nearby",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,...pl,near,
         title:(b&&b.title)||"",scope:String((b&&b.scope)||"").slice(0,1500),url:(b&&b.url)||""})},75000);
     const d=await r.json();
@@ -9173,6 +9189,21 @@ function fetchWithTimeout(url,opts,ms=12000){
   const ctrl=new AbortController();
   const t=setTimeout(()=>ctrl.abort(),ms);
   return fetch(url,{...opts,signal:ctrl.signal}).finally(()=>clearTimeout(t));
+}
+// The same, tried once more when the server is restarting (502/503/504 from
+// the host while a deploy rolls over) or the phone's connection dropped.
+// Only for reads and lookups: never for anything that sends, charges or
+// saves, where a second try could do it twice. A timeout isn't retried.
+async function fetchRetry(url,opts,ms){
+  const wait=()=>new Promise(r=>setTimeout(r,2500));
+  try{
+    const r=await fetchWithTimeout(url,opts,ms);
+    if(![502,503,504].includes(r.status))return r;
+  }catch(e){
+    if(e&&e.name==="AbortError")throw e;
+  }
+  await wait();
+  return fetchWithTimeout(url,opts,ms);
 }
 
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)autoUnlock();});

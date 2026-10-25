@@ -2355,6 +2355,90 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── The same for every fetch ──
+  console.log("\nPlants, plans, forms and a restarting server, all without extra steps");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    const hits = { nearby: 0, read: [], fill: [] };
+    let busyOnce = true;
+    await page.route("**/*", async (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      const json = (o, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(o) });
+      if (u.endsWith("/suppliers/nearby")) {
+        hits.nearby++;
+        return json({ ok: true, city: "Aurora", state: "MO", radius_mi: 50, near: "", plants: [], web: [], quotes: { enough: false, count: 0 } });
+      }
+      if (u.endsWith("/bid-documents/read")) {
+        const body = JSON.parse(route.request().postData() || "{}");
+        hits.read.push(body);
+        if (body.kind === "takeoff") {
+          if (busyOnce) { busyOnce = false; return json({ error: "deploying" }, 503); }
+          return json({ ok: true, line_items: [{ description: "Sidewalk", quantity: 900, unit: "SF", basis: "Sheet C-2", estimated: true }], notes: "" });
+        }
+        return json({ ok: false, reason: "ai_error" });
+      }
+      if (u.endsWith("/bid-documents/fill")) {
+        hits.fill.push(JSON.parse(route.request().postData() || "{}"));
+        return json({ ok: true, fields: 2, filled: [{ field: "Bidder", label: "Bidder", value: "Test Concrete", key: "company.name" }],
+          left_blank: 1, form_name: "Bid Proposal Form.pdf", pdf_b64: "JVBERi0xLjQK" });
+      }
+      if (u.endsWith("/bid/locate")) return json({ ok: false });
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      localStorage.setItem("license_key", JSON.stringify("k"));
+      localStorage.setItem("company_profile", JSON.stringify({ name: "Test Concrete", bid_info: { address: "1 Main St" } }));
+      localStorage.setItem("last_feed", JSON.stringify({ "Aurora, MO": [
+        { title: "Elm St Sidewalk", scope: "Sidewalk", deadline: "2099-11-01", status: "open", url: "https://e.gov/bids/17",
+          documents: [{ name: "Plan Set", url: "https://e.gov/plans.pdf" }, { name: "Civil Sheets", url: "https://e.gov/civil.zip" }] },
+        { title: "Oak Ave Curb", scope: "Curb", deadline: "2099-11-03", status: "open", url: "https://e.gov/bids/18" }] }));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(800);
+    const [a, b2] = await page.evaluate(() => { window.getSupabaseToken = async () => "tok"; window.isOffline = () => false;
+      return bidData["Aurora, MO"].map((b) => bidId("Aurora, MO", b)); });
+    await page.evaluate((i) => toggleSave("Aurora, MO", i), a);
+    await page.waitForTimeout(1200);
+    check("starring a bid also looks up the plants near the job", hits.nearby === 1, String(hits.nearby));
+
+    // Measuring from every plan file at once, through a server restart.
+    await page.evaluate((i) => openPrep("Aurora, MO", i, "pricing"), a);
+    await page.waitForTimeout(400);
+    await page.click("#pl-takeoff");
+    await page.waitForTimeout(300);
+    await page.click("#to-all");
+    await page.waitForTimeout(4500);
+    const tk = hits.read.filter((r) => r.kind === "takeoff");
+    check("all the plan files are measured together", tk.length >= 1 && tk[0].url === "https://e.gov/plans.pdf"
+          && JSON.stringify(tk[0].urls) === JSON.stringify(["https://e.gov/civil.zip"]), JSON.stringify(tk[0]));
+    check("a server restarting mid-request is tried once more, not shown as an error",
+          tk.length === 2 && /Measured from 2 linked files/.test(await page.textContent("#prep-body")), String(tk.length));
+
+    // A bid with nothing but its posting still gets its form filled.
+    await page.evaluate((i) => openPrep("Aurora, MO", i, "summary"), b2);
+    await page.waitForTimeout(400);
+    await page.evaluate((i) => renderFormFill(document.getElementById("prep-body"), "Aurora, MO", i, findBid(i)), b2);
+    await page.waitForTimeout(400);
+    const ff = await page.textContent("#prep-body");
+    check("with only a posting, the bid form on it is offered", /The bid form on the posting page/.test(ff), ff.slice(0, 300));
+    await page.click("#ff-go");
+    await page.waitForTimeout(600);
+    check("...the posting is sent to be searched for the form", hits.fill.length === 1 && hits.fill[0].url === "https://e.gov/bids/18");
+    const names = await page.evaluate(async (i) => (await bidFiles.list(i, "filled")).map((f) => f.name), b2);
+    check("...and the filled copy is named after the form found", names.includes("Bid Proposal Form (filled).pdf"), JSON.stringify(names));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   // ── A statewide bid is placed by its own name ──
   console.log("\nA bid from a statewide search is placed by the site its name gives");
   {
