@@ -977,6 +977,101 @@ class SeveralLinksEndpointTests(EndpointTests):
         self.assertTrue(d["ok"])
 
 
+class WhatEachReadWantsFirstTests(unittest.TestCase):
+    def test_each_kind_of_read_puts_its_own_files_first(self):
+        names = ["Plans.pdf", "Addendum 2.pdf", "Bid Form.pdf", "Notes.pdf"]
+        first = lambda kind: sorted(names, key=lambda n: ls._doc_rank(n, kind))[0]
+        self.assertEqual(first("doc"), "Bid Form.pdf")
+        self.assertEqual(first("form"), "Bid Form.pdf")
+        self.assertEqual(first("addendum"), "Addendum 2.pdf")
+        self.assertEqual(first("takeoff"), "Plans.pdf")
+
+
+class FormBehindALinkTests(unittest.TestCase):
+    """Filling the bid form works from a posting page or a zipped packet."""
+    FORM = fillable_pdf(["Bidder Name", "Total Bid"])
+
+    def _with(self, files):
+        def fetch(u):
+            got = files.get(u)
+            return (got[0], got[1], "ok") if got else (b"", "", "http_404")
+        return patch.object(ls, "_fetch_document", side_effect=fetch), patch.object(ls, "_public_http_url", return_value=True)
+
+    def test_the_fillable_form_is_found_on_the_posting_page(self):
+        page = (b'<html><a href="/f/Specs.pdf">Specifications</a>'
+                b'<a href="/f/Proposal.pdf">Bid Proposal</a></html>')
+        a, b = self._with({"https://e.gov/bids/1": (page, "text/html"),
+                           "https://e.gov/f/Specs.pdf": (text_pdf([(72, 700, 11, "Specs")]), "application/pdf"),
+                           "https://e.gov/f/Proposal.pdf": (self.FORM, "application/pdf")})
+        with a, b:
+            raw, name, outcome = ls._form_behind("https://e.gov/bids/1")
+        self.assertEqual((outcome, name), ("ok", "Bid Proposal"))
+        self.assertEqual(raw, self.FORM)
+
+    def test_the_form_inside_a_zip_is_found(self):
+        z = zip_of([("Plans.pdf", text_pdf([(72, 700, 11, "Sheet C-1")])), ("Bid Form.pdf", self.FORM)])
+        a, b = self._with({"https://e.gov/packet.zip": (z, "application/zip")})
+        with a, b:
+            raw, name, outcome = ls._form_behind("https://e.gov/packet.zip")
+        self.assertEqual((outcome, name, raw), ("ok", "Bid Form.pdf", self.FORM))
+
+    def test_the_filled_form_says_which_form_it_was(self):
+        client = ls.app.test_client()
+        page = b'<html><a href="/f/Proposal.pdf">Bid Proposal</a></html>'
+        a, b = self._with({"https://e.gov/bids/1": (page, "text/html"),
+                           "https://e.gov/f/Proposal.pdf": (self.FORM, "application/pdf")})
+        with a, b, patch.object(ls, "_license_is_active", return_value=True), patch.object(ls, "OPENAI_API_KEY", "k"), \
+                patch.object(ls, "_ip_rate_ok", return_value=True), \
+                patch.object(ls, "_ai_match_fields", return_value={"Bidder Name": "company.name"}):
+            d = client.post("/bid-documents/fill", json={"key": "k", "device_id": "d", "url": "https://e.gov/bids/1",
+                                                          "company": {"name": "Test Concrete LLC"}}).get_json()
+        self.assertTrue(d["ok"], d)
+        self.assertEqual(d["form_name"], "Bid Proposal")
+
+
+class SharedFetchRetryTests(unittest.TestCase):
+    """The scanner's page fetch and the shared JSON fetch try a busy server once more."""
+
+    def _urlopen(self, script, body=b'{"ok": 1}'):
+        calls = []
+
+        class Resp:
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def read(self, n=None): return body
+
+        def urlopen(req, timeout=None):
+            calls.append(1)
+            step = script[len(calls) - 1]
+            if isinstance(step, Exception):
+                raise step
+            return Resp()
+        return urlopen, calls
+
+    def test_json_from_a_busy_server(self):
+        urlopen, calls = self._urlopen([ls.urllib.error.HTTPError("u", 503, "busy", {}, None), "ok"])
+        with patch.object(ls.urllib.request, "urlopen", side_effect=urlopen), patch.object(ls.time, "sleep"):
+            self.assertEqual(ls._get_json("https://api.example/x"), {"ok": 1})
+        self.assertEqual(len(calls), 2)
+
+    def test_a_page_after_a_dropped_connection(self):
+        urlopen, calls = self._urlopen([ConnectionResetError("reset"), "ok"], body=b"<html>bids</html>")
+        with patch.object(ls.urllib.request, "urlopen", side_effect=urlopen), patch.object(ls.time, "sleep"), \
+                patch.object(ls, "_robots_allows", return_value=True):
+            self.assertEqual(ls._fetch_page("https://e.gov/bids"), ("<html>bids</html>", "ok"))
+        self.assertEqual(len(calls), 2)
+
+    def test_no_retry_for_a_refusal_a_timeout_or_a_dead_name(self):
+        for ex, want in ((ls.urllib.error.HTTPError("u", 403, "no", {}, None), "http_403"),
+                         (ls.socket.timeout("slow"), "timeout"),
+                         (ls.urllib.error.URLError(ls.socket.gaierror("no such host")), "unreachable")):
+            urlopen, calls = self._urlopen([ex])
+            with patch.object(ls.urllib.request, "urlopen", side_effect=urlopen), patch.object(ls.time, "sleep"), \
+                    patch.object(ls, "_robots_allows", return_value=True):
+                self.assertEqual(ls._fetch_page("https://e.gov/bids"), ("", want))
+            self.assertEqual(len(calls), 1, want)
+
+
 if __name__ == "__main__":
     unittest.main()
 

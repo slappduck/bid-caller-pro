@@ -4154,13 +4154,34 @@ def admin_list():
 # ═══════════════════════════════════════════════════════════
 # SHARED HELPERS (HTTP, geocoding, distance)
 # ═══════════════════════════════════════════════════════════
+_RETRY_CODES = (429, 500, 502, 503, 504)
+
+
+def _retryable(ex):
+    """A failure worth one more try: a busy server or a dropped connection.
+    Never a timeout (it would only wait twice) or a 4xx answer."""
+    if isinstance(ex, urllib.error.HTTPError):
+        return ex.code in _RETRY_CODES
+    # A name that doesn't resolve won't resolve a second later either.
+    if isinstance(ex, (socket.timeout, TimeoutError, socket.gaierror)):
+        return False
+    if isinstance(ex, urllib.error.URLError):
+        return not isinstance(ex.reason, (socket.timeout, TimeoutError, socket.gaierror)) \
+            and "non-public" not in str(ex.reason)
+    return isinstance(ex, ConnectionError)
+
+
 def _get_json(url, headers=None, timeout=20):
-    try:
-        req = urllib.request.Request(url, headers=headers or {"User-Agent": "BidCallerPro/2.0"})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return json.loads(resp.read().decode("utf-8"))
-    except Exception:
-        return None
+    for attempt in (0, 1):
+        try:
+            req = urllib.request.Request(url, headers=headers or {"User-Agent": "BidCallerPro/2.0"})
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except Exception as ex:
+            if attempt == 0 and _retryable(ex):
+                time.sleep(1.5)
+                continue
+            return None
 
 
 def _geo_from_zip(zip_code):
@@ -5307,15 +5328,21 @@ def _fetch_page(url, timeout=None):
     """
     if not _robots_allows(url):
         return "", "robots_disallow"
-    try:
-        req = urllib.request.Request(url, headers=_page_headers())
-        with urllib.request.urlopen(req, timeout=timeout or FETCH_TIMEOUT) as resp:
-            return resp.read(800000).decode("utf-8", "ignore"), "ok"
-    except urllib.error.HTTPError as e:
-        return "", f"http_{e.code}"
-    except Exception as ex:
-        name = type(ex).__name__.lower()
-        return "", "timeout" if "timeout" in name else "unreachable"
+    # A small town's server that is busy or drops the connection usually
+    # answers a moment later; one more try, never for a timeout or a 4xx.
+    for attempt in (0, 1):
+        try:
+            req = urllib.request.Request(url, headers=_page_headers())
+            with urllib.request.urlopen(req, timeout=timeout or FETCH_TIMEOUT) as resp:
+                return resp.read(800000).decode("utf-8", "ignore"), "ok"
+        except Exception as ex:
+            if attempt == 0 and _retryable(ex):
+                time.sleep(1.5)
+                continue
+            if isinstance(ex, urllib.error.HTTPError):
+                return "", f"http_{ex.code}"
+            name = type(ex).__name__.lower()
+            return "", "timeout" if "timeout" in name or "timeout" in str(getattr(ex, "reason", "")).lower() else "unreachable"
 
 
 def _resolve_bid_url(ai_url, page_url, source_text=""):
@@ -9031,9 +9058,18 @@ _DOC_RANK = (
 )
 
 
-def _doc_rank(name):
+def _doc_rank(name, kind="doc"):
+    """0 is read first. An addendum read wants the addenda; a takeoff wants
+    the plan sheets; everything else wants the bid form."""
+    name = name or ""
+    if kind == "addendum":
+        return 0 if re.search(r"addend", name, re.I) else 2 + min(1, _doc_rank(name))
+    if kind == "takeoff":
+        if re.search(r"plan|drawing|sheets?\b|\bdwg|civil|construction\s*set", name, re.I):
+            return 0
+        return 3 if re.search(r"addend", name, re.I) else 2
     for rx, rank in _DOC_RANK:
-        if rx.search(name or ""):
+        if rx.search(name):
             return rank
     return 2
 
@@ -9065,7 +9101,7 @@ def _docx_text(data):
     return re.sub(r"[ \t]+\n", "\n", re.sub(r"\n{3,}", "\n\n", text)).strip()
 
 
-def _zip_members(data):
+def _zip_members(data, kind="doc"):
     """[(name, bytes)] of the PDFs and Word files in a zip, bid form first.
 
     Sizes are capped from the real bytes read, not the zip's own claims, so
@@ -9080,7 +9116,7 @@ def _zip_members(data):
         infos = [i for i in z.infolist()
                  if not i.is_dir() and not i.filename.startswith("__MACOSX")
                  and re.search(r"\.(pdf|docx)$", i.filename, re.I)]
-        infos.sort(key=lambda i: (_doc_rank(i.filename), i.file_size))
+        infos.sort(key=lambda i: (_doc_rank(i.filename, kind), i.file_size))
         for info in infos[:BID_DOC_ZIP_FILES]:
             if info.file_size > BID_DOC_MAX_BYTES or total + info.file_size > BID_DOC_MAX_TOTAL:
                 continue
@@ -9101,13 +9137,13 @@ def _is_page(raw, ctype):
     return raw[:5] != b"%PDF-" and raw[:2] != b"PK" and ("html" in ctype or b"<html" in raw[:2000].lower())
 
 
-def _unpack(name, raw, ctype):
+def _unpack(name, raw, ctype, kind="doc"):
     """One download as the documents in it: [(name, bytes, ctype)]."""
     if raw[:4] == b"PK\x03\x04":
         if _is_docx(raw):
             return [(name, raw, _DOCX_TYPE)]
         return [(n, r, _DOCX_TYPE if _is_docx(r) else "application/pdf")
-                for n, r in _zip_members(raw)]
+                for n, r in _zip_members(raw, kind)]
     return [(name, raw, ctype)]
 
 
@@ -9116,7 +9152,7 @@ def _link_name(url):
     return re.sub(r"[^\w .()&#,-]+", "", tail)[:120]
 
 
-def _gather_documents(urls):
+def _gather_documents(urls, kind="doc"):
     """([(name, bytes, ctype)], outcome of the first failure or "ok").
 
     The links are fetched together. A web page among them is read for its
@@ -9144,15 +9180,15 @@ def _gather_documents(urls):
                     seen.add(d["url"])
                     follow.append((d.get("name") or _link_name(d["url"]), d["url"]))
         else:
-            docs += _unpack(name or _link_name(url), raw, ctype)
-    follow.sort(key=lambda nu: _doc_rank(nu[0] + " " + nu[1]))
+            docs += _unpack(name or _link_name(url), raw, ctype, kind)
+    follow.sort(key=lambda nu: _doc_rank(nu[0] + " " + nu[1], kind))
     if follow:
         for (name, url), (raw, ctype, outcome) in fetch_all(follow[:BID_DOC_FOLLOW_LINKS]):
             if outcome == "ok" and raw and not _is_page(raw, ctype):
-                docs += _unpack(name, raw, ctype)
-    # The bid form first, the posting's own page after the files.
+                docs += _unpack(name, raw, ctype, kind)
+    # The wanted files first, the posting's own page after them.
     order = {id(d): i for i, d in enumerate(docs)}
-    docs.sort(key=lambda d: (1.5 if _is_page(d[1], d[2]) else _doc_rank(d[0]), order[id(d)]))
+    docs.sort(key=lambda d: (1.5 if _is_page(d[1], d[2]) else _doc_rank(d[0], kind), order[id(d)]))
     total, kept = 0, []
     for d in docs[:BID_DOC_MAX_DOCS]:
         if total + len(d[1]) > BID_DOC_MAX_TOTAL:
@@ -9632,7 +9668,7 @@ def bid_documents_read():
     if upload is not None:
         docs = [(name, raw, "application/pdf") for name, raw in upload]
     else:
-        docs, outcome = _gather_documents(urls)
+        docs, outcome = _gather_documents(urls, kind)
         if not docs:
             return jsonify({"ok": False, "reason": "fetch_failed", "detail": outcome})
     texts, images, pages, truncated, read = [], [], 0, False, []
@@ -10032,6 +10068,35 @@ def _fill_flat(raw, vals):
             "pdf_b64": base64.b64encode(pdf).decode("ascii")}, 200
 
 
+def _has_form_fields(raw):
+    try:
+        from pypdf import PdfReader
+        return bool(_form_text_fields(PdfReader(io.BytesIO(raw))))
+    except Exception:
+        return False
+
+
+def _form_behind(url):
+    """(pdf bytes, name, outcome): the bid form a link leads to.
+
+    A PDF link is the form. A posting page, a zipped packet or a share link
+    is opened the way the reader opens it, and the PDF with fill-in boxes is
+    taken, else the one named like a bid form, else the first, so "fill in
+    the bid form" works from whatever link the bid has.
+    """
+    docs, outcome = _gather_documents([url], "form")
+    pdfs = [(n, r) for n, r, _c in docs if r[:5] == b"%PDF-"]
+    if not pdfs:
+        if docs:
+            return docs[0][1], docs[0][0], "ok"
+        return b"", "", outcome
+    if len(pdfs) == 1:
+        return pdfs[0][1], pdfs[0][0], "ok"
+    best = next(((n, r) for n, r in pdfs if _has_form_fields(r)), None) \
+        or next(((n, r) for n, r in pdfs if _doc_rank(n) == 0), None) or pdfs[0]
+    return best[1], best[0], "ok"
+
+
 @app.route("/bid-documents/fill", methods=["POST"])
 def bid_documents_fill():
     data, upload, err = _doc_request()
@@ -10053,10 +10118,11 @@ def bid_documents_fill():
                        BID_FILL_MAX_PER_KEY_PER_DAY):
         return jsonify({"ok": False, "reason": "rate_limited"}), 429
 
+    form_name = ""
     if upload is not None:
-        raw = upload[0][1]
+        form_name, raw = upload[0]
     else:
-        raw, ctype, outcome = _fetch_document(url)
+        raw, form_name, outcome = _form_behind(url)
         if outcome != "ok":
             return jsonify({"ok": False, "reason": "fetch_failed", "detail": outcome})
     if raw[:5] != b"%PDF-":
@@ -10088,7 +10154,7 @@ def bid_documents_fill():
     filled = [{"field": f, "label": tips.get(f) or f, "value": values[f], "key": k}
               for f, k in plan.items()]
     return jsonify({"ok": True, "fields": len(fields), "filled": filled,
-                    "left_blank": len(fields) - len(filled),
+                    "left_blank": len(fields) - len(filled), "form_name": form_name,
                     "pdf_b64": base64.b64encode(pdf).decode("ascii")})
 
 
