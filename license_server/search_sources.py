@@ -1,13 +1,34 @@
 # ═══════════════════════════════════════════════════════════
 # SHARED HELPERS (HTTP, geocoding, distance)
 # ═══════════════════════════════════════════════════════════
+_RETRY_CODES = (429, 500, 502, 503, 504)
+
+
+def _retryable(ex):
+    """A failure worth one more try: a busy server or a dropped connection.
+    Never a timeout (it would only wait twice) or a 4xx answer."""
+    if isinstance(ex, urllib.error.HTTPError):
+        return ex.code in _RETRY_CODES
+    # A name that doesn't resolve won't resolve a second later either.
+    if isinstance(ex, (socket.timeout, TimeoutError, socket.gaierror)):
+        return False
+    if isinstance(ex, urllib.error.URLError):
+        return not isinstance(ex.reason, (socket.timeout, TimeoutError, socket.gaierror)) \
+            and "non-public" not in str(ex.reason)
+    return isinstance(ex, ConnectionError)
+
+
 def _get_json(url, headers=None, timeout=20):
-    try:
-        req = urllib.request.Request(url, headers=headers or {"User-Agent": "BidCallerPro/2.0"})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return json.loads(resp.read().decode("utf-8"))
-    except Exception:
-        return None
+    for attempt in (0, 1):
+        try:
+            req = urllib.request.Request(url, headers=headers or {"User-Agent": "BidCallerPro/2.0"})
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except Exception as ex:
+            if attempt == 0 and _retryable(ex):
+                time.sleep(1.5)
+                continue
+            return None
 
 
 def _geo_from_zip(zip_code):
@@ -1154,15 +1175,21 @@ def _fetch_page(url, timeout=None):
     """
     if not _robots_allows(url):
         return "", "robots_disallow"
-    try:
-        req = urllib.request.Request(url, headers=_page_headers())
-        with urllib.request.urlopen(req, timeout=timeout or FETCH_TIMEOUT) as resp:
-            return resp.read(800000).decode("utf-8", "ignore"), "ok"
-    except urllib.error.HTTPError as e:
-        return "", f"http_{e.code}"
-    except Exception as ex:
-        name = type(ex).__name__.lower()
-        return "", "timeout" if "timeout" in name else "unreachable"
+    # A small town's server that is busy or drops the connection usually
+    # answers a moment later; one more try, never for a timeout or a 4xx.
+    for attempt in (0, 1):
+        try:
+            req = urllib.request.Request(url, headers=_page_headers())
+            with urllib.request.urlopen(req, timeout=timeout or FETCH_TIMEOUT) as resp:
+                return resp.read(800000).decode("utf-8", "ignore"), "ok"
+        except Exception as ex:
+            if attempt == 0 and _retryable(ex):
+                time.sleep(1.5)
+                continue
+            if isinstance(ex, urllib.error.HTTPError):
+                return "", f"http_{ex.code}"
+            name = type(ex).__name__.lower()
+            return "", "timeout" if "timeout" in name or "timeout" in str(getattr(ex, "reason", "")).lower() else "unreachable"
 
 
 def _resolve_bid_url(ai_url, page_url, source_text=""):

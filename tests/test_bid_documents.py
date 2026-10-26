@@ -674,6 +674,53 @@ class AddendumPromptTests(unittest.TestCase):
         self.assertEqual(fp["addendum_docs"], [{"name": "Addendum No. 1", "url": "https://93.184.216.34/files/Addendum-1.pdf"}])
 
 
+class JobTermsTests(unittest.TestCase):
+    def test_retainage_completion_wages_and_testing_come_through(self):
+        got = ls._clean_doc_result({"line_items": [], "retainage": "5% retained until final acceptance",
+                                    "completion": "60 calendar days; $500/day liquidated damages",
+                                    "prevailing_wage": "Missouri prevailing wage applies", "testing": 42})
+        self.assertEqual((got["retainage"], got["completion"], got["prevailing_wage"], got["testing"]),
+                         ("5% retained until final acceptance", "60 calendar days; $500/day liquidated damages",
+                          "Missouri prevailing wage applies", ""))
+
+
+class TakeoffTests(_UploadSetup, unittest.TestCase):
+    """Quantities measured from plan sheets: each with how it was worked out."""
+    RAW = {"items": [{"description": "4 in. concrete sidewalk", "quantity": "6,200", "unit": "SF",
+                      "basis": "5 ft wide x 1,240 ft, sta 10+00 to 22+40"},
+                     {"description": "Curb and gutter", "quantity": "400", "unit": "LF", "basis": ""},
+                     {"description": "Ramps", "quantity": "", "unit": "EA", "basis": "Sheet C-3"}, "junk"],
+           "notes": "Driveway approaches not dimensioned; count them on sheet C-4."}
+
+    def test_only_quantities_with_a_basis_are_kept(self):
+        got = ls._clean_takeoff_result(self.RAW)
+        self.assertEqual(got["line_items"], [{"item_no": "", "description": "4 in. concrete sidewalk", "quantity": 6200.0,
+                                              "unit": "SF", "basis": "5 ft wide x 1,240 ft, sta 10+00 to 22+40",
+                                              "estimated": True}])
+        self.assertIn("sheet C-4", got["notes"])
+
+    def test_a_takeoff_reads_every_plan_page_and_is_cached_apart(self):
+        asked = []
+
+        def ai(text, images=None, addendum=False, kind=None):
+            asked.append(kind)
+            return ls._clean_takeoff_result(self.RAW) if kind == "takeoff" else ls._clean_doc_result({"line_items": []})
+        with patch.object(ls, "_ai_read_bid_document", side_effect=ai), \
+             patch.object(ls, "_scan_page_images", side_effect=lambda raw, n, every_page=False, width=1400:
+                          [b"img"] * (2 if every_page else 0)) as scan:
+            d = self.upload("/bid-documents/read", b"%PDF-1.4 plans", kind="takeoff").get_json()
+            self.assertTrue(d["ok"], d)
+            self.assertEqual(d["line_items"][0]["quantity"], 6200.0)
+            self.assertEqual(d["scanned_pages"], 2)
+            self.assertFalse(self.upload("/bid-documents/read", b"%PDF-1.4 plans").get_json()["cached"])
+            self.assertTrue(self.upload("/bid-documents/read", b"%PDF-1.4 plans", kind="takeoff").get_json()["cached"])
+        self.assertEqual(asked, ["takeoff", None])
+        self.assertTrue(scan.call_args_list[0].kwargs.get("every_page"))
+
+    def test_every_page_is_drawn_for_plans(self):
+        self.assertEqual(len(ls._scan_page_images(FLAT_FORM, 4, every_page=True)), 1)
+
+
 class BidWatchTests(unittest.TestCase):
     URL = "https://93.184.216.34/bids/elm-st"
     PAGE = (b"<html><body><h1>Elm St Sidewalk</h1><p>Addendum No. 1 issued 9/30. See Addendum #2.</p>"
@@ -724,6 +771,305 @@ class BidWatchTests(unittest.TestCase):
     def test_an_unlicensed_caller_is_refused(self):
         with patch.object(ls, "_license_is_active", return_value=False):
             self.assertEqual(self.post([self.URL]).status_code, 403)
+
+
+def many_pages(pages):
+    """A PDF of one typed page per entry: [text]."""
+    from pypdf import PdfReader, PdfWriter
+    w = PdfWriter()
+    for t in pages:
+        w.add_page(PdfReader(ls.io.BytesIO(text_pdf([(72, 700, 11, t)]))).pages[0])
+    buf = ls.io.BytesIO()
+    w.write(buf)
+    return buf.getvalue()
+
+
+def zip_of(files):
+    buf = ls.io.BytesIO()
+    with ls.zipfile.ZipFile(buf, "w") as z:
+        for name, raw in files:
+            z.writestr(name, raw)
+    return buf.getvalue()
+
+
+def docx_of(paragraphs):
+    body = "".join(f"<w:p><w:r><w:t>{p}</w:t></w:r></w:p>" for p in paragraphs)
+    return zip_of([("[Content_Types].xml", "<Types/>"),
+                   ("word/document.xml", f'<w:document xmlns:w="w"><w:body>{body}</w:body></w:document>')])
+
+
+class ShareLinkTests(unittest.TestCase):
+    """Links that open a viewer are turned into the file itself."""
+
+    def test_google_drive_and_docs(self):
+        self.assertEqual(ls._direct_download_url("https://drive.google.com/file/d/1AbCdEfGhIjKlMnOp/view?usp=sharing"),
+                         "https://drive.google.com/uc?export=download&id=1AbCdEfGhIjKlMnOp&confirm=t")
+        self.assertEqual(ls._direct_download_url("https://drive.google.com/open?id=1AbCdEfGhIjKlMnOp"),
+                         "https://drive.google.com/uc?export=download&id=1AbCdEfGhIjKlMnOp&confirm=t")
+        self.assertEqual(ls._direct_download_url("https://docs.google.com/document/d/1AbCdEfGhIjKlMnOp/edit"),
+                         "https://docs.google.com/document/d/1AbCdEfGhIjKlMnOp/export?format=pdf")
+
+    def test_dropbox_downloads_instead_of_previewing(self):
+        self.assertEqual(ls._direct_download_url("https://www.dropbox.com/s/abc/Bid%20Form.pdf?dl=0"),
+                         "https://www.dropbox.com/s/abc/Bid%20Form.pdf?dl=1")
+
+    def test_other_links_are_left_alone(self):
+        for u in ("https://www.aurora-mo.gov/DocumentCenter/View/123", "https://e.gov/bid.pdf"):
+            self.assertEqual(ls._direct_download_url(u), u)
+
+
+class RetryTests(unittest.TestCase):
+    def _opener(self, script):
+        calls = []
+
+        class Resp:
+            headers = {"Content-Type": "application/pdf"}
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def read(self, n): return b"%PDF-1.4 ok"
+
+        class Opener:
+            def open(self, req, timeout=None):
+                calls.append(req.full_url)
+                step = script[len(calls) - 1]
+                if isinstance(step, Exception):
+                    raise step
+                return Resp()
+        return Opener(), calls
+
+    def _fetch(self, script):
+        opener, calls = self._opener(script)
+        with patch.object(ls, "_public_http_url", return_value=True), \
+             patch.object(ls, "_robots_allows_checked", return_value=True), \
+             patch.object(ls.urllib.request, "build_opener", return_value=opener), \
+             patch.object(ls.time, "sleep"):
+            return ls._fetch_document("https://93.184.216.34/bid.pdf"), calls
+
+    def test_a_busy_server_is_tried_once_more(self):
+        err = ls.urllib.error.HTTPError("u", 503, "busy", {}, None)
+        (data, _c, outcome), calls = self._fetch([err, "ok"])
+        self.assertEqual((outcome, len(calls)), ("ok", 2))
+
+    def test_a_missing_file_is_not_retried(self):
+        err = ls.urllib.error.HTTPError("u", 404, "gone", {}, None)
+        (_d, _c, outcome), calls = self._fetch([err])
+        self.assertEqual((outcome, len(calls)), ("http_404", 1))
+
+    def test_a_timeout_is_not_waited_out_twice(self):
+        (_d, _c, outcome), calls = self._fetch([ls.socket.timeout("slow")])
+        self.assertEqual((outcome, len(calls)), ("timeout", 1))
+
+
+class PackageTests(unittest.TestCase):
+    def test_a_zipped_packet_is_opened_bid_form_first(self):
+        z = zip_of([("Packet/Plans.pdf", b"%PDF-plans"), ("Packet/Bid Form.pdf", b"%PDF-form"),
+                    ("Packet/notes.txt", b"x"), ("__MACOSX/._Bid Form.pdf", b"%PDF-junk")])
+        got = ls._zip_members(z)
+        self.assertEqual([n for n, _r in got], ["Bid Form.pdf", "Plans.pdf"])
+
+    def test_a_zip_can_not_claim_its_way_past_the_size_limit(self):
+        z = zip_of([("Bid Form.pdf", b"%PDF-" + b"x" * 5000)])
+        with patch.object(ls, "BID_DOC_MAX_BYTES", 1000):
+            self.assertEqual(ls._zip_members(z), [])
+
+    def test_a_word_bid_form_is_read(self):
+        d = docx_of(["BID FORM", "Item 1 Concrete sidewalk 1,250 SY", "Bids due &amp; opened May 1"])
+        self.assertTrue(ls._is_docx(d))
+        text, pages, cut = ls._document_text(d, "")
+        self.assertIn("Item 1 Concrete sidewalk 1,250 SY", text)
+        self.assertIn("due & opened", text)
+
+    def test_a_zip_is_not_mistaken_for_a_word_file(self):
+        self.assertFalse(ls._is_docx(zip_of([("a.pdf", b"%PDF-")])))
+
+
+class BigSpecBookTests(unittest.TestCase):
+    def test_the_bid_form_deep_in_a_spec_book_is_read(self):
+        pages = ["Cover"] + ["Section 0%d General conditions" % i for i in range(2, 60)]
+        pages[51] = "BID FORM Item 1 Concrete sidewalk 1250 SY Item 2 Curb 400 LF Unit Price"
+        pages[52] = "Item 3 ADA ramp 12 EA Item 4 Mobilization 1 LS Total Base Bid"
+        pdf = many_pages(pages)
+        with patch.object(ls, "BID_DOC_MAX_PAGES", 10):
+            text, n, cut = ls._document_text(pdf, "application/pdf")
+        self.assertIn("1250 SY", text)
+        self.assertIn("ADA ramp 12 EA", text)
+        self.assertIn("--- page 52 ---", text)
+        self.assertIn("Cover", text)
+        self.assertTrue(cut)
+        self.assertLessEqual(n, 10)
+
+    def test_short_documents_are_read_whole_as_before(self):
+        text, n, cut = ls._document_text(many_pages(["One", "Two"]), "application/pdf")
+        self.assertEqual((n, cut), (2, False))
+        self.assertNotIn("--- page", text)
+
+    def test_one_long_file_cannot_crowd_out_a_short_one(self):
+        text, cut = ls._fair_join(["S" * 10000, "BID FORM short"], 3000)
+        self.assertIn("BID FORM short", text)
+        self.assertTrue(cut)
+        self.assertLessEqual(len(text), 3002)
+
+
+class GatherTests(unittest.TestCase):
+    POSTING = ("<html><body><h1>Elm St Sidewalk</h1><p>Sealed bids due May 1.</p>"
+               '<a href="/DocumentCenter/View/11/Plans">Plans</a>'
+               '<a href="/files/Bid-Form.pdf">Bid Form</a>'
+               '<a href="/files/Specs.zip">Specifications</a>'
+               '<a href="/files/Addendum-1.pdf">Addendum 1</a></body></html>').encode()
+
+    def setUp(self):
+        self.fetched = []
+        files = {"https://e.gov/bids/17": (self.POSTING, "text/html; charset=utf-8"),
+                 "https://e.gov/files/Bid-Form.pdf": (b"%PDF-form", "application/pdf"),
+                 "https://e.gov/files/Specs.zip": (zip_of([("Project Manual.pdf", b"%PDF-specs")]), "application/zip"),
+                 "https://e.gov/DocumentCenter/View/11/Plans": (b"%PDF-plans", "application/pdf"),
+                 "https://e.gov/files/Addendum-1.pdf": (b"%PDF-add", "application/pdf")}
+
+        def fetch(u):
+            self.fetched.append(u)
+            got = files.get(u)
+            return (got[0], got[1], "ok") if got else (b"", "", "http_404")
+        self._p = [patch.object(ls, "_fetch_document", side_effect=fetch),
+                   patch.object(ls, "_public_http_url", return_value=True)]
+        for p in self._p:
+            p.start()
+
+    def tearDown(self):
+        for p in self._p:
+            p.stop()
+
+    def test_a_posting_page_is_followed_to_its_documents(self):
+        docs, outcome = ls._gather_documents(["https://e.gov/bids/17"])
+        self.assertEqual(outcome, "ok")
+        names = [n for n, _r, _c in docs]
+        self.assertEqual(names[0], "Bid Form")
+        self.assertIn("Project Manual.pdf", names)
+        self.assertIn("Posting page", names)
+        # The three likeliest files, not the addendum.
+        self.assertNotIn("https://e.gov/files/Addendum-1.pdf", self.fetched)
+
+    def test_nothing_is_fetched_twice(self):
+        ls._gather_documents(["https://e.gov/bids/17", "https://e.gov/files/Bid-Form.pdf"])
+        self.assertEqual(self.fetched.count("https://e.gov/files/Bid-Form.pdf"), 1)
+
+    def test_when_nothing_downloads_the_reason_is_kept(self):
+        docs, outcome = ls._gather_documents(["https://e.gov/missing.pdf"])
+        self.assertEqual((docs, outcome), ([], "http_404"))
+
+
+class SeveralLinksEndpointTests(EndpointTests):
+    """Every link the app has for a bid, read together in one go."""
+
+    def test_all_the_links_are_read_and_named(self):
+        d = self.post(urls=["https://93.184.216.34/specs.pdf", "http://169.254.169.254/x"]).get_json()
+        self.assertTrue(d["ok"])
+        self.assertEqual(self.fetches, [self.URL, "https://93.184.216.34/specs.pdf"])
+        self.assertEqual(d["files"], 2)
+        self.assertEqual(d["sources"], ["bid-form.pdf", "specs.pdf"])
+
+    def test_the_same_links_come_from_cache(self):
+        self.post(urls=["https://93.184.216.34/specs.pdf"])
+        self.assertTrue(self.post(urls=["https://93.184.216.34/specs.pdf"]).get_json()["cached"])
+        self.assertEqual(len(self.fetches), 2)
+
+    def test_links_alone_without_url_work(self):
+        d = self.post(url="", urls=["https://93.184.216.34/specs.pdf"]).get_json()
+        self.assertTrue(d["ok"])
+
+
+class WhatEachReadWantsFirstTests(unittest.TestCase):
+    def test_each_kind_of_read_puts_its_own_files_first(self):
+        names = ["Plans.pdf", "Addendum 2.pdf", "Bid Form.pdf", "Notes.pdf"]
+        first = lambda kind: sorted(names, key=lambda n: ls._doc_rank(n, kind))[0]
+        self.assertEqual(first("doc"), "Bid Form.pdf")
+        self.assertEqual(first("form"), "Bid Form.pdf")
+        self.assertEqual(first("addendum"), "Addendum 2.pdf")
+        self.assertEqual(first("takeoff"), "Plans.pdf")
+
+
+class FormBehindALinkTests(unittest.TestCase):
+    """Filling the bid form works from a posting page or a zipped packet."""
+    FORM = fillable_pdf(["Bidder Name", "Total Bid"])
+
+    def _with(self, files):
+        def fetch(u):
+            got = files.get(u)
+            return (got[0], got[1], "ok") if got else (b"", "", "http_404")
+        return patch.object(ls, "_fetch_document", side_effect=fetch), patch.object(ls, "_public_http_url", return_value=True)
+
+    def test_the_fillable_form_is_found_on_the_posting_page(self):
+        page = (b'<html><a href="/f/Specs.pdf">Specifications</a>'
+                b'<a href="/f/Proposal.pdf">Bid Proposal</a></html>')
+        a, b = self._with({"https://e.gov/bids/1": (page, "text/html"),
+                           "https://e.gov/f/Specs.pdf": (text_pdf([(72, 700, 11, "Specs")]), "application/pdf"),
+                           "https://e.gov/f/Proposal.pdf": (self.FORM, "application/pdf")})
+        with a, b:
+            raw, name, outcome = ls._form_behind("https://e.gov/bids/1")
+        self.assertEqual((outcome, name), ("ok", "Bid Proposal"))
+        self.assertEqual(raw, self.FORM)
+
+    def test_the_form_inside_a_zip_is_found(self):
+        z = zip_of([("Plans.pdf", text_pdf([(72, 700, 11, "Sheet C-1")])), ("Bid Form.pdf", self.FORM)])
+        a, b = self._with({"https://e.gov/packet.zip": (z, "application/zip")})
+        with a, b:
+            raw, name, outcome = ls._form_behind("https://e.gov/packet.zip")
+        self.assertEqual((outcome, name, raw), ("ok", "Bid Form.pdf", self.FORM))
+
+    def test_the_filled_form_says_which_form_it_was(self):
+        client = ls.app.test_client()
+        page = b'<html><a href="/f/Proposal.pdf">Bid Proposal</a></html>'
+        a, b = self._with({"https://e.gov/bids/1": (page, "text/html"),
+                           "https://e.gov/f/Proposal.pdf": (self.FORM, "application/pdf")})
+        with a, b, patch.object(ls, "_license_is_active", return_value=True), patch.object(ls, "OPENAI_API_KEY", "k"), \
+                patch.object(ls, "_ip_rate_ok", return_value=True), \
+                patch.object(ls, "_ai_match_fields", return_value={"Bidder Name": "company.name"}):
+            d = client.post("/bid-documents/fill", json={"key": "k", "device_id": "d", "url": "https://e.gov/bids/1",
+                                                          "company": {"name": "Test Concrete LLC"}}).get_json()
+        self.assertTrue(d["ok"], d)
+        self.assertEqual(d["form_name"], "Bid Proposal")
+
+
+class SharedFetchRetryTests(unittest.TestCase):
+    """The scanner's page fetch and the shared JSON fetch try a busy server once more."""
+
+    def _urlopen(self, script, body=b'{"ok": 1}'):
+        calls = []
+
+        class Resp:
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def read(self, n=None): return body
+
+        def urlopen(req, timeout=None):
+            calls.append(1)
+            step = script[len(calls) - 1]
+            if isinstance(step, Exception):
+                raise step
+            return Resp()
+        return urlopen, calls
+
+    def test_json_from_a_busy_server(self):
+        urlopen, calls = self._urlopen([ls.urllib.error.HTTPError("u", 503, "busy", {}, None), "ok"])
+        with patch.object(ls.urllib.request, "urlopen", side_effect=urlopen), patch.object(ls.time, "sleep"):
+            self.assertEqual(ls._get_json("https://api.example/x"), {"ok": 1})
+        self.assertEqual(len(calls), 2)
+
+    def test_a_page_after_a_dropped_connection(self):
+        urlopen, calls = self._urlopen([ConnectionResetError("reset"), "ok"], body=b"<html>bids</html>")
+        with patch.object(ls.urllib.request, "urlopen", side_effect=urlopen), patch.object(ls.time, "sleep"), \
+                patch.object(ls, "_robots_allows", return_value=True):
+            self.assertEqual(ls._fetch_page("https://e.gov/bids"), ("<html>bids</html>", "ok"))
+        self.assertEqual(len(calls), 2)
+
+    def test_no_retry_for_a_refusal_a_timeout_or_a_dead_name(self):
+        for ex, want in ((ls.urllib.error.HTTPError("u", 403, "no", {}, None), "http_403"),
+                         (ls.socket.timeout("slow"), "timeout"),
+                         (ls.urllib.error.URLError(ls.socket.gaierror("no such host")), "unreachable")):
+            urlopen, calls = self._urlopen([ex])
+            with patch.object(ls.urllib.request, "urlopen", side_effect=urlopen), patch.object(ls.time, "sleep"), \
+                    patch.object(ls, "_robots_allows", return_value=True):
+                self.assertEqual(ls._fetch_page("https://e.gov/bids"), ("", want))
+            self.assertEqual(len(calls), 1, want)
 
 
 if __name__ == "__main__":

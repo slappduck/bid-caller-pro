@@ -16,8 +16,12 @@
 # here shares one namespace.
 import io
 import ipaddress
+import zipfile
+from html import unescape as _html_unescape
 
-BID_DOC_MAX_BYTES = int(os.environ.get("BID_DOC_MAX_BYTES", str(15 * 1024 * 1024)))
+# Big enough for a full plan set or a zipped bid packet; spec books past
+# 15 MB were refused outright.
+BID_DOC_MAX_BYTES = int(os.environ.get("BID_DOC_MAX_BYTES", str(40 * 1024 * 1024)))
 BID_DOC_TIMEOUT = int(os.environ.get("BID_DOC_TIMEOUT", "30"))
 BID_DOC_MAX_PAGES = int(os.environ.get("BID_DOC_MAX_PAGES", "40"))
 BID_DOC_TEXT_CHARS = int(os.environ.get("BID_DOC_TEXT_CHARS", "60000"))
@@ -26,7 +30,7 @@ _BID_DOC_RATE_KEY = "bidcaller:bid_doc_rate"
 _BID_DOC_CACHE_PREFIX = "bidcaller:bid_doc:"
 # Bump when the reader starts returning something new, so documents read
 # before the change are read again instead of served from the cache.
-BID_DOC_READER_VERSION = 3
+BID_DOC_READER_VERSION = 5
 BID_DOC_CACHE_TTL_DAYS = 30
 
 
@@ -93,39 +97,339 @@ def _robots_allows_checked(url, opener):
         return True
 
 
+_DRIVE_ID_RE = re.compile(r"/file/d/([\w-]{10,})|[?&]id=([\w-]{10,})")
+_GDOC_RE = re.compile(r"^/document/d/([\w-]{10,})")
+
+
+def _direct_download_url(url):
+    """The file itself, for links that open a viewer instead.
+
+    Agencies share bid packets from Google Drive and Dropbox; those links
+    open a preview page with the file behind a button, so reading them gave
+    the viewer's page. Each host has a documented direct-download form.
+    """
+    try:
+        parts = urllib.parse.urlsplit(url)
+    except ValueError:
+        return url
+    host = (parts.hostname or "").lower()
+    if host == "drive.google.com":
+        m = _DRIVE_ID_RE.search(parts.path + ("?" + parts.query if parts.query else ""))
+        file_id = m and (m.group(1) or m.group(2))
+        if file_id:
+            # confirm=t skips the "too large to scan for viruses" page.
+            return f"https://drive.google.com/uc?export=download&id={file_id}&confirm=t"
+    if host == "docs.google.com":
+        m = _GDOC_RE.match(parts.path)
+        if m:
+            return f"https://docs.google.com/document/d/{m.group(1)}/export?format=pdf"
+    if host in ("dropbox.com", "www.dropbox.com"):
+        q = [(k, v) for k, v in urllib.parse.parse_qsl(parts.query, keep_blank_values=True) if k != "dl"]
+        return urllib.parse.urlunsplit(parts._replace(query=urllib.parse.urlencode(q + [("dl", "1")])))
+    if host == "onedrive.live.com" and parts.path.startswith("/redir"):
+        return urllib.parse.urlunsplit(parts._replace(path="/download" + parts.path[len("/redir"):]))
+    if host.endswith(".sharepoint.com") and re.match(r"^/:[bw]:/", parts.path) and "download=1" not in parts.query:
+        return urllib.parse.urlunsplit(parts._replace(query=(parts.query + "&" if parts.query else "") + "download=1"))
+    return url
+
+
 def _fetch_document(url):
-    """(bytes, content_type, outcome). Never raises."""
+    """(bytes, content_type, outcome). Never raises.
+
+    A dropped connection or a busy server (429, 5xx) is tried once more
+    after a moment: small-town servers fail like that and answer the
+    second time. A timeout is not retried, it would only wait twice.
+    """
+    url = _direct_download_url(url)
     if not _public_http_url(url):
         return b"", "", "not_public"
     opener = urllib.request.build_opener(_CheckedRedirect())
     if RESPECT_ROBOTS and not _robots_allows_checked(url, opener):
         return b"", "", "robots_disallow"
-    try:
-        req = urllib.request.Request(url, headers=_page_headers())
-        with opener.open(req, timeout=BID_DOC_TIMEOUT) as resp:
-            ctype = (resp.headers.get("Content-Type") or "").lower()
-            data = resp.read(BID_DOC_MAX_BYTES + 1)
-    except urllib.error.HTTPError as e:
-        return b"", "", f"http_{e.code}"
-    except Exception:
-        return b"", "", "unreachable"
+    for attempt in (0, 1):
+        try:
+            req = urllib.request.Request(url, headers=_page_headers())
+            with opener.open(req, timeout=BID_DOC_TIMEOUT) as resp:
+                ctype = (resp.headers.get("Content-Type") or "").lower()
+                data = resp.read(BID_DOC_MAX_BYTES + 1)
+            break
+        except urllib.error.HTTPError as e:
+            if attempt == 0 and e.code in (429, 500, 502, 503, 504):
+                time.sleep(2)
+                continue
+            return b"", "", f"http_{e.code}"
+        except (socket.timeout, TimeoutError):
+            return b"", "", "timeout"
+        except Exception as ex:
+            if attempt == 0 and not isinstance(getattr(ex, "reason", None), (socket.timeout, TimeoutError)) \
+                    and "non-public" not in str(ex):
+                time.sleep(1)
+                continue
+            return b"", "", "unreachable"
     if len(data) > BID_DOC_MAX_BYTES:
         return b"", ctype, "too_large"
     return data, ctype, "ok"
 
 
+# ── Everything one bid's links lead to ──
+# The app used to hand over one link and take whatever came back. Often
+# that link is the posting's web page, whose text says "see the bid
+# documents" and stops; or a zip of the whole packet; or a Word bid form.
+# This gets the documents themselves: pages are followed to the files they
+# link, zips are opened, Word files read. The bid form is put first so it is
+# never the part cut off for length.
+BID_DOC_MAX_URLS = 4        # links the app sends for one bid
+BID_DOC_FOLLOW_LINKS = 3    # files fetched from the pages among them
+BID_DOC_MAX_DOCS = 8        # files read together, after unzipping
+BID_DOC_ZIP_FILES = 12      # files looked at inside one zip
+_DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+_DOC_RANK = (
+    (re.compile(r"bid\s*(?:form|schedule|sheet|proposal|tab)|proposal\s*form|schedule\s*of\s*(?:items|prices|values|bid)"
+                r"|unit\s*price|price\s*(?:form|sheet)|quantit", re.I), 0),
+    (re.compile(r"addend", re.I), 3),
+    (re.compile(r"\bbid|proposal|\b(?:itb|ifb|rfb|rfp)\b|invitation|spec|project\s*manual|contract\s*doc|packet", re.I), 1),
+    (re.compile(r"plan|drawing|sheets?\b|\bdwg", re.I), 2),
+)
+
+
+def _doc_rank(name, kind="doc"):
+    """0 is read first. An addendum read wants the addenda; a takeoff wants
+    the plan sheets; everything else wants the bid form."""
+    name = name or ""
+    if kind == "addendum":
+        return 0 if re.search(r"addend", name, re.I) else 2 + min(1, _doc_rank(name))
+    if kind == "takeoff":
+        if re.search(r"plan|drawing|sheets?\b|\bdwg|civil|construction\s*set", name, re.I):
+            return 0
+        return 3 if re.search(r"addend", name, re.I) else 2
+    for rx, rank in _DOC_RANK:
+        if rx.search(name):
+            return rank
+    return 2
+
+
+def _is_docx(data):
+    if data[:4] != b"PK\x03\x04":
+        return False
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            return "word/document.xml" in z.namelist()
+    except Exception:
+        return False
+
+
+def _docx_text(data):
+    """The words of a Word document, paragraph by paragraph. "" if unreadable."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            info = z.getinfo("word/document.xml")
+            if info.file_size > 30 * 1024 * 1024:
+                return ""
+            xml = z.read(info).decode("utf-8", "ignore")
+    except Exception:
+        return ""
+    xml = re.sub(r"<w:tab\b[^>]*/>", "\t", xml)
+    xml = re.sub(r"</w:p>|<w:br\b[^>]*/>|</w:tr>", "\n", xml)
+    xml = re.sub(r"</w:tc>", "\t", xml)
+    text = _html_unescape(re.sub(r"<[^>]+>", "", xml))
+    return re.sub(r"[ \t]+\n", "\n", re.sub(r"\n{3,}", "\n\n", text)).strip()
+
+
+def _zip_members(data, kind="doc"):
+    """[(name, bytes)] of the PDFs and Word files in a zip, bid form first.
+
+    Sizes are capped from the real bytes read, not the zip's own claims, so
+    a zip that lies about its contents can't blow past the limits.
+    """
+    try:
+        z = zipfile.ZipFile(io.BytesIO(data))
+    except Exception:
+        return []
+    out, total = [], 0
+    with z:
+        infos = [i for i in z.infolist()
+                 if not i.is_dir() and not i.filename.startswith("__MACOSX")
+                 and re.search(r"\.(pdf|docx)$", i.filename, re.I)]
+        infos.sort(key=lambda i: (_doc_rank(i.filename, kind), i.file_size))
+        for info in infos[:BID_DOC_ZIP_FILES]:
+            if info.file_size > BID_DOC_MAX_BYTES or total + info.file_size > BID_DOC_MAX_TOTAL:
+                continue
+            try:
+                with z.open(info) as f:
+                    raw = f.read(BID_DOC_MAX_BYTES + 1)
+            except Exception:
+                continue
+            if len(raw) > BID_DOC_MAX_BYTES or total + len(raw) > BID_DOC_MAX_TOTAL:
+                continue
+            total += len(raw)
+            name = re.sub(r"[^\w .()&#,-]+", "", info.filename.rsplit("/", 1)[-1])[:120]
+            out.append((name, raw))
+    return out
+
+
+def _is_page(raw, ctype):
+    return raw[:5] != b"%PDF-" and raw[:2] != b"PK" and ("html" in ctype or b"<html" in raw[:2000].lower())
+
+
+def _unpack(name, raw, ctype, kind="doc"):
+    """One download as the documents in it: [(name, bytes, ctype)]."""
+    if raw[:4] == b"PK\x03\x04":
+        if _is_docx(raw):
+            return [(name, raw, _DOCX_TYPE)]
+        return [(n, r, _DOCX_TYPE if _is_docx(r) else "application/pdf")
+                for n, r in _zip_members(raw, kind)]
+    return [(name, raw, ctype)]
+
+
+def _link_name(url):
+    tail = urllib.parse.unquote(urllib.parse.urlsplit(url).path.rstrip("/").rsplit("/", 1)[-1])
+    return re.sub(r"[^\w .()&#,-]+", "", tail)[:120]
+
+
+def _gather_documents(urls, kind="doc"):
+    """([(name, bytes, ctype)], outcome of the first failure or "ok").
+
+    The links are fetched together. A web page among them is read for its
+    own words AND followed to the bid files it links (the few most likely to
+    be the bid form first). Zips are opened. Nothing is fetched twice.
+    """
+    urls = [u for u in dict.fromkeys(urls) if u][:BID_DOC_MAX_URLS]
+    seen = set(urls)
+    outcomes = []
+
+    def fetch_all(pairs):
+        with ThreadPoolExecutor(max_workers=max(1, min(4, len(pairs)))) as ex:
+            return list(zip(pairs, ex.map(lambda nu: _fetch_document(nu[1]), pairs)))
+
+    docs, follow = [], []
+    for (name, url), (raw, ctype, outcome) in fetch_all([("", u) for u in urls]):
+        outcomes.append(outcome)
+        if outcome != "ok" or not raw:
+            continue
+        if _is_page(raw, ctype):
+            html = raw.decode("utf-8", "ignore")
+            docs.append((name or "Posting page", raw, ctype))
+            for d in bid_sources.detail_documents(html, url, limit=10):
+                if d["url"] not in seen and _public_http_url(d["url"]):
+                    seen.add(d["url"])
+                    follow.append((d.get("name") or _link_name(d["url"]), d["url"]))
+        else:
+            docs += _unpack(name or _link_name(url), raw, ctype, kind)
+    follow.sort(key=lambda nu: _doc_rank(nu[0] + " " + nu[1], kind))
+    if follow:
+        for (name, url), (raw, ctype, outcome) in fetch_all(follow[:BID_DOC_FOLLOW_LINKS]):
+            if outcome == "ok" and raw and not _is_page(raw, ctype):
+                docs += _unpack(name, raw, ctype, kind)
+    # The wanted files first, the posting's own page after them.
+    order = {id(d): i for i, d in enumerate(docs)}
+    docs.sort(key=lambda d: (1.5 if _is_page(d[1], d[2]) else _doc_rank(d[0], kind), order[id(d)]))
+    total, kept = 0, []
+    for d in docs[:BID_DOC_MAX_DOCS]:
+        if total + len(d[1]) > BID_DOC_MAX_TOTAL:
+            continue
+        total += len(d[1])
+        kept.append(d)
+    failed = next((o for o in outcomes if o != "ok"), "unreachable")
+    return kept, ("ok" if kept else failed)
+
+
+def _fair_join(texts, cap):
+    """Join texts within cap chars, each getting a fair share: one long spec
+    book can no longer crowd out the one-page bid form read with it."""
+    if sum(len(t) for t in texts) <= cap:
+        return "\n\n".join(texts), False
+    budgets, left, todo = [0] * len(texts), cap, list(range(len(texts)))
+    while todo and left > 0:
+        share = left // len(todo)
+        small = [i for i in todo if len(texts[i]) - budgets[i] <= share]
+        if not small:
+            for i in todo:
+                budgets[i] += share
+            break
+        for i in small:
+            left -= len(texts[i]) - budgets[i]
+            budgets[i] = len(texts[i])
+            todo.remove(i)
+    return "\n\n".join(t[:b] for t, b in zip(texts, budgets)), True
+
+
+# A spec book runs to hundreds of pages and its bid form is rarely in the
+# first forty, which were all that was read. Every page is scored for the
+# schedule (item numbers with SY/LF/EA quantities, "bid form", "unit
+# price") and the contract terms; the cover pages and the best pages go in.
+BID_DOC_SCAN_ALL_PAGES = int(os.environ.get("BID_DOC_SCAN_ALL_PAGES", "800"))
+_SCHEDULE_PAGE_RE = re.compile(
+    r"bid\s*(?:form|schedule|proposal\s*form|sheet|tabulation)|schedule\s+of\s+(?:items|prices|values|bid)"
+    r"|unit\s*price|total\s*(?:base\s*)?bid|base\s*bid|item\s*(?:no\.?|#|number)", re.I)
+_QTY_UNIT_RE = re.compile(r"\b\d[\d,]*(?:\.\d+)?\s*(?:SY|SF|LF|CY|EA|LS|S\.Y\.|L\.F\.|SQ\.?\s*YDS?|LIN\.?\s*FT)\b", re.I)
+_TERMS_PAGE_RE = re.compile(
+    r"retainage|liquidated\s+damages|prevailing\s+wage|davis[-\s]bacon|pre-?bid\s+(?:meeting|conference)"
+    r"|bid\s+(?:bond|security)|instructions\s+to\s+bidders|sealed\s+bids|substantial(?:ly)?\s+complet"
+    r"|cylinders?|slump|questions?\s+(?:must|shall|are\s+due)", re.I)
+_COVER_PAGES = 6
+
+
+def _page_score(text):
+    return (6 * len(_SCHEDULE_PAGE_RE.findall(text)) + 2 * min(20, len(_QTY_UNIT_RE.findall(text)))
+            + 2 * len(_TERMS_PAGE_RE.findall(text)))
+
+
+def _pick_pages(texts, limit):
+    """Indexes of the pages to read, in page order: the cover pages, then the
+    highest-scoring, each schedule page with the page after it (schedules
+    run over)."""
+    keep = set(range(min(_COVER_PAGES, len(texts))))
+    scored = sorted(((_page_score(t), i) for i, t in enumerate(texts)), reverse=True)
+    for score, i in scored:
+        if len(keep) >= limit or score <= 0:
+            break
+        keep.add(i)
+        if _SCHEDULE_PAGE_RE.search(texts[i]) and i + 1 < len(texts) and len(keep) < limit:
+            keep.add(i + 1)
+    return sorted(keep)
+
+
+def _big_pdf_text(data):
+    """(text, pages_read) of a PDF longer than BID_DOC_MAX_PAGES, or None."""
+    try:
+        import pypdfium2 as pdfium
+        pdf = pdfium.PdfDocument(data)
+    except Exception:
+        return None
+    try:
+        texts = []
+        for i in range(min(len(pdf), BID_DOC_SCAN_ALL_PAGES)):
+            try:
+                texts.append(pdf[i].get_textpage().get_text_range() or "")
+            except Exception:
+                texts.append("")
+    finally:
+        try:
+            pdf.close()
+        except Exception:
+            pass
+    pick = _pick_pages(texts, BID_DOC_MAX_PAGES)
+    return "\n".join(f"--- page {i + 1} ---\n{texts[i]}" for i in pick), len(pick)
+
+
 def _document_text(data, ctype):
-    """(text, pages_read, truncated). PDF or HTML/plain text."""
+    """(text, pages_read, truncated). PDF, Word, or HTML/plain text."""
     if data[:5] == b"%PDF-" or "pdf" in ctype:
         try:
             from pypdf import PdfReader
             reader = PdfReader(io.BytesIO(data))
             pages = reader.pages
-            n = min(len(pages), BID_DOC_MAX_PAGES)
-            text = "\n".join((pages[i].extract_text() or "") for i in range(n))
-            truncated = len(pages) > n
+            truncated = len(pages) > BID_DOC_MAX_PAGES
+            big = _big_pdf_text(data) if truncated else None
+            if big:
+                text, n = big
+            else:
+                n = min(len(pages), BID_DOC_MAX_PAGES)
+                text = "\n".join((pages[i].extract_text() or "") for i in range(n))
         except Exception:
             return "", 0, False
+    elif _is_docx(data):
+        text, n, truncated = _docx_text(data), 1, False
     else:
         text = _html_to_text(data.decode("utf-8", "ignore"))
         n, truncated = 1, False
@@ -153,6 +457,11 @@ _BID_DOC_PROMPT = (
     "\"required_forms\": names of forms, affidavits or certificates the bid "
     "must include, as stated.\n"
     "\"questions_due\": the deadline for written questions, as stated.\n"
+    "\"retainage\": the retainage withheld from progress payments, as stated.\n"
+    "\"completion\": the time allowed or completion date, and any liquidated damages, as stated.\n"
+    "\"prevailing_wage\": whether prevailing wage or Davis-Bacon wages apply, as stated; \"\" if not mentioned.\n"
+    "\"testing\": concrete testing and inspection required (cylinders, slump, air, "
+    "who pays, notice to the inspector), as stated.\n"
     "\"contact\": the person bidders are told to contact about this bid "
     "(purchasing agent, project manager or engineer), as "
     "{\"name\", \"title\", \"organization\", \"phone\", \"email\"} exactly as printed; "
@@ -211,7 +520,9 @@ def _clean_doc_result(raw):
             "prebid_place": text("prebid_place", 200),
             "project_location": text("project_location", 200),
             "questions_due": text("questions_due", 300), "required_forms": forms,
-            "contact": contact if any(contact.values()) else {}}
+            "contact": contact if any(contact.values()) else {},
+            "retainage": text("retainage", 200), "completion": text("completion", 300),
+            "prevailing_wage": text("prevailing_wage", 200), "testing": text("testing", 400)}
 
 
 # ── Reading an addendum ──
@@ -288,11 +599,50 @@ def _clean_addendum_result(raw):
             "answers": answers, "other_changes": other}
 
 
-def _ai_read_bid_document(text, images=None, addendum=False):
+# ── Measuring from the plans ──
+# A lump-sum job often comes with drawings and no schedule of items. The
+# quantities a concrete contractor prices -- sidewalk area, curb length,
+# ramp count -- are on the sheets as dimensions, callouts and quantity
+# tables. The model may only work them out from what's printed, and must
+# say how (the basis), so the contractor can check each one.
+BID_TAKEOFF_READER_VERSION = 1
+_TAKEOFF_PROMPT = (
+    "You measure concrete flatwork quantities from construction PLANS for a concrete contractor. "
+    "Use ONLY quantity tables, dimensions, stationing and callouts printed on the sheets. "
+    "Never guess a dimension that isn't shown; leave out anything you can't work out.\n\n"
+    "Return ONE JSON object: {\"items\": [{\"description\" (e.g. \"4 in. concrete sidewalk\"), "
+    "\"quantity\" (number), \"unit\" (SY, SF, LF, EA or CY), \"basis\" (how you got it, e.g. "
+    "\"Quantity table, sheet C-2\" or \"5 ft wide x 1,240 ft, sta 10+00 to 22+40\")}], "
+    "\"notes\": anything the contractor should check by hand}. "
+    "Sidewalk, curb and gutter, ADA ramps, driveway approaches, flatwork slabs only. No markdown.\n\nPLAN TEXT:\n"
+)
+
+
+def _clean_takeoff_result(raw):
+    if not isinstance(raw, dict):
+        return None
+    items = []
+    for it in (raw.get("items") or [])[:60]:
+        if not isinstance(it, dict):
+            continue
+        desc = re.sub(r"\s+", " ", str(it.get("description") or "")).strip()[:200]
+        qty = _num_or_none(it.get("quantity"))
+        unit = str(it.get("unit") or "").strip()
+        basis = re.sub(r"\s+", " ", str(it.get("basis") or "")).strip()[:300]
+        if not desc or not qty or not basis:
+            continue
+        items.append({"item_no": "", "description": desc, "quantity": qty,
+                      "unit": unit if _UNIT_RE.match(unit) else "", "basis": basis, "estimated": True})
+    notes = raw.get("notes")
+    return {"line_items": items, "notes": re.sub(r"\s+", " ", notes).strip()[:600] if isinstance(notes, str) else ""}
+
+
+def _ai_read_bid_document(text, images=None, addendum=False, kind=None):
     images = images or []
     if not OPENAI_API_KEY or not (text.strip() or images):
         return None
-    prompt = _ADDENDUM_PROMPT if addendum else _BID_DOC_PROMPT
+    kind = kind or ("addendum" if addendum else "doc")
+    prompt = {"addendum": _ADDENDUM_PROMPT, "takeoff": _TAKEOFF_PROMPT}.get(kind, _BID_DOC_PROMPT)
     content = prompt + (text if text.strip() else "(none: the pages are scanned images, attached)")
     if images:
         content = [{"type": "text", "text": content + "\n\nSCANNED PAGES are attached as images; read them too."}] + [
@@ -312,7 +662,7 @@ def _ai_read_bid_document(text, images=None, addendum=False):
         with urllib.request.urlopen(req, timeout=120 if images else 90) as resp:
             data = json.loads(resp.read().decode("utf-8"))
         got = json.loads(data["choices"][0]["message"]["content"])
-        return _clean_addendum_result(got) if addendum else _clean_doc_result(got)
+        return {"addendum": _clean_addendum_result, "takeoff": _clean_takeoff_result}.get(kind, _clean_doc_result)(got)
     except Exception as ex:
         print(f"[bid-doc] ai error: {ex}", flush=True)
         return None
@@ -367,8 +717,9 @@ BID_DOC_SCAN_PAGES = int(os.environ.get("BID_DOC_SCAN_PAGES", "8"))
 _SCAN_TEXT_CHARS = 40
 
 
-def _scan_page_images(data, limit=None):
-    """JPEG bytes of the pages that are pictures rather than text. Never raises."""
+def _scan_page_images(data, limit=None, every_page=False, width=1400):
+    """JPEG bytes of the pages that are pictures rather than text (or of
+    every page, for plan sheets whose drawings matter). Never raises."""
     limit = BID_DOC_SCAN_PAGES if limit is None else limit
     out = []
     try:
@@ -382,10 +733,10 @@ def _scan_page_images(data, limit=None):
                 break
             page = pdf[i]
             tp = page.get_textpage()
-            if len(re.sub(r"\s+", "", tp.get_text_range() or "")) >= _SCAN_TEXT_CHARS:
+            if not every_page and len(re.sub(r"\s+", "", tp.get_text_range() or "")) >= _SCAN_TEXT_CHARS:
                 continue
             w = page.get_width() or 612
-            img = page.render(scale=max(0.5, min(3.0, 1400.0 / w))).to_pil().convert("L")
+            img = page.render(scale=max(0.3, min(3.0, float(width) / w))).to_pil().convert("L")
             buf = io.BytesIO()
             img.save(buf, "JPEG", quality=70)
             out.append(buf.getvalue())
@@ -409,16 +760,24 @@ def bid_documents_read():
     if err:
         return jsonify({"ok": False, "reason": err}), 413 if err == "too_large" else 400
     url = str(data.get("url") or "").strip()
-    if upload is None and not _public_http_url(url):
-        return jsonify({"ok": False, "reason": "bad_url"}), 400
+    # Every link the app has for the bid, read together: "url" alone still
+    # works, and comes first.
+    more = data.get("urls") if isinstance(data.get("urls"), list) else []
+    urls = [u for u in dict.fromkeys([url] + [str(x or "").strip() for x in more]) if u][:BID_DOC_MAX_URLS]
+    if upload is None:
+        urls = [u for u in urls if _public_http_url(u)]
+        if not urls:
+            return jsonify({"ok": False, "reason": "bad_url"}), 400
     if not OPENAI_API_KEY:
         return jsonify({"ok": False, "reason": "ai_unavailable"})
 
     # "kind": "addendum" reads the same files for what they change instead.
-    addendum = data.get("kind") == "addendum"
-    version = BID_ADDENDUM_READER_VERSION if addendum else BID_DOC_READER_VERSION
-    ident = (b"upload:" + b"".join(hashlib.sha256(raw).digest() for _n, raw in upload)) if upload is not None else url.encode()
-    cache_key = _BID_DOC_CACHE_PREFIX + ("addendum:" if addendum else "") + hashlib.sha256(ident).hexdigest()[:32]
+    kind = data.get("kind") if data.get("kind") in ("addendum", "takeoff") else "doc"
+    addendum = kind == "addendum"
+    version = {"addendum": BID_ADDENDUM_READER_VERSION, "takeoff": BID_TAKEOFF_READER_VERSION}.get(kind, BID_DOC_READER_VERSION)
+    ident = (b"upload:" + b"".join(hashlib.sha256(raw).digest() for _n, raw in upload)) if upload is not None \
+        else "\n".join(urls).encode()
+    cache_key = _BID_DOC_CACHE_PREFIX + ("" if kind == "doc" else kind + ":") + hashlib.sha256(ident).hexdigest()[:32]
     try:
         hit = kv_backend.get(cache_key, None)
     except Exception:
@@ -443,28 +802,34 @@ def bid_documents_read():
     if upload is not None:
         docs = [(name, raw, "application/pdf") for name, raw in upload]
     else:
-        raw, ctype, outcome = _fetch_document(url)
-        if outcome != "ok":
+        docs, outcome = _gather_documents(urls, kind)
+        if not docs:
             return jsonify({"ok": False, "reason": "fetch_failed", "detail": outcome})
-        docs = [("", raw, ctype)]
-    texts, images, pages, truncated = [], [], 0, False
+    texts, images, pages, truncated, read = [], [], 0, False, []
     for name, raw, ctype in docs:
         t, n, cut = _document_text(raw, ctype)
         pages += n
         truncated = truncated or cut
         if t.strip():
-            texts.append(f"=== FILE: {name} ===\n{t}" if len(docs) > 1 else t)
+            read.append(name)
+            texts.append(f"=== FILE: {name or 'Document'} ===\n{t}" if len(docs) > 1 else t)
         if raw[:5] == b"%PDF-" and len(images) < BID_DOC_SCAN_PAGES:
-            images += _scan_page_images(raw, BID_DOC_SCAN_PAGES - len(images))
-    text = "\n\n".join(texts)[:BID_DOC_TEXT_CHARS]
+            # Plan sheets are read as drawings, every page: a dimension on a
+            # detail is only on the picture.
+            images += (_scan_page_images(raw, BID_DOC_SCAN_PAGES - len(images), every_page=True, width=2000)
+                       if kind == "takeoff" else _scan_page_images(raw, BID_DOC_SCAN_PAGES - len(images)))
+    text, cut = _fair_join(texts, BID_DOC_TEXT_CHARS)
+    truncated = truncated or cut
     if not text.strip() and not images:
         return jsonify({"ok": False, "reason": "no_text",
                         "detail": "This document has no readable text (it may be a scan)."})
-    result = _ai_read_bid_document(text, images, addendum=True) if addendum else _ai_read_bid_document(text, images)
+    result = (_ai_read_bid_document(text, images, addendum=True) if addendum
+              else _ai_read_bid_document(text, images, kind="takeoff") if kind == "takeoff"
+              else _ai_read_bid_document(text, images))
     if result is None:
         return jsonify({"ok": False, "reason": "ai_error"}), 502
     result.update({"pages_read": pages, "truncated": truncated, "scanned_pages": len(images),
-                   "files": len(docs)})
+                   "files": len(docs), "sources": [n for n in read if n][:BID_DOC_MAX_DOCS]})
     try:
         kv_backend.set(cache_key, {"at": time.time(), "v": version, "result": result})
     except Exception:
@@ -837,6 +1202,35 @@ def _fill_flat(raw, vals):
             "pdf_b64": base64.b64encode(pdf).decode("ascii")}, 200
 
 
+def _has_form_fields(raw):
+    try:
+        from pypdf import PdfReader
+        return bool(_form_text_fields(PdfReader(io.BytesIO(raw))))
+    except Exception:
+        return False
+
+
+def _form_behind(url):
+    """(pdf bytes, name, outcome): the bid form a link leads to.
+
+    A PDF link is the form. A posting page, a zipped packet or a share link
+    is opened the way the reader opens it, and the PDF with fill-in boxes is
+    taken, else the one named like a bid form, else the first, so "fill in
+    the bid form" works from whatever link the bid has.
+    """
+    docs, outcome = _gather_documents([url], "form")
+    pdfs = [(n, r) for n, r, _c in docs if r[:5] == b"%PDF-"]
+    if not pdfs:
+        if docs:
+            return docs[0][1], docs[0][0], "ok"
+        return b"", "", outcome
+    if len(pdfs) == 1:
+        return pdfs[0][1], pdfs[0][0], "ok"
+    best = next(((n, r) for n, r in pdfs if _has_form_fields(r)), None) \
+        or next(((n, r) for n, r in pdfs if _doc_rank(n) == 0), None) or pdfs[0]
+    return best[1], best[0], "ok"
+
+
 @app.route("/bid-documents/fill", methods=["POST"])
 def bid_documents_fill():
     data, upload, err = _doc_request()
@@ -858,10 +1252,11 @@ def bid_documents_fill():
                        BID_FILL_MAX_PER_KEY_PER_DAY):
         return jsonify({"ok": False, "reason": "rate_limited"}), 429
 
+    form_name = ""
     if upload is not None:
-        raw = upload[0][1]
+        form_name, raw = upload[0]
     else:
-        raw, ctype, outcome = _fetch_document(url)
+        raw, form_name, outcome = _form_behind(url)
         if outcome != "ok":
             return jsonify({"ok": False, "reason": "fetch_failed", "detail": outcome})
     if raw[:5] != b"%PDF-":
@@ -893,7 +1288,7 @@ def bid_documents_fill():
     filled = [{"field": f, "label": tips.get(f) or f, "value": values[f], "key": k}
               for f, k in plan.items()]
     return jsonify({"ok": True, "fields": len(fields), "filled": filled,
-                    "left_blank": len(fields) - len(filled),
+                    "left_blank": len(fields) - len(filled), "form_name": form_name,
                     "pdf_b64": base64.b64encode(pdf).decode("ascii")})
 
 

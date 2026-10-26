@@ -2363,7 +2363,7 @@ function onbCheckCoverage(){
   el.textContent="Checking...";
   onbCovTimer=setTimeout(async()=>{
     try{
-      const r=await fetchWithTimeout(SERVER+"/coverage",{
+      const r=await fetchRetry(SERVER+"/coverage",{
         method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({location:loc.trim(),radius:onbRadius})},20000);
       const d=await r.json();
@@ -4294,7 +4294,7 @@ async function checkSavedBids(){
   try{
     const urls=ids.map(id=>safeUrl(saved[id].url));
     const token=await getSupabaseToken();
-    const r=await fetchWithTimeout(SERVER+"/bid-watch/check",{method:"POST",headers:{"Content-Type":"application/json"},
+    const r=await fetchRetry(SERVER+"/bid-watch/check",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,urls})},90000);
     const d=await r.json();
     if(!d||!d.ok)return;
@@ -4382,8 +4382,9 @@ function wireOutcomeCard(root){
       setPipelineStatus(id,out);
       resultAsked[id]=true;store.set(RESULT_ASKED_KEY,resultAsked);
       if(out==="won"){
-        row.innerHTML=`<div class="outcome-t"><b>Nice work.</b><small>Would you tell other contractors how CurbCall helped? It takes a minute.</small></div>
-          <div class="outcome-b"><button class="btn-primary" data-review="1" style="margin-top:0;">Leave a review</button></div>`;
+        row.innerHTML=`<div class="outcome-t"><b>Nice work.</b><small>The Job tab has the award paperwork, pours, daily log, pay requests and payroll. And would you tell other contractors how CurbCall helped? It takes a minute.</small></div>
+          <div class="outcome-b"><button class="btn-primary" data-job="1" style="margin-top:0;">Open the job</button><button class="btn-ghost" data-review="1">Leave a review</button></div>`;
+        row.querySelector("[data-job]").onclick=()=>openPrep((saved[id]&&saved[id]._city)||"",id,"job");
         row.querySelector("[data-review]").onclick=()=>{switchScreen("account");setTimeout(()=>{const c=document.getElementById("review-card");if(c)c.scrollIntoView({behavior:"smooth"});},300);};
       }else if(out==="lost"){
         const b=saved[id]||findBid(id),r=stateResultFor(b);
@@ -4452,6 +4453,31 @@ function isMandatory(t){
   const x=String(t||"");
   return/mandatory/i.test(x)&&!/\b(non|not)[\s-]*mandatory/i.test(x);
 }
+// ── Bids submitted online ──
+// More agencies take bids only through a portal. A bid's own link, its
+// plan room, or what the documents say about submitting tells which; the
+// Submit step then says so, links the portal, and the packet checklist
+// says upload instead of seal.
+const PORTALS=[["bonfirehub.com","Bonfire"],["bidnetdirect.com","BidNet Direct"],["planetbids.com","PlanetBids"],
+  ["questcdn.com","QuestCDN"],["demandstar.com","DemandStar"],["publicpurchase.com","Public Purchase"],
+  ["civcastusa.com","CivCast"],["bidexpress.com","Bid Express"],["procurenow.com","OpenGov Procurement"],
+  ["opengov.com","OpenGov Procurement"],["ionwave.net","IonWave"],["periscopeholdings.com","Periscope"],["bidsync.com","BidSync"]];
+function portalOf(url){
+  let host="";
+  try{host=new URL(url).hostname.toLowerCase();}catch(e){return null;}
+  const hit=PORTALS.find(([h])=>host===h||host.endsWith("."+h));
+  return hit?{name:hit[1],url}:null;
+}
+function onlineSubmission(b,p){
+  const sub=String((p&&p.docInfo&&p.docInfo.submission)||"");
+  const named=PORTALS.find(([,n])=>new RegExp(n.split(" ")[0],"i").test(sub));
+  const says=/electronic(ally)?|online|e-?bid|upload|portal|submitted through|via the/i.test(sub)&&!/sealed envelope|hand[- ]deliver|mail(ed)? to/i.test(sub);
+  // A posting that lives on a portal is bid there; a plan room only hands
+  // out documents unless the documents say bids go in through it too.
+  const link=portalOf(safeUrl(b&&b.url)||"")||(says||named?portalOf(safeUrl(b&&b.plan_room)||""):null);
+  if(!link&&!named&&!says)return null;
+  return{name:(link&&link.name)||(named&&named[1])||"the agency's online portal",url:link?link.url:""};
+}
 const PREP_PHASES=[["before","Before you price"],["price","Price it"],["paper","Paperwork"],["submit","Submit"]];
 function prepChecklist(b,info){
   info=info||{};
@@ -4486,8 +4512,9 @@ function prepChecklist(b,info){
         ?` Required by the bid documents: ${info.required_forms.join("; ")}.`:"")},
     {key:"insurance",phase:"paper",label:"Insurance certificate, if requested",detail:"Check the posting for limits and who to name as additional insured."},
     {key:"sign",phase:"paper",label:"Sign, and notarize if required",detail:"Done by you, outside the app."},
-    {key:"submit",phase:"submit",label:"Submit before the deadline",
-      detail:`${b&&b.deadline?`Due ${b.deadline}. `:""}${info.submission?fromDocs(info.submission).trim():"Sealed envelope or online, as the posting says."} Late bids are usually returned unopened.`,urgent:true},
+    (()=>{const on=onlineSubmission(b,{docInfo:info});return{key:"submit",phase:"submit",label:on?`Submit online before the deadline`:"Submit before the deadline",
+      detail:`${b&&b.deadline?`Due ${b.deadline}. `:""}${on?`This bid is submitted through ${on.name}. Upload the packet and each signed form where it asks, submit a day early (portals slow down near the deadline), and save the confirmation.`
+        :info.submission?fromDocs(info.submission).trim():"Sealed envelope or online, as the posting says."}${on&&info.submission?fromDocs(info.submission):""} Late bids are usually ${on?"locked out":"returned unopened"}.`,urgent:true};})(),
   ];
   return items.filter(Boolean);
 }
@@ -4524,7 +4551,7 @@ function prepProgress(id,b){
 // The tab a tool was opened from, for its Back button.
 function prepBackName(id,dflt){
   const s=(bidPrep[id]&&bidPrep[id].step)||dflt;
-  return{steps:"steps",pricing:"pricing",summary:"summary"}[s]||dflt;
+  return{steps:"steps",pricing:"pricing",summary:"summary",job:"job"}[s]||dflt;
 }
 // Where the pre-bid meeting is, and where the work is: typed in, else what
 // the documents say. A bid in the feed only knows its town -- for state jobs
@@ -4571,7 +4598,7 @@ async function locateBid(id,city,b){
   _locating[id]=true;
   try{
     const token=await getSupabaseToken();
-    const r=await fetchWithTimeout(SERVER+"/bid/locate",{method:"POST",headers:{"Content-Type":"application/json"},
+    const r=await fetchRetry(SERVER+"/bid/locate",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,...pl,
         title:b.title||"",scope:String(b.scope||"").slice(0,1500),url:b.url||""})},45000);
     const d=await r.json();
@@ -4669,6 +4696,9 @@ function prepTotals(p){
 function money0(n){return"$"+Math.round(n).toLocaleString();}
 function money2(n){return"$"+(Number(n)||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});}
 
+// The bid whose prep sheet is on screen: a read finishing in the background
+// redraws only its own bid, never one the contractor has moved on from.
+let prepShownId=null;
 async function openPrep(city,id,step){
   const b=findBid(id)||saved[id];
   if(!b){toast("That bid isn't available any more");return;}
@@ -4679,21 +4709,25 @@ async function openPrep(city,id,step){
   savePrep(id,city);
   // "checklist" is what the Steps tab was called before; a saved bid may
   // still remember it.
-  step=step||p.step||"steps";
+  const won=pipeline[id]==="won";
+  step=step||(won?"job":p.step)||"steps";
   if(step==="checklist")step="steps";
+  if(step==="job"&&!won)step="steps";
   p.step=step;
   const mc=document.getElementById("modal-content");
+  prepShownId=id;
   const prog=prepProgress(id,b);
   const t=prepTotals(p);
   const dleft=daysUntil(b);
-  mc.innerHTML=`<div class="sheet-head"><h2>Prepare bid</h2>
+  mc.innerHTML=`<div class="sheet-head"><h2>${won?"The job":"Prepare bid"}</h2>
       <div class="sheet-sub"><span class="chip">${esc(b.title||"Untitled")}</span>
-        ${b.deadline?`<span class="chip"${dleft!=null&&dleft<=2?' style="color:var(--red);"':""}>Due ${esc(b.deadline)}${dleft!=null&&dleft>=0?` · ${dleft===0?"today":dleft+"d left"}`:""}</span>`:""}</div></div>
+        ${b.deadline&&!won?`<span class="chip"${dleft!=null&&dleft<=2?' style="color:var(--red);"':""}>Due ${esc(b.deadline)}${dleft!=null&&dleft>=0?` · ${dleft===0?"today":dleft+"d left"}`:""}</span>`:""}</div></div>
     <a href="#" class="prep-back" id="prep-back">← Bid details</a>
     <div class="prep-tabs" role="tablist">
       <button role="tab" data-step="steps" class="${step==="steps"?"on":""}">Steps <span>${prog.done}/${prog.total}</span></button>
       <button role="tab" data-step="pricing" class="${step==="pricing"?"on":""}">Pricing <span id="prep-tab-total">${t.total?money0(t.total):""}</span></button>
       <button role="tab" data-step="summary" class="${step==="summary"?"on":""}">Summary</button>
+      ${won?`<button role="tab" data-step="job" class="${step==="job"?"on":""}">Job</button>`:""}
     </div>
     <div id="prep-body"></div>`;
   mc.querySelectorAll(".prep-tabs button").forEach(btn=>btn.onclick=()=>openPrep(city,id,btn.dataset.step));
@@ -4701,6 +4735,7 @@ async function openPrep(city,id,step){
   const body=document.getElementById("prep-body");
   if(step==="steps")renderPrepSteps(body,city,id,b);
   else if(step==="pricing")renderPrepPricing(body,city,id,b);
+  else if(step==="job")renderJob(body,city,id,b);
   else renderPrepSummary(body,city,id,b);
   document.getElementById("modal-back").classList.add("open");
   document.getElementById("modal").classList.add("open");
@@ -4740,7 +4775,7 @@ async function readAddendumDoc(target){
     if(target.files)d=await postDocFiles("/bid-documents/read",target.files,{kind:"addendum"},120000);
     else{
       const token=await getSupabaseToken();
-      const r=await fetchWithTimeout(SERVER+"/bid-documents/read",{method:"POST",headers:{"Content-Type":"application/json"},
+      const r=await fetchRetry(SERVER+"/bid-documents/read",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,url:target.url,kind:"addendum"})},120000);
       d=await r.json();
     }
@@ -4948,6 +4983,22 @@ async function renderAddenda(body,city,id,b){
 // of Steps, with the lines undoable. Nothing is acknowledged, signed, sent
 // or submitted for them.
 const BID_DOC_NAME_RE=/bid ?form|proposal|bid ?sheet|schedule of (?:items|prices|values)|price ?sheet|bid ?documents?|bid ?packet|specifications?|invitation|\bitb\b|\brfp\b|\bifb\b|\brfq\b/i;
+// Every link worth reading for the bid, best first, the posting last: up
+// to four, which the server reads in one go. Addenda are read on their own.
+function docsToRead(b){
+  const best=bestDocToRead(b);
+  const rest=prepDocCandidates(b).filter(d=>(!best||d.url!==best.url)&&!/addend/i.test(d.name));
+  rest.sort((x,y)=>(x.name==="Original posting")-(y.name==="Original posting"));
+  return(best?[best]:[]).concat(rest).slice(0,4);
+}
+// What a read of several links says it read: "Bid Form and Specs".
+function readSourceName(docs,res){
+  const n=((res&&res.sources)||[]).filter(Boolean);
+  if(n.length>2)return`${n[0]} and ${n.length-1} more`;
+  if(n.length)return n.join(" and ");
+  // A server from before it named what it read.
+  return docs[0].name;
+}
 function bestDocToRead(b){
   const docs=prepDocCandidates(b);
   const named=docs.filter(d=>d.name!=="Original posting"&&BID_DOC_NAME_RE.test(d.name));
@@ -4961,6 +5012,24 @@ function linesUntouched(p,b,city){
   if(p.linesFrom)return false;
   const key=(ls)=>JSON.stringify((ls||[]).map(l=>[l.name||"",String(l.qty??""),l.unit||"",String(l.price??"")]));
   return key(p.lines)===key(defaultPrepLines(b,city));
+}
+// Starring a bid starts reading its documents, so by the time it's opened
+// the schedule, the meeting and the bond are already filled in. Same daily
+// limit as opening it: autoPrepare runs once a day per bid at most.
+async function preReadBid(city,id){
+  try{
+    const b=findBid(id);
+    if(!b||!licenseKey()||isOffline())return;
+    const p=prepFor(id);
+    if(p.docInfo&&p.docInfo.read_at)return;
+    const st=bidState(city,b);
+    await Promise.all([loadRates(st),loadBidResults(st)]);
+    if(!p.lines){p.lines=defaultPrepLines(b,city);p.linesFrom="ballpark";savePrep(id,city);}
+    await autoPrepare(id,city,b);
+    // The plants near the job, found after the job site is: the concrete
+    // panel opens on them instead of a 30-second map search.
+    loadSuppliers(city,false,jobAddress(p),b).catch(()=>{});
+  }catch(e){}
 }
 const _autoRunning={};
 function autoDue(p,k){const t=p.autoTried&&p.autoTried[k];return!t||Date.now()-t>86400000;}
@@ -4989,8 +5058,12 @@ async function autoPrepare(id,city,b){
     }
     if(docsNeeded){
       p.autoTried.docs=Date.now();
-      let doc=bestDocToRead(b),res=null;
-      if(doc)res=await readBidDocument(doc.url);
+      const links=docsToRead(b);
+      let doc=links[0]||null,res=null;
+      if(doc){
+        res=await readBidDocument(doc.url,links.slice(1).map(d=>d.url));
+        if(res&&res.ok)doc={name:readSourceName(links,res),url:doc.url};
+      }
       // Nothing linked could be read: a forwarded email for this bid.
       if((!res||!res.ok)&&inboxAddress()){
         try{
@@ -5044,7 +5117,7 @@ async function autoPrepare(id,city,b){
     delete _autoRunning[id];
   }
   const body=document.getElementById("prep-body");
-  if(!body||!document.getElementById("modal").classList.contains("open"))return;
+  if(!body||prepShownId!==id||!document.getElementById("modal").classList.contains("open"))return;
   // Never pull the page out from under someone typing.
   const typing=document.activeElement&&/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)&&body.contains(document.activeElement);
   if(!typing&&["steps","summary"].includes(prepFor(id).step))openPrep(city,id,prepFor(id).step);
@@ -5053,7 +5126,7 @@ async function autoPrepare(id,city,b){
 function autoStripHTML(p){
   const a=p.autoFilled;
   if(!a||Date.now()-a.at>3*86400000)return`<div id="auto-strip"></div>`;
-  if(a.failed&&!a.addenda)return`<div class="auto-strip" id="auto-strip">Couldn't read the bid documents by itself${a.source?` (${esc(a.source)})`:""}. Upload them, or forward the plan room's email, and they'll be read.</div>`;
+  if(a.failed&&!a.addenda)return`<div class="auto-strip" id="auto-strip">Couldn't get the bid documents by itself${a.source?` (${esc(a.source)})`:""}. It tries again tomorrow. If the agency sends them once you register, forward that email to your CurbCall address and they're read on their own.</div>`;
   const what=(a.what||[]).concat(a.addenda?[plural(a.addenda,"addendum read","addenda read")]:[]);
   if(!what.length)return`<div id="auto-strip"></div>`;
   return`<div class="auto-strip done" id="auto-strip"><b>Filled in for you${a.source?` from ${esc(a.source)}`:""}:</b> ${esc(what.join(", "))}. Check it before you rely on it.
@@ -5143,7 +5216,9 @@ function renderPrepSteps(body,city,id,b){
       case"addenda":return btn("addenda",addendaKnown(id,b,p).length?"Read the addenda":"Find addenda")
         +(addendaNotRecorded(id,b,p).length?btn("ack",`I've read them: record ${addendaNotRecorded(id,b,p).map(n=>"#"+n).join(", ")}`):"");
       case"forms":return btn("fill","Fill in the agency's forms")+(p.formFilledAt?btn("packet","Make the bid packet"):"");
-      case"submit":return dates.length?btn("dates","Add to calendar"):"";
+      case"submit":{const on=onlineSubmission(b,p);
+        return(on&&on.url?a(`href="${esc(on.url)}" target="_blank" rel="noopener noreferrer"`,`Open ${on.name}`):"")
+          +(p.formFilledAt?btn("packet",on?"Make the packet to upload":"Make the bid packet"):"")+(dates.length?btn("dates","Add to calendar"):"");}
       default:return"";
     }
   };
@@ -5364,7 +5439,8 @@ const DOC_ERRORS={
   ai_error:"Couldn't read that document. Try again in a minute.",
 };
 const FETCH_ERRORS={robots_disallow:"That site doesn't allow automated reading. Open it and enter the items by hand.",
-  too_large:"That file is too large to read.",http_404:"That document isn't there any more.",http_403:"That site refused the request."};
+  too_large:"That file is too large to read.",http_404:"That document isn't there any more.",http_403:"That site refused the request.",
+  timeout:"That site took too long to answer. Try again in a while.",not_public:"That link can't be read."};
 // ── A document the contractor uploads ──
 // Plans and bid forms an agency gives out only to registered plan holders
 // can't be fetched by the server. The contractor downloads them after
@@ -5433,6 +5509,412 @@ const bidFiles=(()=>{
   };
 })();
 setTimeout(()=>{try{bidFiles.prune();}catch(e){}},5000);
+// ── The job, once it's won ──
+// Award paperwork, pours, a daily log with photos, pay requests and
+// certified payroll, on a Job tab that appears when a bid is marked Won.
+// Kept on this phone only (workers' names and pay rates are in it), never
+// synced; each part prints as a page to save or send.
+let jobs=store.get("jobs",{});
+function jobFor(id){
+  const j=jobs[id]=jobs[id]||{};
+  j.award=j.award||{};j.pours=j.pours||[];j.log=j.log||[];j.pays=j.pays||[];j.weeks=j.weeks||[];
+  return j;
+}
+function saveJobs(){store.set("jobs",jobs);}
+function todayISO(){const d=new Date(),z=n=>String(n).padStart(2,"0");return`${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`;}
+function isoDate(s){const d=/^\d{4}-\d{2}-\d{2}$/.test(s||"")?new Date(s+"T00:00:00"):null;return d&&!isNaN(d)?d:null;}
+function fmtDate(s){const d=isoDate(s);return d?d.toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"}):String(s||"");}
+// The contract's items: the bid's priced lines with the markup in, as the
+// agency was quoted. Snapshotted when the job starts, refreshable.
+function contractLines(p){
+  const k=1+(Number(p.markup)||0)/100;
+  return(p.lines||[]).filter(l=>(l.name||"").trim()&&Number(l.qty)>0&&Number(l.price)>0)
+    .map(l=>({name:l.name,qty:Number(l.qty),unit:l.unit||"",price:Math.round(Number(l.price)*k*100)/100}));
+}
+function jobContract(id){
+  const j=jobFor(id);
+  if(!j.contract||!j.contract.length){j.contract=contractLines(prepFor(id));saveJobs();}
+  return j.contract;
+}
+// "60 calendar days" / "45 working days" from the notice to proceed.
+function finishDate(ntp,completion){
+  const d=isoDate(ntp),m=/(\d{1,4})\s*(calendar|working|work)?\s*days?/i.exec(String(completion||""));
+  if(!d||!m)return null;
+  let n=Number(m[1]);const working=/work/i.test(m[2]||"");
+  const out=new Date(d);
+  if(!working)out.setDate(out.getDate()+n);
+  else while(n>0){out.setDate(out.getDate()+1);if(out.getDay()%6)n--;}
+  return out;
+}
+function openPrintPage(title,inner,landscape){
+  const html=`<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title>
+<style>@page{size:${landscape?"landscape":"portrait"};margin:14mm;}body{font-family:Arial,Helvetica,sans-serif;color:#111;font-size:12px;margin:0;}
+h1{font-size:17px;margin:0 0 4px;}h2{font-size:14px;margin:18px 0 6px;}.m{color:#444;margin:2px 0;}
+table{width:100%;border-collapse:collapse;margin-top:10px;}th,td{border:1px solid #999;padding:4px 6px;text-align:left;vertical-align:top;}
+th{background:#eee;font-size:11px;}td.n,th.n{text-align:right;}.t{margin-top:10px;}.t div{display:flex;justify-content:space-between;max-width:420px;margin:3px 0 3px auto;}
+.g{font-weight:bold;font-size:14px;}.blank{display:inline-block;min-width:180px;border-bottom:1px solid #111;}
+.photos img{width:31%;margin:1%;vertical-align:top;}.fine{color:#666;font-size:10px;margin-top:14px;}.entry{page-break-inside:avoid;border-top:1px solid #ccc;padding-top:8px;margin-top:10px;}</style></head><body>
+${inner}<script>window.onload=function(){setTimeout(function(){window.print();},300);}<\/script></body></html>`;
+  const w=window.open("","_blank");
+  if(!w){toast("Allow pop-ups to print");return;}
+  w.document.open();w.document.write(html);w.document.close();
+}
+function jobHeaderHTML(b,p,city){
+  const c=companyProfile||{},i=bidInfo();
+  return`<div class="m"><b>${esc(b.title||"")}</b>${b.bid_number?` &middot; ${esc(b.bid_number)}`:""}</div>
+    <div class="m">${esc(jobPlace(p,city))}</div>
+    <div class="m">Contractor: ${esc(c.name||"")}${i.address?`, ${esc(i.address)}`:""}${i.city_state_zip?`, ${esc(i.city_state_zip)}`:""}</div>`;
+}
+
+function renderJob(body,city,id,b){
+  const p=prepFor(id),j=jobFor(id),info=p.docInfo||{},i=bidInfo();
+  const contract=jobContract(id);
+  const total=contract.reduce((s,l)=>s+l.qty*l.price,0);
+  const fin=finishDate(j.award.ntp,info.completion);
+  const ak=j.award.checks||{};
+  const item=(k,label,extra)=>`<label class="prep-check${ak[k]?" done":""}"><input type="checkbox" data-aw="${k}"${ak[k]?" checked":""}>
+    <span><b>${esc(label)}</b>${extra||""}</span></label>`;
+  const bondMail=mailtoUrl(i.bond_email,`Performance and payment bonds: ${b.title||"awarded job"}`,
+    [`${String(i.bond_agent||"").split(/\s+/)[0]?`Hi ${String(i.bond_agent).split(/\s+/)[0]},`:"Hello,"}`,"",
+     `We were awarded ${b.title||"this job"}${b.bid_number?` (${b.bid_number})`:""}, ${jobPlace(p,city)}.`,
+     `Contract amount: ${money2(total)}.`,"The contract requires performance and payment bonds. Please prepare them, and let me know what you need from me.",
+     b.url?`Bid posting: ${b.url}`:"","","Thanks,",signOff()].filter((x,k,a)=>x!==""||a[k-1]!=="").join("\n"));
+  const owner=agencyContact(b,p).org||"the owner";
+  const insMail=mailtoUrl(i.insurance_email,`Certificate of insurance: ${b.title||"awarded job"}`,
+    ["Hello,","",`We were awarded ${b.title||"this job"}${b.bid_number?` (${b.bid_number})`:""} at ${jobPlace(p,city)}.`,
+     `Please send a certificate of insurance naming ${owner} as certificate holder and additional insured, with the limits the contract documents require.`,
+     agencyContact(b,p).email?`It can go to ${agencyContact(b,p).email}, with a copy to me.`:"","","Thanks,",signOff()].filter((x,k,a)=>x!==""||a[k-1]!=="").join("\n"));
+  const placed={};j.log.forEach(e=>Object.entries(e.placed||{}).forEach(([k,v])=>{placed[k]=(placed[k]||0)+(Number(v)||0);}));
+  const billed=j.pays.reduce((s,r)=>s+(r.due||0),0);
+  body.innerHTML=`<div class="rate-note" style="margin-top:0;">Kept on this phone only. Each part prints as a page you can save as a PDF or send.</div>
+    <div class="job-card"><div class="workspace-title">Award paperwork</div>
+      ${item("contract","Sign and return the contract")}
+      ${item("bonds","Performance and payment bonds",`<small>${i.bond_email?`<a class="step-act" href="${esc(bondMail)}">Email my bonding agent</a>`:`Add your bonding agent's email in bid details to have this written for you.`}</small>`)}
+      ${item("insurance","Certificate of insurance",`<small>${i.insurance_email?`<a class="step-act" href="${esc(insMail)}">Email my insurance agent</a>`:`Add your insurance agent's email in bid details to have this written for you.`}</small>`)}
+      ${item("w9","W-9 to the agency")}
+      ${item("precon","Pre-construction meeting")}
+      <div class="job-row"><span>Notice to proceed</span><input type="date" class="input" id="jb-ntp" value="${esc(j.award.ntp||"")}"></div>
+      ${info.completion?`<div class="rate-note">Time allowed: ${esc(info.completion)}${fin?`. <b>Finish by ${esc(fin.toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"}))}.</b>`:""}</div>`:""}
+      ${info.prevailing_wage?`<div class="rate-note">Wages: ${esc(info.prevailing_wage)}. Certified payroll is below.</div>`:""}
+      ${info.testing?`<div class="rate-note">Testing: ${esc(info.testing)}</div>`:""}
+    </div>
+    <div class="job-card"><div class="workspace-title">Pours</div>
+      ${j.pours.length?j.pours.slice().sort((a,z)=>String(a.date).localeCompare(z.date)).map(x=>`<div class="ff-done"><span><b>${esc(fmtDate(x.date))}${x.time?` ${esc(x.time)}`:""}</b> ${esc(x.desc||"")} · ${esc(String(x.yards||""))} yd${x.plant?` · ${esc(x.plant)}`:""} <small>${esc(x.status||"planned")}</small></span>
+        <button type="button" class="step-act" data-pour="${esc(x.id)}">Open</button></div>`).join(""):`<div class="account-status">No pours planned yet.</div>`}
+      <button class="btn-ghost" id="jb-pour">Plan a pour</button></div>
+    <div class="job-card"><div class="workspace-title">Daily log</div>
+      ${j.log.length?`<div class="rate-note" style="margin-top:0;">${plural(j.log.length,"day")} logged${Object.keys(placed).length?`. Placed so far: ${contract.map((l,k)=>placed[k]?`${esc(splitItemNo(l.name).description)} ${Math.round(placed[k]).toLocaleString()} ${esc(l.unit)}`:"").filter(Boolean).join("; ")}`:""}.</div>`:""}
+      ${j.log.slice().sort((a,z)=>String(z.date).localeCompare(a.date)).slice(0,5).map(e=>`<div class="ff-done"><span><b>${esc(fmtDate(e.date))}</b> ${esc(String(e.work||"").slice(0,60))}${e.photos&&e.photos.length?` <small>${plural(e.photos.length,"photo")}</small>`:""}</span>
+        <button type="button" class="step-act" data-log="${esc(e.id)}">Open</button></div>`).join("")}
+      <button class="btn-ghost" id="jb-log">Log today</button>${j.log.length?`<button class="btn-ghost" id="jb-logprint">Print the log with photos</button>`:""}</div>
+    <div class="job-card"><div class="workspace-title">Pay requests</div>
+      <div class="rate-note" style="margin-top:0;">Contract ${money0(total)}${j.pays.length?` · requested ${money0(billed)} so far`:""}. Retainage ${esc(String(jobRetainage(j,info)))}%.</div>
+      ${j.pays.map((r,k)=>`<div class="ff-done"><span><b>No. ${k+1}</b> through ${esc(fmtDate(r.end))} · ${money0(r.due)} due</span>
+        <button type="button" class="step-act" data-pay="${k}">Print</button></div>`).join("")}
+      <button class="btn-ghost" id="jb-pay">New pay request</button>
+      <button class="btn-ghost" id="jb-contract">Update contract items from Pricing</button></div>
+    <div class="job-card"><div class="workspace-title">Certified payroll</div>
+      <div class="rate-note" style="margin-top:0;">Weekly payroll in the federal WH-347 layout${info.prevailing_wage?"":" (for prevailing-wage jobs)"}. Some states have their own form; check which yours wants. You sign it; the numbers are yours to check.</div>
+      ${j.weeks.map((w,k)=>`<div class="ff-done"><span><b>No. ${k+1}</b> week ending ${esc(fmtDate(w.ending))}</span>
+        <button type="button" class="step-act" data-week="${k}">Open</button></div>`).join("")}
+      <button class="btn-ghost" id="jb-week">Add a payroll week</button><button class="btn-ghost" id="jb-crew">Your crew and rates</button></div>`;
+  const reopen=()=>renderJob(body,city,id,b);
+  body.querySelectorAll("[data-aw]").forEach(x=>x.onchange=()=>{(j.award.checks=j.award.checks||{})[x.dataset.aw]=x.checked;saveJobs();reopen();});
+  document.getElementById("jb-ntp").onchange=(e)=>{j.award.ntp=e.target.value;saveJobs();reopen();};
+  document.getElementById("jb-pour").onclick=()=>renderPour(body,city,id,b,null);
+  body.querySelectorAll("[data-pour]").forEach(x=>x.onclick=()=>renderPour(body,city,id,b,x.dataset.pour));
+  document.getElementById("jb-log").onclick=()=>renderLogEntry(body,city,id,b,null);
+  body.querySelectorAll("[data-log]").forEach(x=>x.onclick=()=>renderLogEntry(body,city,id,b,x.dataset.log));
+  const lp=document.getElementById("jb-logprint");if(lp)lp.onclick=()=>printJobLog(id,b,city);
+  document.getElementById("jb-pay").onclick=()=>renderPayRequest(body,city,id,b);
+  body.querySelectorAll("[data-pay]").forEach(x=>x.onclick=()=>printPayRequest(id,b,city,Number(x.dataset.pay)));
+  document.getElementById("jb-contract").onclick=()=>{
+    if(j.pays.length&&!confirm("Pay requests already made keep their numbers. Update the contract items from Pricing?"))return;
+    j.contract=contractLines(p);saveJobs();toast("Contract items updated");reopen();
+  };
+  document.getElementById("jb-week").onclick=()=>renderPayrollWeek(body,city,id,b,null);
+  body.querySelectorAll("[data-week]").forEach(x=>x.onclick=()=>renderPayrollWeek(body,city,id,b,Number(x.dataset.week)));
+  document.getElementById("jb-crew").onclick=()=>renderCrew(body,city,id,b);
+}
+
+// ── Pours ──
+function renderPour(body,city,id,b,pid){
+  const p=prepFor(id),j=jobFor(id),c=concreteState(p),info=p.docInfo||{},i=bidInfo();
+  const contract=jobContract(id);
+  const x=pid?j.pours.find(q=>q.id===pid):{id:"p"+Date.now(),date:todayISO(),time:"7:00 AM",line:-1,desc:"",yards:"",plant:i.supplier||"",email:i.supplier_email||"",psi:c.psi||"",status:"planned"};
+  if(!x){renderJob(body,city,id,b);return;}
+  const plants=[...new Set([i.supplier,...Object.keys(c.plants)].filter(Boolean))];
+  const cyOf=(k)=>{const l=contract[k];if(!l)return"";const lc=concreteYards([{name:l.name,qty:l.qty,unit:l.unit}]);return lc.total?Math.ceil(lc.total*(1+wastePct()/100)):"";};
+  body.innerHTML=`<div class="workspace-title">${pid?"Pour":"Plan a pour"}</div>
+    <div class="job-form">
+      <label>Date<input type="date" class="input" data-pf="date" value="${esc(x.date)}"></label>
+      <label>Start time<input class="input" data-pf="time" value="${esc(x.time||"")}"></label>
+      <label>What's being poured<select class="input" data-pf="line"><option value="-1">Type it below</option>
+        ${contract.map((l,k)=>`<option value="${k}"${String(x.line)===String(k)?" selected":""}>${esc(l.name)}</option>`).join("")}</select></label>
+      <label>Description<input class="input" data-pf="desc" value="${esc(x.desc||"")}" placeholder="e.g. Elm St, 1st to 3rd, north side"></label>
+      <label>Yards<input class="input" data-pf="yards" inputmode="decimal" value="${esc(String(x.yards||""))}"></label>
+      <label>Mix (PSI)<input class="input" data-pf="psi" inputmode="numeric" value="${esc(String(x.psi||""))}" placeholder="per the specs"></label>
+      <label>Plant<input class="input" data-pf="plant" list="jb-plants" value="${esc(x.plant||"")}"><datalist id="jb-plants">${plants.map(n=>`<option value="${esc(n)}">`).join("")}</datalist></label>
+      <label>Plant's email<input class="input" data-pf="email" inputmode="email" value="${esc(x.email||"")}"></label>
+      <label>Status<select class="input" data-pf="status">${["planned","ordered","poured"].map(s=>`<option${x.status===s?" selected":""}>${s}</option>`).join("")}</select></label>
+    </div>
+    ${info.testing?`<div class="rate-note">Testing the specs ask for: ${esc(info.testing)}</div>`:`<div class="rate-note">Check the specs for testing (cylinders, slump, air) and call for any inspection the forms and base need before the pour.</div>`}
+    <div class="act-primary"><button class="ma-gold" id="pr-save">Save</button><a class="ma-ghost" id="pr-order" href="#">Email the order to the plant</a></div>
+    <button class="btn-ghost" id="pr-cal">Add to my calendar</button>
+    ${pid?`<button class="btn-ghost" id="pr-del">Delete this pour</button>`:""}
+    <button class="btn-ghost" id="pr-back">Back to the job</button>`;
+  const read=()=>{body.querySelectorAll("[data-pf]").forEach(el=>{x[el.dataset.pf]=el.value.trim();});x.line=Number(x.line);return x;};
+  body.querySelector('[data-pf="line"]').onchange=(e)=>{const k=Number(e.target.value),y=body.querySelector('[data-pf="yards"]');
+    if(k>=0&&!y.value)y.value=cyOf(k);const d=body.querySelector('[data-pf="desc"]');if(k>=0&&!d.value)d.value=contract[k].name;};
+  const save=()=>{read();if(!j.pours.some(q=>q.id===x.id))j.pours.push(x);saveJobs();};
+  document.getElementById("pr-save").onclick=()=>{save();toast("Pour saved");renderJob(body,city,id,b);};
+  const order=document.getElementById("pr-order");
+  order.onclick=(e)=>{
+    read();
+    const body_=[`Hello,`,"",`Please schedule a ready-mix delivery:`,"",`Date: ${fmtDate(x.date)}${x.time?`, first truck at ${x.time}`:""}`,
+      `Yards: ${x.yards||"(to confirm)"}`,`Mix: ${x.psi?`${x.psi} PSI, `:""}per the project specs`,`Deliver to: ${jobPlace(p,city)}`,
+      `Job: ${b.title||""}${b.bid_number?` (${b.bid_number})`:""}`,x.desc?`Pour: ${x.desc}`:"","",
+      `Call me on the day with any questions${(companyProfile||{}).phone?`: ${companyProfile.phone}`:""}.`,"","Thanks,",signOff()]
+      .filter((v,k,a)=>v!==""||a[k-1]!=="").join("\n");
+    order.href=mailtoUrl(x.email,`Concrete order: ${fmtDate(x.date)}, ${x.yards||""} yd, ${b.title||""}`,body_);
+    if(x.status==="planned")body.querySelector('[data-pf="status"]').value="ordered";
+    save();
+  };
+  document.getElementById("pr-cal").onclick=()=>{
+    read();const d=isoDate(x.date);if(!d){toast("Pick the pour date first");return;}
+    const z=n=>String(n).padStart(2,"0"),d8=`${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}`;
+    const ics=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//CurbCall Pro//Pour//EN","BEGIN:VEVENT",`UID:${x.id}-${id}@curbcall.app`,
+      `DTSTAMP:${new Date().toISOString().replace(/[-:]/g,"").split(".")[0]}Z`,`DTSTART;VALUE=DATE:${d8}`,
+      `SUMMARY:${icsEscape(`Pour: ${x.yards||""} yd, ${b.title||""}`)}`,`DESCRIPTION:${icsEscape(`${x.desc||""}${x.time?` First truck ${x.time}.`:""} ${x.plant||""}`)}`,
+      `LOCATION:${icsEscape(jobPlace(p,city))}`,"BEGIN:VALARM","TRIGGER:-P1D","ACTION:DISPLAY","DESCRIPTION:Confirm the concrete order","END:VALARM","END:VEVENT","END:VCALENDAR"];
+    downloadBlob(new Blob([ics.join("\r\n")],{type:"text/calendar"}),`pour_${x.date}.ics`);
+  };
+  const del=document.getElementById("pr-del");
+  if(del)del.onclick=()=>{if(!confirm("Delete this pour?"))return;j.pours=j.pours.filter(q=>q.id!==x.id);saveJobs();renderJob(body,city,id,b);};
+  document.getElementById("pr-back").onclick=()=>renderJob(body,city,id,b);
+}
+
+// ── Daily log ──
+async function renderLogEntry(body,city,id,b,eid){
+  const j=jobFor(id),contract=jobContract(id);
+  const e=eid?j.log.find(x=>x.id===eid):{id:"d"+Date.now(),date:todayISO(),crew:"",hours:"",weather:"",work:"",placed:{},photos:[]};
+  if(!e){renderJob(body,city,id,b);return;}
+  const photos=(await bidFiles.list(id,"photo")).filter(f=>(e.photos||[]).includes(f.key));
+  if(!document.getElementById("prep-body"))return;
+  const urls=photos.map(f=>URL.createObjectURL(f.blob));
+  body.innerHTML=`<div class="workspace-title">${eid?"Daily log":"Log today"}</div>
+    <div class="job-form">
+      <label>Date<input type="date" class="input" data-lf="date" value="${esc(e.date)}"></label>
+      <label>Crew on site<input class="input" data-lf="crew" inputmode="numeric" value="${esc(String(e.crew||""))}" placeholder="people"></label>
+      <label>Hours worked<input class="input" data-lf="hours" inputmode="decimal" value="${esc(String(e.hours||""))}"></label>
+      <label>Weather<input class="input" data-lf="weather" value="${esc(e.weather||"")}" placeholder="e.g. Sunny, 62°F"></label>
+      <label class="wide">Work done<textarea class="input" data-lf="work" rows="3" placeholder="What got done, deliveries, inspections, problems">${esc(e.work||"")}</textarea></label>
+    </div>
+    ${contract.length?`<div class="detail-label" style="margin-top:0.6rem;">Placed today (feeds your next pay request)</div>
+      <div class="job-form">${contract.map((l,k)=>`<label>${esc(l.name)}<span class="cost-in"><input class="input" inputmode="decimal" data-placed="${k}" value="${esc(String((e.placed||{})[k]||""))}"> ${esc(l.unit)}</span></label>`).join("")}</div>`:""}
+    <div class="detail-label" style="margin-top:0.6rem;">Photos</div>
+    <div class="log-photos">${urls.map((u,k)=>`<img src="${esc(u)}" alt="Photo ${k+1}">`).join("")||`<span class="rate-thin">None yet.</span>`}</div>
+    <button class="btn-ghost" id="lg-photo">Take or add photos</button>
+    <div class="act-primary"><button class="ma-gold" id="lg-save">Save the day</button></div>
+    ${eid?`<button class="btn-ghost" id="lg-del">Delete this day</button>`:""}
+    <button class="btn-ghost" id="lg-back">Back to the job</button>`;
+  const read=()=>{
+    body.querySelectorAll("[data-lf]").forEach(el=>{e[el.dataset.lf]=el.value.trim();});
+    e.placed={};body.querySelectorAll("[data-placed]").forEach(el=>{const v=Number(String(el.value).replace(/[^0-9.]/g,""));if(v>0)e.placed[el.dataset.placed]=v;});
+  };
+  const save=()=>{read();if(!j.log.some(x=>x.id===e.id))j.log.push(e);saveJobs();};
+  document.getElementById("lg-photo").onclick=()=>{
+    const inp=document.createElement("input");
+    inp.type="file";inp.accept="image/*";inp.multiple=true;inp.setAttribute("capture","environment");inp.style.display="none";
+    inp.onchange=async()=>{
+      const files=Array.from(inp.files||[]).slice(0,20);inp.remove();
+      read();
+      for(let k=0;k<files.length;k++){
+        const name=`photo-${e.date}-${Date.now()}-${k}.${(files[k].type.split("/")[1]||"jpg").slice(0,4)}`;
+        const row=await bidFiles.put(id,"photo",name,files[k],{entry:e.id,taken:files[k].lastModified||Date.now()});
+        (e.photos=e.photos||[]).push(row.key);
+      }
+      save();renderLogEntry(body,city,id,b,e.id);
+    };
+    document.body.appendChild(inp);inp.click();
+  };
+  document.getElementById("lg-save").onclick=()=>{save();urls.forEach(u=>URL.revokeObjectURL(u));toast("Day saved");renderJob(body,city,id,b);};
+  const del=document.getElementById("lg-del");
+  if(del)del.onclick=async()=>{if(!confirm("Delete this day and its photos?"))return;
+    for(const k of e.photos||[])await bidFiles.remove(k);j.log=j.log.filter(x=>x.id!==e.id);saveJobs();renderJob(body,city,id,b);};
+  document.getElementById("lg-back").onclick=()=>{urls.forEach(u=>URL.revokeObjectURL(u));renderJob(body,city,id,b);};
+}
+async function printJobLog(id,b,city){
+  const j=jobFor(id),p=prepFor(id),contract=jobContract(id);
+  const all=await bidFiles.list(id,"photo");
+  const toData=(blob)=>new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.onerror=()=>r("");fr.readAsDataURL(blob);});
+  let budget=40;
+  const parts=[];
+  for(const e of j.log.slice().sort((a,z)=>String(a.date).localeCompare(z.date))){
+    const imgs=[];
+    for(const f of all.filter(x=>(e.photos||[]).includes(x.key))){if(budget-->0)imgs.push(await toData(f.blob));}
+    parts.push(`<div class="entry"><h2>${esc(fmtDate(e.date))}</h2>
+      <div class="m">${e.crew?`Crew: ${esc(String(e.crew))}`:""}${e.hours?` &middot; Hours: ${esc(String(e.hours))}`:""}${e.weather?` &middot; Weather: ${esc(e.weather)}`:""}</div>
+      ${e.work?`<p>${esc(e.work)}</p>`:""}
+      ${Object.keys(e.placed||{}).length?`<div class="m">Placed: ${Object.entries(e.placed).map(([k,v])=>`${esc((contract[k]||{}).name||"")} ${esc(String(v))} ${esc((contract[k]||{}).unit||"")}`).join("; ")}</div>`:""}
+      ${imgs.length?`<div class="photos">${imgs.filter(Boolean).map(u=>`<img src="${u}">`).join("")}</div>`:""}</div>`);
+  }
+  openPrintPage(`Daily log - ${b.title||""}`,`<h1>Daily log</h1>${jobHeaderHTML(b,p,city)}${parts.join("")}<div class="fine">Kept with CurbCall Pro. Photos as taken on site.</div>`);
+}
+
+// ── Pay requests ──
+function jobRetainage(j,info){
+  if(j.retainage!=null&&j.retainage!=="")return Number(j.retainage);
+  const m=/(\d+(?:\.\d+)?)\s*%/.exec(String(info.retainage||""));
+  return m?Number(m[1]):5;
+}
+function renderPayRequest(body,city,id,b){
+  const j=jobFor(id),p=prepFor(id),info=p.docInfo||{},contract=jobContract(id);
+  const prevEnd=j.pays.length?j.pays[j.pays.length-1].end:"";
+  const prevQty=contract.map((l,k)=>j.pays.reduce((s,r)=>s+(Number((r.qty||{})[k])||0),0));
+  // This period: what the daily log says was placed on days no request has
+  // billed yet.
+  const billedDays=new Set(j.pays.flatMap(r=>r.logs||[]));
+  const unbilled=j.log.filter(e=>!billedDays.has(e.id));
+  const fromLog=contract.map((l,k)=>unbilled.reduce((s,e)=>s+(Number((e.placed||{})[k])||0),0));
+  body.innerHTML=`<div class="workspace-title">Pay request No. ${j.pays.length+1}</div>
+    <div class="job-form">
+      <label>Period ending<input type="date" class="input" id="py-end" value="${esc(todayISO())}"></label>
+      <label>Retainage<span class="cost-in"><input class="input" id="py-ret" inputmode="decimal" value="${esc(String(jobRetainage(j,info)))}"> %</span></label>
+    </div>
+    <div class="rate-note">${prevEnd?`Since No. ${j.pays.length} (through ${esc(fmtDate(prevEnd))}). `:""}Quantities this period start from your daily log; change any to what was measured.</div>
+    <table class="ps-table"><thead><tr><th>Item</th><th>Before</th><th>This period</th></tr></thead><tbody>
+    ${contract.map((l,k)=>`<tr><td>${esc(l.name)}<small>${esc(l.qty.toLocaleString())} ${esc(l.unit)} at ${money2(l.price)}</small></td>
+      <td>${esc(prevQty[k].toLocaleString())}</td><td><input class="input py-q" data-py="${k}" inputmode="decimal" value="${fromLog[k]?esc(String(fromLog[k])):""}"></td></tr>`).join("")}</tbody></table>
+    <div id="py-tot"></div>
+    <div class="act-primary"><button class="ma-gold" id="py-save">Save and print</button></div>
+    <button class="btn-ghost" id="py-back">Back to the job</button>`;
+  const calc=()=>{
+    const ret=Number(document.getElementById("py-ret").value)||0;
+    const qty={};body.querySelectorAll("[data-py]").forEach(el=>{const v=Number(String(el.value).replace(/[^0-9.]/g,""));if(v>0)qty[el.dataset.py]=v;});
+    const toDate=contract.reduce((s,l,k)=>s+(prevQty[k]+(qty[k]||0))*l.price,0);
+    const retained=toDate*ret/100,earned=toDate-retained;
+    const prevDue=j.pays.reduce((s,r)=>s+(r.due||0),0);
+    return{qty,ret,toDate,retained,earned,prevDue,due:Math.round((earned-prevDue)*100)/100};
+  };
+  const show=()=>{const t=calc();document.getElementById("py-tot").innerHTML=`<div class="prep-totals">
+    <div><span>Work completed to date</span><b>${money2(t.toDate)}</b></div><div><span>Less retainage (${t.ret}%)</span><b>${money2(t.retained)}</b></div>
+    <div><span>Less previous requests</span><b>${money2(t.prevDue)}</b></div><div class="pt-grand"><span>Due this request</span><b>${money2(t.due)}</b></div></div>`;};
+  body.querySelectorAll("[data-py],#py-ret").forEach(el=>el.oninput=show);show();
+  document.getElementById("py-save").onclick=()=>{
+    const t=calc();
+    j.retainage=t.ret;
+    j.pays.push({end:document.getElementById("py-end").value||todayISO(),qty:t.qty,ret:t.ret,due:t.due,at:Date.now(),logs:unbilled.map(e=>e.id)});
+    saveJobs();printPayRequest(id,b,city,j.pays.length-1);renderJob(body,city,id,b);
+  };
+  document.getElementById("py-back").onclick=()=>renderJob(body,city,id,b);
+}
+function printPayRequest(id,b,city,n){
+  const j=jobFor(id),p=prepFor(id),contract=jobContract(id),r=j.pays[n];
+  if(!r)return;
+  const before=contract.map((l,k)=>j.pays.slice(0,n).reduce((s,x)=>s+(Number((x.qty||{})[k])||0),0));
+  const sched=contract.reduce((s,l)=>s+l.qty*l.price,0);
+  let done=0;
+  const rows=contract.map((l,k)=>{
+    const prev=before[k],now=Number((r.qty||{})[k])||0,toDate=prev+now,val=toDate*l.price;done+=val;
+    return`<tr><td>${k+1}</td><td>${esc(l.name)}</td><td class="n">${esc(l.qty.toLocaleString())} ${esc(l.unit)}</td><td class="n">${money2(l.price)}</td>
+      <td class="n">${money2(l.qty*l.price)}</td><td class="n">${esc(prev.toLocaleString())}</td><td class="n">${esc(now.toLocaleString())}</td>
+      <td class="n">${esc(toDate.toLocaleString())}</td><td class="n">${money2(val)}</td><td class="n">${l.qty*l.price?Math.round(val/(l.qty*l.price)*100):0}%</td></tr>`;
+  }).join("");
+  const retained=done*(r.ret||0)/100,prevDue=j.pays.slice(0,n).reduce((s,x)=>s+(x.due||0),0);
+  openPrintPage(`Pay request ${n+1} - ${b.title||""}`,`<h1>Application for payment No. ${n+1}</h1>${jobHeaderHTML(b,p,city)}
+    <div class="m">Period ending ${esc(fmtDate(r.end))}${agencyContact(b,p).org?` &middot; To: ${esc(agencyContact(b,p).org)}`:""}</div>
+    <table><thead><tr><th>#</th><th>Item</th><th class="n">Contract qty</th><th class="n">Unit price</th><th class="n">Scheduled value</th>
+      <th class="n">Previous qty</th><th class="n">This period</th><th class="n">To date</th><th class="n">Completed to date</th><th class="n">%</th></tr></thead>
+      <tbody>${rows}</tbody></table>
+    <div class="t"><div><span>Original contract sum</span><b>${money2(sched)}</b></div><div><span>Total completed to date</span><b>${money2(done)}</b></div>
+      <div><span>Retainage (${esc(String(r.ret||0))}%)</span><b>${money2(retained)}</b></div><div><span>Total earned less retainage</span><b>${money2(done-retained)}</b></div>
+      <div><span>Less previous applications</span><b>${money2(prevDue)}</b></div><div class="g"><span>Current payment due</span><b>${money2(r.due)}</b></div></div>
+    <p style="margin-top:28px;">Contractor: <span class="blank"></span> Date: <span class="blank" style="min-width:110px"></span></p>
+    <div class="fine">Quantities as measured by the contractor; the agency's engineer verifies them. If the agency has its own pay application form, copy these figures onto it.</div>`,true);
+}
+
+// ── Certified payroll (WH-347 layout) ──
+function crewList(){return store.get("crew",[]);}
+function renderCrew(body,city,id,b){
+  const crew=crewList();
+  body.innerHTML=`<div class="workspace-title">Your crew and rates</div>
+    <div class="rate-note" style="margin-top:0;">Kept on this phone only, for certified payroll. Each worker's ID number is left for you to write on the printed form; the app never asks for it.</div>
+    <div id="cr-rows">${crew.map((w,k)=>crewRow(w,k)).join("")}</div>
+    <button class="btn-ghost" id="cr-add">Add a worker</button>
+    <div class="act-primary"><button class="ma-gold" id="cr-save">Save</button></div>
+    <button class="btn-ghost" id="cr-back">Back to the job</button>`;
+  document.getElementById("cr-add").onclick=()=>{const rows=document.getElementById("cr-rows");rows.insertAdjacentHTML("beforeend",crewRow({},rows.children.length));};
+  document.getElementById("cr-save").onclick=()=>{
+    const out=[];body.querySelectorAll(".crew-row").forEach(r=>{
+      const v=(k)=>r.querySelector(`[data-cw="${k}"]`).value.trim();
+      if(v("name"))out.push({name:v("name").slice(0,80),cls:v("cls").slice(0,60),rate:Number(v("rate"))||0,fringe:Number(v("fringe"))||0});
+    });
+    store.set("crew",out);toast("Crew saved");renderJob(body,city,id,b);
+  };
+  document.getElementById("cr-back").onclick=()=>renderJob(body,city,id,b);
+}
+function crewRow(w,k){
+  return`<div class="crew-row job-form"><label>Name<input class="input" data-cw="name" value="${esc(w.name||"")}"></label>
+    <label>Work classification<input class="input" data-cw="cls" value="${esc(w.cls||"")}" placeholder="e.g. Cement Mason"></label>
+    <label>Rate $/hr<input class="input" data-cw="rate" inputmode="decimal" value="${esc(String(w.rate||""))}"></label>
+    <label>Fringe paid in cash $/hr<input class="input" data-cw="fringe" inputmode="decimal" value="${esc(String(w.fringe||""))}"></label></div>`;
+}
+// Saturday of this week, the usual payroll week end.
+function weekEnding(){const d=new Date();d.setDate(d.getDate()+((6-d.getDay()+7)%7));const z=n=>String(n).padStart(2,"0");return`${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`;}
+function payrollPay(w,hrs){
+  const total=hrs.reduce((s,h)=>s+(Number(h)||0),0),st=Math.min(40,total),ot=Math.max(0,total-40);
+  return{total,st,ot,gross:Math.round((st*w.rate+ot*w.rate*1.5+total*(w.fringe||0))*100)/100};
+}
+function renderPayrollWeek(body,city,id,b,n){
+  const j=jobFor(id),crew=crewList();
+  if(!crew.length){toast("Add your crew and rates first");renderCrew(body,city,id,b);return;}
+  const wk=n!=null?j.weeks[n]:{ending:weekEnding(),hours:{}};
+  const ending=isoDate(wk.ending)||new Date();
+  const days=[...Array(7)].map((_,k)=>{const d=new Date(ending);d.setDate(d.getDate()-6+k);return d;});
+  body.innerHTML=`<div class="workspace-title">Payroll No. ${n!=null?n+1:j.weeks.length+1}</div>
+    <div class="job-form"><label>Week ending<input type="date" class="input" id="pw-end" value="${esc(wk.ending)}"></label></div>
+    <div class="rate-note">Hours on this job each day. Over 40 in the week is paid at time and a half.</div>
+    <div class="pw-grid"><div class="pw-h">${days.map(d=>`<span>${d.toLocaleDateString(undefined,{weekday:"short"})}<br>${d.getDate()}</span>`).join("")}</div>
+    ${crew.map((w,k)=>`<div class="pw-r"><span>${esc(w.name)}<small>${esc(w.cls)}</small></span>${days.map((d,x)=>`<input class="input" inputmode="decimal" aria-label="${esc(w.name)}, ${esc(d.toLocaleDateString(undefined,{weekday:"long"}))}" data-ph="${k}:${x}" value="${esc(String(((wk.hours||{})[k]||[])[x]||""))}">`).join("")}</div>`).join("")}</div>
+    <div class="act-primary"><button class="ma-gold" id="pw-save">Save and print</button></div>
+    ${n!=null?`<button class="btn-ghost" id="pw-del">Delete this week</button>`:""}
+    <button class="btn-ghost" id="pw-back">Back to the job</button>`;
+  document.getElementById("pw-save").onclick=()=>{
+    const hours={};body.querySelectorAll("[data-ph]").forEach(el=>{const[k,x]=el.dataset.ph.split(":").map(Number);
+      (hours[k]=hours[k]||Array(7).fill(0))[x]=Number(String(el.value).replace(/[^0-9.]/g,""))||0;});
+    const rec={ending:document.getElementById("pw-end").value||wk.ending,hours,crew:crew.slice()};
+    if(n!=null)j.weeks[n]=rec;else j.weeks.push(rec);
+    saveJobs();printPayroll(id,b,city,n!=null?n:j.weeks.length-1);renderJob(body,city,id,b);
+  };
+  const del=document.getElementById("pw-del");
+  if(del)del.onclick=()=>{if(!confirm("Delete this payroll week?"))return;j.weeks.splice(n,1);saveJobs();renderJob(body,city,id,b);};
+  document.getElementById("pw-back").onclick=()=>renderJob(body,city,id,b);
+}
+function printPayroll(id,b,city,n){
+  const j=jobFor(id),p=prepFor(id),wk=j.weeks[n],c=companyProfile||{},i=bidInfo();
+  if(!wk)return;
+  const crew=wk.crew||crewList(),end=isoDate(wk.ending)||new Date();
+  const days=[...Array(7)].map((_,k)=>{const d=new Date(end);d.setDate(d.getDate()-6+k);return d;});
+  const rows=crew.map((w,k)=>{const hrs=(wk.hours||{})[k]||Array(7).fill(0);if(!hrs.some(h=>h>0))return"";const pay=payrollPay(w,hrs);
+    return`<tr><td>${esc(w.name)}</td><td></td><td>${esc(w.cls)}</td>${hrs.map(h=>`<td class="n">${h||""}</td>`).join("")}
+      <td class="n">${pay.st}${pay.ot?` + ${pay.ot} OT`:""}</td><td class="n">${money2(w.rate)}${w.fringe?`<br>+${money2(w.fringe)} fringe`:""}</td><td class="n">${money2(pay.gross)}</td>
+      <td></td><td></td><td></td></tr>`;}).join("");
+  openPrintPage(`Certified payroll ${n+1} - ${b.title||""}`,`<h1>Payroll (WH-347 layout) No. ${n+1}</h1>
+    <div class="m">Contractor: ${esc(c.name||"")}${i.address?`, ${esc(i.address)}`:""}${i.city_state_zip?`, ${esc(i.city_state_zip)}`:""}</div>
+    <div class="m">Project and location: ${esc(b.title||"")}${b.bid_number?` (${esc(b.bid_number)})`:""}, ${esc(jobPlace(p,city))}</div>
+    <div class="m">Week ending ${esc(fmtDate(wk.ending))}</div>
+    <table><thead><tr><th>Name</th><th>ID no. (write in)</th><th>Classification</th>${days.map(d=>`<th class="n">${d.toLocaleDateString(undefined,{weekday:"short"})} ${d.getDate()}</th>`).join("")}
+      <th class="n">Total hours</th><th class="n">Rate</th><th class="n">Gross this job</th><th>Deductions</th><th>Net pay</th><th>Check no.</th></tr></thead>
+      <tbody>${rows||`<tr><td colspan="16">No hours this week.</td></tr>`}</tbody></table>
+    <h2>Statement of compliance</h2>
+    <p>I, <span class="blank"></span>, <span class="blank"></span> (title), pay or supervise the payment of the persons employed by ${esc(c.name||"[contractor]")} on the project above; during the payroll period ending ${esc(fmtDate(wk.ending))} all persons employed on the project have been paid the full weekly wages earned, no rebates have been or will be made, and no deductions have been made other than permissible deductions.</p>
+    <p>The payrolls are correct and complete; the wage rates paid are not less than the applicable rates in the contract; and classifications conform with the work each person performed.</p>
+    <p>Fringe benefits: [ ] paid to approved plans, funds or programs &nbsp; [ ] paid in cash (shown above) &nbsp; Exceptions: <span class="blank"></span></p>
+    <p style="margin-top:22px;">Signature: <span class="blank" style="min-width:260px"></span> Date: <span class="blank" style="min-width:110px"></span></p>
+    <div class="fine">Laid out after the U.S. Department of Labor's form WH-347. Gross includes overtime over 40 hours at 1.5x the base rate and any fringe paid in cash. Deductions, net pay and ID numbers are for you to complete. Use your state's form if it requires its own. False statements on certified payroll carry civil and criminal penalties: check every figure before you sign.</div>`,true);
+}
+
 function pickPdfs(multiple){
   return new Promise(resolve=>{
     const inp=document.createElement("input");
@@ -5457,7 +5939,7 @@ async function postDocFiles(path,files,extra,ms){
   const fd=new FormData();
   fd.append("json",JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,...(extra||{})}));
   files.forEach(f=>fd.append("file",f.blob||f,f.name||"document.pdf"));
-  const r=await fetchWithTimeout(SERVER+path,{method:"POST",body:fd},ms);
+  const r=await fetchRetry(SERVER+path,{method:"POST",body:fd},ms);
   return r.json();
 }
 async function readBidDocumentFiles(files){
@@ -5498,7 +5980,7 @@ async function uploadAndRead(body,city,id,b){
 // only shows once the server says email-in is set up.
 async function inboxCall(path,extra,raw){
   const token=await getSupabaseToken();
-  const r=await fetchWithTimeout(SERVER+path,{method:"POST",headers:{"Content-Type":"application/json"},
+  const r=await fetchRetry(SERVER+path,{method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,...(extra||{})})},60000);
   if(raw)return r;
   return r.json();
@@ -5631,12 +6113,14 @@ function renderRegisterHelp(body,city,id,b){
   document.getElementById("reg-edit").onclick=()=>openBidInfo(()=>{openPrep(city,id,"steps").then(()=>{const bd=document.getElementById("prep-body");if(bd)renderRegisterHelp(bd,city,id,b);});});
   document.getElementById("reg-back").onclick=()=>openPrep(city,id,prepFor(id).step||"steps");
 }
-async function readBidDocument(url){
+// More than one link is read together: the server follows a posting page
+// to the files it links, opens zips and Word forms, and reads them as one.
+async function readBidDocument(url,urls){
   try{
     const token=await getSupabaseToken();
-    const r=await fetchWithTimeout(SERVER+"/bid-documents/read",{method:"POST",
+    const r=await fetchRetry(SERVER+"/bid-documents/read",{method:"POST",
       headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,url})},100000);
+      body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,url,...(urls&&urls.length?{urls}:{})})},150000);
     const d=await r.json();
     if(d&&d.ok)return d;
     const msg=d&&d.reason==="fetch_failed"?(FETCH_ERRORS[d.detail]||"Couldn't download that document.")
@@ -5653,6 +6137,7 @@ async function renderDocPicker(body,city,id,b){
     ${ups.length?`<div class="detail-label">On this phone</div>${ups.map((u,i)=>`<button class="btn-ghost doc-pick" data-up="${i}">${esc(u.name)}</button>`).join("")}
       ${ups.length>1?`<button class="btn-ghost doc-pick" id="doc-upall">Read all ${ups.length} together</button>`:""}`:""}
     ${docs.length?`<div class="detail-label">Linked to the bid</div>`:""}
+    ${docs.length>1?`<button class="btn-ghost doc-pick" id="doc-all">Read all of them together</button>`:""}
     ${docs.map((d,i)=>`<button class="btn-ghost doc-pick" data-doc="${i}">${esc(d.name)}</button>`).join("")}
     <button class="btn-ghost doc-pick" id="doc-upload">Upload from your phone</button>
     ${inboxAddress()?`<button class="btn-ghost doc-pick" id="doc-inbox">Get them from your email</button>`:""}
@@ -5679,6 +6164,19 @@ async function renderDocPicker(body,city,id,b){
     }
     renderDocReview(body,city,id,b,d,res);
   });
+  const allLinked=document.getElementById("doc-all");
+  if(allLinked)allLinked.onclick=async()=>{
+    const links=docsToRead(b);
+    body.innerHTML=`<div class="account-status"><span class="spin"></span> Reading ${plural(links.length,"document")} together… this can take a minute or two.</div>`;
+    const res=await readBidDocument(links[0].url,links.slice(1).map(d=>d.url));
+    if(!document.getElementById("prep-body"))return;
+    if(!res.ok){
+      body.innerHTML=`<div class="alert alert-amber"><span>${esc(res.msg)}</span></div><button class="btn-ghost" id="doc-back">Back to ${prepBackName(id,"pricing")}</button>`;
+      document.getElementById("doc-back").onclick=()=>openPrep(city,id,prepFor(id).step||"pricing");
+      return;
+    }
+    renderDocReview(body,city,id,b,{name:readSourceName(links,res),url:links[0].url},res);
+  };
   document.getElementById("doc-cancel").onclick=()=>openPrep(city,id,prepFor(id).step||"pricing");
 }
 // Opens a PDF kept on the phone in the phone's own viewer.
@@ -5938,6 +6436,178 @@ function applyLineChoice(l,v,d){
   }
 }
 
+// ── Will this price make money? ──
+// The going rate says what wins; only the contractor's own costs say
+// whether winning pays. Entered once (crew, wage, how much they place a
+// day, equipment, materials, overhead) and kept with the bid details, they
+// give each line a cost and the bid a profit. The starting numbers are
+// rough guesses, said so until the contractor sets their own.
+const COST_DEFAULTS={crew:4,wage:35,hours:8,equip:250,sf_day:800,lf_day:300,ea_day:2,
+  mat_sf:0.75,mat_lf:2,curb_cy_ft:0.07,ramp_cy:2.5,overhead:10};
+const COST_FIELDS=[["crew","Crew size","people"],["wage","Labor cost per hour, with taxes and insurance","$"],
+  ["hours","Hours a day",""],["equip","Equipment and truck per day","$"],
+  ["sf_day","Sidewalk and slabs placed per day","sq ft"],["lf_day","Curb and gutter placed per day","ft"],
+  ["ea_day","ADA ramps per day","each"],["mat_sf","Base, forms and rebar per sq ft","$"],["mat_lf","Forms and base per ft of curb","$"],
+  ["curb_cy_ft","Concrete per ft of curb and gutter","cu yd"],["ramp_cy","Concrete per ramp","cu yd"],["overhead","Overhead","%"]];
+function myCosts(){const c=(bidInfo().costs)||{};return{...COST_DEFAULTS,...c};}
+function costsAreMine(){return!!(bidInfo().costs&&Object.keys(bidInfo().costs).length);}
+// The concrete price this bid is costed at: a quote logged on it, else the
+// middle of the typical range.
+function concretePriceFor(p){
+  const plants=(p.concrete&&p.concrete.plants)||{};
+  const quoted=Object.values(plants).map(x=>Number(x&&x.price)).filter(x=>x>0);
+  return quoted.length?Math.min(...quoted):(READY_MIX.low+READY_MIX.high)/2;
+}
+// {cost, perUnit, basis} for one line, or null where there's no way to know.
+function lineCost(l,p){
+  const c=myCosts(),qty=Number(l.qty)||0,name=String(l.name||"");
+  if(!qty)return null;
+  const dayCost=c.crew*c.wage*c.hours+c.equip,cy=concretePriceFor(p)*(1+wastePct()/100);
+  let days=0,yards=0,mat=0,kind="";
+  const area=l.unit==="sq yd"?qty*9:l.unit==="sq ft"?qty:0;
+  if(area){
+    const m=/(\d+(?:\.\d+)?)\s*(?:in\b|in\.|inch|")/i.exec(name),tIn=m?Number(m[1]):4;
+    days=area/Math.max(1,c.sf_day);yards=area*tIn/12/27;mat=area*c.mat_sf;kind="flat";
+  }else if(l.unit==="ft"&&/curb|gutter/i.test(name)){
+    days=qty/Math.max(1,c.lf_day);yards=qty*c.curb_cy_ft;mat=qty*c.mat_lf;kind="curb";
+  }else if(l.unit==="each"&&/ramp/i.test(name)){
+    days=qty/Math.max(0.1,c.ea_day);yards=qty*c.ramp_cy;kind="ramp";
+  }else return null;
+  const cost=(days*dayCost+yards*cy+mat)*(1+c.overhead/100);
+  return{cost,perUnit:cost/qty,days};
+}
+function lineProfitHTML(l,p){
+  const lc=lineCost(l,p),price=Number(l.price)||0;
+  if(!lc)return"";
+  const k=1+(Number(p.markup)||0)/100,rev=(Number(l.qty)||0)*price*k,profit=rev-lc.cost;
+  const pct=rev>0?Math.round(profit/rev*100):null;
+  return`Your cost about ${money2(lc.perUnit)}/${esc(l.unit)}${price>0?` · <b class="pc ${profit<0?"pc-hi":pct<10?"pc-lo":"pc-ok"}">${profit<0?"loses":"makes"} ${money0(Math.abs(profit))}${pct!=null?` (${pct}%)`:""}</b>`:""}`;
+}
+function profitSummaryHTML(p){
+  let cost=0,rev=0,n=0;
+  const k=1+(Number(p.markup)||0)/100;
+  (p.lines||[]).forEach(l=>{const lc=lineCost(l,p);if(!lc)return;n++;cost+=lc.cost;rev+=(Number(l.qty)||0)*(Number(l.price)||0)*k;});
+  if(!n)return"";
+  const profit=rev-cost,pct=rev>0?Math.round(profit/rev*100):0;
+  return`<div class="profit-box${profit<0?" loss":""}"><div><span>Estimated cost of the lines it can cost</span><b>${money0(cost)}</b></div>
+    <div><span>${profit<0?"Loss":"Profit"} on those lines</span><b>${money0(Math.abs(profit))} (${pct}%)</b></div>
+    <small>${costsAreMine()?"From your costs.":"From starting guesses, not your numbers yet."} Lump-sum lines and anything it can't size are left out. Concrete at ${money0(concretePriceFor(p))} a yard${Object.values((p.concrete&&p.concrete.plants)||{}).some(x=>Number(x&&x.price)>0)?", your quote":", typical price"}.</small></div>`;
+}
+function costsEditorHTML(){
+  const c=myCosts();
+  return`<details class="rm-log" id="cost-edit"><summary>${costsAreMine()?"Your costs":"Set your costs (now using starting guesses)"}</summary>
+    <div class="rate-note" style="margin-top:0.3rem;">Used on every bid to show what each line costs you and what it makes. Saved with your bid details.</div>
+    <div class="cost-grid">${COST_FIELDS.map(([k,label,u])=>`<label><span>${esc(label)}</span>
+      <span class="cost-in">${u==="$"?"$":""}<input class="input" inputmode="decimal" data-cost-k="${k}" value="${esc(String(c[k]))}">${u&&u!=="$"?` ${esc(u)}`:""}</span></label>`).join("")}</div>
+  </details>`;
+}
+function wireCostsEditor(body,refresh){
+  body.querySelectorAll("[data-cost-k]").forEach(inp=>inp.oninput=()=>{
+    const v=Number(String(inp.value).replace(/[^0-9.]/g,""));
+    if(!(v>=0))return;
+    const info={...bidInfo()};
+    info.costs={...(info.costs||{}),[inp.dataset.costK]:v};
+    companyProfile.bid_info=info;
+    store.set("company_profile",companyProfile);
+    clearTimeout(wireCostsEditor._t);
+    wireCostsEditor._t=setTimeout(()=>{if(currentUser)pushCompanyProfile();},1500);
+    refresh();
+  });
+}
+
+// ── Measuring from the plans (server: /bid-documents/read, kind "takeoff") ──
+// For a job with drawings and no schedule of items. The server reads the
+// sheets and returns quantities, each with how it was worked out; they're
+// shown for checking before they become lines, and each line keeps its
+// basis as a note.
+async function readTakeoff(target){
+  try{
+    let d;
+    if(target.files)d=await postDocFiles("/bid-documents/read",target.files,{kind:"takeoff"},150000);
+    else{
+      const token=await getSupabaseToken();
+      const r=await fetchRetry(SERVER+"/bid-documents/read",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,url:target.url,
+          ...(target.urls&&target.urls.length?{urls:target.urls}:{}),kind:"takeoff"})},180000);
+      d=await r.json();
+    }
+    if(d&&d.ok)return d;
+    const msg=d&&d.reason==="fetch_failed"?(FETCH_ERRORS[d.detail]||"Couldn't download the plans.")
+      :(d&&(DOC_ERRORS[d.reason]||d.detail))||"Couldn't read the plans.";
+    return{ok:false,msg};
+  }catch(e){return{ok:false,msg:offlineOrServer()};}
+}
+async function renderTakeoff(body,city,id,b){
+  const p=prepFor(id);
+  const back=()=>openPrep(city,id,"pricing");
+  let linked=prepDocCandidates(b).filter(d=>d.name!=="Original posting");
+  linked.sort((x,y)=>(/plan|drawing|sheet|civil/i.test(y.name))-(/plan|drawing|sheet|civil/i.test(x.name)));
+  // Only the posting: the server follows it to the plan files it links.
+  const post=prepDocCandidates(b).find(d=>d.name==="Original posting");
+  if(!linked.length&&post)linked=[{name:"The plans on the posting page",url:post.url}];
+  const plansish=linked.filter(d=>!/addend/i.test(d.name)).slice(0,4);
+  const ups=await bidFiles.list(id,"upload");
+  if(!document.getElementById("prep-body"))return;
+  body.innerHTML=`<div class="workspace-title">Measure from the plans</div>
+    <div class="rate-note" style="margin-top:0;">Pick the plan set. Sidewalk area, curb length, ramps and slabs are worked out from the quantity tables and dimensions on the sheets, each with how it was measured, for you to check.</div>
+    ${plansish.length>1?`<button class="btn-ghost doc-pick" id="to-all">All ${plansish.length} linked files together</button>`:""}
+    ${ups.map((u,i)=>`<button class="btn-ghost doc-pick" data-tu="${i}">${esc(u.name)} <small>on this phone</small></button>`).join("")}
+    ${linked.map((d,i)=>`<button class="btn-ghost doc-pick" data-tl="${i}">${esc(d.name)}</button>`).join("")}
+    <button class="btn-ghost doc-pick" id="to-upload">Upload the plans</button>
+    <button class="btn-ghost" id="to-back">Back to pricing</button>`;
+  document.getElementById("to-back").onclick=back;
+  const run=async(label,target)=>{
+    body.innerHTML=`<div class="account-status"><span class="spin"></span> Measuring ${esc(label)}… plan sets can take a couple of minutes.</div>`;
+    const res=await readTakeoff(target);
+    if(!document.getElementById("prep-body"))return;
+    if(!res.ok){
+      body.innerHTML=`<div class="alert alert-amber"><span>${esc(res.msg)}</span></div><button class="btn-ghost" id="to-back">Back to pricing</button>`;
+      document.getElementById("to-back").onclick=back;return;
+    }
+    p.takeoff={source:label,at:Date.now(),items:res.line_items||[],notes:res.notes||""};
+    savePrep(id,city);
+    renderTakeoffReview(body,city,id,b);
+  };
+  body.querySelectorAll("[data-tu]").forEach(x=>x.onclick=()=>{const u=ups[Number(x.dataset.tu)];
+    run(u.name,{files:[new File([u.blob],u.name,{type:"application/pdf"})]});});
+  body.querySelectorAll("[data-tl]").forEach(x=>x.onclick=()=>{const d=linked[Number(x.dataset.tl)];run(d.name,{url:d.url});});
+  const all=document.getElementById("to-all");
+  if(all)all.onclick=()=>run(`${plural(plansish.length,"linked file")}`,{url:plansish[0].url,urls:plansish.slice(1).map(d=>d.url)});
+  document.getElementById("to-upload").onclick=async()=>{
+    const files=await pickPdfs(true);
+    if(!files.length)return;
+    const bad=uploadProblem(files);
+    if(bad){toast(bad);return;}
+    await rememberUploads(id,files);
+    run(docsName(files),{files});
+  };
+}
+function renderTakeoffReview(body,city,id,b){
+  const p=prepFor(id),t=p.takeoff||{items:[]};
+  const back=()=>openPrep(city,id,"pricing");
+  body.innerHTML=`<div class="workspace-title">Measured from ${esc(t.source||"the plans")}</div>
+    <div class="alert alert-amber"><span>These are estimates from the drawings. Check each one against the sheets before you bid on it.</span></div>
+    ${t.items.length?`<table class="ps-table"><thead><tr><th>Item</th><th>Qty</th></tr></thead><tbody>
+      ${t.items.map(it=>`<tr><td>${esc(it.description)}<small>${esc(it.basis)}</small></td><td>${esc(Number(it.quantity).toLocaleString())} ${esc(it.unit||"")}</td></tr>`).join("")}</tbody></table>
+      <div class="act-primary"><button class="ma-gold" id="to-use">Use these lines</button><button class="ma-ghost" id="to-add">Add to my lines</button></div>`
+      :`<div class="account-status">No quantities could be worked out from these sheets.</div>`}
+    ${t.notes?`<div class="rate-note"><b>To check by hand:</b> ${esc(t.notes)}</div>`:""}
+    <button class="btn-ghost" id="to-again" style="margin-top:0.5rem;">Measure from other sheets</button>
+    <button class="btn-ghost" id="to-back">Back to pricing</button>`;
+  document.getElementById("to-back").onclick=back;
+  document.getElementById("to-again").onclick=()=>renderTakeoff(body,city,id,b);
+  const take=(replace)=>{
+    const d=rateData[bidState(city,b)];
+    const lines=t.items.map(it=>({...lineFromDocItem(it,d),note:`Measured from the plans: ${it.basis}. Check it.`}));
+    p.lines=replace?lines:(p.lines||[]).filter(l=>(l.name||"").trim()||l.qty||l.price).concat(lines);
+    p.linesFrom=replace?"documents":"you";
+    savePrep(id,city);back();
+  };
+  const u=document.getElementById("to-use"),a=document.getElementById("to-add");
+  if(u)u.onclick=()=>{if(confirm("Replace your current lines with the measured quantities?"))take(true);};
+  if(a)a.onclick=()=>take(false);
+}
+
 function renderPrepPricing(body,city,id,b){
   const p=prepFor(id);
   const hist=priceHistory(id);
@@ -5952,6 +6622,7 @@ function renderPrepPricing(body,city,id,b){
         <button type="button" class="prep-x" data-del="${i}" aria-label="Delete line">×</button>
       </div>
       <small class="pl-ref" data-pc="${i}">${priceCheckHTML(l)}</small>
+      <small class="pl-ref" data-cost="${i}">${lineProfitHTML(l,p)}</small>
       ${l.note?`<small class="pl-ref rate-thin">${esc(l.note)}</small>`:""}
       ${historyHint(hist[lineKey(l)])}
     </div>`;
@@ -5965,6 +6636,7 @@ function renderPrepPricing(body,city,id,b){
   body.innerHTML=`<button class="btn-primary" id="pl-read" style="margin-bottom:0.6rem;">${canRead?"Read quantities from the bid form":"Read quantities from a bid form you upload"}</button>
     ${p.docInfo&&p.docInfo.read_at?`<button class="btn-ghost" id="pl-docinfo" style="margin:0 0 0.6rem;">See what was read from ${esc(p.docInfo.source||"the documents")}</button>`:""}
     ${hasPast?`<button class="btn-ghost" id="pl-past" style="margin:0 0 0.6rem;">Use a past bid</button>`:""}
+    <button class="btn-ghost" id="pl-takeoff" style="margin:0 0 0.6rem;">${p.takeoff?"See what was measured from the plans":"No item list? Measure from the plans"}</button>
     <div class="rate-note" style="margin-top:0;">${p.docInfo&&p.docInfo.source?`Bid documents read: ${esc(p.docInfo.source)}. `:""}${startNote} Change anything to your own numbers.</div>
     <div id="prep-lines">${p.lines.map(lineRow).join("")}</div>
     <div class="prep-add"><button class="btn-ghost" id="pl-add">+ Add line</button><button class="btn-ghost" id="pl-reset">Start over from ballpark</button></div>
@@ -5974,6 +6646,8 @@ function renderPrepPricing(body,city,id,b){
       <div><span>Markup <input class="input pt-mk" id="pt-mk" inputmode="decimal" value="${esc(String(p.markup||0))}" aria-label="Markup percent">%</span><b id="pt-mkv">${money0(t.markup)}</b></div>
       <div class="pt-grand"><span>Your bid</span><b id="pt-total">${money0(t.total)}</b></div>
     </div>
+    <div id="pt-profit">${profitSummaryHTML(p)}</div>
+    ${costsEditorHTML()}
     ${b.value?`<div class="rate-note">Posted value: <b>${esc(b.value)}</b></div>`:""}
     <div class="rate-note">Add lines the posting doesn't list: removal, mobilization, traffic control, testing.</div>`;
   const refresh=()=>{
@@ -5981,7 +6655,9 @@ function renderPrepPricing(body,city,id,b){
     p.lines.forEach((l,i)=>{
       const el=body.querySelector(`[data-total="${i}"]`);if(el)el.textContent=money0((Number(l.qty)||0)*(Number(l.price)||0));
       const pc=body.querySelector(`[data-pc="${i}"]`);if(pc)pc.innerHTML=priceCheckHTML(l);
+      const cc=body.querySelector(`[data-cost="${i}"]`);if(cc)cc.innerHTML=lineProfitHTML(l,p);
     });
+    const pp=document.getElementById("pt-profit");if(pp)pp.innerHTML=profitSummaryHTML(p);
     document.getElementById("pt-sub").textContent=money0(tt.sub);
     document.getElementById("pt-mkv").textContent=money0(tt.markup);
     document.getElementById("pt-total").textContent=money0(tt.total);
@@ -6017,6 +6693,7 @@ function renderPrepPricing(body,city,id,b){
   if(rd)rd.onclick=()=>renderDocPicker(body,city,id,b);
   const di=document.getElementById("pl-docinfo");
   if(di)di.onclick=()=>renderSavedDocInfo(body,city,id,b);
+  document.getElementById("pl-takeoff").onclick=()=>p.takeoff?renderTakeoffReview(body,city,id,b):renderTakeoff(body,city,id,b);
   document.getElementById("pl-add").onclick=()=>{
     p.lines.push({name:"",qty:"",unit:"",price:"",ref:null});
     p.linesFrom="you";
@@ -6031,6 +6708,7 @@ function renderPrepPricing(body,city,id,b){
     p.markup=e.target.value.replace(/[^0-9.]/g,"");
     savePrep(id,city);refresh();
   };
+  wireCostsEditor(body,refresh);
 }
 
 // Plain text of the summary -- what "Copy" puts on the clipboard and the
@@ -6142,6 +6820,7 @@ const BID_INFO_FIELDS=[
   ["license","License / registration numbers","State or city contractor numbers"],
   ["years","Years in business","12"],
   ["insurance","Insurance carrier and agent","Carrier, agent name and phone"],
+  ["insurance_email","Insurance agent's email","agent@example.com"],
   ["bond_company","Bonding company (surety)","Surety name"],
   ["bond_agent","Bonding agent","Agent's name"],
   ["bond_email","Bonding agent's email","agent@example.com"],
@@ -6162,6 +6841,8 @@ function openBidInfo(after){
   document.getElementById("bi-save").onclick=()=>{
     const next={};
     mc.querySelectorAll(".bi-field").forEach(f=>{const v=f.value.trim().slice(0,300);if(v)next[f.dataset.k]=v;});
+    // Costs live alongside, edited on the Pricing tab.
+    if(info.costs)next.costs=info.costs;
     companyProfile.bid_info=next;
     store.set("company_profile",companyProfile);
     pushCompanyProfile();
@@ -6206,7 +6887,7 @@ function fillError(d,what){
 async function fillBidForm(url,payload){
   try{
     const token=await getSupabaseToken();
-    const r=await fetchWithTimeout(SERVER+"/bid-documents/fill",{method:"POST",headers:{"Content-Type":"application/json"},
+    const r=await fetchRetry(SERVER+"/bid-documents/fill",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,url,...payload})},120000);
     const d=await r.json();
     if(d&&d.ok)return d;
@@ -6240,6 +6921,9 @@ async function renderFormFill(body,city,id,b){
   // bid links to. The document the schedule was read from goes first.
   const opts=ups.map(u=>({name:u.name,file:new File([u.blob],u.name,{type:"application/pdf"}),phone:true}))
     .concat(linked.filter(d=>!ups.some(u=>u.name===d.name)).map(d=>({name:d.name,url:d.url})));
+  // Nothing linked but the posting: the server finds the bid form on it.
+  const post=prepDocCandidates(b).find(d=>d.name==="Original posting");
+  if(!opts.length&&post)opts.push({name:"The bid form on the posting page",url:post.url,posting:true});
   opts.sort((x,y)=>(y.name===src)-(x.name===src));
   const pre=new Set(opts.map((o,i)=>(o.name===src||FORMISH_RE.test(o.name)||(o.phone&&opts.length<=2))?i:-1).filter(i=>i>=0));
   if(!pre.size&&opts.length)pre.add(0);
@@ -6303,6 +6987,8 @@ async function fillAndShow(body,city,id,b,forms){
     const res=f.file?await fillBidFormFile(f.file,fillPayload(b,p,city)):await fillBidForm(f.url,fillPayload(b,p,city));
     if(!document.getElementById("prep-body"))return;
     if(res.ok){
+      // Found behind a page or in a zip: named after the form itself.
+      if(res.form_name&&(f.posting||!/\.pdf$/i.test(f.url||"")))f.name=res.form_name.replace(/\.pdf$/i,"");
       const blob=b64ToBlob(res.pdf_b64);
       await bidFiles.put(id,"filled",filledName(f.name),blob,{filled:res.filled.length,flat:!!res.flat,from:f.name});
       res.blob=blob;
@@ -6356,8 +7042,14 @@ function packetChecklist(b,p,names){
   out.push(String(p.addenda||"").trim()?`Write the addenda you received (${String(p.addenda).trim()}) where the form asks.`
     :"Check for addenda and acknowledge each one on the form.");
   out.push("Insurance certificate, if the bid asks for one.");
-  out.push(`Seal the envelope and mark it with the project name${b.bid_number?` and bid number ${b.bid_number}`:""}.`);
-  if(b.deadline)out.push(`Deliver it before ${b.deadline}. Late bids are usually returned unopened.`);
+  const on=onlineSubmission(b,p);
+  if(on){
+    out.push(`Scan each signed page and upload it with this packet through ${on.name}, in the places it asks for each.`);
+    if(b.deadline)out.push(`Submit at least a day before ${b.deadline}; portals slow down and lock at the deadline. Save the confirmation.`);
+  }else{
+    out.push(`Seal the envelope and mark it with the project name${b.bid_number?` and bid number ${b.bid_number}`:""}.`);
+    if(b.deadline)out.push(`Deliver it before ${b.deadline}. Late bids are usually returned unopened.`);
+  }
   return out;
 }
 async function renderPacket(body,city,id,b){
@@ -6439,6 +7131,25 @@ function concreteYards(lines){
     else if(/concrete|curb|gutter|ramp|sidewalk|walk|driveway|approach|median|slab|flatwork/i.test(name))other.push({name,qty,unit:l.unit});
   });
   return{out,other,total:out.reduce((s,x)=>s+x.cy,0)};
+}
+// The same request to several plants at once, blind-copied.
+function concreteQuoteMailAll(b,p,city,waste,emails){
+  const one=concreteQuoteMail(b,p,city,waste,"plant@example.com");
+  return one.replace(/^mailto:[^?]*\?/,`mailto:?bcc=${encodeURIComponent(emails.join(","))}&`);
+}
+// Quotes logged on this bid, cheapest delivered cost for the job first.
+function quoteCompareHTML(p,waste){
+  const c=concreteState(p),y=concreteYards(p.lines),yards=pickedYards(y,c,waste).yards;
+  const rows=Object.entries(c.plants).filter(([,q])=>Number(q&&q.price)>0).map(([name,q])=>{
+    const total=Number(q.price)*yards+(Number(q.delivery)||0)+(Number(q.short)||0);
+    return{name,q,total};
+  }).sort((a,z)=>a.total-z.total);
+  if(rows.length<2)return"";
+  return`<div class="workspace-title" style="margin-top:0.3rem;">Your quotes, side by side</div>
+    <table class="ps-table"><thead><tr><th>Plant</th><th>A yard</th><th>For ${Math.round(yards)} yd</th></tr></thead><tbody>
+    ${rows.map((r,i)=>`<tr><td>${esc(r.name)}${i===0?` <b class="pc pc-ok">cheapest</b>`:""}<small>${[r.q.delivery?`${money0(r.q.delivery)} delivery`:"",r.q.short?`${money0(r.q.short)} short-load`:""].filter(Boolean).join(", ")}</small></td>
+      <td>${money2(r.q.price)}</td><td><b>${money0(r.total)}</b></td></tr>`).join("")}</tbody></table>
+    <div class="rate-note">Delivered cost for this job's yards, with each plant's delivery and short-load charges. Pricing costs your concrete at the lowest price a yard.</div>`;
 }
 function concreteQuoteMail(b,p,city,waste,to){
   const i=bidInfo(),y=concreteYards(p.lines);
@@ -6568,7 +7279,7 @@ async function loadSuppliers(city,fresh,near,b){
   if(isOffline())return{ok:false,reason:"offline"};
   try{
     const token=await getSupabaseToken();
-    const r=await fetchWithTimeout(SERVER+"/suppliers/nearby",{method:"POST",headers:{"Content-Type":"application/json"},
+    const r=await fetchRetry(SERVER+"/suppliers/nearby",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,...pl,near,
         title:(b&&b.title)||"",scope:String((b&&b.scope)||"").slice(0,1500),url:(b&&b.url)||""})},75000);
     const d=await r.json();
@@ -6582,7 +7293,7 @@ function plantSelect(name,status,i){
 }
 function suppliersHTML(d,b,p,city,waste){
   if(!d||!d.ok){
-    const why={not_licensed:"Supplier search is part of a paid plan.",place_not_found:"Couldn't place this town on the map.",
+    const why={not_licensed:"Supplier search is part of a paid plan.",
       bad_place:"Couldn't tell where this job is. Add the job address on the Steps tab.",
       place_not_found:"Couldn't tell where this job is. Add the job address on the Steps tab.",
       rate_limited:"Too many searches today. Try again tomorrow.",offline:"You're offline."}[d&&d.reason]
@@ -6595,7 +7306,12 @@ function suppliersHTML(d,b,p,city,waste){
   plants.sort((a,z)=>(a.st===PLANT_STATUS[4])-(z.st===PLANT_STATUS[4])||a.miles-z.miles);
   const web=d.web||[];
   if(!plants.length&&!web.length)return`<div class="account-status">No ready-mix plants found within ${d.radius_mi} miles.</div>`;
-  return`${plants.map(x=>{
+  // Every plant with an email, in one message (each sees only their own
+  // address), and the quotes that come back side by side.
+  const emails=plants.filter(x=>x.st!==PLANT_STATUS[4]&&/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(x.email||"")).map(x=>x.email);
+  const mailAll=emails.length>1?`<div class="act-primary" style="margin-top:0;"><a class="ma-ghost" id="rm-mailall" href="${esc(concreteQuoteMailAll(b,p,city,waste,emails))}">Email all ${emails.length} plants for a quote</a></div>
+    <div class="rate-note" style="margin-top:0;">One email, each plant blind-copied so none sees the others.</div>`:"";
+  return`${quoteCompareHTML(p,waste)}${mailAll}${plants.map(x=>{
     const q=c.plants[x.name]||{};
     return`<div class="sup-row${x.st===PLANT_STATUS[4]?" sup-out":""}">
       <div class="sup-head"><div class="sup-name">${esc(x.name)} ${x.miles!=null?`<span class="sup-mi">${x.miles} mi</span>`:""}${x.source==="web"?` <span class="sup-mi">found online</span>`:""}</div>${plantSelect(x.name,x.st,x.i)}</div>
@@ -6805,6 +7521,14 @@ function renderConcretePanel(body,city,id,b){
         }
         redraw();
       };
+    });
+    const all=document.getElementById("rm-mailall");
+    if(all)all.addEventListener("click",()=>{
+      (sup.plants||[]).forEach(x=>{
+        const cur=c.plants[x.name]||{};
+        if(x.email&&(!cur.status||cur.status==="Not contacted"))c.plants[x.name]={...cur,status:"Emailed"};
+      });
+      save();setTimeout(redraw,0);
     });
     document.querySelectorAll("#rm-sup [data-mailed]").forEach(a=>{
       a.addEventListener("click",()=>{
@@ -7124,7 +7848,7 @@ function findBid(id){
 }
 function toggleSave(city,id){
   if(saved[id]){delete saved[id];deleteSavedBidCloud(id);}
-  else{const b=findBid(id);if(b){saved[id]={...b,_city:city};pushSavedBid(id,city);}}
+  else{const b=findBid(id);if(b){saved[id]={...b,_city:city};pushSavedBid(id,city);preReadBid(city,id);}}
   store.set("saved",saved);
   renderFeed();
   if(document.getElementById("screen-saved").classList.contains("active"))renderSaved();
@@ -7385,7 +8109,7 @@ function openDetail(city,b){
         ?` This job also covers ${esc(b.also_in.slice(0,4).map(titleCase).join(", "))}${b.also_in.length>4?" and more":""}.`
         :""}</span></div>`:""}
     ${(()=>{const pg=prepProgress(id,b);return`<button class="btn-primary prep-cta" id="prep-open">${
-      pg?`Continue preparing \u00b7 ${pg.done}/${pg.total} done`:"Prepare bid \u2192"}</button>`;})()}
+      pipeline[id]==="won"?"Run the job \u2192":pg?`Continue preparing \u00b7 ${pg.done}/${pg.total} done`:"Prepare bid \u2192"}</button>`;})()}
     ${watchDetailHTML(id)}
     ${holderBlock(b)}
     ${row("Scope of Work",b.scope)}
@@ -8465,6 +9189,21 @@ function fetchWithTimeout(url,opts,ms=12000){
   const ctrl=new AbortController();
   const t=setTimeout(()=>ctrl.abort(),ms);
   return fetch(url,{...opts,signal:ctrl.signal}).finally(()=>clearTimeout(t));
+}
+// The same, tried once more when the server is restarting (502/503/504 from
+// the host while a deploy rolls over) or the phone's connection dropped.
+// Only for reads and lookups: never for anything that sends, charges or
+// saves, where a second try could do it twice. A timeout isn't retried.
+async function fetchRetry(url,opts,ms){
+  const wait=()=>new Promise(r=>setTimeout(r,2500));
+  try{
+    const r=await fetchWithTimeout(url,opts,ms);
+    if(![502,503,504].includes(r.status))return r;
+  }catch(e){
+    if(e&&e.name==="AbortError")throw e;
+  }
+  await wait();
+  return fetchWithTimeout(url,opts,ms);
 }
 
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)autoUnlock();});
