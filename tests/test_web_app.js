@@ -2114,9 +2114,9 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await page.evaluate((i) => openPrep("Aurora, MO", i, "pricing"), id);
     await page.waitForTimeout(400);
     const pricing = await page.textContent("#prep-body");
-    check("each line it can cost shows your cost and what it makes", /Your cost about \$\d/.test(pricing) && /makes \$|loses \$/.test(pricing), pricing.slice(0, 600));
-    check("...and the bid shows a profit from starting guesses until costs are set",
-          /Profit on those lines|Loss on those lines/.test(pricing) && /starting guesses/.test(pricing));
+    check("the bid shows one line of what it makes, from starting guesses until costs are set",
+          /You'd (?:make|lose) about\s*\$\d/.test(pricing) && /starting guesses/.test(pricing) && !/Your cost about/.test(pricing),
+          pricing.slice(-700));
     const before = await page.evaluate((i) => lineCost(prepFor(i).lines[0], prepFor(i)).perUnit, id);
     await page.click("#cost-edit summary");
     await page.fill('[data-cost-k="sf_day"]', "1600");
@@ -2168,7 +2168,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
   }
 
   // ── The job, once it's won ──
-  console.log("\nA won bid runs as a job: award paperwork, pours, daily log, pay requests, payroll");
+  console.log("\nA won bid gets its award paperwork");
   {
     const ctx = await browser.newContext(MOBILE_VIEWPORT);
     const page = await ctx.newPage();
@@ -2187,9 +2187,6 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
         { title: "Elm St Sidewalk", bid_number: "B-17", scope: "Sidewalk", deadline: "2099-11-01", status: "open", agency: "City of Aurora" }] }));
       localStorage.setItem("company_profile", JSON.stringify({ name: "Ace Concrete", phone: "417-555-0100",
         bid_info: { bond_email: "bonds@agent.example", bond_agent: "Pat Lee", insurance_email: "coi@agent.example", address: "1 Main St" } }));
-      // Every page the job prints, captured instead of opened.
-      window.__printed = [];
-      window.open = () => ({ document: { open() {}, write(h) { window.__printed.push(h); }, close() {} } });
     });
     await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
     await page.waitForTimeout(600);
@@ -2208,8 +2205,8 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await page.evaluate((i) => { setPipelineStatus(i, "won"); return openPrep("Aurora, MO", i); }, id);
     await page.waitForTimeout(400);
     const job = await page.textContent("#prep-body");
-    check("a won bid opens on its Job tab", await page.$eval('[data-step="job"]', (b) => b.classList.contains("on")) && /Award paperwork/.test(job) && /Kept on this phone only/.test(job), job.slice(0, 300));
-    check("the contract is the priced lines with the markup in", /Contract \$69,960/.test(job) && /Retainage 5%/.test(job), job);
+    check("a won bid opens on its Job tab", await page.$eval('[data-step="job"]', (b) => b.classList.contains("on")) && /Award paperwork/.test(job), job.slice(0, 300));
+    check("only the paperwork, nothing more to manage", !/Pours|Daily log|Pay requests|payroll/i.test(job), job);
     const bond = decodeURIComponent(await page.getAttribute('a[href^="mailto:bonds%40agent.example"]', "href"));
     check("the bonding agent is asked for performance and payment bonds on the contract amount",
           /Hi Pat,/.test(bond) && /Contract amount: \$69,960\.00/.test(bond) && /performance and payment bonds/.test(bond), bond);
@@ -2220,68 +2217,6 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await page.waitForTimeout(200);
     check("the notice to proceed gives the finish date", /Finish by May 1, 2099/.test(await page.textContent("#prep-body")), await page.textContent("#prep-body"));
 
-    // A pour, ordered from the plant.
-    await page.click("#jb-pour");
-    await page.selectOption('[data-pf="line"]', "0");
-    check("picking the line fills its yards with waste", (await page.inputValue('[data-pf="yards"]')) === "117", await page.inputValue('[data-pf="yards"]'));
-    await page.fill('[data-pf="date"]', "2099-03-10");
-    await page.fill('[data-pf="email"]', "orders@mix.example");
-    await page.$eval("#pr-order", (a) => a.addEventListener("click", (e) => e.preventDefault()));
-    await page.click("#pr-order");
-    const order = decodeURIComponent(await page.getAttribute("#pr-order", "href"));
-    check("the order email has the yards, date and delivery address", order.startsWith("mailto:orders@mix.example") && /Yards: 117/.test(order)
-          && /Date: Mar 10, 2099, first truck at 7:00 AM/.test(order) && /Deliver to: /.test(order), order);
-    check("...and marks the pour ordered", await page.evaluate((i) => jobFor(i).pours[0].status === "ordered", id));
-    await page.click("#pr-back");
-
-    // A day on the log, with a photo, feeds the pay request.
-    await page.click("#jb-log");
-    await page.waitForTimeout(200);
-    await page.fill('[data-lf="date"]', "2099-03-10");
-    await page.fill('[data-lf="crew"]', "4");
-    await page.fill('[data-lf="work"]', "Poured Elm St north side");
-    await page.fill('[data-placed="0"]', "200");
-    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("#lg-photo")]);
-    await chooser.setFiles({ name: "site.jpg", mimeType: "image/jpeg", buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]) });
-    await page.waitForTimeout(600);
-    check("a photo is kept with the day", (await page.$$(".log-photos img")).length === 1);
-    await page.click("#lg-save");
-    await page.waitForTimeout(300);
-    check("the job shows what's been placed", /Placed so far: 4 in\. concrete sidewalk 200 sq yd/.test(await page.textContent("#prep-body")));
-    await page.click("#jb-pay");
-    await page.waitForTimeout(200);
-    check("the pay request starts from what the log says was placed", (await page.inputValue('[data-py="0"]')) === "200");
-    const tot = await page.textContent("#py-tot");
-    check("...holds back retainage and shows what's due", /\$13,200\.00/.test(tot) && /\$660\.00/.test(tot) && /Due this request\$12,540\.00/.test(tot), tot);
-    await page.click("#py-save");
-    await page.waitForTimeout(300);
-    const pay = await page.evaluate(() => window.__printed.pop());
-    check("it prints as an application for payment", /Application for payment No\. 1/.test(pay) && /Current payment due<\/span><b>\$12,540\.00/.test(pay), pay.slice(0, 200));
-    await page.click("#jb-pay");
-    await page.waitForTimeout(200);
-    check("the next request starts after the last one", (await page.inputValue('[data-py="0"]')) === "" && /Before/.test(await page.textContent("#prep-body")));
-    await page.click("#py-back");
-
-    // Certified payroll.
-    await page.click("#jb-crew");
-    await page.click("#cr-add");
-    await page.fill('[data-cw="name"]', "Sam Ortiz");
-    await page.fill('[data-cw="cls"]', "Cement Mason");
-    await page.fill('[data-cw="rate"]', "30");
-    await page.fill('[data-cw="fringe"]', "5");
-    await page.click("#cr-save");
-    await page.click("#jb-week");
-    for (const x of [1, 2, 3, 4, 5]) await page.fill(`[data-ph="0:${x}"]`, "10");
-    await page.click("#pw-save");
-    await page.waitForTimeout(300);
-    const pr = await page.evaluate(() => window.__printed.pop());
-    check("payroll pays overtime past 40 hours and cash fringe", /\$1,900\.00/.test(pr) && /40 \+ 10 OT/.test(pr), pr.replace(/<[^>]+>/g, " ").slice(0, 600));
-    check("...with the statement of compliance to sign, and no ID numbers kept", /Statement of compliance/.test(pr) && /ID no\. \(write in\)/.test(pr));
-    await page.click("#jb-logprint");
-    await page.waitForTimeout(500);
-    const log = await page.evaluate(() => window.__printed.pop() || "");
-    check("the daily log prints with its photos", /Daily log/.test(log) && /Poured Elm St north side/.test(log) && /<img src="data:image/.test(log));
-    check("none of it goes to the server", await page.evaluate(() => !JSON.stringify(bidPrep).includes("Sam Ortiz") && !JSON.stringify(companyProfile).includes("Sam Ortiz")));
     check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
     await ctx.close();
   }
