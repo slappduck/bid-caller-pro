@@ -53,11 +53,11 @@ guntersvilleal.gov,Guntersville,AL,City,City of Guntersville,not_found,,,2026-08
 alexandercityal.gov,Alexander City,AL,City,City of Alexander City,not_found,,,2026-08-11
 magnoliaspringsal.gov,Magnolia Springs,AL,City,Town of Magnolia Springs,not_found,,,2026-08-11
 cityofadamsville.gov,Adamsville,AL,City,City of Adamsville,not_found,,,2026-08-11
-huntsvilleal.gov,Huntsville,AL,City,City of Huntsville,not_found,,,2026-08-11
+huntsvilleal.gov,Huntsville,AL,City,City of Huntsville,found,https://huntsvilleal.gov/rfp,agency,2026-11-02
 birminghamal911.gov,Birmingham,AL,City,Birmingham Emergency Communication District,not_found,,,2026-08-11
 sewardak.gov,Seward,AK,City,City of Seward,not_found,,,2026-08-11
 harpersvilleal.gov,Harpersville,AL,City,Town of Harpersville,not_found,,,2026-08-11
-cityoffoley.gov,Foley,AL,City,City of Foley,not_found,,,2026-08-11
+cityoffoley.gov,Foley,AL,City,City of Foley,found,https://cityoffoley.org/purchasing-and-bids/,custom,2026-11-02
 pelhamlibraryal.gov,Pelham,AL,City,Pelham Publc Library,found,https://pelhamlibraryal.gov/Bids.aspx,civicplus,2026-08-11
 annistonal.gov,Anniston,AL,City,"City of Anniston, Alabama",found,https://annistonal.gov/purchasing,agency,2026-08-11
 greensboroal.gov,Greensboro,AL,City,City of Greensboro,not_found,,,2026-08-11
@@ -91,10 +91,10 @@ gardencityal.gov,Garden City,AL,City,"Town of Garden City, Alabama",not_found,,,
 spanishfortal.gov,Spanish Fort,AL,City,City of Spanish Fort,not_found,,,2026-08-11
 clantonal.gov,Clanton,AL,City,City of Clanton,not_found,,,2026-08-11
 whittieralaska.gov,Whittier,AK,City,City of Whittier,not_found,,,2026-08-11
-prattvilleal.gov,Prattville,AL,City,City of Prattville,not_found,,,2026-08-11
+prattvilleal.gov,Prattville,AL,City,City of Prattville,found,https://www.bidnetdirect.com/alabama/cityofprattville/solicitations/open-bids?selectedContent=BUYER,bidnetdirect,2026-11-02
 genevaal.gov,Geneva,AL,City,City of Geneva,not_found,,,2026-08-11
 kimberlyal.gov,Kimberly,AL,City,"City of Kimberly, Alabama",not_found,,,2026-08-11
-dauphinisland.gov,Dauphin Island,AL,City,Town of Dauphin Island,not_found,,,2026-08-11
+dauphinisland.gov,Dauphin Island,AL,City,Town of Dauphin Island,found,https://dauphinisland.gov/departments/purchasing,agency,2026-11-02
 cityofbayminetteal.gov,Bay Minette,AL,City,City of Bay Minette,not_found,,,2026-08-11
 sylacaugaal.gov,Sylacauga,AL,City,City of Sylacauga,not_found,,,2026-08-11
 sardiscityal.gov,Sardis City,AL,City,Sardis City Alabama,not_found,,,2026-08-11
@@ -135,7 +135,7 @@ traffordal.gov,Trafford,AL,City,Town of Trafford,not_found,,,2026-08-11
 montgomeryal.gov,Montgomery,AL,City,City of Montgomery,not_found,,,2026-08-11
 houston-ak.gov,Houston,AK,City,"City of Houston, Alaska",found,https://houston-ak.gov/contracts/competitive_bids.php,agency,2026-08-11
 almaarkansaspd.gov,Alma,AR,City,Alma Police Department,not_found,,,2026-08-11
-fairhopeal.gov,Fairhope,AL,City,City of Fairhope,not_found,,,2026-08-11
+fairhopeal.gov,Fairhope,AL,City,City of Fairhope,found,https://fairhopeal.gov/Bids.aspx,civicplus,2026-11-02
 blackrockar.gov,Black Rock,AR,City,"City of Black Rock, AR",not_found,,,2026-08-11
 juneau.gov,Juneau,AK,City,City and Borough of Juneau,not_found,,,2026-08-11
 cityofaugustaar.gov,Augusta,AR,City,City of Augusta,not_found,,,2026-08-11
@@ -154,7 +154,7 @@ cityofbriarcliffar.gov,Briarcliff,AR,City,City of Briarcliff,not_found,,,2026-08
 orangebeachlibrary.gov,Orange Beach,AL,City,Orange Beach Public Library,not_found,,,2026-08-11
 cityofbigflatar.gov,Big Flat,AR,City,City of Big Flat AR,not_found,,,2026-08-11
 cityofblytheville.gov,Blytheville,AR,City,City of Blytheville,found,https://cityofblytheville.gov/Bids.aspx,civicplus,2026-11-02
-berlinal.gov,Cullman,AL,City,Town of Berlin,not_found,,,2026-08-11
+berlinal.gov,Cullman,AL,City,Town of Berlin,found,https://berlinal.gov/invitation-to-bid,agency,2026-11-02
 ashflatar.gov,Ash Flat,AR,City,City of Ash Flat,not_found,,,2026-08-11
 bellavistaar.gov,Bella Vista,AR,City,City of Bella Vista,found,https://bellavistaar.gov/bids,agency,2026-08-11
 blythevillepdar.gov,Blytheville,AR,City,Blytheville Police Department,not_found,,,2026-08-11
@@ -188,7 +188,7 @@ earlear.gov,Earle,AR,City,"City of Earle, AR",not_found,,,2026-08-11
 cherokeevillage.gov,Cherokee Village,AR,City,"Cherokee Village, Arkansas",not_found,,,2026-08-11
 cityofcasa.gov,Casa,AR,City,City of Casa,not_found,,,2026-08-11
 cityofbono.gov,Bono,AR,City,City of Bono,not_found,,,2026-08-11
-nauvooal.gov,Nauvoo,AL,City,Town of Nauvoo,not_found,,,2026-08-11
+nauvooal.gov,Nauvoo,AL,City,Town of Nauvoo,found,https://nauvooal.gov/public-notices,custom,2026-11-02
 uniontownpdal.gov,UNIONTOWN,AL,City,Uniontown Police Department,not_found,,,2026-08-11
 cityofcrossettar.gov,Crossett,AR,City,City of Crossett,not_found,,,2026-08-11
 corningar.gov,Corning,AR,City,City of Corning Arkansas,not_found,,,2026-08-11
@@ -1368,7 +1368,7 @@ baxleyga.gov,Baxley,GA,City,City of Baxley,not_found,,,2026-08-11
 alpharettaga.gov,Alpharetta,GA,City,City of Alpharetta,found,https://alpharettaga.gov/bids-and-rfps,agency,2026-08-11
 daltonga.gov,Dalton,GA,City,City of Dalton,found,https://daltonga.gov/Bids.aspx,civicplus,2026-08-11
 townofcarl.gov,Auburn,GA,City,Town of Carl,not_found,,,2026-08-11
-cityofblueridgega.gov,Blue Ridge,GA,City,City of Blue Ridge,not_found,,,2026-08-11
+cityofblueridgega.gov,Blue Ridge,GA,City,City of Blue Ridge,found,https://cityofblueridgega.gov/Bids.aspx,civicplus,2026-11-02
 oldsmarfl.gov,Oldsmar,FL,City,City of Oldsmar,not_found,,,2026-08-11
 dallasga.gov,Dallas,GA,City,City of Dallas,found,https://dallasga.gov/Bids.aspx,civicplus,2026-08-11
 zephyrhills.gov,Zephyrhills,FL,City,City of Zephyrhills,not_found,,,2026-08-11
@@ -1412,7 +1412,7 @@ westmiamipolice.gov,West Miami,FL,City,City of West Miami,not_found,,,2026-08-11
 clearwaterfl.gov,Clearwater,FL,City,City of Clearwater,found,https://www.myclearwater.com/Business-Development/Doing-Business-with-the-City/View-Closed-Solicitations,custom,2026-08-11
 cityofconcordga.gov,Concord,GA,City,City of Concord,not_found,,,2026-08-11
 jeffersonga.gov,Jefferson,GA,City,City of Jefferson,found,https://jeffersonga.gov/Bids.aspx,civicplus,2026-08-11
-colquittga.gov,Colquitt,GA,City,City of Colquitt,not_found,,,2026-08-11
+colquittga.gov,Colquitt,GA,City,City of Colquitt,found,https://www.colquittga.gov/copy-of-agendas-and-minutes,custom,2026-11-02
 dawsonville-ga.gov,Dawsonville,GA,City,City of Dawsonville,not_found,,,2026-08-11
 braswellga.gov,Braswell,GA,City,City of Braswell,not_found,,,2026-08-11
 stonecrestga.gov,Lithonia,GA,City,Governor's Commission for the City of Stonecrest,found,https://stonecrestga.gov/Bids.aspx,civicplus,2026-08-11
@@ -1425,7 +1425,7 @@ fenwickisland-de.gov,Fenwick Island,DE,City,Town of Fenwick,not_found,,,2026-08-
 mariettaga.gov,Marietta,GA,City,City of Marietta,found,https://mariettaga.gov/Bids.aspx,civicplus,2026-08-11
 westonfl.gov,Weston,FL,City,"City of Weston, Florida",not_found,,,2026-08-11
 fortlauderdale.gov,Fort Lauderdale,FL,City,City of Ft. Lauderdale,found,https://www.fortlauderdale.gov/Business/Bid-Solicitation-Results,agency,2026-08-11
-chambleega.gov,Chamblee,GA,City,City of Chamblee,not_found,,,2026-08-11
+chambleega.gov,Chamblee,GA,City,City of Chamblee,found,https://www.chambleega.com/finance/procurement.php,custom,2026-11-02
 sibfl.gov,Sunny Isles Beach,FL,City,City of Sunny Isles Beach,found,https://sibfl.gov/purchasing,agency,2026-08-11
 griffinga.gov,Griffin,GA,City,City of Griffin,not_found,,,2026-08-11
 mableton.gov,Mableton,GA,City,CITY OF MABLETON,found,https://mableton.gov/Bids.aspx,civicplus,2026-08-11
@@ -1436,9 +1436,9 @@ virginiagardens-fl.gov,Virginia Gardens,FL,City,Village of Virgina Gardens,not_f
 hiram-ga.gov,Hiram,GA,City,City of Hiram,not_found,,,2026-08-11
 johnscreekga.gov,Johns Creek,GA,City,City of Johns Creek,found,https://johnscreekga.gov/bids,agency,2026-08-11
 mariettageorgia.gov,Marietta,GA,City,City of Marietta,found,https://mariettageorgia.gov/Bids.aspx,civicplus,2026-08-11
-hiawasseega.gov,Hiawassee,GA,City,City of Hiawassee,not_found,,,2026-08-11
+hiawasseega.gov,Hiawassee,GA,City,City of Hiawassee,found,https://hiawasseega.gov/bids,agency,2026-11-02
 franklinga.gov,Franklin,GA,City,City of Franklin,not_found,,,2026-08-11
-forestparkga.gov,Forest Park,GA,City,City of Forest Park,not_found,,,2026-08-11
+forestparkga.gov,Forest Park,GA,City,City of Forest Park,found,https://forestparkga.gov/departments/finance/procurement.php,agency,2026-11-02
 kissimmee.gov,Kissimmee,FL,City,City of Kissimmee,not_found,,,2026-08-11
 greensboroga.gov,Greensboro,GA,City,City of Greensboro,not_found,,,2026-08-11
 davisboroga.gov,Davisboro,GA,City,"City of Davisboro, GA",not_found,,,2026-08-11
@@ -1447,7 +1447,7 @@ newnanga.gov,Newnan,GA,City,"City of Newnan, Georgria",found,https://newnanga.go
 ballgroundga.gov,Ball Ground,GA,City,"City of Ball Ground, Georgia",not_found,,,2026-08-11
 clarkstonga.gov,Clarkston,GA,City,City of Clarkston,found,https://clarkstonga.gov/bid-solicitations,agency,2026-08-11
 hamptonga.gov,Hampton,GA,City,City of Hampton,not_found,,,2026-08-11
-augustaga.gov,Augusta,GA,City,City of Augusta,not_found,,,2026-08-11
+augustaga.gov,Augusta,GA,City,City of Augusta,found,https://augustaga.gov/procurement,agency,2026-11-02
 hartwellga.gov,Hartwell,GA,City,City of Hartwell,not_found,,,2026-08-11
 lawrencevillega.gov,Lawrenceville,GA,City,City of Lawrenceville,not_found,,,2026-08-11
 peachtreecornersga.gov,Peachtree Corners,GA,City,City of Peachtree Corners,found,https://peachtreecornersga.gov/Bids.aspx,civicplus,2026-08-11
@@ -1494,7 +1494,7 @@ midville-ga.gov,Midville,GA,City,Midville Police Department,not_found,,,2026-08-
 tiftonga.gov,Tifton,GA,City,City of Tifton,found,https://tiftonga.gov/Bids.aspx,civicplus,2026-08-11
 milnerga.gov,Milner,GA,City,City of Milner,not_found,,,2026-08-11
 milledgevillepdga.gov,Milledgeville,GA,City,Milledgeville Police Department,not_found,,,2026-08-11
-glennvillega.gov,Glennville,GA,City,City of Glennville,not_found,,,2026-08-11
+glennvillega.gov,Glennville,GA,City,City of Glennville,found,https://glennvillega.gov/invitation-to-bid,agency,2026-11-02
 lakelandga.gov,Lakeland,GA,City,"City of Lakeland, GA",not_found,,,2026-08-11
 braselton.gov,Braselton,GA,City,Town of Braselton,found,https://braselton.gov/town_info/rfp_bids/index.php,agency,2026-08-11
 cityofmorgantonga.gov,Morganton,GA,City,City of Morganton,not_found,,,2026-08-11
@@ -1531,14 +1531,14 @@ hialeahfl.gov,Hialeah,FL,City,City of Hialeah,not_found,,,2026-08-11
 cityofclintoniowa.gov,Clinton,IA,City,City of Clinton Iowa,found,https://cityofclintoniowa.gov/Bids.aspx,civicplus,2026-08-11
 salecityga.gov,Sale City,GA,City,City of Sale City,not_found,,,2026-08-11
 cityofclaytonga.gov,Clayton,GA,City,City of Clayton,not_found,,,2026-08-11
-bloomingdale-ga.gov,Bloomingdale,GA,City,City of Bloomingdale,not_found,,,2026-08-11
+bloomingdale-ga.gov,Bloomingdale,GA,City,City of Bloomingdale,found,https://bloomingdale-ga.gov/finance/purchasing,agency,2026-11-02
 algonaiowa.gov,Algona,IA,City,City of Algona,found,https://algonaiowa.gov/Bids.aspx,civicplus,2026-08-11
 raycityga.gov,Ray City,GA,City,City of Ray City,not_found,,,2026-08-11
 atlantaga.gov,Atlanta,GA,City,City of Atlanta,not_found,,,2026-08-11
 hamiltonga.gov,Hamilton,GA,City,City of Hamilton,not_found,,,2026-08-11
 tuckerga.gov,Tucker,GA,City,"City of Tucker, GA",found,https://tuckerga.gov/bids,agency,2026-08-11
 cityofnichollsga.gov,Nicholls,GA,City,City Of Nicholls,not_found,,,2026-08-11
-hazlehurstga.gov,Hazlehurst,GA,City,City of Hazlehurst,not_found,,,2026-08-11
+hazlehurstga.gov,Hazlehurst,GA,City,City of Hazlehurst,found,https://www.hazlehurstga.gov/general-8,custom,2026-11-02
 sugarhillga.gov,Sugar Hill,GA,City,City of Sugar Hill,not_found,,,2026-08-11
 fairmountga.gov,Fairmount,GA,City,City of Fairmount GA,not_found,,,2026-08-11
 hawkinsvillega.gov,Hawkinsville,GA,City,City of Hawkinsville,not_found,,,2026-08-11
@@ -1577,7 +1577,7 @@ muscatineiowa.gov,Muscatine,IA,City,City of Muscatine,found,https://muscatineiow
 marshalltown-ia.gov,Marshalltown,IA,City,City of Marshalltown,found,https://marshalltown-ia.gov/Bids.aspx,civicplus,2026-08-11
 fruitlandia.gov,Fruitland,IA,City,City of Fruitland Iowa,not_found,,,2026-08-11
 fortatkinsonia.gov,Fort Atkinson,IA,City,City of Fort Atkinson,not_found,,,2026-08-11
-woodstockga.gov,Woodstock,GA,City,City of Woodstock,not_found,,,2026-08-11
+woodstockga.gov,Woodstock,GA,City,City of Woodstock,found,https://woodstockga.gov/your_government/departments/finance_department/purchasing.php,agency,2026-11-02
 belmondpdia.gov,Belmond,IA,City,Belmond Police Department,not_found,,,2026-08-11
 statesboroga.gov,Statesboro,GA,City,City of Statesboro,found,https://statesboroga.gov/departments/central_services/purchasing_bids.php,agency,2026-08-11
 miltonga.gov,Milton,GA,City,City of MIlton,not_found,,,2026-08-11
@@ -1591,7 +1591,7 @@ ciww.gov,Des Moines,IA,City,Des Moines Water Works,found,https://ciww.gov/rfp,ag
 belleplaineiowa.gov,Belle Plaine,IA,City,City of Belle Plaine,not_found,,,2026-08-11
 lakemillsiowa.gov,Lake Mills,IA,City,City of Lake Mills,found,https://lakemillsiowa.gov/Bids.aspx,civicplus,2026-08-11
 colfaxia.gov,Colfax,IA,City,City of Colfax,found,https://colfaxia.gov/bids-and-rfps,agency,2026-11-02
-warrentonga.gov,Warrenton,GA,City,City of Warrenton,not_found,,,2026-08-11
+warrentonga.gov,Warrenton,GA,City,City of Warrenton,found,https://warrentonga.gov/procurement,agency,2026-11-02
 holsteinia.gov,Holstein,IA,City,City of Holstein,not_found,,,2026-08-11
 grangeriowa.gov,Granger,IA,City,City of Granger,not_found,,,2026-08-11
 westburlingtoniowa.gov,West Burlington,IA,City,City of West Burlington,found,https://westburlingtoniowa.gov/Bids.aspx,civicplus,2026-08-11
@@ -1603,7 +1603,7 @@ adairia.gov,Adair,IA,City,City of Adair,not_found,,,2026-08-11
 ruthvenfire.gov,Ruthven,IA,City,Ruthven Fire Department,not_found,,,2026-08-11
 rossvillega.gov,Rossville,GA,City,"City of Rossville, GA",not_found,,,2026-08-11
 sandyspringsgapolice.gov,Sandy Springs,GA,City,Sandy Springs Police Department,not_found,,,2026-08-11
-portwentworthga.gov,Port Wentworth,GA,City,City of Port Wentworth,not_found,,,2026-08-11
+portwentworthga.gov,Port Wentworth,GA,City,City of Port Wentworth,found,https://portwentworthga.gov/gov-pubnotices,custom,2026-11-02
 jacksonvillega.gov,Jacksonville,GA,City,City of Jacksonville,not_found,,,2026-08-11
 honolulu.gov,Honolulu,HI,City,City and County of Honolulu,not_found,,,2026-08-11
 parkersburgiapolice.gov,Parkersburg,IA,City,Parkersburg Police Department,not_found,,,2026-08-11
@@ -1685,7 +1685,7 @@ snellville.gov,Snellville,GA,City,City of Snellville,found,https://snellville.go
 cityofrigby.gov,Rigby,ID,City,City of Rigby,found,https://cityofrigby.gov/bids-and-rfps,agency,2026-08-11
 belvidereil.gov,Bevlvidere,IL,City,City of Belvidere,found,https://belvidereil.gov/Bids.aspx,civicplus,2026-08-11
 athensil.gov,Athens,IL,City,City of Athens,not_found,,,2026-08-11
-cedartowngeorgia.gov,Cedartown,GA,City,City of Cedartown,not_found,,,2026-08-11
+cedartowngeorgia.gov,Cedartown,GA,City,City of Cedartown,found,https://cedartowngeorgia.gov/bids,agency,2026-11-02
 burbankil.gov,Burbank,IL,City,The City of Burbank Illinois,found,https://burbankil.gov/Bids.aspx,civicplus,2026-08-11
 sandpointidaho.gov,Sandpoint,ID,City,City of Sandpoint,not_found,,,2026-08-11
 nampapolice.gov,Nampa,ID,City,Nampa Police Department,not_found,,,2026-08-11
@@ -2879,10 +2879,10 @@ armadatwp.gov,Armada,MI,City,Armada Township,not_found,,,2026-08-11
 westportisland.gov,Westport Island,ME,City,Town of Westport Island,not_found,,,2026-08-11
 berglandmi.gov,Bergland,MI,City,Bergland Township,not_found,,,2026-08-11
 cheboygan.gov,Cheboygan,MI,City,City of Cheboygan,not_found,,,2026-08-11
-brileytownshipmi.gov,Atlanta,MI,City,Briley Township,not_found,,,2026-08-11
+brileytownshipmi.gov,Atlanta,MI,City,Briley Township,found,http://www.bidnetdirect.com/brileytownship,bidnetdirect,2026-11-02
 allendalemi.gov,Allendale,MI,City,Allendale Charter Township,not_found,,,2026-08-11
 dewitttownship.gov,DeWitt,MI,City,DeWitt Charter Township,found,https://dewitttownship.gov/Bids.aspx,civicplus,2026-08-11
-byrontwpmi.gov,Byron Center,MI,City,Byron Township,not_found,,,2026-08-11
+byrontwpmi.gov,Byron Center,MI,City,Byron Township,found,https://byrontwpmi.gov/how_do_i/apply_for_obtain/public_notices.php,custom,2026-11-02
 annapolismd.gov,Annapolis,MD,City,City of Annapolis,not_found,,,2026-08-11
 cliomi.gov,Clio,MI,City,City of Clio,not_found,,,2026-08-11
 bertrandtwpmi.gov,Buchanan,MI,City,Bertrand Charter Township,not_found,,,2026-08-11
@@ -2900,7 +2900,7 @@ mariontwpcvxmi.gov,Charlevoix,MI,City,"Marion Township, Charlevoix County, Michi
 sandyriverplantation.gov,Sandy River Plantation,ME,City,Sandy River Plantation,not_found,,,2026-08-11
 helenatownshipmichigan.gov,Alden,MI,City,Helena Township,not_found,,,2026-08-11
 stoughton-ma.gov,Stoughton,MA,City,Town of Stoughton,not_found,,,2026-08-11
-bloomfieldtwpmi.gov,Bloomfield Hills,MI,City,Charter Township of Bloomfield,not_found,,,2026-08-11
+bloomfieldtwpmi.gov,Bloomfield Hills,MI,City,Charter Township of Bloomfield,found,https://bloomfieldtwpmi.gov/government/open-transparent-government/public-notices/,custom,2026-11-02
 alpinetwp.gov,Comstock Park,MI,City,Township of Alpine,not_found,,,2026-08-11
 belding.gov,Belding,MI,City,City of Belding,not_found,,,2026-08-11
 parmatwp.gov,Albion,MI,City,Parma Township,not_found,,,2026-08-11
@@ -2947,7 +2947,7 @@ charlottemi.gov,Charlotte,MI,City,City of Charlotte,not_found,,,2026-08-11
 rockrivertownship.gov,Chatham,MI,City,Rock River Township,not_found,,,2026-08-11
 cascostclair.gov,CASCO,MI,City,Casco Township,not_found,,,2026-08-11
 gladstonemi.gov,GLADSTONE,MI,City,City of Gladstone,not_found,,,2026-08-11
-eastpointemi.gov,Eastpointe,MI,City,City of Eastpointe,not_found,,,2026-08-11
+eastpointemi.gov,Eastpointe,MI,City,City of Eastpointe,found,https://eastpointemi.gov/purchasing,agency,2026-11-02
 charlevoixtownship.gov,Charlevoix,MI,City,Charlevoix Township,not_found,,,2026-08-11
 hayestwpotsegomi.gov,GAYLORD,MI,City,Hayes Township,not_found,,,2026-08-11
 robinsonfiremi.gov,Grand Haven,MI,City,Robinson Township Fire Department,not_found,,,2026-08-11
@@ -2959,7 +2959,7 @@ burnstwpmi.gov,BYRON,MI,City,Township of Burns,not_found,,,2026-08-11
 cityofgrossepointemi.gov,Grosse Pointe City,MI,City,City of Grosse Pointe,not_found,,,2026-08-11
 franklinvillagemi.gov,Franklin,MI,City,Village of Franklin,not_found,,,2026-08-11
 ferndalemi.gov,Ferndale,MI,City,City of Ferndale,not_found,,,2026-08-11
-cityofclare.gov,Clare,MI,City,City of Clare,not_found,,,2026-08-11
+cityofclare.gov,Clare,MI,City,City of Clare,found,https://cityofclare.gov/public-notices,custom,2026-11-02
 columbiatwpmi.gov,Grand Junction,MI,City,Columbia Township,not_found,,,2026-08-11
 burtcheboyganmi.gov,Cheboygan,MI,City,Burt Township,not_found,,,2026-08-11
 boynecity.gov,Boyne City,MI,City,City of Boyne City,found,https://boynecity.gov/business/bid_opportunities.php,agency,2026-08-11
@@ -2969,7 +2969,7 @@ berlinmd.gov,Berlin,MD,City,Town of Berlin,not_found,,,2026-08-11
 ecorsemi.gov,Ecorse,MI,City,City of Ecorse,not_found,,,2026-08-11
 36thdistrictcourtmi.gov,Detroit,MI,City,36th District Court,not_found,,,2026-08-11
 franklintwphcmi.gov,Hancock,MI,City,Franklin Township,not_found,,,2026-08-11
-cityofgrandblancmi.gov,Grand Blanc,MI,City,City Of Grand Blanc,not_found,,,2026-08-11
+cityofgrandblancmi.gov,Grand Blanc,MI,City,City Of Grand Blanc,found,https://www.cityofgrandblancmi.gov/doing_business/project_bid_invitations___results/rfp.php,agency,2026-11-02
 reddingtwpmi.gov,HARRISON,MI,City,REDDING TOWNSHIP,not_found,,,2026-08-11
 cottrellvilletwp.gov,Cottrellville Twp.,MI,City,Cottrellville Township,found,https://cottrellvilletwp.gov/bid-opportunities/,agency,2026-08-11
 delhitownshipmi.gov,Holt,MI,City,Delhi Charter Township,found,https://delhitownshipmi.gov/Bids.aspx,civicplus,2026-08-11
@@ -2999,7 +2999,7 @@ pokagontownshipmi.gov,Dowagiac,MI,City,Pokagon Township,not_found,,,2026-08-11
 pleasantviewmi.gov,Harbor Springs,MI,City,Pleasantview Township,not_found,,,2026-08-11
 cityofhowell.gov,HOWELL,MI,City,CITY OF HOWELL,not_found,,,2026-08-11
 sylvantownshipmi.gov,Chelsea,MI,City,Sylvan Township,not_found,,,2026-08-11
-greenwoodoceanami.gov,Hesperia,MI,City,Greenwood Township,not_found,,,2026-08-11
+greenwoodoceanami.gov,Hesperia,MI,City,Greenwood Township,found,https://greenwoodoceanami.gov/invitation-to-bid,agency,2026-11-02
 lenox-mi.gov,Lenox,MI,City,Lenox Township,found,https://lenox-mi.gov/Bids.aspx,civicplus,2026-08-11
 selmatownship-mi.gov,Cadillac,MI,City,Selma Township,not_found,,,2026-08-11
 robinsontwpmi.gov,Grand Haven,MI,City,Robinson Township,not_found,,,2026-08-11
@@ -3043,7 +3043,7 @@ kalkaskapolicemi.gov,Kalkaska,MI,City,Village of Kalkaska Department of Public S
 littletraversetwpmi.gov,Harbor Springs,MI,City,Little Traverse Township,not_found,,,2026-08-11
 essexville.gov,Essexville,MI,City,City of Essexville,not_found,,,2026-08-11
 pinegrovetownshipmi.gov,Gobles,MI,City,Pine Grove Township,not_found,,,2026-08-11
-highlandparkmi.gov,Highland Park,MI,City,City of Highland City,not_found,,,2026-08-11
+highlandparkmi.gov,Highland Park,MI,City,City of Highland City,found,https://highlandparkmi.gov/community/hp-latest-news/request-for-qualifications-rfq-city-of-highland-park/,custom,2026-11-02
 almiratownshipmi.gov,Lake Ann,MI,City,Almira Township,not_found,,,2026-08-11
 georgetown-mi.gov,Jenison,MI,City,Georgetown Charter Township,not_found,,,2026-08-11
 gilfordtownshipmi.gov,Fairgrove,MI,City,Gilford Township,not_found,,,2026-08-11
@@ -3051,18 +3051,18 @@ fennville.gov,Fennville,MI,City,City of Fennville,not_found,,,2026-08-11
 alberttwpmi.gov,Lewiston,MI,City,Township of Albert,not_found,,,2026-08-11
 germfasktownship.gov,Germfask,MI,City,Germfask Township,found,https://germfasktownship.gov/bidsandrfps,agency,2026-08-11
 kalkaskavillagemi.gov,Kalkaska,MI,City,Village of Kalkaska,not_found,,,2026-08-11
-kinrosstownship-mi.gov,Kincheloe,MI,City,Kinross Charter Township,not_found,,,2026-08-11
+kinrosstownship-mi.gov,Kincheloe,MI,City,Kinross Charter Township,found,https://kinrosstownship-mi.gov/business/bid_proposals.php,agency,2026-11-02
 frenchtownmi.gov,Monroe,MI,City,Frenchtown Charter Township,found,https://frenchtownmi.gov/Bids.aspx,civicplus,2026-08-11
-cityofmarlette.gov,Marlette,MI,City,City of Marlette,not_found,,,2026-08-11
-grandrapidsmi.gov,Grand Rapids,MI,City,City of Grand Rapids,not_found,,,2026-08-11
+cityofmarlette.gov,Marlette,MI,City,City of Marlette,found,https://cityofmarlette.gov/rfp,agency,2026-11-02
+grandrapidsmi.gov,Grand Rapids,MI,City,City of Grand Rapids,found,https://grandrapidsmi.gov/departments/purchasing,agency,2026-11-02
 spencertwpmi.gov,Gowen,MI,City,Spencer Township,not_found,,,2026-08-11
 eurekatownshipmi.gov,Greenville,MI,City,Eureka Township,not_found,,,2026-08-11
 thompsonmi.gov,Manistique,MI,City,Thompson Township,not_found,,,2026-08-11
 cityofmidland-mi.gov,Midland,MI,City,City of Midland,not_found,,,2026-08-11
 wilbertwpmi.gov,East Tawas,MI,City,Wilber Township,not_found,,,2026-08-11
 gustintwp.gov,Lincoln,MI,City,Gustin Township,not_found,,,2026-08-11
-deltami.gov,Lansing,MI,City,Delta Charter Township,not_found,,,2026-08-11
-lowellmi.gov,Lowell,MI,City,City of Lowell,not_found,,,2026-08-11
+deltami.gov,Lansing,MI,City,Delta Charter Township,found,https://deltami.gov/bids,agency,2026-11-02
+lowellmi.gov,Lowell,MI,City,City of Lowell,found,https://lowellmi.gov/government/public_notices/index.php,custom,2026-11-02
 villageofmendonmi.gov,Mendon,MI,City,Village of Mendon,not_found,,,2026-08-11
 hiawathatownshipmi.gov,Manistique,MI,City,Hiawatha Township,not_found,,,2026-08-11
 ironmountainmi.gov,Iron Mountain,MI,City,City of Iron Mountain,not_found,,,2026-08-11
@@ -3094,7 +3094,7 @@ milanmi.gov,Milan,MI,City,City of Milan,found,https://milanmi.gov/business/bid_o
 alamotownshipmi.gov,Kalamazoo,MI,City,Alamo Township,not_found,,,2026-08-11
 napoleonpolicemi.gov,Napoleon,MI,City,Napoleon Township Police Department,not_found,,,2026-08-11
 mountclemens.gov,Mount Clemens,MI,City,City of Mount Clemens,found,https://mountclemens.gov/purchasing,agency,2026-08-11
-daltonmi.gov,Muskegon,MI,City,Dalton Township,not_found,,,2026-08-11
+daltonmi.gov,Muskegon,MI,City,Dalton Township,found,https://daltonmi.gov/government/public_notices.php,custom,2026-11-02
 denvericmi.gov,Mt Pleasant,MI,City,Denver Township,not_found,,,2026-08-11
 maplegrovetownshipmi.gov,New Lothrop,MI,City,Maple Grove Township,not_found,,,2026-08-11
 homertownshipcalhouncounty.gov,Homer,MI,City,Homer Township,not_found,,,2026-08-11
@@ -3110,7 +3110,7 @@ comstockmi.gov,Kalamazoo,MI,City,"Charter Township of Comstock, Michigan",not_fo
 portagemi.gov,Portage,MI,City,City of Portage,found,https://portagemi.gov/Bids.aspx,civicplus,2026-08-11
 cityofnewbuffalomi.gov,New Buffalo,MI,City,City of New Buffalo,not_found,,,2026-08-11
 arcadami.gov,Ithaca,MI,City,Arcada Township,not_found,,,2026-08-11
-norwaymi.gov,Norway,MI,City,City of Norway,not_found,,,2026-08-11
+norwaymi.gov,Norway,MI,City,City of Norway,found,https://norwaymi.gov/bids-and-rfps,agency,2026-11-02
 fairfieldtwplenaweemi.gov,Jasper,MI,City,Fairfield Township,not_found,,,2026-08-11
 cityofnovi.gov,Novi,MI,City,City of Novi,not_found,,,2026-08-11
 nilestwpmi.gov,Niles,MI,City,Niles Charter Township,not_found,,,2026-08-11
@@ -3148,7 +3148,7 @@ rosspolicemi.gov,Richland,MI,City,Ross Township Police Department,not_found,,,20
 filertwpmi.gov,Manistee,MI,City,Filer Township,not_found,,,2026-08-11
 grasslaketownship.gov,GRASS LAKE,MI,City,GRASS LAKE CHARTER TOWNSHIP,not_found,,,2026-08-11
 delawaretwpmi.gov,Minden City,MI,City,Delaware Township,not_found,,,2026-08-11
-pontiacmi.gov,Pontiac,MI,City,City of Pontiac,not_found,,,2026-08-11
+pontiacmi.gov,Pontiac,MI,City,City of Pontiac,found,https://pontiacmi.gov/purchasing,agency,2026-11-02
 leonidastwp.gov,Leonidas,MI,City,Leonidas Township,found,https://leonidastwp.gov/rfp,agency,2026-08-11
 villageofrichlandmi.gov,Richland,MI,City,Village of Richland,not_found,,,2026-08-11
 hintontownship.gov,Lakeview,MI,City,Hinton Township,not_found,,,2026-08-11
@@ -3168,7 +3168,7 @@ courtlandtwpmi.gov,Rockford,MI,City,Courtland Township,not_found,,,2026-08-11
 leelanautownshipmi.gov,Northport,MI,City,Leelanau Township,not_found,,,2026-08-11
 marinecity.gov,Marine City,MI,City,City of Marine City,found,https://marinecity.gov/purchasing,agency,2026-08-11
 rosevillepolice-mi.gov,Roseville,MI,City,City of Roseville Police Department,not_found,,,2026-08-11
-bearcreektownshipmi.gov,Petoskey,MI,City,Bear Creek Township,not_found,,,2026-08-11
+bearcreektownshipmi.gov,Petoskey,MI,City,Bear Creek Township,found,https://bearcreektownshipmi.gov/request-for-proposals/,custom,2026-11-02
 vergennestwpmi.gov,Lowell,MI,City,Vergennes Township,not_found,,,2026-08-11
 sturgismi.gov,Sturgis,MI,City,City of Sturgis,found,https://sturgismi.gov/Bids.aspx,civicplus,2026-08-11
 lincolntwp-midland.gov,Midland,MI,City,Lincoln Township,not_found,,,2026-08-11
@@ -3205,14 +3205,14 @@ coldwatermi.gov,Coldwater,MI,City,City Of Coldwater,not_found,,,2026-08-11
 henriettatownshipmi.gov,Pleasant Lake,MI,City,Henrietta Township,not_found,,,2026-08-11
 whitefordtownshipmi.gov,Ottawa Lake,MI,City,Whiteford Township,not_found,,,2026-08-11
 sterlingheightsmi.gov,Sterling Heights,MI,City,City of Sterling Heights,not_found,,,2026-08-11
-whitefishtownshipmi.gov,Paradise,MI,City,Whitefish Township,not_found,,,2026-08-11
-southhavenmi.gov,South Haven,MI,City,City of South Haven,not_found,,,2026-08-11
+whitefishtownshipmi.gov,Paradise,MI,City,Whitefish Township,found,https://whitefishtownshipmi.gov/rfp,agency,2026-11-02
+southhavenmi.gov,South Haven,MI,City,City of South Haven,found,https://southhavenmi.gov/help_center/bids_and_rfps.php,agency,2026-11-02
 villageofmorleymi.gov,Morley,MI,City,Village of Morley,not_found,,,2026-08-11
 breitungtownshipmi.gov,Quinnesec,MI,City,Charter Township of Breitung,not_found,,,2026-08-11
 laketontwpmi.gov,Muskegon,MI,City,LAKETON TOWNSHIP,found,https://laketontwpmi.gov/projects-and-bids/,agency,2026-08-11
 andovermn.gov,Andover,MN,City,City of Andover,found,https://andovermn.gov/Bids.aspx,civicplus,2026-08-11
 anokamn.gov,Anoka,MN,City,City of Anoka,found,https://anokamn.gov/Bids.aspx,civicplus,2026-08-11
-standishtownship.gov,Standish,MI,City,Standish Township Board of Trustees,not_found,,,2026-08-11
+standishtownship.gov,Standish,MI,City,Standish Township Board of Trustees,found,https://standishtownship.gov/township-seeking-bids-for-snowplowing-for-winter-2026-2027/,agency,2026-11-02
 wyandottemi.gov,Wyandotte,MI,City,City of Wyandotte,found,https://wyandottemi.gov/Bids.aspx,civicplus,2026-08-11
 antrimtownshipmi.gov,Morrice,MI,City,Antrim Township,not_found,,,2026-08-11
 lyontwp-higginsmi.gov,Roscommon,MI,City,Lyon Township,not_found,,,2026-08-11
@@ -3225,7 +3225,7 @@ summerfieldtwpmonroemi.gov,Petersburg,MI,City,Summerfield Township,not_found,,,2
 waterlootwpmi.gov,Munith,MI,City,Waterloo Township,not_found,,,2026-08-11
 somersettownshipmi.gov,Somerset Center,MI,City,Somerset Township,not_found,,,2026-08-11
 hastingsmi.gov,Hastings,MI,City,City of Hastings,not_found,,,2026-08-11
-springlakemi.gov,Spring Lake,MI,City,Spring Lake Township,not_found,,,2026-08-11
+springlakemi.gov,Spring Lake,MI,City,Spring Lake Township,found,https://springlakemi.gov/Bids.aspx,civicplus,2026-11-02
 portsheldonmi.gov,West Olive,MI,City,Port Sheldon Township,not_found,,,2026-08-11
 dentontownshipmi.gov,Prudenville,MI,City,Denton Township,found,https://dentontownshipmi.gov/rfp,agency,2026-08-11
 vermontvilletownshipmi.gov,Vermontville,MI,City,Vermontville Township,not_found,,,2026-08-11
@@ -3255,7 +3255,7 @@ vbtmi.gov,Van Buren Township,MI,City,Van Buren Charter Township,found,https://vb
 anokawineandspirits.gov,Anoka,MN,City,City of Anoka,not_found,,,2026-08-11
 belvideretownshipmi.gov,Six Lakes,MI,City,Belvidere Township,not_found,,,2026-08-11
 douglasstwpmi.gov,Stanton,MI,City,Douglass Township,not_found,,,2026-08-11
-cityofstclairmi.gov,St. Clair,MI,City,City of St. Clair,not_found,,,2026-08-11
+cityofstclairmi.gov,St. Clair,MI,City,City of St. Clair,found,https://cityofstclairmi.gov/department-of-public-works/#notices,custom,2026-11-02
 paviliontwpmi.gov,Scotts,MI,City,Pavilion Township,not_found,,,2026-08-11
 cityofswartzcreekmi.gov,Swartz Creek,MI,City,City of Swartz Creek,found,https://www.bidnetdirect.com/mitn/cityofswartzcreek,bidnetdirect,2026-08-11
 wyomingmi.gov,Wyoming,MI,City,City of Wyoming,found,https://wyomingmi.gov/bids,agency,2026-08-11
@@ -3269,7 +3269,7 @@ cityofaudubonmn.gov,Audubon,MN,City,City of Audubon,not_found,,,2026-08-11
 cityofalbanymn.gov,Albany,MN,City,City of Albany,not_found,,,2026-08-11
 villageofwoodlandmi.gov,Woodland,MI,City,Village of Woodland,not_found,,,2026-08-11
 salinemi.gov,Saline,MI,City,City of Saline,found,https://salinemi.gov/government/bids_and_purchasing.php,agency,2026-08-11
-muskegontwpmi.gov,Muskegon,MI,City,Muskegon Township,not_found,,,2026-08-11
+muskegontwpmi.gov,Muskegon,MI,City,Muskegon Township,found,https://muskegontwpmi.gov/rfp,agency,2026-11-02
 pewamo.gov,Pewamo,MI,City,Village of Pewamo,not_found,,,2026-08-11
 lynntownshipmi.gov,Yale,MI,City,Lynn Township,not_found,,,2026-08-11
 champlinmn.gov,Champlin,MN,City,City of Champlin,found,https://champlinmn.gov/Bids.aspx,civicplus,2026-08-11
@@ -3364,11 +3364,11 @@ beckermn.gov,Becker,MN,City,City of Becker,not_found,,,2026-08-11
 eaganmn.gov,Eagan,MN,City,City of Eagan,not_found,,,2026-08-11
 ellsburgtownshipmn.gov,Cotton,MN,City,Ellsburg Township,not_found,,,2026-08-11
 columbiaheightsmn.gov,Columbia Heights,MN,City,City of Columbia Heights,found,https://columbiaheightsmn.gov/bid_opportunities.php,agency,2026-08-11
-cityofcrookstonmn.gov,Crookston,MN,City,City of Crookston,not_found,,,2026-08-11
+cityofcrookstonmn.gov,Crookston,MN,City,City of Crookston,found,https://cityofcrookstonmn.gov/Bids.aspx,civicplus,2026-11-02
 adamn.gov,Ada,MN,City,City Of Ada,not_found,,,2026-08-11
 arlingtonmn.gov,Arlington,MN,City,City of Arlington,found,https://arlingtonmn.gov/submitbid,agency,2026-08-11
 goldenvalleymn.gov,Golden Valley,MN,City,City of Golden Valley,found,https://goldenvalleymn.gov/Bids.aspx,civicplus,2026-08-11
-appletonmn.gov,Appleton,MN,City,City of Appleton,not_found,,,2026-08-11
+appletonmn.gov,Appleton,MN,City,City of Appleton,found,https://appletonmn.gov/procurement,agency,2026-11-02
 clintonmn.gov,Clinton,MN,City,City of Clinton,not_found,,,2026-08-11
 balkantownshipmn.gov,Chisholm,MN,City,Balkan Township,not_found,,,2026-08-11
 roosevelttownshipccmn.gov,Brainerd,MN,City,Roosevelt Township,not_found,,,2026-08-11
@@ -3389,7 +3389,7 @@ townofthomsonmn.gov,Esko,MN,City,Town of Thomson,not_found,,,2026-08-11
 cityofclearlakemn.gov,Clear Lake,MN,City,City of Clear Lake,not_found,,,2026-08-11
 townofcanosiamn.gov,Duluth,MN,City,Town of Canosia,not_found,,,2026-08-11
 corcoranmn.gov,Corcoran,MN,City,City of Corcoran,found,https://corcoranmn.gov/government/public_notices/bid_requests_bid_results/index.php,agency,2026-08-11
-bloomingprairiemn.gov,Blooming Prairie,MN,City,City of Blooming Prairie,not_found,,,2026-08-11
+bloomingprairiemn.gov,Blooming Prairie,MN,City,City of Blooming Prairie,found,https://bloomingprairiemn.gov/business/bids,agency,2026-11-02
 brooklyncentermn.gov,Brooklyn Center,MN,City,City of Brooklyn Center,not_found,,,2026-08-11
 glenwoodpolicemn.gov,Glenwood,MN,City,City of Glenwood,not_found,,,2026-08-11
 leontwpgoodhuecomn.gov,Cannon Falls,MN,City,Leon Township,not_found,,,2026-08-11
@@ -3647,7 +3647,7 @@ bransonmo.gov,Branson,MO,City,City of Branson,found,https://bransonmo.gov/Bids.a
 shingobeemn.gov,Walker,MN,City,Shingobee Township,not_found,,,2026-08-11
 sleepyeyemn.gov,Sleepy Eye,MN,City,City of Sleepy Eye,not_found,,,2026-08-11
 starbuckmn.gov,Starbuck,MN,City,City of Starbuck,not_found,,,2026-08-11
-oakgrovemn.gov,Oak Grove,MN,City,City of Oak Grove,not_found,,,2026-08-11
+oakgrovemn.gov,Oak Grove,MN,City,City of Oak Grove,found,https://oakgrovemn.gov/index.asp?SEC=0D26C28F-2000-43DC-8044-369FFDC0E1FD,custom,2026-11-02
 wahkonmn.gov,WAHKON,MN,City,CITY OF WAHKON,not_found,,,2026-08-11
 wilmatownship.gov,Sandstone,MN,City,Wilma Township,not_found,,,2026-08-11
 plymouthmn.gov,Plymouth,MN,City,City of Plymouth,not_found,,,2026-08-11
@@ -3671,14 +3671,14 @@ swanvillemn.gov,Swanville,MN,City,City of Swanville,not_found,,,2026-08-11
 victoriamn.gov,Victoria,MN,City,City of Victoria,found,https://victoriamn.gov/community/projects/bids_posting.php,agency,2026-08-11
 sandlaketownship.gov,Spring Lake,MN,City,Sand Lake Township,not_found,,,2026-08-11
 bethelmo.gov,Bethel,MO,City,Village of Bethel,not_found,,,2026-08-11
-priorlakemn.gov,Prior Lake,MN,City,City of Prior Lake,not_found,,,2026-08-11
+priorlakemn.gov,Prior Lake,MN,City,City of Prior Lake,found,https://priorlakemn.gov/Bids.aspx,civicplus,2026-11-02
 winthropmn.gov,Winthrop,MN,City,City of Winthrop,not_found,,,2026-08-11
 cityofwanamingo.gov,Wanamingo,MN,City,City of Wanamingo,not_found,,,2026-08-11
 bonneterrepd.gov,Bonne Terre,MO,City,Bonne Terre Police Department,not_found,,,2026-08-11
 auroramo.gov,Aurora,MO,City,City of Aurora,not_found,,,2026-08-11
 stclairmn.gov,St. Clair,MN,City,City of St. Clair,not_found,,,2026-08-11
 festusmo.gov,Festus,MO,City,City of Festus,found,https://festusmo.gov/Bids.aspx,civicplus,2026-08-11
-waverlymn.gov,Waverly,MN,City,City of Waverly,not_found,,,2026-08-11
+waverlymn.gov,Waverly,MN,City,City of Waverly,found,https://waverlymn.gov/index.asp?SEC=BB98CE7E-24B4-4981-AF2A-E84D008D511B&DE=6EF449CF-EE2C-407F-AE63-3BDE32F0A0A9,custom,2026-11-02
 auxvassemo.gov,Auxvasse,MO,City,City of Auxvasse,not_found,,,2026-08-11
 bransonwestmo.gov,Branson West,MO,City,City of Branson West,not_found,,,2026-08-11
 twoharborsmn.gov,Two Harbors,MN,City,City of Two Harbors,not_found,,,2026-08-11
@@ -3714,9 +3714,9 @@ tracymn.gov,Tracy,MN,City,City of Tracy,not_found,,,2026-08-11
 hazelwoodmo.gov,Hazelwood,MO,City,City of Hazelwood,not_found,,,2026-08-11
 rushfordvillagemn.gov,Rushford Village,MN,City,City of Rushford Village,not_found,,,2026-08-11
 holtssummit.gov,Holts Summit,MO,City,City of Holts Summit,found,https://holtssummit.gov/bids,agency,2026-08-11
-stlouisparkmn.gov,St. Louis Park,MN,City,City of St. Louis Park,not_found,,,2026-08-11
+stlouisparkmn.gov,St. Louis Park,MN,City,City of St. Louis Park,found,https://www.stlouisparkmn.gov/Government/Legal-Notices,custom,2026-11-02
 clarencemo.gov,Clarence,MO,City,City of Clarence MO,not_found,,,2026-08-11
-stillwatermn.gov,Stillwater,MN,City,City of Stillwater,not_found,,,2026-08-11
+stillwatermn.gov,Stillwater,MN,City,City of Stillwater,found,https://stillwatermn.gov/Bids.aspx,civicplus,2026-11-02
 cranemo.gov,Crane,MO,City,"City of Crane, Missouri",not_found,,,2026-08-11
 cityoframseymn.gov,Ramsey,MN,City,City of Ramsey,not_found,,,2026-08-11
 gladstonemo.gov,Gladstone,MO,City,City of Gladstone,not_found,,,2026-08-11
@@ -3742,7 +3742,7 @@ forsythmo.gov,Forsyth,MO,City,City of Forsyth,not_found,,,2026-08-11
 russellmn.gov,Russell,MN,City,City of Russell,not_found,,,2026-08-11
 woodburymn.gov,Woodbury,MN,City,City of Woodbury,not_found,,,2026-08-11
 haytimo.gov,Hayti,MO,City,City of Hayti MO,not_found,,,2026-08-11
-whitebearlakemn.gov,White Bear Lake,MN,City,City of White Bear Lake,not_found,,,2026-08-11
+whitebearlakemn.gov,White Bear Lake,MN,City,City of White Bear Lake,found,https://whitebearlakemn.gov/Bids.aspx,civicplus,2026-11-02
 monettmo.gov,Monett,MO,City,City of Monett,found,https://monettmo.gov/Bids.aspx,civicplus,2026-08-11
 cityofclintonmo.gov,Clinton,MO,City,City Of Clinton Missouri,found,https://cityofclintonmo.gov/bids.php,agency,2026-08-11
 irondale-mo.gov,Irondale,MO,City,Irondale,not_found,,,2026-08-11
@@ -3790,7 +3790,7 @@ ashgrovemo.gov,Ash Grove,MO,City,City of Ash Grove,found,https://ashgrovemo.gov/
 cityofoldmonroe.gov,Old Monroe,MO,City,City of Old Monroe,not_found,,,2026-08-11
 cityofnewfranklinmo.gov,New Franklin,MO,City,City of New Franklin,not_found,,,2026-08-11
 belleriveacresmo.gov,Normandy,MO,City,City of Bellerive Acres,not_found,,,2026-08-11
-cityofwatervillemn.gov,Waterville,MN,City,City of Waterville,not_found,,,2026-11-02
+cityofwatervillemn.gov,Waterville,MN,City,City of Waterville,found,https://cityofwatervillemn.gov/public-notices,custom,2026-11-02
 stcloudmn.gov,Saint Cloud,MN,City,"City of St. Cloud, MN",not_found,,,2026-08-11
 missouricitymo.gov,Missouri City,MO,City,Missouri City,not_found,,,2026-08-11
 crystalcitymo.gov,Crystal City,MO,City,City of Crystal City,not_found,,,2026-08-11
@@ -3808,7 +3808,7 @@ caboolmo.gov,Cabool,MO,City,City of Cabool Missouri,not_found,,,2026-08-11
 wayzatamn.gov,Wayzata,MN,City,City of Wayzata,not_found,,,2026-08-11
 maplewoodmo.gov,Maplewood,MO,City,"City of Maplewood, Missouri",found,https://maplewoodmo.gov/bids,agency,2026-11-02
 desloge-mo.gov,Desloge,MO,City,City of Desloge,not_found,,,2026-08-11
-worthingtonmn.gov,Worthington,MN,City,City of Worthington,not_found,,,2026-08-11
+worthingtonmn.gov,Worthington,MN,City,City of Worthington,found,https://worthingtonmn.gov/public-notices,custom,2026-11-02
 cityofsilex.gov,Silex,MO,City,City of Silex,found,https://cityofsilex.gov/bids,agency,2026-08-11
 houstonlake.gov,Houston Lake,MO,City,City of Houston Lake,found,https://www.att.com/cfd/contact/?vn=csrd-textflow-stb-flex-tfnbot&amp;chatmessage=false&amp;slidechat=false&amp;ckmid=102009&amp;cs=csrpid&amp;WT.srch=1&amp;source=EPDxATFIB00C22CFP&amp;a=144&amp;ocid=1025484&amp;agid=141389687437&amp;subid=2264309156.2264309156.1975316661&amp;s1=2264309156.2264309156.1975316661&amp;cpid=105378&amp;cookiereset=1&amp;gclid=Cj0KCQiAiebIBhDmARIsAE8PGNLYcG8NSlhWSNqjZqGf3yWS_KlzsN7O93mI8WnUAtfxobopQHA3UWsaAlJjEALw_wcB&amp;device=c&amp;c=110667&amp;s3=e.g.622355215673&amp;s4=c&amp;s6=9023171&amp;ls=g&amp;s20=105378&amp;s19=EPDxATFIB00C22CFP&amp;gclsrc=aw.ds&amp;gad_source=1&amp;gad_campaignid=17890613932,custom,2026-08-11
 lakelafayettemo.gov,Lake Lafayette,MO,City,"Lake Lafayette, City of",not_found,,,2026-08-11
@@ -3988,7 +3988,7 @@ townofstevensville.gov,Stevensville,MT,City,Town of Stevensville,not_found,,,202
 sunrisebeachmo.gov,Sunrise Beach,MO,City,Village of Sunrise Beach Missouri,found,https://sunrisebeachmo.gov/home-page/page/public-invitation-bid-beachwood-drive-paving-project,agency,2026-08-11
 learnedms.gov,Learned,MS,City,Town of Learned,not_found,,,2026-08-11
 warsawmo.gov,Warsaw,MO,City,CITY OF WARSAW,not_found,,,2026-08-11
-butnernc.gov,Butner,NC,City,Town of Butner,not_found,,,2026-08-11
+butnernc.gov,Butner,NC,City,Town of Butner,found,https://butnernc.gov/Bids.aspx,civicplus,2026-11-02
 townofbelville.gov,Belville,NC,City,Town of Belville,not_found,,,2026-08-11
 cityofbelmont.gov,Belmont,NC,City,City of Belmont,not_found,,,2026-08-11
 durhamnc.gov,Durham,NC,City,City of Durham,found,https://durhamnc.gov/Bids.aspx,civicplus,2026-08-11
@@ -4052,11 +4052,11 @@ greenlevelnc.gov,Burlington,NC,City,Town of Green Level,found,https://greenlevel
 lincolntonpolicenc.gov,Lincolnton,NC,City,City of Lincolnton Police Department,not_found,,,2026-08-11
 ahoskienc.gov,Ahoskie,NC,City,Town of Ahoskie,not_found,,,2026-08-11
 bermudarun.gov,Bermuda Run,NC,City,Town of Bermuda Run,not_found,,,2026-08-11
-hickorync.gov,Hickory,NC,City,City of Hickory,not_found,,,2026-08-11
+hickorync.gov,Hickory,NC,City,City of Hickory,found,https://hickorync.gov/purchasing,agency,2026-11-02
 lenoirnc.gov,Lenoir,NC,City,City of Lenoir,not_found,,,2026-08-11
 walkervillemt.gov,Walkerville,MT,City,Town of Walkerville,not_found,,,2026-08-11
 cityofweatherbylake-mo.gov,Weatherby Lake,MO,City,City of Weatherby Lake,not_found,,,2026-08-11
-elizabethcitync.gov,Elizabeth City,NC,City,City of Elizabeth City,not_found,,,2026-08-11
+elizabethcitync.gov,Elizabeth City,NC,City,City of Elizabeth City,found,https://elizabethcitync.gov/departments/purchasing,agency,2026-11-02
 locustnc.gov,Locust,NC,City,City of Locust,not_found,,,2026-08-11
 pittsboronc.gov,Pittsboro,NC,City,Town of Pittsboro,found,https://pittsboronc.gov/Bids.aspx,civicplus,2026-08-11
 ducknc.gov,Duck,NC,City,Town of Duck,found,https://ducknc.gov/frequently-visited/bid/,agency,2026-08-11
@@ -4095,16 +4095,16 @@ surfcitync.gov,Surf City,NC,City,Town of Surf City,found,https://surfcitync.gov/
 townofnashvillenc.gov,Nashville,NC,City,Town of Nashville,not_found,,,2026-08-11
 townofdrummondmt.gov,Drummond,MT,City,Town of Drummond,not_found,,,2026-08-11
 proctorvillenc.gov,Proctorville,NC,City,Town of Proctorville,not_found,,,2026-08-11
-hollyspringsnc.gov,Holly Springs,NC,City,Town of Holly Springs,not_found,,,2026-08-11
+hollyspringsnc.gov,Holly Springs,NC,City,Town of Holly Springs,found,https://hollyspringsnc.gov/Bids.aspx,civicplus,2026-11-02
 lowellnc.gov,Lowell,NC,City,City of Lowell,found,https://lowellnc.gov/bid-documents/,agency,2026-08-11
-northtopsailbeachnc.gov,North Topsail Beach,NC,City,Town of North Topsail Beach,not_found,,,2026-08-11
+northtopsailbeachnc.gov,North Topsail Beach,NC,City,Town of North Topsail Beach,found,https://northtopsailbeachnc.gov/Bids.aspx,civicplus,2026-11-02
 fayettevillenc.gov,Fayetteville,NC,City,"City of Fayetteville, North Carolina",found,https://fayettevillenc.gov/purchasing,agency,2026-08-11
-kannapolisnc.gov,Concord,NC,City,City of Kannapolis,not_found,,,2026-08-11
+kannapolisnc.gov,Concord,NC,City,City of Kannapolis,found,https://kannapolisnc.gov/business/bids,agency,2026-11-02
 woodheights-mo.gov,Wood Heights,MO,City,City of Wood Heights,not_found,,,2026-08-11
 townoflandisnc.gov,Landis,NC,City,Town of Landis,found,https://townoflandisnc.gov/purchasing,agency,2026-08-11
 norwoodnc.gov,Norwood,NC,City,Town of Norwood,not_found,,,2026-08-11
 marvinnc.gov,Marvin,NC,City,Village of Marvin,found,https://marvinnc.gov/About-Marvin/Requests-for-Proposals-RFPs,agency,2026-08-11
-franklintonnc.gov,Franklinton,NC,City,Town of Franklinton,not_found,,,2026-08-11
+franklintonnc.gov,Franklinton,NC,City,Town of Franklinton,found,https://franklintonnc.gov/procurement,agency,2026-11-02
 townofedentonnc.gov,Edenton,NC,City,Town of Edenton,not_found,,,2026-08-11
 pembrokenc.gov,Pembroke,NC,City,"Town of Pembroke, NC",not_found,,,2026-08-11
 townofwingatenc.gov,Wingate,NC,City,Town of Wingate,found,https://townofwingatenc.gov/Bids.aspx,civicplus,2026-08-11
@@ -4120,17 +4120,17 @@ minotnd.gov,Bismarck,ND,City,"State of ND, ITD",found,https://minotnd.gov/Bids.a
 rowlandnc.gov,Rowland,NC,City,Town of Rowland,not_found,,,2026-08-11
 richfieldnc.gov,Richfield,NC,City,Town of Richfield,found,https://richfieldnc.gov/rfp,agency,2026-08-11
 sevendevilsnc.gov,Seven Devils,NC,City,Town of Seven Devils,not_found,,,2026-08-11
-lakewaccamawnc.gov,Lake Waccamaw,NC,City,Town of Lake Waccamaw,not_found,,,2026-08-11
+lakewaccamawnc.gov,Lake Waccamaw,NC,City,Town of Lake Waccamaw,found,https://lakewaccamawnc.gov/business/bids,agency,2026-11-02
 lakeparknc.gov,Indian Trail,NC,City,Village of Lake Park,not_found,,,2026-08-11
 cityofmebanenc.gov,Mebane,NC,City,City of Mebane,found,https://cityofmebanenc.gov/advertisement-for-bids-office-shop-renovations-and-storage-building-addition-to-mebane-public-works/,agency,2026-08-11
 summerfieldnc.gov,Summerfield,NC,City,"Town of Summerfield, NC",not_found,,,2026-08-11
 helenamt.gov,Helena,MT,City,City of Helena,found,https://www.helenamt.gov/Business/Bids-RFP-RFQ,agency,2026-08-11
-newbernnc.gov,New Bern,NC,City,City of New Bern,not_found,,,2026-08-11
+newbernnc.gov,New Bern,NC,City,City of New Bern,found,https://newbernnc.gov/business/city_bids_and_proposals/index.php,agency,2026-11-02
 westfargond.gov,Bismarck,ND,City,State of ND,found,https://westfargond.gov/Bids.aspx,civicplus,2026-08-11
 townofruthnc.gov,Rutherfordton,NC,City,Town of Ruth,not_found,,,2026-08-11
 roanokerapidsnc.gov,Roanoke Rapids,NC,City,City of Roanoke Rapids,found,https://roanokerapidsnc.gov/documents-downloads/bid-opportunities.html,agency,2026-08-11
 mtpleasantnc.gov,Mount Pleasant,NC,City,Town of Mount Pleasant,not_found,,,2026-08-11
-southernshores-nc.gov,Southern Shores,NC,City,Town of Southern Shores,not_found,,,2026-08-11
+southernshores-nc.gov,Southern Shores,NC,City,Town of Southern Shores,found,https://southernshores-nc.gov/list.aspx,custom,2026-11-02
 hillsboroughnc.gov,Hillsborough,NC,City,Town of Hillsborough,not_found,,,2026-08-11
 oakboro.gov,Oakboro,NC,City,Town of Oakboro,not_found,,,2026-08-11
 wallacenc.gov,Wallace,NC,City,Town of Wallace,found,https://wallacenc.gov/bids,agency,2026-08-11
@@ -4152,7 +4152,7 @@ matthewsnc.gov,Matthews,NC,City,Town of Matthews,not_found,,,2026-08-11
 cityofws.gov,Winston Salem,NC,City,City of Winston-Salem,not_found,,,2026-08-11
 manteonc.gov,Manteo,NC,City,Town of Manteo,not_found,,,2026-08-11
 fargond.gov,Fargo,ND,City,City of Fargo,found,https://fargond.gov/bids,agency,2026-08-11
-minthill.gov,Mint Hill,NC,City,Town of Mint Hill,not_found,,,2026-08-11
+minthill.gov,Mint Hill,NC,City,Town of Mint Hill,found,https://minthill.gov/departments/public_works/bids_and_rfqs.php,agency,2026-11-02
 trinity-nc.gov,Trinity,NC,City,City of Trinity,not_found,,,2026-08-11
 wilmingtonnc.gov,Wilmington,NC,City,City of Wilmington,found,https://wilmingtonnc.gov/bids,agency,2026-08-11
 rockwellnc.gov,Rockwell,NC,City,Town of Rockwell,not_found,,,2026-08-11
@@ -4175,7 +4175,7 @@ fargo-nd.gov,Fargo,ND,City,City of Fargo,found,https://fargo-nd.gov/bids,agency,
 hillsboro-nd.gov,Hillsboro,ND,City,City of Hillsboro North Dakota,not_found,,,2026-08-11
 cityoffargo-nd.gov,Fargo,ND,City,City of Fargo,found,https://cityoffargo-nd.gov/bids,agency,2026-08-11
 northplattene.gov,North Platte,NE,City,City of North Platte,found,https://northplattene.gov/Bids.aspx,civicplus,2026-08-11
-granitefallsnc.gov,Granite Falls,NC,City,Town of Granite Falls,not_found,,,2026-08-11
+granitefallsnc.gov,Granite Falls,NC,City,Town of Granite Falls,found,https://granitefallsnc.gov/rfp,agency,2026-11-02
 reidsvillenc.gov,Reidsville,NC,City,City of Reidsville,not_found,,,2026-08-11
 washburnnd.gov,Washburn,ND,City,City of Washburn,not_found,,,2026-08-11
 youngsvillenc.gov,Youngsville,NC,City,Town of Youngsville,found,https://youngsvillenc.gov/bids,agency,2026-08-11
@@ -4221,7 +4221,7 @@ berlinnh.gov,Berlin,NH,City,City of Berlin,found,https://berlinnh.gov/Bids.aspx,
 alsteadnh.gov,Alstead,NH,City,Town of Alstead,not_found,,,2026-08-11
 fairviewnc.gov,Monroe,NC,City,Fairview Town Council,not_found,,,2026-08-11
 snyder-ne.gov,Snyder,NE,City,Village of Snyder,not_found,,,2026-08-11
-wadesboronc.gov,Wadesboro,NC,City,Town of Wadesboro,not_found,,,2026-08-11
+wadesboronc.gov,Wadesboro,NC,City,Town of Wadesboro,found,https://www.wadesboronc.gov/news-and-events,custom,2026-11-02
 potterneb.gov,Potter,NE,City,Village of Potter,not_found,,,2026-08-11
 charlottenc.gov,Charlotte,NC,City,City of Charlotte,found,https://www.charlottenc.gov/City-Government/Departments/Contracting-and-Procurement,agency,2026-08-11
 alexandrianh.gov,Alexandria,NH,City,Town of Alexandria,not_found,,,2026-08-11
@@ -4281,7 +4281,7 @@ townofcarrollnh.gov,Carroll,NH,City,Town of Carroll,not_found,,,2026-08-11
 bradfordnh.gov,Bradford,NH,City,"Town of Bradford, NH",not_found,,,2026-08-11
 cityofashlandne.gov,Ashland,NE,City,City of Ashland,not_found,,,2026-08-11
 alvo.gov,Eagle,NE,City,Village of Alvo,not_found,,,2026-08-11
-claytonnc.gov,Clayton,NC,City,Town of Clayton,not_found,,,2026-08-11
+claytonnc.gov,Clayton,NC,City,Town of Clayton,found,https://claytonnc.gov/Bids.aspx,civicplus,2026-11-02
 geringpolice.gov,Gering,NE,City,Gering Police Department,not_found,,,2026-08-11
 croydon-nh.gov,Croydon,NH,City,Town of Croydon,not_found,,,2026-08-11
 sunsetbeachnc.gov,Sunset Beach,NC,City,"Sunset Beach, Town of",not_found,,,2026-08-11
@@ -5918,7 +5918,7 @@ chagrinfallspdoh.gov,Chagrin Falls,OH,City,Village of Chagrin Falls,not_found,,,
 cardingtontownshipohio.gov,Cardington,OH,City,Cardington Township,not_found,,,2026-08-11
 pleasantfireclarkoh.gov,CATAWBA,OH,City,Pleasant Fire Department in Clark County,not_found,,,2026-08-11
 bloomingburgoh.gov,Bloomingburg,OH,City,Village of Bloomingburg,not_found,,,2026-08-11
-plaintownshipstarkoh.gov,Canton,OH,City,Plain Township,not_found,,,2026-08-11
+plaintownshipstarkoh.gov,Canton,OH,City,Plain Township,found,https://plaintownshipstarkoh.gov/departments/finance_department/legal_notices.php,custom,2026-11-02
 bethel-oh.gov,Bethel,OH,City,Village of Bethel,not_found,,,2026-08-11
 villageofwolcottny.gov,Wolcott,NY,City,Village of Wolcott,not_found,,,2026-08-11
 mycolumbus.gov,Columbus,OH,City,City of Columbus Ohio,found,https://mycolumbus.gov/Bids.aspx,civicplus,2026-08-11
@@ -5932,7 +5932,7 @@ coldwaterohio.gov,Coldwater,OH,City,Village of Coldwater,not_found,,,2026-08-11
 elmwoodplace-oh.gov,Cincinnati,OH,City,"M-Tec Systems, Inc",not_found,,,2026-08-11
 fairfieldoh.gov,Fairfield,OH,City,City of Fairfield Ohio,found,https://fairfieldoh.gov/Bids.aspx,civicplus,2026-08-11
 brunswickohio.gov,Brunswick,OH,City,City of Brunswick,not_found,,,2026-08-11
-indianhill.gov,Cincinnati,OH,City,The City of the Village of Indian Hill,not_found,,,2026-08-11
+indianhill.gov,Cincinnati,OH,City,The City of the Village of Indian Hill,found,https://indianhill.gov/bid-opportunities,agency,2026-11-02
 gahanna.gov,Gahanna,OH,City,City of Gahanna,found,https://gahanna.gov/Bids.aspx,civicplus,2026-08-11
 yorkny.gov,York,NY,City,Town of York,not_found,,,2026-08-11
 fostoriaohio.gov,Fostoria,OH,City,City of Fostoria,found,https://fostoriaohio.gov/Bids.aspx,civicplus,2026-08-11
@@ -5952,7 +5952,7 @@ grandviewheights.gov,Grandview Heights,OH,City,City of Grandview Heights,found,h
 columbianaohio.gov,Columbiana,OH,City,City of Columbiana,not_found,,,2026-08-11
 covington-oh.gov,Covington,OH,City,Village of Covington,not_found,,,2026-08-11
 brinkhaven.gov,Brinkhaven,OH,City,Village of Brinkhaven,not_found,,,2026-08-11
-fairlawnoh.gov,Fairlawn,OH,City,City of Fairlawn,not_found,,,2026-08-11
+fairlawnoh.gov,Fairlawn,OH,City,City of Fairlawn,found,https://fairlawnoh.gov/Bids.aspx,civicplus,2026-11-02
 williamsvilleny.gov,Williamsville,NY,City,Village of Williamsville,not_found,,,2026-08-11
 conneautohio.gov,Conneaut,OH,City,City of Conneaut,not_found,,,2026-08-11
 crosbytownshipohio.gov,Crosby Township,OH,City,Crosby Township,not_found,,,2026-08-11
@@ -6037,7 +6037,7 @@ hiramvlgohio.gov,Hiram,OH,City,Village of Hiram,not_found,,,2026-08-11
 cincinnati-oh.gov,Cincinnati,OH,City,City of Cincinnati,found,https://cincinnati-oh.gov/purchasing,agency,2026-08-11
 leetoniaohio.gov,Leetonia,OH,City,VIllage of Leetonia,not_found,,,2026-08-11
 mariontwphancockoh.gov,Findlay,OH,City,Marion Township,not_found,,,2026-08-11
-columbus.gov,Columbus,OH,City,City of Columbus,not_found,,,2026-08-11
+columbus.gov,Columbus,OH,City,City of Columbus,found,https://www.columbus.gov/Business-Development/Bids-Solicitations/RFPs,agency,2026-11-02
 madisontwpcolco.gov,Lisbon,OH,City,Madison Township in Columbiana County,not_found,,,2026-08-11
 stewartmanorny.gov,Stewart Manor,NY,City,Inc. Village of Stewart Manor,not_found,,,2026-08-11
 ketteringoh.gov,Kettering,OH,City,City of Kettering,found,https://ketteringoh.gov/purchasing,agency,2026-08-11
@@ -6059,7 +6059,7 @@ clevelandohio.gov,Cleveland,OH,City,City of Cleveland,found,https://clevelandohi
 findlayohio.gov,Findlay,OH,City,City of Findlay,not_found,,,2026-08-11
 jacksontwpfranklinoh.gov,Grove City,OH,City,Jackson Township,not_found,,,2026-08-11
 bentontownshipottawaoh.gov,Graytown,OH,City,Benton Township,not_found,,,2026-08-11
-greenhillsohio.gov,Greenhills,OH,City,Village of Greenhills,not_found,,,2026-08-11
+greenhillsohio.gov,Greenhills,OH,City,Village of Greenhills,found,https://greenhillsohio.gov/solicitation/,agency,2026-11-02
 mariettacourtohio.gov,Marietta,OH,City,Marietta Municipal Court,not_found,,,2026-08-11
 grandriverohio.gov,GRAND RIVER,OH,City,GRAND RIVER VILLAGE,not_found,,,2026-08-11
 cityofdefiance.gov,Defiance,OH,City,City of Defiance Ohio,not_found,,,2026-08-11
@@ -6077,7 +6077,7 @@ leesburgtownshipoh.gov,Marysville,OH,City,Leesburg Township,not_found,,,2026-08-
 glenfordohio.gov,Glenford,OH,City,Village of Glenford,not_found,,,2026-08-11
 northcantonohio.gov,North Canton,OH,City,City of North Canton,found,https://northcantonohio.gov/Bids.aspx,civicplus,2026-08-11
 masoncourtoh.gov,Mason,OH,City,Mason Municipal Court,not_found,,,2026-08-11
-cityofjacksonohio.gov,Jackson,OH,City,City of Jackson,not_found,,,2026-08-11
+cityofjacksonohio.gov,Jackson,OH,City,City of Jackson,found,https://cityofjacksonohio.gov/how_do_i/view_current_project_bids.php,agency,2026-11-02
 newphiladelphiaoh.gov,New Philadelphia,OH,City,City of new philadelphia,found,https://newphiladelphiaoh.gov/Bids.aspx,civicplus,2026-08-11
 lakewoodoh.gov,Lakewood,OH,City,City of Lakewood,not_found,,,2026-08-11
 moraineohio.gov,Moraine,OH,City,City of Moraine,not_found,,,2026-08-11
@@ -6087,7 +6087,7 @@ villageofnewboston.gov,New Boston,OH,City,Village of New Boston,not_found,,,2026
 magneticspringsoh.gov,Magnetic Springs,OH,City,Village of Magnetic Springs,not_found,,,2026-08-11
 mapleheightsohio.gov,Maple Heights,OH,City,City of Maple Heights,not_found,,,2026-08-11
 martinsferryoh.gov,Martins Ferry,OH,City,City of Martins Ferry,not_found,,,2026-08-11
-genevaonthelakeoh.gov,Geneva-on-the-Lake,OH,City,Village of Geneva-On-The-Lake,not_found,,,2026-08-11
+genevaonthelakeoh.gov,Geneva-on-the-Lake,OH,City,Village of Geneva-On-The-Lake,found,https://genevaonthelakeoh.gov/bid-opportunities,agency,2026-11-02
 middleburgheights-oh.gov,Middleburg Heights,OH,City,City of Middleburg Heights,not_found,,,2026-08-11
 hamersville.gov,Hamersville,OH,City,Village of Hamersville,not_found,,,2026-08-11
 mantuatownshipohio.gov,Mantua,OH,City,Mantua Township,not_found,,,2026-08-11
@@ -6119,7 +6119,7 @@ newmiddletownoh.gov,New Middletown,OH,City,Village of New Middletown,not_found,,
 villageoflowellvilleoh.gov,Lowellville,OH,City,Village of Lowellville,not_found,,,2026-08-11
 reynoldsburg.gov,Reynoldsburg,OH,City,City of Reynoldsburg,found,https://reynoldsburg.gov/Bids.aspx,civicplus,2026-08-11
 newtonfallsoh.gov,Newton Falls,OH,City,Newton Falls City,not_found,,,2026-08-11
-nimishillentownship.gov,LOUISVILLE,OH,City,NIMISHILLEN TOWNSHIP,not_found,,,2026-08-11
+nimishillentownship.gov,LOUISVILLE,OH,City,NIMISHILLEN TOWNSHIP,found,https://www.nimishillentownship.gov/copy-of-legal-notices,custom,2026-11-02
 mentoronthelake.gov,Mentor-on-the-Lake,OH,City,City of Mentor on the Lake,found,https://mentoronthelake.gov/departments/service/bids.php,agency,2026-08-11
 russellpdoh.gov,Novelty,OH,City,Russell Township Police Department,not_found,,,2026-08-11
 villageoflagrangeohio.gov,Lagrange,OH,City,Village of Lagrange,not_found,,,2026-08-11
@@ -6134,7 +6134,7 @@ milanohio.gov,Milan,OH,City,Village of Milan,not_found,,,2026-08-11
 londonohio.gov,London,OH,City,City of London Ohio,not_found,,,2026-08-11
 orangepoliceoh.gov,Orange Village,OH,City,Orange Police Department,not_found,,,2026-08-11
 newtownohio.gov,Newtown,OH,City,Village of Newtown,not_found,,,2026-08-11
-montpelieroh.gov,Montpelier,OH,City,Village of Montpelier,not_found,,,2026-08-11
+montpelieroh.gov,Montpelier,OH,City,Village of Montpelier,found,https://montpelieroh.gov/invitation-to-bid,agency,2026-11-02
 carlisletwpoh.gov,Lagrange,OH,City,Carlisle Township,not_found,,,2026-08-11
 newwaterford-oh.gov,New Waterford,OH,City,The Village of New Waterford,not_found,,,2026-08-11
 firelandsems.gov,New London,OH,City,Firelands Ambulance Service District,not_found,,,2026-08-11
@@ -6173,7 +6173,7 @@ villageofpeninsula-oh.gov,Peninsula,OH,City,Village of Peninsula,not_found,,,202
 portsmouthohpd.gov,Portsmouth,OH,City,Portsmouth Police Department,not_found,,,2026-08-11
 villageofnewholland-oh.gov,New Holland,OH,City,The Village of New Holland,not_found,,,2026-08-11
 tallmadgeoh.gov,Tallmadge,OH,City,City of Tallmadge,found,https://tallmadgeoh.gov/Bids.aspx,civicplus,2026-08-11
-cityofnilesoh.gov,Niles,OH,City,City of Niles,not_found,,,2026-08-11
+cityofnilesoh.gov,Niles,OH,City,City of Niles,found,https://thecityofniles.com/category/public-bids-2/,custom,2026-11-02
 lyndhurstohio.gov,Lyndhurst,OH,City,"City of Lyndhurst, Ohio",not_found,,,2026-08-11
 powhatanpointoh.gov,Powhatan Point,OH,City,Village of Powhatan Point,not_found,,,2026-08-11
 beavercreekfireoh.gov,Suite C,OH,City,Beavercreek Township,found,https://beavercreekfireoh.gov/Bids.aspx,civicplus,2026-08-11
@@ -6208,12 +6208,12 @@ polandtownship.gov,Poland,OH,City,Poland Township,not_found,,,2026-08-11
 obetz.gov,Obetz,OH,City,City of Obetz,not_found,,,2026-08-11
 strongsville.gov,Strongsville,OH,City,City of Strongsville,not_found,,,2026-08-11
 stclairsvilleoh.gov,St. Clairsville,OH,City,City of St. Clairsville,not_found,,,2026-08-11
-cityofspringboro.gov,Springboro,OH,City,City of Springboro,not_found,,,2026-08-11
+cityofspringboro.gov,Springboro,OH,City,City of Springboro,found,https://cityofspringboro.gov/Bids.aspx,civicplus,2026-11-02
 upperarlingtonoh.gov,Upper Arlington,OH,City,City of Upper Arlington,found,https://upperarlingtonoh.gov/Bids.aspx,civicplus,2026-08-11
 sugarbushknolls.gov,Streetsboro,OH,City,The Village of Sugar Bush Knolls,not_found,,,2026-08-11
 wyomingohio.gov,Wyoming,OH,City,City of Wyoming,found,https://wyomingohio.gov/Bids.aspx,civicplus,2026-08-11
 franklintwpcoloh.gov,Summitville,OH,City,Franklin Township Columbiana County Ohio,not_found,,,2026-08-11
-portclinton-oh.gov,Port Clinton,OH,City,City of Port Clinton,not_found,,,2026-08-11
+portclinton-oh.gov,Port Clinton,OH,City,City of Port Clinton,found,http://www.portclinton.com/government/public_notices_bids.php,custom,2026-11-02
 stowmunicourtoh.gov,Stow,OH,City,Stow Municipal Court,not_found,,,2026-08-11
 twpclintonshelbyoh.gov,Sidney,OH,City,Clinton Township,not_found,,,2026-08-11
 montgomeryohio.gov,Montgomery,OH,City,City of Montgomery,found,https://www.montgomeryohio.gov/rfq-rfps-bids-and-procurement/,agency,2026-08-11
@@ -6263,7 +6263,7 @@ eldoradooh.gov,Eldorado,OH,City,Village of Eldorado,not_found,,,2026-08-11
 newrussiatownship-oh.gov,Oberlin,OH,City,New Russia Township OH,not_found,,,2026-08-11
 duncanok.gov,Duncan,OK,City,City of Duncan,found,https://duncanok.gov/Bids.aspx,civicplus,2026-08-11
 waverlyohio.gov,Waverly,OH,City,Village of Waverly,not_found,,,2026-08-11
-willoughbyhills-oh.gov,Willoughby Hills,OH,City,City of Willoughby Hills,not_found,,,2026-08-11
+willoughbyhills-oh.gov,Willoughby Hills,OH,City,City of Willoughby Hills,found,https://willoughbyhills-oh.gov/opportunities/index.php,custom,2026-11-02
 elrenook.gov,El Reno,OK,City,City of El Reno,found,https://elrenook.gov/Bids.aspx,civicplus,2026-08-11
 tiffinohio.gov,Tiffin,OH,City,City of Tiffin,found,https://www.tiffinohio.gov/departments/engineering/biddingrfqs,agency,2026-08-11
 townofbillingsok.gov,Billings,OK,City,Town of Billings,not_found,,,2026-08-11
@@ -6417,7 +6417,7 @@ albanyoregon.gov,Albany,OR,City,"City of Albany, Oregon",found,https://albanyore
 altusok.gov,Altus,OK,City,City of Altus,not_found,,,2026-08-11
 tahlequah.gov,Tahlequah,OK,City,City of Tahlequah OK,not_found,,,2026-08-11
 blackwellok.gov,BLACKWELL,OK,City,City of Blackwell,not_found,,,2026-08-11
-nridgeville.gov,North Ridgeville,OH,City,City of North Ridgeville,not_found,,,2026-08-11
+nridgeville.gov,North Ridgeville,OH,City,City of North Ridgeville,found,https://nridgeville.gov/publicbidsandRFPs.aspx,agency,2026-11-02
 cityofhines.gov,Hines,OR,City,City of Hines,found,https://cityofhines.gov/Bids.aspx,civicplus,2026-08-11
 lapineoregon.gov,La Pine,OR,City,City of La Pine,found,https://lapineoregon.gov/Bids.aspx,civicplus,2026-08-11
 unioncityok.gov,Union City,OK,City,Town of Union City,not_found,,,2026-08-11
@@ -8175,7 +8175,7 @@ arpinvillagewi.gov,Arpin,WI,City,Village of Arpin,not_found,,,2026-08-11
 townofhamburgmcwi.gov,Athens,WI,City,Town of Hamburg,not_found,,,2026-08-11
 richlandwa.gov,Richland,WA,City,City of Richland,not_found,,,2026-08-11
 athelstanewiclerk.gov,Athelstane,WI,City,Town of Athelstane,not_found,,,2026-08-11
-townofpilsenwi.gov,Ashland,WI,City,Town of Pilsen,not_found,,,2026-08-11
+townofpilsenwi.gov,Ashland,WI,City,Town of Pilsen,found,https://townofpilsenwi.gov/procurement,agency,2026-11-02
 olympiawa.gov,Olympia,WA,City,City of Olympia,found,https://olympiawa.gov/rfp,agency,2026-08-11
 baileysharborwi.gov,BAILEYS HARBOR,WI,City,Town of Baileys Harbor,not_found,,,2026-08-11
 johnstownrockcowi.gov,Avalon,WI,City,Town Of Johnstown,not_found,,,2026-08-11
@@ -8297,7 +8297,7 @@ villageofcenturia.gov,Centuria,WI,City,Village of Centuria,not_found,,,2026-08-1
 clintonvillewi.gov,Clintonville,WI,City,City of Clintonville,not_found,,,2026-08-11
 townofcrandonwi.gov,Crandon,WI,City,Town Of Crandon,not_found,,,2026-08-11
 townofturtlewi.gov,Beloit,WI,City,Town of Turtle,not_found,,,2026-08-11
-richfieldadamscowi.gov,Coloma,WI,City,Town of Richfield,not_found,,,2026-08-11
+richfieldadamscowi.gov,Coloma,WI,City,Town of Richfield,found,https://richfieldadamscowi.gov/legal-notices,custom,2026-11-02
 fitchburgwi.gov,Fitchburg,WI,City,City of Fitchburg,found,https://fitchburgwi.gov/Bids.aspx,civicplus,2026-08-11
 cityofchetek-wi.gov,Chetek,WI,City,city of chetek,not_found,,,2026-08-11
 townoflincolnforestwi.gov,Crandon,WI,City,Town of Lincoln,not_found,,,2026-08-11
@@ -8323,7 +8323,7 @@ eagleriverwi.gov,Eagle River,WI,City,"EAGLE RIVER, CITY OF",found,https://eagler
 townofconoverwi.gov,Conover,WI,City,Town of Conover,not_found,,,2026-08-11
 townofchiltonwi.gov,Chilton,WI,City,Town of Chilton,not_found,,,2026-08-11
 townofnewdenmarkwi.gov,Denmark,WI,City,Town of New Denmark,not_found,,,2026-08-11
-chiltonwi.gov,Chilton,WI,City,City of Chilton,not_found,,,2026-08-11
+chiltonwi.gov,Chilton,WI,City,City of Chilton,found,https://chiltonwi.gov/proposals,custom,2026-11-02
 villageofdane.gov,Dane,WI,City,Village of Dane,not_found,,,2026-08-11
 pleasantvalleywi.gov,Eleva,WI,City,Town of Pleasant Valley,not_found,,,2026-08-11
 townofbeavermarinettewi.gov,Crivitz,WI,City,Town of Beaver,not_found,,,2026-08-11
@@ -8345,7 +8345,7 @@ townofdrammen-wi.gov,Eleva,WI,City,Town of Drammen,not_found,,,2026-08-11
 evansvillewi.gov,Evansville,WI,City,City of Evansville,not_found,,,2026-08-11
 townofeasttroywi.gov,East Troy,WI,City,Town of East Troy,not_found,,,2026-08-11
 fredericwi.gov,Frederic,WI,City,Village of Frederic,not_found,,,2026-08-11
-beloitwi.gov,Beloit,WI,City,City of Beloit,not_found,,,2026-08-11
+beloitwi.gov,Beloit,WI,City,City of Beloit,found,https://beloitwi.gov/business/bids,agency,2026-11-02
 townofbrillionwi.gov,Forest Junction,WI,City,Town of Brillion,not_found,,,2026-08-11
 evergreenlangladewi.gov,Elton,WI,City,"Town of Evergreen, Langlade County, WI  USA",not_found,,,2026-08-11
 townofbrothertownwi.gov,Chilton,WI,City,Town of Brothertown,not_found,,,2026-08-11
@@ -8404,7 +8404,7 @@ gibraltarwi.gov,Fish Creek,WI,City,Town of Gibraltar,not_found,,,2026-08-11
 colburnadamswi.gov,Hancock,WI,City,Town of Colburn,not_found,,,2026-08-11
 willardwi.gov,Conrath,WI,City,Town of Willard,not_found,,,2026-08-11
 halescornerswi.gov,Hales Corners,WI,City,Village of Hales Corners,not_found,,,2026-08-11
-easttroywi.gov,East Troy,WI,City,Village of East Troy,not_found,,,2026-08-11
+easttroywi.gov,East Troy,WI,City,Village of East Troy,found,http://easttroywi.gov/dpw,custom,2026-11-02
 glenbeulahwi.gov,Glenbeulah,WI,City,Village of Glenbeulah,not_found,,,2026-08-11
 cityofhaywardwi.gov,Hayward,WI,City,City of Hayward,not_found,,,2026-08-11
 blackbrookwi.gov,Clear Lake,WI,City,Town of Black Brook,not_found,,,2026-08-11
@@ -8424,7 +8424,7 @@ lisbonwi.gov,Lisbon,WI,City,Village of Lisbon,found,https://lisbonwi.gov/Bids.as
 townofwoodvillewi.gov,Hilbert,WI,City,Town of Woodville,not_found,,,2026-08-11
 elmwoodparkwi.gov,Elmwood Park,WI,City,Village of Elmwood Park,not_found,,,2026-08-11
 hlpdwi.gov,Hobart,WI,City,Hobart-Lawrence Police Department,not_found,,,2026-08-11
-eauclairewi.gov,Eau Claire,WI,City,City of Eau Claire,not_found,,,2026-08-11
+eauclairewi.gov,Eau Claire,WI,City,City of Eau Claire,found,https://eauclairewi.gov/Bids.aspx,civicplus,2026-11-02
 villageofhixton.gov,Hixton,WI,City,Village of Hixton,not_found,,,2026-08-11
 villageofgrantsburg.gov,Grantsburg,WI,City,Village of Grantsburg,not_found,,,2026-08-11
 hilbertwi.gov,Hilbert,WI,City,Village of Hilbert,not_found,,,2026-08-11
@@ -8475,7 +8475,7 @@ villageofluxemburgwi.gov,Luxemburg,WI,City,Village of Luxemburg,not_found,,,2026
 moundvillewi.gov,Endeavor,WI,City,Town of Moundville,not_found,,,2026-08-11
 poppleriverwi.gov,Long Lake,WI,City,Town Of Popple River,not_found,,,2026-08-11
 townofstarprairiewi.gov,Madison,WI,City,Town of Star Prairie,not_found,,,2026-08-11
-kielwi.gov,Kiel,WI,City,City of Kiel,not_found,,,2026-08-11
+kielwi.gov,Kiel,WI,City,City of Kiel,found,https://kielwi.gov/Bids.aspx,civicplus,2026-11-02
 cityoflakemillswi.gov,Lake Mills,WI,City,City of Lake Mills,not_found,,,2026-08-11
 townoflyndonwi.gov,LYNDON STATION,WI,City,TOWN OF LYNDON,not_found,,,2026-08-11
 foresttownrcwi.gov,MADISON,WI,City,Town of Forest,not_found,,,2026-08-11
@@ -8498,7 +8498,7 @@ farrwestcity.gov,Farr West city,UT,City,Farr West City,not_found,,,2026-08-11
 townofmarathonwi.gov,Marathon,WI,City,Township of Marathon,not_found,,,2026-08-11
 townofkewaskumwi.gov,Kewaskum,WI,City,Town of Kewaskum,not_found,,,2026-08-11
 villageofmarshallwi.gov,Marshall,WI,City,Village of Marshall,not_found,,,2026-08-11
-grandchutewi.gov,Grand Chute,WI,City,Town of Grand Chute,not_found,,,2026-08-11
+grandchutewi.gov,Grand Chute,WI,City,Town of Grand Chute,found,https://grandchutewi.gov/link/ceb17d366c8f/,custom,2026-11-02
 villageoflyndonstation.gov,Lyndon Station,WI,City,Village of Lyndon Station,not_found,,,2026-08-11
 brookfield-wi.gov,Brookfield,WI,City,City of Brookfield,not_found,,,2026-08-11
 townofcasselwi.gov,Marathon,WI,City,Town of Cassel,not_found,,,2026-08-11
@@ -8514,10 +8514,10 @@ gaysmills.gov,Gays Mills,WI,City,Village of Gays Mills,not_found,,,2026-08-11
 mwtown.gov,Manitowish Waters,WI,City,Town of Manitowish Waters,not_found,,,2026-08-11
 florencewi.gov,Florence,WI,City,Town of Florence,not_found,,,2026-08-11
 cityofmonroewi.gov,Monroe,WI,City,City of Monroe,not_found,,,2026-08-11
-villageoflomira.gov,Lomira,WI,City,Village of Lomira,not_found,,,2026-08-11
+villageoflomira.gov,Lomira,WI,City,Village of Lomira,found,https://villageoflomira.gov/departments/purchasing,agency,2026-11-02
 villageofminongwi.gov,MINONG,WI,City,VILLAGE OF MINONG,not_found,,,2026-08-11
 townofjordanwi.gov,Monroe,WI,City,Town of Jordan,not_found,,,2026-08-11
-townofmiltonrcwi.gov,Milton,WI,City,Town of Milton,not_found,,,2026-08-11
+townofmiltonrcwi.gov,Milton,WI,City,Town of Milton,found,https://townofmiltonrcwi.gov/bidsandrfps,agency,2026-11-02
 gilmanwi.gov,Gilman,WI,City,Village of Gilman WI,not_found,,,2026-08-11
 jacksonpdwi.gov,Jackson,WI,City,Village of Jackson Police Department,not_found,,,2026-08-11
 menashawi.gov,Menasha,WI,City,City of Menasha,not_found,,,2026-08-11
@@ -8612,7 +8612,7 @@ greenfieldlaxwi.gov,La Crosse,WI,City,Town of Greenfield,not_found,,,2026-08-11
 markesanwi.gov,Markesan,WI,City,City of Markesan,not_found,,,2026-08-11
 villageofmerton.gov,Merton,WI,City,Village of Merton,not_found,,,2026-08-11
 omro-wi.gov,Omro,WI,City,City of Omro,not_found,,,2026-08-11
-newrichmondwi.gov,New Richmond,WI,City,City of New Richmond,not_found,,,2026-08-11
+newrichmondwi.gov,New Richmond,WI,City,City of New Richmond,found,https://newrichmondwi.gov/business/bids_requests_for_proposals.php,agency,2026-11-02
 townofoasiswi.gov,Plainfield,WI,City,Town of Oasis,not_found,,,2026-08-11
 townoflimagrantcountywi.gov,Platteville,WI,City,Town of Lima,not_found,,,2026-08-11
 portagewi.gov,Portage,WI,City,City of Portage,found,https://portagewi.gov/Bids.aspx,civicplus,2026-08-11
@@ -8643,7 +8643,7 @@ fortwinn.gov,Portage,WI,City,Town of Fort Winnebago,not_found,,,2026-08-11
 townoflisbonwi.gov,New Lisbon,WI,City,Town of Lisbon,not_found,,,2026-08-11
 townofcaledoniacolumbiawi.gov,Portage,WI,City,"Town of Caledonia, Columbia County, WI",not_found,,,2026-08-11
 southmilwaukee.gov,South Milwaukee,WI,City,City of South Milwaukee,found,https://southmilwaukee.gov/Bids.aspx,civicplus,2026-08-11
-marathoncitywi.gov,Marathon,WI,City,Village of Marathon City,not_found,,,2026-08-11
+marathoncitywi.gov,Marathon,WI,City,Village of Marathon City,found,https://marathoncitywi.gov/public-notices,custom,2026-11-02
 reedsvillewi.gov,Reedsville,WI,City,Village of Reedsville,not_found,,,2026-08-11
 townofbeecherwi.gov,Pembine,WI,City,Town Of Beecher,not_found,,,2026-08-11
 pittsvillewi.gov,PITTSVILLE,WI,City,City of Pittsville,not_found,,,2026-08-11
@@ -8658,13 +8658,13 @@ ridgewaywi.gov,Ridgeway,WI,City,Village of Ridgeway,not_found,,,2026-08-11
 riverhillswi.gov,River Hills,WI,City,Village of River Hills,not_found,,,2026-08-11
 townofuticawi.gov,Oshkosh,WI,City,Town of Utica,not_found,,,2026-08-11
 villageofoakdalewi.gov,Oakdale,WI,City,Village of Oakdale,not_found,,,2026-08-11
-townoflakesidewi.gov,Poplar,WI,City,Town of Lakeside,not_found,,,2026-08-11
+townoflakesidewi.gov,Poplar,WI,City,Town of Lakeside,found,https://bid.wisconsinsurplus.com/Public/Auction/AuctionItemDetail?pageNumber=WddRnDis30ojx01x46RicQ%3d%3d&pageSize=WddRnDis30ojx01x46RicQ%3d%3d&AuctionItemId=LjLVXCGMs58Wwkn5MbQEyw%3d%3d&AuctionId=GVL5O0bIGbRF9OUTrztonQ%3d%3d,custom,2026-11-02
 maplegrovewi.gov,Reedsville,WI,City,Town of Maple Grove,not_found,,,2026-08-11
 freedomsaukwi.gov,Rock Springs,WI,City,Town of Freedom,not_found,,,2026-08-11
 stevenspoint.gov,Stevens Point,WI,City,City of Stevens Point,found,https://stevenspoint.gov/Bids.aspx,civicplus,2026-08-11
 rockspringswi.gov,ROCK SPRINGS,WI,City,Village of Rock Springs,not_found,,,2026-08-11
 riponfirewi.gov,Ripon,WI,City,City of Ripon - Fire Department,not_found,,,2026-08-11
-villageofmukwonago.gov,Mukwonago,WI,City,Village of Mukwonago,not_found,,,2026-08-11
+villageofmukwonago.gov,Mukwonago,WI,City,Village of Mukwonago,found,https://www.villageofmukwonago.gov/1259/Village-Projects,custom,2026-11-02
 dekorra-wi.gov,Poynette,WI,City,Town of Dekorra Wisconsin,found,https://dekorra-wi.gov/rfpbid-notices,agency,2026-08-11
 townofsandcreekwi.gov,Sand Creek,WI,City,Town of Sand Creek,not_found,,,2026-08-11
 richlandcenterwi.gov,Richland Center,WI,City,City of Richland Center,not_found,,,2026-08-11
@@ -8692,7 +8692,7 @@ townofgreenlake.gov,Ripon,WI,City,Township Of Green Lake,not_found,,,2026-08-11
 boazwi.gov,Richland Center,WI,City,Village of Boaz,not_found,,,2026-08-11
 sheboyganfallswi.gov,Sheboygan Falls,WI,City,City of Sheboygan Falls,not_found,,,2026-08-11
 shorewoodwi.gov,Shorewood,WI,City,Village of Shorewood,not_found,,,2026-08-11
-oakcreekwi.gov,Oak Creek,WI,City,City of Oak Creek,not_found,,,2026-08-11
+oakcreekwi.gov,Oak Creek,WI,City,City of Oak Creek,found,https://oakcreekwi.gov/Bids.aspx,civicplus,2026-11-02
 stcloudwi.gov,Saint Cloud,WI,City,Village of Saint Cloud,not_found,,,2026-08-11
 veronawi.gov,Verona,WI,City,City of Verona,found,https://veronawi.gov/Bids.aspx,civicplus,2026-08-11
 villageofsullivanwi.gov,SULLIVAN,WI,City,VILLAGE OF SULLIVAN,not_found,,,2026-08-11
@@ -8748,7 +8748,7 @@ cityofthorp.gov,Thorp,WI,City,City of Thorp Wisconsin,not_found,,,2026-08-11
 townofthreelakeswi.gov,Three Lakes,WI,City,Town of Three Lakes,not_found,,,2026-08-11
 moselwi.gov,Sehboygan,WI,City,Town of Mosel,not_found,,,2026-08-11
 washingtonisland-wi.gov,Washington Island,WI,City,Town of Washington,not_found,,,2026-08-11
-pleasantprairiewi.gov,Pleasant Prairie,WI,City,Village of Pleasant Prairie,not_found,,,2026-08-11
+pleasantprairiewi.gov,Pleasant Prairie,WI,City,Village of Pleasant Prairie,found,https://pleasantprairiewi.gov/services/information/meetings_and_notices/public_notices,custom,2026-11-02
 tomahwi.gov,Tomah,WI,City,City of Tomah,not_found,,,2026-08-11
 townoflynneoneidactywi.gov,Tripoli,WI,City,Town of Lynne,not_found,,,2026-08-11
 madison.gov,Madison,WI,City,City of Madison,not_found,,,2026-08-11
@@ -8764,7 +8764,7 @@ townofdaytonwcwi.gov,Waupaca,WI,City,Town of Dayton,found,https://townofdaytonwc
 townofwalworthwi.gov,Walworth,WI,City,"Walworth, Town of",not_found,,,2026-08-11
 portwashingtonwi.gov,Port Washington,WI,City,City of Port Washington,not_found,,,2026-08-11
 townofthorpwi.gov,Thorp,WI,City,Town of Thorp,not_found,,,2026-08-11
-reedsburgwi.gov,Reedsburg,WI,City,City of Reedsburg,not_found,,,2026-08-11
+reedsburgwi.gov,Reedsburg,WI,City,City of Reedsburg,found,https://reedsburgwi.gov/rfp,agency,2026-11-02
 townofshieldsdcwi.gov,Watertown,WI,City,Town of Shields Dodge County,not_found,,,2026-08-11
 wirapids.gov,Wisconsin Rapids,WI,City,City of Wisconsin Rapids,found,https://wirapids.gov/Bids.aspx,civicplus,2026-08-11
 villageofwales.gov,Wales,WI,City,Village of Wales,not_found,,,2026-08-11
@@ -8774,7 +8774,7 @@ cityofowenwi.gov,Owen,WI,City,"City of Owen, WI",not_found,,,2026-08-11
 eastonmcwi.gov,Ringle,WI,City,Town of Easton,not_found,,,2026-08-11
 townofwyomingwi.gov,Spring Green,WI,City,Town of Wyoming,not_found,,,2026-08-11
 townofhansen.gov,Vesper,WI,City,Town of Hansen,not_found,,,2026-08-11
-greenvillewi.gov,Village of Greenville,WI,City,Town of Greenville,not_found,,,2026-08-11
+greenvillewi.gov,Village of Greenville,WI,City,Town of Greenville,found,https://greenvillewi.gov/government/legal_notices_and_postings.php,custom,2026-11-02
 townofmarionwausharawi.gov,Wautoma,WI,City,Town of Marion,not_found,,,2026-08-11
 townofsheboyganwi.gov,Sheboygan,WI,City,Town of Sheboygan,not_found,,,2026-08-11
 townofdaywi.gov,Stratford,WI,City,Town of Day,not_found,,,2026-08-11
@@ -8784,7 +8784,7 @@ morgantownwv.gov,Morgantown,WV,City,City of Morgantown,found,https://morgantownw
 villageofwaukesha.gov,Waukesha,WI,City,Village of Waukesha,not_found,,,2026-08-11
 saratogawi.gov,Wisconsin Rapids,WI,City,Town Of Saratoga,not_found,,,2026-08-11
 cameronwv.gov,Cameron,WV,City,City of Cameron,not_found,,,2026-08-11
-waukesha-wi.gov,Waukesha,WI,City,City of Waukesha,not_found,,,2026-08-11
+waukesha-wi.gov,Waukesha,WI,City,City of Waukesha,found,https://waukesha-wi.gov/bids,agency,2026-11-02
 townofweyauwega-wi.gov,Weyauwega,WI,City,Town of Weyauwega,not_found,,,2026-08-11
 follansbeewv.gov,Follansbee,WV,City,City of Follansbee,not_found,,,2026-08-11
 townofpoygan.gov,Winneconne,WI,City,Town of Poygan,not_found,,,2026-08-11
@@ -8809,10 +8809,10 @@ townoffranzenwi.gov,Wittenberg,WI,City,Town of Franzen,not_found,,,2026-08-11
 sussexwi.gov,Sussex,WI,City,The Village of Sussex,not_found,,,2026-08-11
 wilson-lincoln-wi.gov,Tomahawk,WI,City,Town of Wilson,not_found,,,2026-08-11
 stratfordwi.gov,Stratford,WI,City,Village of Stratford,not_found,,,2026-08-11
-voslwi.gov,Salem,WI,City,Village of Salem Lakes,not_found,,,2026-08-11
+voslwi.gov,Salem,WI,City,Village of Salem Lakes,found,https://voslwi.gov/bids-quotes,agency,2026-11-02
 townofscottbrownwi.gov,New Franken,WI,City,Town of Scott,not_found,,,2026-08-11
 beckley.gov,Beckley,WV,City,City of Beckley,not_found,,,2026-08-11
-brooklyntownwashburnwi.gov,Trego,WI,City,Town of Brooklyn,not_found,,,2026-08-11
+brooklyntownwashburnwi.gov,Trego,WI,City,Town of Brooklyn,found,https://brooklyntownwashburnwi.gov/government/purchasing,agency,2026-11-02
 townofgarywv.gov,Gary,WV,City,Town of Gary,not_found,,,2026-08-11
 vofwittenbergwi.gov,Wittenberg,WI,City,Village of Wittenberg,not_found,,,2026-08-11
 whitefishbaywi.gov,Whitefish Bay,WI,City,Village of Whitefish Bay,not_found,,,2026-08-11
@@ -8851,7 +8851,7 @@ watertownwi.gov,Watertown,WI,City,City of Watertown,not_found,,,2026-08-11
 princetonwv.gov,Princeton,WV,City,Princeton Police Department,not_found,,,2026-08-11
 torringtonwy.gov,Torrington,WY,City,City of Torrington,found,https://torringtonwy.gov/Bids.aspx,civicplus,2026-08-11
 wellsburgwvpd.gov,Wellsburg,WV,City,Wellsburg Police Department,not_found,,,2026-08-11
-townofrichmond-walworthwi.gov,Whitewater,WI,City,Town of Richmond,not_found,,,2026-08-11
+townofrichmond-walworthwi.gov,Whitewater,WI,City,Town of Richmond,found,https://townofrichmond-walworthwi.gov/purchasing,agency,2026-11-02
 cityofwilliamsonwv.gov,Williamson,WV,City,City of Williamson,not_found,,,2026-08-11
 wheelingwv.gov,Wheeling,WV,City,City of Wheeling,found,https://wheelingwv.gov/bids,agency,2026-08-11
 fnsb.gov,Fairbanks,AK,County,Fairbanks North Star Borough,found,https://fnsb.gov/Bids.aspx,civicplus,2026-08-11
@@ -8881,7 +8881,7 @@ ribmountainwi.gov,Wausau,WI,City,Village of Rib Mountain,found,https://ribmounta
 codypolicewy.gov,Cody,WY,City,Cody Police Department,not_found,,,2026-08-11
 wausauwi.gov,Wausau,WI,City,City of Wausau,not_found,,,2026-08-11
 baysidefireak.gov,Kodiak,AK,County,Kodiak Island Borough,not_found,,,2026-08-11
-wauwatosa.gov,Wauwatosa,WI,City,City of Wauwatosa,not_found,,,2026-08-11
+wauwatosa.gov,Wauwatosa,WI,City,City of Wauwatosa,found,https://wauwatosa.gov/purchasing,agency,2026-11-02
 henrycountyal.gov,Abbeville,AL,County,Henry County Commission,not_found,,,2026-08-11
 cityofweyauwega-wi.gov,Weyauwega,WI,City,City of Weyauwega,not_found,,,2026-08-11
 bridgeportwv.gov,Bridgeport,WV,City,City of Bridgeport,not_found,,,2026-08-11
@@ -8934,7 +8934,7 @@ winstonal.gov,Double Springs,AL,County,Winston County Commission,not_found,,,202
 bullockcountyal.gov,Union Springs,AL,County,Bullock County Commission,not_found,,,2026-08-11
 franklincountyal.gov,Russellville,AL,County,Franklin County Commission,not_found,,,2026-08-11
 littlerivercircuitclerkar.gov,Ashdown,AR,County,Little River Circuit Clerk,not_found,,,2026-08-11
-leecountyal.gov,Opelika,AL,County,Lee County Commission,not_found,,,2026-08-11
+leecountyal.gov,Opelika,AL,County,Lee County Commission,found,https://www.leecountyal.gov/departments/commission_office/bid_opportunities.php,agency,2026-11-02
 lawrencecountyal.gov,Moulton,AL,County,Lawrence County Commission,not_found,,,2026-08-11
 independencecircuitclerkar.gov,Batesville,AR,County,Independence County Circuit Clerk,not_found,,,2026-08-11
 genevacountyal.gov,Geneva,AL,County,Geneva County Probate Judge,not_found,,,2026-08-11
@@ -8946,7 +8946,7 @@ clarksburgwv.gov,Clarksburg,WV,City,City of Clarksburg WV,found,https://clarksbu
 monroecountyassessorar.gov,Clarendon,AR,County,Monroe County Assessor,not_found,,,2026-08-11
 thermopoliswy.gov,Thermopolis,WY,City,Town of Thermopolis,not_found,,,2026-08-11
 lamarcountyal.gov,Vernon,AL,County,Lamar County Commission,not_found,,,2026-08-11
-cherokeecounty-al.gov,Centre,AL,County,Cherokee County Commission,not_found,,,2026-08-11
+cherokeecounty-al.gov,Centre,AL,County,Cherokee County Commission,found,https://cherokeecounty-al.gov/purchasing,agency,2026-11-02
 cokevillewy.gov,Cokeville,WY,City,Town of Cokeville,not_found,,,2026-08-11
 waupacawi.gov,Waupaca,WI,City,City of Waupaca,found,https://cityofwaupaca.org/government/rfps/,custom,2026-08-11
 bencosoar.gov,Bentonville,AR,County,Benton County Sheriff's Office,not_found,,,2026-08-11
@@ -9467,9 +9467,9 @@ newtoncountyga.gov,Covington,GA,County,Newton County Board of Commissioners,not_
 maconcountyga.gov,Oglethorpe,GA,County,Macon County Board of Commissioners,not_found,,,2026-08-11
 tiftcounty.gov,Tifton,GA,County,Tift County,not_found,,,2026-08-11
 marshallcountyia.gov,Marshalltown,IA,County,"Marshall County, Iowa",found,https://marshallcountyia.gov/Bids.aspx,civicplus,2026-08-11
-houstoncountyga.gov,Warner Robins,GA,County,Houston County Board Of Commissioners,not_found,,,2026-08-11
+houstoncountyga.gov,Warner Robins,GA,County,Houston County Board Of Commissioners,found,https://houstoncountyga.gov/residents/news.cms/2026/20/houston-public-notice---site-suitability---fin,custom,2026-11-02
 irwincounty-ga.gov,Ocilla,GA,County,Irwin County Georgia,not_found,,,2026-08-11
-colquittcountyga.gov,Moultrie,GA,County,Colquitt County Board of Commissioners,not_found,,,2026-08-11
+colquittcountyga.gov,Moultrie,GA,County,Colquitt County Board of Commissioners,found,https://colquittcountyga.gov/departments/purchasing,agency,2026-11-02
 hawaiiprosecutors.gov,Hilo,HI,County,Office of the Prosecuting Attorney,not_found,,,2026-08-11
 henrycountyga.gov,McDonough,GA,County,Henry County Government,found,https://henrycountyga.gov/bids-and-rfps,agency,2026-08-11
 polkcountyiowa.gov,Des Moines,IA,County,Polk County,found,https://polkcountyiowa.gov/Bids.aspx,civicplus,2026-08-11
@@ -9483,7 +9483,7 @@ leonpa.gov,Tallahassee,FL,County,Leon County Property Appraiser,not_found,,,2026
 earlycountyga.gov,Blakely,GA,County,Early County Board of Commissioners,found,https://earlycountyga.gov/bidsandrfps,agency,2026-08-11
 gcso.gov,Guthrie Center,IA,County,"Guthrie County, Iowa",not_found,,,2026-08-11
 warrencountyga.gov,Warrenton,GA,County,Warren County Board of Commissioners,not_found,,,2026-08-11
-walkercountyga.gov,LaFayette,GA,County,Walker County Government,not_found,,,2026-08-11
+walkercountyga.gov,LaFayette,GA,County,Walker County Government,found,https://walkercountyga.gov/public-notices,custom,2026-11-02
 floydcountyiowa.gov,Charles City,IA,County,Floyd County Iowa,not_found,,,2026-08-11
 decaturcountyga.gov,Bainbridge,GA,County,Decatur County Board of Commissioners,found,https://decaturcountyga.gov/bids-and-rfps,agency,2026-08-26
 stephenscountyga.gov,Toccoa,GA,County,Stephens County Board of Commissioners,not_found,,,2026-08-11
@@ -9497,7 +9497,7 @@ auduboncountyia.gov,Audubon,IA,County,Audubon County Courthouse,not_found,,,2026
 colliercountyfl.gov,Naples,FL,County,Collier County Government,found,https://www.collier.gov/Collier-County/Organization-Resources/Procurement-Services-Division,agency,2026-08-11
 nejcga.gov,Gainesville,GA,County,Northeast Judicial Circuit Court,not_found,,,2026-08-11
 lakeclerkfl.gov,Tavares,FL,County,Lake County Clerk of the Circuit Court and Comptroller,found,https://lakeclerkfl.gov/purchasing,agency,2026-08-11
-brookscountyga.gov,Quitman,GA,County,Brooks County Board of Commissioners,not_found,,,2026-08-11
+brookscountyga.gov,Quitman,GA,County,Brooks County Board of Commissioners,found,https://brookscountyga.gov/agendas-minutes-and-public-notices,custom,2026-11-02
 pikecoga.gov,Zebulon,GA,County,"Pike County, GA",found,https://pikecoga.gov/purchasing,agency,2026-08-11
 hardincountyia.gov,Eldora,IA,County,Hardin County,not_found,,,2026-08-11
 burkecounty-ga.gov,Waynesboro,GA,County,Burke County Georgia,found,https://burkecounty-ga.gov/departments/administration/bid_opportunities.php,agency,2026-08-11
@@ -9508,7 +9508,7 @@ cobbtax.gov,Marietta,GA,County,Cobb County Tax Commissioner,not_found,,,2026-08-
 duvalclerk.gov,Jacksonville,FL,County,Duval County Clerk of Courts,not_found,,,2026-08-11
 henrycountysheriffga.gov,McDonough,GA,County,Henry County Government,not_found,,,2026-08-11
 webstercountyia.gov,Fort Dodge,IA,County,Webster County,not_found,,,2026-08-11
-oglethorpecountyga.gov,Lexington,GA,County,Oglethorpe County Board of Commissioners,not_found,,,2026-08-11
+oglethorpecountyga.gov,Lexington,GA,County,Oglethorpe County Board of Commissioners,found,https://oglethorpecountyga.gov/government/purchasing,agency,2026-11-02
 gwinnettcounty.gov,Lawrenceville,GA,County,Gwinnett County Board of Commissioners,not_found,,,2026-08-11
 pamartinfl.gov,Stuart,FL,County,Martin County Property Appraiser Office,not_found,,,2026-08-11
 longcountyga.gov,Ludowici,GA,County,Long County Board of Commissioners,not_found,,,2026-08-11
@@ -9588,7 +9588,7 @@ mcleancountyil.gov,Bloomington,IL,County,McLean County,found,https://www.mcleanc
 cookcountyil.gov,Chicago,IL,County,Cook County Government - Bureau of Technology,found,https://cookcountyil.gov/procurement,agency,2026-11-02
 randolphcountyil.gov,CHESTER,IL,County,Randolph County,not_found,,,2026-08-11
 elmorecountyid.gov,Mountain Home,ID,County,"Elmore County, Idaho",not_found,,,2026-08-11
-troupcountyga.gov,LaGrange,GA,County,Troup County Board of Commissioners,not_found,,,2026-08-11
+troupcountyga.gov,LaGrange,GA,County,Troup County Board of Commissioners,found,https://troupcountyga.gov/departments/purchasing,agency,2026-11-02
 marioncountyiowa.gov,Knoxville,IA,County,"County of Marion, Iowa",found,https://marioncountyiowa.gov/bid_notices/,agency,2026-11-02
 claytoncountyia.gov,Elkader,IA,County,"Clayton County, Iowa",not_found,,,2026-08-11
 dewittcountyil.gov,Clinton,IL,County,"Dewitt County, Illinois",not_found,,,2026-08-11
@@ -10051,9 +10051,9 @@ sibleycountyattorney.gov,Gaylord,MN,County,Sibley County Attorney,not_found,,,20
 ottertailcounty.gov,Fergus Falls,MN,County,"Otter Tail County, MN",found,https://ottertailcounty.gov/Bids.aspx,civicplus,2026-08-11
 montcalmcountymi.gov,Stanton,MI,County,County of Montcalm,not_found,,,2026-08-11
 kittsonmn.gov,Hallock,MN,County,Kittson County,not_found,,,2026-08-11
-crowwing.gov,Brainerd,MN,County,Crow Wing County,not_found,,,2026-08-11
+crowwing.gov,Brainerd,MN,County,Crow Wing County,found,https://crowwing.gov/Bids.aspx,civicplus,2026-11-02
 grantcountymn.gov,Elbow Lake,MN,County,Grant County MN,not_found,,,2026-08-11
-hocomn.gov,Caledonia,MN,County,Houston County,not_found,,,2026-08-11
+hocomn.gov,Caledonia,MN,County,Houston County,found,https://hocomn.gov/government/public_notices.php,custom,2026-11-02
 swiftcounty.gov,Benson,MN,County,Swift County,not_found,,,2026-08-11
 lakecountymi.gov,BALDWIN,MI,County,Lake County Baldwin Michigan,found,https://lakecountymi.gov/projects-bids/,agency,2026-08-11
 hamptontownshipmi.gov,Essexville,MI,County,Charter Township of Hampton,found,https://hamptontownshipmi.gov/bids-and-rfps,agency,2026-08-26
@@ -10068,14 +10068,14 @@ kanabeccountymn.gov,Mora,MN,County,Kanabec County,not_found,,,2026-08-11
 washingtoncomaineema.gov,Machias,ME,County,Washington County Emergency Management Agency,found,https://washingtoncomaineema.gov/bids-and-rfps,agency,2026-08-26
 stoddardcountymo.gov,Bloomfield,MO,County,Stoddard County,not_found,,,2026-08-11
 popecountymn.gov,GLENWOOD,MN,County,Pope County,not_found,,,2026-08-11
-fillmorecountymn.gov,Preston,MN,County,Fillmore County,not_found,,,2026-08-11
+fillmorecountymn.gov,Preston,MN,County,Fillmore County,found,https://fillmorecountymn.gov/bid_rfps/index.php,agency,2026-11-02
 westernprobationmn.gov,Wheaton,MN,County,Western Probation Services,not_found,,,2026-08-11
 lyoncountymn.gov,Marshall,MN,County,Lyon County,not_found,,,2026-08-11
 batescountymo.gov,Butler,MO,County,Bates County Commission,not_found,,,2026-08-11
 traversecosomn.gov,Wheaton,MN,County,Traverse County Sheriff's Office,not_found,,,2026-08-11
 carrollcountymd.gov,Westminster,MD,County,"Commissioners of Carroll County, Maryland",not_found,,,2026-08-11
 dodgecountymn.gov,Mantorville,MN,County,Dodge County,not_found,,,2026-08-11
-oaklandcountymi.gov,Pontiac,MI,County,Oakland County Michigan,not_found,,,2026-08-11
+oaklandcountymi.gov,Pontiac,MI,County,Oakland County Michigan,found,https://oaklandcountymi.gov/purchasing,agency,2026-11-02
 harrisoncountymo.gov,Bethany,MO,County,Harrison County,not_found,,,2026-08-11
 gentrycountymo.gov,ALBANY,MO,County,GENTRY COUNTY,not_found,,,2026-08-11
 waynecountymi.gov,Detroit,MI,County,Charter County of Wayne,found,https://waynecountymi.gov/purchasing,agency,2026-08-11
@@ -10088,7 +10088,7 @@ menomineecountymi.gov,Menominee,MI,County,"Menominee County, MI",not_found,,,202
 clearwatercountymn.gov,Bagley,MN,County,Clearwater County,found,https://www.clearwatercountymn.gov/bidsandrfps,agency,2026-08-11
 claycountymo.gov,Liberty,MO,County,"Clay County, Missouri",found,https://claycountymo.gov/Bids.aspx,civicplus,2026-08-11
 claycountymn.gov,Moorhead,MN,County,Clay County,not_found,,,2026-08-11
-chippewacountymi.gov,Sault Ste Marie,MI,County,Chippewa County,not_found,,,2026-08-11
+chippewacountymi.gov,Sault Ste Marie,MI,County,Chippewa County,found,https://chippewacountymi.gov/bids-and-rfps,agency,2026-11-02
 pipestonecounty.gov,Pipestone,MN,County,County of Pipestone,found,https://pipestonecounty.gov/government/departments/highway/bid_opportunities.php,agency,2026-08-11
 stearnscountymn.gov,Saint Cloud,MN,County,County of Stearns,found,https://stearnscountymn.gov/bids-and-rfps,agency,2026-08-11
 traversecountymn.gov,Wheaton,MN,County,Traverse County MN,not_found,,,2026-08-11
@@ -10120,7 +10120,7 @@ coopercohealth.gov,Boonville,MO,County,Cooper County Public Health Center,not_fo
 daviessmosheriff.gov,Gallatin,MO,County,Daviess County Sheriff's Office,not_found,,,2026-08-11
 sullivansomo.gov,Milan,MO,County,Sullivan County Sheriff's Office,not_found,,,2026-08-11
 adaircosomo.gov,Kirksville,MO,County,Adair County Law Enforcement Center,not_found,,,2026-08-11
-redwoodcounty-mn.gov,Redwood Falls,MN,County,Redwood County,not_found,,,2026-08-11
+redwoodcounty-mn.gov,Redwood Falls,MN,County,Redwood County,found,https://redwoodcounty-mn.gov/notices/,custom,2026-11-02
 callawayso.gov,FULTON,MO,County,Callaway County Sheriff Office,not_found,,,2026-08-11
 stonecountymo.gov,Galena,MO,County,Stone County,not_found,,,2026-08-11
 wrightcountymo911.gov,Mountain Grove,MO,County,Wright County Emergency Services Board,not_found,,,2026-08-11
@@ -10314,7 +10314,7 @@ jeffersoncountysheriffmt.gov,Boulder,MT,County,Jefferson County Sheriff's Office
 swaincountync.gov,Bryson City,NC,County,Swain County Government,not_found,,,2026-08-11
 toolecountymt.gov,Shelby,MT,County,Toole County,not_found,,,2026-08-11
 harnettcountync.gov,Lillington,NC,County,Harnett County,not_found,,,2026-08-11
-pamlicocountync.gov,Bayboro,NC,County,County of Pamlico,not_found,,,2026-08-11
+pamlicocountync.gov,Bayboro,NC,County,County of Pamlico,found,https://pamlicocountync.gov/county_government/public_notices.php,custom,2026-11-02
 iredellcountync.gov,Statesville,NC,County,Iredell County,found,https://iredellcountync.gov/Bids.aspx,civicplus,2026-08-11
 tyrrellnc.gov,Columbia,NC,County,Tyrrell County,not_found,,,2026-08-11
 copiahcountyms.gov,Hazlehurst,MS,County,Copiah County Board of Supervisors,not_found,,,2026-08-11
@@ -10358,7 +10358,7 @@ darencsheriff.gov,Manteo,NC,County,Dare County Sheriff's Office,not_found,,,2026
 mcdowellnc.gov,Marion,NC,County,McDowell County Administration,found,https://mcdowellnc.gov/county/bid-opportunities,agency,2026-08-11
 billingscountynd.gov,Medora,ND,County,"Billings County, North Dakota",found,https://billingscountynd.gov/Bids.aspx,civicplus,2026-08-11
 lenoircountync.gov,Kinston,NC,County,Lenoir County,found,https://lenoircountync.gov/business/bid-opportunities/,agency,2026-08-11
-cherokeecounty-nc.gov,Murphy,NC,County,Cherokee County Government,not_found,,,2026-08-11
+cherokeecounty-nc.gov,Murphy,NC,County,Cherokee County Government,found,https://cherokeecounty-nc.gov/Bids.aspx,civicplus,2026-11-02
 richmondcountync.gov,Rockingham,NC,County,Richmond County Government,not_found,,,2026-08-11
 granitecountymt.gov,PHILIPSBURG,MT,County,Granite County,not_found,,,2026-08-11
 averycountync.gov,Newland,NC,County,County of Avery,not_found,,,2026-08-11
@@ -10375,12 +10375,12 @@ columbuscoemergencyservicesnc.gov,Whiteville,NC,County,Columbus County Governmen
 avss-nd.gov,Bismarck,ND,County,"State of ND, ITD",not_found,,,2026-08-11
 ansoncountync.gov,Wadesboro,NC,County,County of Anson,not_found,,,2026-08-11
 smithcountyms.gov,Raleigh,MS,County,Smith County MS Board of Supervisors,found,https://www.smithcountyms.gov/board-of-supervisors/,custom,2026-08-11
-edgecombecountync.gov,Tarboro,NC,County,Edgecombe County,not_found,,,2026-08-11
+edgecombecountync.gov,Tarboro,NC,County,Edgecombe County,found,https://www.edgecombecountync.gov/departments/finance/bid___funding_opportunity.php,agency,2026-11-02
 stonecountyms.gov,Wiggins,MS,County,Stone County Board of Supervisors,not_found,,,2026-08-11
 moniteaucountymo.gov,California,MO,County,Moniteau County Commission,not_found,,,2026-08-11
 starkcountynd.gov,Bismarck,ND,County,Stark County North Dakota,not_found,,,2026-08-11
 rooseveltcountymt.gov,Wolf Point,MT,County,Roosevelt County,not_found,,,2026-08-11
-montgomerycountync.gov,Troy,NC,County,"Montgomery County, NC",not_found,,,2026-08-11
+montgomerycountync.gov,Troy,NC,County,"Montgomery County, NC",found,https://montgomerycountync.gov/bids,agency,2026-11-02
 mecknc.gov,Charlotte,NC,County,Mecklenburg County,found,https://fin.mecknc.gov/procurement,agency,2026-08-11
 emmonsnd.gov,Linton,ND,County,Emmons County,not_found,,,2026-08-11
 catawbacountync.gov,Newton,NC,County,Catawba County North Carolina,found,https://catawbacountync.gov/county-services/purchasing,agency,2026-08-11
@@ -10418,12 +10418,12 @@ dunncountynd.gov,Manning,ND,County,Dunn County,not_found,,,2026-08-11
 hydehealthnc.gov,Swan Quarter,NC,County,Hyde County Health Department,not_found,,,2026-08-11
 randolphcounty-mo.gov,Huntsville,MO,County,Randolph County Missouri,not_found,,,2026-08-11
 wilsoncountync.gov,Wilson,NC,County,Wilson County Government,not_found,,,2026-08-11
-guilfordcountync.gov,Greensboro,NC,County,Guilford County,not_found,,,2026-08-11
+guilfordcountync.gov,Greensboro,NC,County,Guilford County,found,https://legalnotices.guilfordcountync.gov/Default.aspx,custom,2026-11-02
 greeleycountyne.gov,Greeley,NE,County,Greeley County,not_found,,,2026-08-11
 claycountyne.gov,Clay Center,NE,County,Clay County Nebraska,not_found,,,2026-08-11
 rockcountyne.gov,Bassett,NE,County,Rock County Nebraska,found,https://rockcountyne.gov/bids,agency,2026-11-02
 amitecountyms.gov,Liberty,MS,County,Amite County Board of Supervisors,not_found,,,2026-08-11
-robesoncountync.gov,LUMBERTON,NC,County,ROBESON COUNTY,not_found,,,2026-08-11
+robesoncountync.gov,LUMBERTON,NC,County,ROBESON COUNTY,found,https://www.robesoncountync.gov/robeson-county-purchasing,agency,2026-11-02
 mckenziecountynd.gov,Watford City,ND,County,McKenzie County,found,https://mckenziecountynd.gov/bid-and-rfp-rfq-notices/,agency,2026-08-11
 georgecountyms.gov,Lucedale,MS,County,George County Board of Supervisors,not_found,,,2026-08-11
 chasecountyne.gov,Imperial,NE,County,Chase County,not_found,,,2026-08-11
@@ -10439,7 +10439,7 @@ chathamcountync.gov,Pittsboro,NC,County,Chatham County,not_found,,,2026-08-11
 carrollcountynh.gov,Ossipee,NH,County,County of Carroll,found,https://carrollcountynh.gov/Bids.aspx,civicplus,2026-08-11
 shermancountyne.gov,Loup City,NE,County,Sherman County,not_found,,,2026-08-11
 unioncountync.gov,Monroe,NC,County,Union County Government,not_found,,,2026-08-11
-martincountync.gov,Williamston,NC,County,Martin County,not_found,,,2026-08-11
+martincountync.gov,Williamston,NC,County,Martin County,found,https://martincountync.gov/public_notices/index.php,custom,2026-11-02
 sullivancountynh.gov,Unity,NH,County,"County of Sullivan, NH",found,https://sullivancountynh.gov/Bids.aspx,civicplus,2026-08-11
 hydecountync.gov,Swanquarter,NC,County,Hyde County Local Govt.,found,https://hydecountync.gov/county_rfps/index.php,agency,2026-08-11
 thurstoncountysheriffne.gov,Pender,NE,County,Thurston County Sheriff's Office,not_found,,,2026-08-11
@@ -10487,7 +10487,7 @@ stantoncountyne.gov,Stanton,NE,County,Stanton County,not_found,,,2026-08-11
 passaiccountynj.gov,PATERSON,NJ,County,COUNTY OF PASSAIC,not_found,,,2026-08-11
 bcnhsheriff.gov,Laconia,NH,County,Belknap County,not_found,,,2026-08-11
 somersetcoparksnj.gov,Bridgewater,NJ,County,Somerset County Park Commission,not_found,,,2026-08-11
-gatescountync.gov,Gatesville,NC,County,Gates County,not_found,,,2026-08-11
+gatescountync.gov,Gatesville,NC,County,Gates County,found,https://gatescountync.gov/MCCRFP2026,agency,2026-11-02
 grantcountynm.gov,Silver City,NM,County,Grant County,found,https://grantcountynm.gov/Bids.aspx,civicplus,2026-08-11
 essexcountynj.gov,Newark,NJ,County,County of Essex,not_found,,,2026-08-11
 ocbssnj.gov,Toms River,NJ,County,Ocean County Board of Social Services,not_found,,,2026-08-11
@@ -10617,7 +10617,7 @@ santafecountynm.gov,Santa Fe,NM,County,Santa Fe County,found,https://santafecoun
 onondaga.gov,Syracuse,NY,County,Onondaga County,not_found,,,2026-08-11
 rosscountyohiocourts.gov,Chillicothe,OH,County,Ross County Common Pleas Courts,not_found,,,2026-08-11
 townofnewlebanonny.gov,New Lebanon,NY,County,Town of New Lebanon,found,https://townofnewlebanonny.gov/due-aug-21-highway-bid-notices-notice-of-special-meeting/,agency,2026-08-11
-summitcountyjfsohio.gov,Akron,OH,County,Summit County Department of Job and Family Services,not_found,,,2026-08-11
+summitcountyjfsohio.gov,Akron,OH,County,Summit County Department of Job and Family Services,found,https://www.summitcountyjfsohio.gov/pages/Competitive-Bidding-Opportunities.html,agency,2026-11-02
 schenectadycountyny.gov,Schenectady,NY,County,Schenectady County,found,https://schenectadycountyny.gov/purchasing,agency,2026-08-11
 monroecountysheriff-ny.gov,Rochester,NY,County,Monroe County Sheriff's Office,not_found,,,2026-08-11
 schohariecounty-ny.gov,Schoharie,NY,County,Schoharie County,found,https://schohariecounty-ny.gov/services/bids.php,agency,2026-08-11
@@ -10705,7 +10705,7 @@ sanduskycoprosecutor.gov,Fremont,OH,County,Sandusky County Prosecutor,not_found,
 pawneecountyne.gov,Pawnee City,NE,County,County of Pawnee,found,https://pawneecountyne.gov/bids-contracts-rfps/,agency,2026-08-11
 hamiltoncountyohio.gov,Cincinnati,OH,County,Hamilton County Telecommunications,found,https://hamiltoncountyohio.gov/purchasing,agency,2026-08-11
 colfaxcountyne.gov,Schuyler,NE,County,Colfax County,found,https://colfaxcountyne.gov/bids-contracts-rfps/,agency,2026-08-11
-bcvetsoh.gov,HAMILTON,OH,County,BUTLER COUNTY VETERANS SERVICE COMMISSION,not_found,,,2026-08-11
+bcvetsoh.gov,HAMILTON,OH,County,BUTLER COUNTY VETERANS SERVICE COMMISSION,found,https://bcvetsoh.gov/bids,agency,2026-11-02
 geneseeny.gov,Batavia,NY,County,Genesee County,found,https://www.geneseeny.gov/Business-Development/Bids-and-RFPS,agency,2026-08-11
 sanduskycountyoh.gov,Fremont,OH,County,Sandusky County,found,https://sanduskycountyoh.gov/bids-and-rfps,agency,2026-08-26
 hardincountyohio.gov,Kenton,OH,County,Hardin County,found,https://hardincountyohio.gov/bids-and-rfps,agency,2026-08-26
@@ -10713,7 +10713,7 @@ piercecountyne.gov,Pierce,NE,County,Pierce County Nebraska,found,https://piercec
 cherrycountyne.gov,Valentine,NE,County,Cherry County,found,https://cherrycountyne.gov/bids-contracts-rfps/,agency,2026-08-11
 auditorwashingtoncountyohio.gov,Marietta,OH,County,Washington County Auditor,not_found,,,2026-08-11
 warrencountyohio.gov,Lebanon,OH,County,Warren County,not_found,,,2026-08-11
-galliacountyoh.gov,Gallipolis,OH,County,Gallia County Ohio,not_found,,,2026-08-11
+galliacountyoh.gov,Gallipolis,OH,County,Gallia County Ohio,found,https://galliacountyoh.gov/public-notices,custom,2026-11-02
 sciotocounty.gov,Portsmouth,OH,County,Scioto County,not_found,,,2026-08-11
 senecaohpivot.gov,Tiffin,OH,County,Seneca County PIVOT Recovery Program,not_found,,,2026-08-11
 burtcountyne.gov,Tekamah,NE,County,"Burt County, NE",found,https://burtcountyne.gov/bids-contracts-rfps/,agency,2026-08-11
@@ -10790,7 +10790,7 @@ washingtoncountyok.gov,Bartlesville,OK,County,Washington County,not_found,,,2026
 pushcountytreasurer.gov,Antlers,OK,County,Pushmataha County Treasurer,not_found,,,2026-08-11
 washitaso.gov,Cordell,OK,County,Washita County Sheriff's Office,not_found,,,2026-08-11
 pontotocsheriff-ok.gov,Ada,OK,County,Pontotoc County Sheriff's Office,not_found,,,2026-08-11
-vanwertcountyohio.gov,Van Wert,OH,County,Van Wert County,not_found,,,2026-08-11
+vanwertcountyohio.gov,Van Wert,OH,County,Van Wert County,found,https://vanwertcountyohio.gov/government/county_commissioners/legal_notices.php,custom,2026-11-02
 delawarecoclerkok.gov,Jay,OK,County,Delaware County,not_found,,,2026-08-11
 mccurtaincountyso.gov,Idabel,OK,County,McCurtain County Sheriff's Office,not_found,,,2026-08-11
 hughescountyok911.gov,HOLDENVILLE,OK,County,Hughes County 911,not_found,,,2026-08-11
@@ -11389,7 +11389,7 @@ kenoshacountywi.gov,Kenosha,WI,County,Kenosha County,not_found,,,2026-08-11
 chamberstx.gov,Anahuac,TX,County,Chambers County Government,not_found,,,2026-08-11
 florencecountywi.gov,Florence,WI,County,Florence County,not_found,,,2026-08-11
 spokanesheriff.gov,Spokane,WA,County,Spokane County Sheriff's Office,not_found,,,2026-08-11
-ashlandcountywi.gov,Ashland,WI,County,Ashland County,not_found,,,2026-08-11
+ashlandcountywi.gov,Ashland,WI,County,Ashland County,found,https://ashlandcountywi.gov/rfp,agency,2026-11-02
 mrrjva.gov,Staunton,VA,County,Middle River Regional Jail,not_found,,,2026-08-11
 princewilliamva.gov,Prince William,VA,County,Prince William County,not_found,,,2026-08-11
 columbiacountywi.gov,Portage,WI,County,Columbia County Government,not_found,,,2026-08-11
@@ -11406,9 +11406,9 @@ barroncountywi.gov,Barron,WI,County,Barron County,found,https://barroncountywi.g
 juneaucountywi.gov,Mauston,WI,County,Juneau County,not_found,,,2026-08-11
 nelsoncounty-va.gov,Lovingston,VA,County,Nelson County,not_found,,,2026-08-11
 waukeshacounty.gov,Waukesha,WI,County,Waukesha County Government,found,https://waukeshacounty.gov/Bids.aspx,civicplus,2026-08-11
-vilascountywi.gov,Eagle River,WI,County,Vilas County Wisconsin,not_found,,,2026-08-11
+vilascountywi.gov,Eagle River,WI,County,Vilas County Wisconsin,found,https://vilascountywi.gov/how_do_i/apply_for/request_for_bids.php,agency,2026-11-02
 princegeorgecountyva.gov,Prince George,VA,County,County of Prince George,found,https://princegeorgecountyva.gov/departments/finance_department/procurement/current_solicitations_and_awards.php,agency,2026-08-11
-washcowisco.gov,West Bend,WI,County,Washington County,not_found,,,2026-08-11
+washcowisco.gov,West Bend,WI,County,Washington County,found,https://washcowisco.gov/departments/purchasing,agency,2026-11-02
 frederickcountyva.gov,Winchester,VA,County,County of Frederick,not_found,,,2026-08-11
 pwcva.gov,Woodbridge,VA,County,Prince William County Government,not_found,,,2026-08-11
 craigcountyva.gov,New Castle,VA,County,The County of Craig,not_found,,,2026-11-02
@@ -11442,7 +11442,7 @@ thurstonauditor.gov,Olympia,WA,County,"Thurston County, WA",not_found,,,2026-08-
 kingcountyhazwastewa.gov,seattle,WA,County,King County,not_found,,,2026-08-11
 conversecountywy.gov,Douglas,WY,County,Converse County,found,https://conversecountywy.gov/Bids.aspx,civicplus,2026-08-11
 campbellcountywy.gov,Gillette,WY,County,Campbell County,found,https://campbellcountywy.gov/Bids.aspx,civicplus,2026-08-11
-waupacacounty-wi.gov,Waupaca,WI,County,Waupaca County,not_found,,,2026-08-11
+waupacacounty-wi.gov,Waupaca,WI,County,Waupaca County,found,https://waupacacounty-wi.gov/businesses/bids_and_proposals.php,agency,2026-11-02
 washozwi.gov,West Bend,WI,County,Washington County,not_found,,,2026-08-11
 bentoncountywa.gov,Prosser,WA,County,"Benton County, WA",found,https://bentoncountywa.gov/departments/purchasing/bid_opportunities.php,agency,2026-08-11
 gilmercountywv.gov,Glenville,WV,County,Gilmer County Commission,not_found,,,2026-08-11
@@ -12021,7 +12021,7 @@ dakota911mn.gov,Rosemount,MN,Special district,Dakota Communications Center,not_f
 thomashillpwsdmo.gov,MOBERLY,MO,Special district,Thomas Hill Public Water Supply District #1,not_found,,,2026-08-11
 sedgewickvillefiremo.gov,Sedgewickville,MO,Special district,Sedgewickville Fire Protection District,not_found,,,2026-08-11
 nixafire.gov,Nixa,MO,Special district,Nixa Fire Protection District 2,not_found,,,2026-08-11
-nwgrc.gov,Rome,GA,Special district,Northwest Georgia Regional Commission,not_found,,,2026-08-11
+nwgrc.gov,Rome,GA,Special district,Northwest Georgia Regional Commission,found,https://www.nwgrc.gov/meetings-and-announcements/request-for-proposals-rfp-programs-services-for-older-adults-and-caregivers/,agency,2026-11-02
 threemilefiremt.gov,Stevensville,MT,Special district,Three Mile Rural Fire District,not_found,,,2026-08-11
 pwsd1maconco.gov,Macon,MO,Special district,Public Water Supply District No.1 of Macon County,not_found,,,2026-08-11
 nemo911.gov,Hannibal,MO,Special district,Marion County Emergency Services,not_found,,,2026-08-11
@@ -12157,7 +12157,7 @@ montgomeryfiredistrictny.gov,Montgomery,NY,Special district,Montgomery Fire Dist
 greenlawnfd.gov,Greenlawn,NY,Special district,Greenlawn Fire District,not_found,,,2026-08-11
 northbannockfire.gov,Chubbuck,ID,Special district,North Bannock Fire District,not_found,,,2026-08-11
 erha-nm.gov,Roswell,NM,Special district,Eastern Regional Housing Authority,not_found,,,2026-08-11
-akronhousing.gov,Akron,OH,Special district,Akron Metropolitan Housing Authority,not_found,,,2026-08-11
+akronhousing.gov,Akron,OH,Special district,Akron Metropolitan Housing Authority,found,https://akronhousing.gov/bids,agency,2026-11-02
 ransomvillefiredistrict.gov,Ransomville,NY,Special district,Ransomville Fire District,not_found,,,2026-08-11
 valenciaswcd-nm.gov,Belen,NM,Special district,Valencia Soil and Water Conservation District,not_found,,,2026-08-11
 mahoningcolumbianatrainingoh.gov,Boardman,OH,Special district,Mahoning and Columbiana Training Association,not_found,,,2026-08-11
@@ -12188,7 +12188,7 @@ orienteastmarionparks.gov,East Marion,NY,Special district,Orient-East Marion Par
 scscogoh.gov,North Canton,OH,Special district,Stark County Schools Council of Governments,not_found,,,2026-08-11
 penfieldfd.gov,Penfield,NY,Special district,Penfield Fire District,not_found,,,2026-08-11
 wadingriverfdny.gov,WADING RIVER,NY,Special district,Wading River Fire District,not_found,,,2026-08-11
-vayahealth.gov,Asheville,NC,Special district,Vaya Health,not_found,,,2026-08-11
+vayahealth.gov,Asheville,NC,Special district,Vaya Health,found,https://vayahealth.gov/Bids.aspx,civicplus,2026-11-02
 stpaulfireny.gov,Rochester,NY,Special district,St Paul Boulevard Fire District,not_found,,,2026-08-11
 nffiredistrictoh.gov,Newton Falls,OH,Special district,NF Joint Fire District,not_found,,,2026-08-11
 seboh.gov,Parma,OH,Special district,SEB,not_found,,,2026-08-11
@@ -12917,7 +12917,7 @@ livoniapublicschools.org,Livonia,MI,School district,Livonia Public Schools,found
 ithacaschools.net,Ithaca,MI,School district,Ithaca Public Schools,not_found,,,2026-08-31
 scusd.edu,Sacramento,CA,School district,Sacramento City Unified School District,found,https://scusd.edu/purchasing,custom,2026-08-31
 icschools.us,Imlay City,MI,School district,Imlay City Community Schools,not_found,,,2026-08-31
-gwinnett.k12.ga.us,Lawrenceville,GA,School district,Gwinnett County Public Schools,not_found,,,2026-08-31
+gwinnett.k12.ga.us,Lawrenceville,GA,School district,Gwinnett County Public Schools,found,https://gwinnett.k12.ga.us/get-connected/bids,agency,2026-11-02
 ksd.org,Kennewick,WA,School district,Kennewick School District,not_found,,,2026-08-31
 ccps.us,Bowling Green,VA,School district,Caroline County Public Schools,not_found,,,2026-08-31
 newton-conover.org,Newton,NC,School district,Newton-Conover City Schools,not_found,,,2026-08-31
@@ -12932,7 +12932,7 @@ jefferson.kyschools.us,Louisville,KY,School district,Jefferson County Public Sch
 irondistrict.org,Cedar City,UT,School district,Iron County School District,not_found,,,2026-08-31
 judsonisd.org,San Antonio,TX,School district,Judson Independent School District,not_found,,,2026-08-31
 farmersville.k12.ca.us,Farmersville,CA,School district,Farmersville Unified School District,not_found,,,2026-08-31
-hcbe.net,Perry,GA,School district,Houston County Schools,not_found,,,2026-08-31
+hcbe.net,Perry,GA,School district,Houston County Schools,found,https://hcbe.net/purchasing,custom,2026-11-02
 issaquah.wednet.edu,Issaquah,WA,School district,Issaquah School District,not_found,,,2026-08-31
 aberdeen58.org,Aberdeen,ID,School district,Aberdeen School District,not_found,,,2026-08-31
 alamogordoschools.org,Alamogordo,NM,School district,Alamogordo Public Schools,not_found,,,2026-08-31
@@ -13134,7 +13134,7 @@ conwayschools.org,Conway,AR,School district,Conway Public Schools,not_found,,,20
 ppsvikings.org,Potterville,MI,School district,Potterville Public Schools,not_found,,,2026-08-31
 homeofthefalcons.org,Constantine,MI,School district,Constantine Public Schools,not_found,,,2026-08-31
 mendonschools.org,Mendon,MI,School district,Mendon Community School District,found,https://mendonschools.org/mendon-active-rfp/,custom,2026-08-31
-readingrangers.org,Reading,MI,School district,Reading Community Schools,not_found,,,2026-08-31
+readingrangers.org,Reading,MI,School district,Reading Community Schools,found,https://readingrangers.org/about-us/public-notices/,custom,2026-11-02
 ypsd.us,Yale,MI,School district,Yale Public Schools,not_found,,,2026-08-31
 sccoe.org,San Jose,CA,School district,Santa Clara County Office of Education,not_found,,,2026-08-31
 vicksburgschools.org,Vicksburg,MI,School district,Vicksburg Community Schools,not_found,,,2026-08-31
@@ -13257,13 +13257,13 @@ cityofcitronelle.com,Citronelle,AL,City,Citronelle,not_found,,,2026-09-01
 cityofbayminette.org,Bay Minette,AL,City,Bay Minette,not_found,,,2026-09-01
 cityoffultondale.com,Fultondale,AL,City,Fultondale,not_found,,,2026-09-01
 nana.com,Deering,AK,City,Deering,not_found,,,2026-09-01
-dalevilleal.com,Daleville,AL,City,Daleville,not_found,,,2026-09-01
+dalevilleal.com,Daleville,AL,City,Daleville,found,https://dalevilleal.com/government/purchasing,custom,2026-11-02
 cityofenterprise.net,Fairfield,AL,City,Fairfield,not_found,,,2026-09-01
 cityofhamilton.org,Hamilton,AL,City,Hamilton,not_found,,,2026-09-01
-cofairhope.com,Fairhope,AL,City,Fairhope,not_found,,,2026-09-01
+cofairhope.com,Fairhope,AL,City,Fairhope,found,https://cofairhope.com/Bids.aspx,civicplus,2026-11-02
 yakutatak.govoffice2.com,Yakutat,AK,City,Yakutat,not_found,,,2026-09-01
 hooveral.org,Hoover,AL,City,Hoover,not_found,,,2026-09-01
-cityofhelena.org,Helena,AL,City,Helena,not_found,,,2026-09-01
+cityofhelena.org,Helena,AL,City,Helena,found,https://cityofhelena.org/invitation-to-bid,custom,2026-11-02
 jacksonville-al.org,Jacksonville,AL,City,Jacksonville,not_found,,,2026-09-01
 leedsalabama.org,Leeds,AL,City,Leeds,not_found,,,2026-09-01
 ci.livingston.al.us,Livingston,AL,City,Livingston,not_found,,,2026-09-01
@@ -13277,7 +13277,7 @@ cityofgardendale.com,Gardendale,AL,City,Gardendale,not_found,,,2026-09-01
 opelika.org,Opelika,AL,City,Opelika,not_found,,,2026-09-01
 cityofgeneva.com,Geneva,AL,City,Geneva,not_found,,,2026-09-01
 oxfordalabama.org,Oxford,AL,City,Oxford,not_found,,,2026-09-01
-cityofnorthport.org,Northport,AL,City,Northport,not_found,,,2026-09-01
+cityofnorthport.org,Northport,AL,City,Northport,found,https://cityofnorthport.org/Bids.aspx,civicplus,2026-11-02
 pelhamonline.com,Pelham,AL,City,Pelham,not_found,,,2026-09-01
 cityoforangebeach.com,Orange Beach,AL,City,Orange Beach,not_found,,,2026-09-01
 headlandalabama.org,Headland,AL,City,Headland,not_found,,,2026-09-01
@@ -13319,7 +13319,7 @@ westoveralabama.org,Westover,AL,City,Westover,not_found,,,2026-09-01
 benton.ar.gov,Benton,AR,City,Benton,not_found,,,2026-09-01
 blytheville.co,Blytheville,AR,City,Blytheville,not_found,,,2026-09-01
 cityofbellavista.com,Bella Vista,AR,City,Bella Vista,not_found,,,2026-09-01
-cityofspanishfort.com,Spanish Fort,AL,City,Spanish Fort,not_found,,,2026-09-01
+cityofspanishfort.com,Spanish Fort,AL,City,Spanish Fort,found,https://cityofspanishfort.com/bids,custom,2026-11-02
 talladega.com,Talladega,AL,City,Talladega,not_found,,,2026-09-01
 berryville.com,Berryville,AR,City,Berryville,not_found,,,2026-09-01
 calicorock.com,Calico Rock,AR,City,Calico Rock,not_found,,,2026-09-01
@@ -13850,7 +13850,7 @@ camillaga.net,Camilla,GA,City,Camilla,not_found,,,2026-09-01
 cityofchickamaugageorgia.org,Chickamauga,GA,City,Chickamauga,not_found,,,2026-09-01
 chatthillsga.us,Chattahoochee Hills,GA,City,Chattahoochee Hills,not_found,,,2026-09-01
 cityofcomer.com,Comer,GA,City,Comer,not_found,,,2026-09-01
-chambleega.com,Chamblee,GA,City,Chamblee,not_found,,,2026-09-01
+chambleega.com,Chamblee,GA,City,Chamblee,found,https://www.chambleega.com/finance/procurement.php,custom,2026-11-02
 barnesville.org,Barnesville,GA,City,Barnesville,not_found,,,2026-09-01
 dahlonega-ga.gov,Dahlonega,GA,City,Dahlonega,not_found,,,2026-09-01
 commercega.org,Commerce,GA,City,Commerce,not_found,,,2026-09-01
@@ -13858,12 +13858,12 @@ bainbridgecity.com,Bainbridge,GA,City,Bainbridge,not_found,,,2026-09-01
 collegeparkga.com,College Park,GA,City,College Park,not_found,,,2026-09-01
 cityofdarienga.com,Darien,GA,City,Darien,not_found,,,2026-09-01
 ci.douglasville.ga.us,Douglasville,GA,City,Douglasville,not_found,,,2026-09-01
-doravillega.us,Doraville,GA,City,Doraville,not_found,,,2026-09-01
+doravillega.us,Doraville,GA,City,Doraville,found,https://doravillega.us/business/bid_opportunities.php,custom,2026-11-02
 bloomingdale-ga.com,Bloomingdale,GA,City,Bloomingdale,not_found,,,2026-09-01
-cityofcartersville.org,Cartersville,GA,City,Cartersville,not_found,,,2026-09-01
+cityofcartersville.org,Cartersville,GA,City,Cartersville,found,https://cityofcartersville.org/Bids.aspx,civicplus,2026-11-02
 cityofauburn-ga.org,Auburn,GA,City,Auburn,not_found,,,2026-09-01
 cityofdemorest.org,Demorest,GA,City,Demorest,not_found,,,2026-09-01
-bowdon.net,Bowdon,GA,City,Bowdon,not_found,,,2026-09-01
+bowdon.net,Bowdon,GA,City,Bowdon,found,https://www.bowdon.net/publicnotices/,custom,2026-11-02
 decaturga.com,Decatur,GA,City,Decatur,not_found,,,2026-09-01
 cumberlandcid.org,Cumberland,GA,City,Cumberland,not_found,,,2026-09-01
 cityofclevelandga.org,Cleveland,GA,City,Cleveland,not_found,,,2026-09-01
@@ -13918,7 +13918,7 @@ cityofdublin.org,Dublin,GA,City,Dublin,found,https://cityofdublin.org/department
 montezuma-ga.org,Montezuma,GA,City,Montezuma,not_found,,,2026-09-01
 cityofnashvillega.net,Nashville,GA,City,Nashville,not_found,,,2026-09-01
 cityofjacksonga.com,Jackson,GA,City,Jackson,not_found,,,2026-09-01
-pooler-ga.us,Pooler,GA,City,Pooler,not_found,,,2026-09-01
+pooler-ga.us,Pooler,GA,City,Pooler,found,https://www.pooler-ga.gov/resources/bids-proposals/,agency,2026-11-02
 cityofportwentworth.com,Port Wentworth,GA,City,Port Wentworth,not_found,,,2026-09-01
 cityofporterdale.com,Porterdale,GA,City,Porterdale,not_found,,,2026-09-01
 pinelakega.com,Pine Lake,GA,City,Pine Lake,not_found,,,2026-09-01
@@ -13932,7 +13932,7 @@ monticelloga.org,Monticello,GA,City,Monticello,not_found,,,2026-09-01
 cityoflouisvillegeorgia.com,Louisville,GA,City,Louisville,not_found,,,2026-09-01
 metter-candler.com,Metter,GA,City,Metter,not_found,,,2026-09-01
 uvaldaga.com,Uvalda,GA,City,Uvalda,found,https://uvaldaga.com/bids-and-rfps,custom,2026-09-01
-cityofpowdersprings.org,Powder Springs,GA,City,Powder Springs,not_found,,,2026-09-01
+cityofpowdersprings.org,Powder Springs,GA,City,Powder Springs,found,https://cityofpowdersprings.org/Bids.aspx,civicplus,2026-11-02
 cityofpelhamga.com,Pelham,GA,City,Pelham,not_found,,,2026-09-01
 senoia.com,Senoia,GA,City,Senoia,not_found,,,2026-09-01
 sandyspringsga.org,Sandy Springs,GA,City,Sandy Springs,not_found,,,2026-09-01
@@ -13946,7 +13946,7 @@ templega.us,Temple,GA,City,Temple,not_found,,,2026-09-01
 socialcirclegeorgia.citymax.com,Social Circle,GA,City,Social Circle,not_found,,,2026-09-01
 stockbridgega.org,Stockbridge,GA,City,Stockbridge,not_found,,,2026-09-01
 pembrokega.net,Pembroke,GA,City,Pembroke,not_found,,,2026-09-01
-summervillega.org,Summerville,GA,City,Summerville,not_found,,,2026-09-01
+summervillega.org,Summerville,GA,City,Summerville,found,https://www.summervillega.org/business/city_purchasing/active_bid_list.php,custom,2026-11-02
 cityoftoccoa.com,Toccoa,GA,City,Toccoa,not_found,,,2026-09-01
 thomson-mcduffie.com,Thomson,GA,City,Thomson,not_found,,,2026-09-01
 hamiltoncityhall.net,Hamilton,GA,City,Hamilton,not_found,,,2026-09-01
@@ -13984,7 +13984,7 @@ bluegrassia.org,Blue Grass,IA,City,Blue Grass,not_found,,,2026-09-01
 ackleyiowa.net,Ackley,IA,City,Ackley,not_found,,,2026-09-01
 rutledgega.us,Rutledge,GA,City,Rutledge,not_found,,,2026-09-01
 cityofwinterville.com,Winterville,GA,City,Winterville,not_found,,,2026-09-01
-cityofwinder.com,Winder,GA,City,Winder,not_found,,,2026-09-01
+cityofwinder.com,Winder,GA,City,Winder,found,https://cityofwinder.com/services/bids.php,custom,2026-11-02
 rossvillegagov.us,Rossville,GA,City,Rossville,not_found,,,2026-09-01
 cityofvienna.org,Vienna,GA,City,Vienna,not_found,,,2026-09-01
 brittiowa.com,Britt,IA,City,Britt,not_found,,,2026-09-01
@@ -14958,7 +14958,7 @@ ci.big-rapids.mi.us,Big Rapids,MI,City,Big Rapids,not_found,,,2026-09-01
 ci.rockland.me.us,Rockland,ME,City,Rockland,not_found,,,2026-09-01
 cityofallenpark.org,Allen Park,MI,City,Allen Park,not_found,,,2026-09-01
 beecherwater.us,Beecher,MI,City,Beecher,not_found,,,2026-09-01
-bloomfieldhillsmi.net,Bloomfield Hills,MI,City,Bloomfield Hills,not_found,,,2026-09-01
+bloomfieldhillsmi.net,Bloomfield Hills,MI,City,Bloomfield Hills,found,https://bloomfieldhillsmi.net/Bids.aspx,civicplus,2026-11-02
 russett.org,Russett,MD,City,Russett,not_found,,,2026-09-01
 auburnhills.org,Auburn Hills,MI,City,Auburn Hills,not_found,,,2026-09-01
 snowhillmd.com,Snow Hill,MD,City,Snow Hill,not_found,,,2026-09-01
@@ -14966,11 +14966,11 @@ cityofbuchanan.com,Buchanan,MI,City,Buchanan,not_found,,,2026-09-01
 ci.brown-city.mi.us,Brown City,MI,City,Brown City,not_found,,,2026-09-01
 washingtoncountymaine.com,Machias,ME,City,Machias,not_found,,,2026-09-01
 hallowell.govoffice.com,Hallowell,ME,City,Hallowell,not_found,,,2026-09-01
-byrontownship.org,Byron Center,MI,City,Byron Center,not_found,,,2026-09-01
+byrontownship.org,Byron Center,MI,City,Byron Center,found,https://byrontownship.org/how_do_i/apply_for_obtain/public_notices.php,custom,2026-11-02
 cityofbessemer.org,Bessemer,MI,City,Bessemer,not_found,,,2026-09-01
 coldwater.org,Coldwater,MI,City,Coldwater,not_found,,,2026-09-01
 west-springfield.ma.us,West Springfield,MA,City,West Springfield,not_found,,,2026-09-01
-brightoncity.org,Brighton,MI,City,Brighton,not_found,,,2026-09-01
+brightoncity.org,Brighton,MI,City,Brighton,found,https://brightoncity.org/bids,custom,2026-11-02
 cityofcoleman.org,Coleman,MI,City,Coleman,not_found,,,2026-09-01
 dover-foxcroft.org,Dover-Foxcroft,ME,City,Dover-Foxcroft,not_found,,,2026-09-01
 cadillac-mi.net,Cadillac,MI,City,Cadillac,not_found,,,2026-09-01
@@ -14985,25 +14985,25 @@ belleville.mi.us,Belleville,MI,City,Belleville,not_found,,,2026-09-01
 ci.douglas.mi.us,Douglas,MI,City,Douglas,not_found,,,2026-09-01
 downtownadrian.com,Adrian,MI,City,Adrian,not_found,,,2026-09-01
 charlottemi.org,Charlotte,MI,City,Charlotte,not_found,,,2026-09-01
-eastgr.org,East Grand Rapids,MI,City,East Grand Rapids,not_found,,,2026-09-01
+eastgr.org,East Grand Rapids,MI,City,East Grand Rapids,found,https://eastgr.org/Bids.aspx,civicplus,2026-11-02
 escanaba.org,Escanaba,MI,City,Escanaba,not_found,,,2026-09-01
 ci.farmington.mi.us,Farmington,MI,City,Farmington,not_found,,,2026-09-01
 flatrockmi.org,Flat Rock,MI,City,Flat Rock,not_found,,,2026-09-01
-cityofeastpointe.net,Eastpointe,MI,City,Eastpointe,not_found,,,2026-09-01
+cityofeastpointe.net,Eastpointe,MI,City,Eastpointe,found,https://cityofeastpointe.net/purchasing,custom,2026-11-02
 cityoftallulah.org,Tallulah,LA,City,Tallulah,not_found,,,2026-09-01
 infomi.com,Gaylord,MI,City,Gaylord,not_found,,,2026-09-01
 cityofgrandville.com,Grandville,MI,City,Grandville,not_found,,,2026-09-01
-flushingcity.com,Flushing,MI,City,Flushing,not_found,,,2026-09-01
-twp.grand-blanc.mi.us,Grand Blanc,MI,City,Grand Blanc,not_found,,,2026-09-01
+flushingcity.com,Flushing,MI,City,Flushing,found,https://flushingcity.com/services/city_manager/bid_postings.php,custom,2026-11-02
+twp.grand-blanc.mi.us,Grand Blanc,MI,City,Grand Blanc,found,https://twp.grand-blanc.mi.us/Bids.aspx,civicplus,2026-11-02
 cityofcoopersville.com,Coopersville,MI,City,Coopersville,not_found,,,2026-09-01
 ferrysburg.org,Ferrysburg,MI,City,Ferrysburg,not_found,,,2026-09-01
-gladwin.org,Gladwin,MI,City,Gladwin,not_found,,,2026-09-01
+gladwin.org,Gladwin,MI,City,Gladwin,found,https://gladwin.org/bids-and-rfps,custom,2026-11-02
 cityofhancock.com,Hancock,MI,City,Hancock,not_found,,,2026-09-01
 crystalfalls.org,Crystal Falls,MI,City,Crystal Falls,not_found,,,2026-09-01
 gpwmi.us,Grosse Pointe Woods,MI,City,Grosse Pointe Woods,not_found,,,2026-09-01
 calaismaine.govoffice.com,Calais,ME,City,Calais,not_found,,,2026-09-01
 cityofharrisvillemi.org,Harrisville,MI,City,Harrisville,found,https://cityofharrisvillemi.org/government/purchasing,custom,2026-09-01
-grossepointecity.org,Grosse Pointe,MI,City,Grosse Pointe,not_found,,,2026-09-01
+grossepointecity.org,Grosse Pointe,MI,City,Grosse Pointe,found,https://grossepointecity.org/bids-and-rfps,custom,2026-11-02
 ci.huntington-woods.mi.us,Huntington Woods,MI,City,Huntington Woods,not_found,,,2026-09-01
 hazelpark.org,Hazel Park,MI,City,Hazel Park,not_found,,,2026-09-01
 harperwoodscity.org,Harper Woods,MI,City,Harper Woods,found,https://harperwoodscity.org/mitn/,custom,2026-09-01
@@ -15022,10 +15022,10 @@ cityofnegaunee.com,Negaunee,MI,City,Negaunee,not_found,,,2026-09-01
 cityofmanistique.org,Manistique,MI,City,Manistique,not_found,,,2026-09-01
 ci.niles.mi.us,Niles,MI,City,Niles,not_found,,,2026-09-01
 ishpemingcity.org,Ishpeming,MI,City,Ishpeming,not_found,,,2026-09-01
-cityofinkster.com,Inkster,MI,City,Inkster,not_found,,,2026-09-01
+cityofinkster.com,Inkster,MI,City,Inkster,found,https://cityofinkster.com/Bids.aspx,civicplus,2026-11-02
 petoskey.us,Petoskey,MI,City,Petoskey,not_found,,,2026-09-01
 cityofnorthmuskegon.com,North Muskegon,MI,City,North Muskegon,not_found,,,2026-09-01
-mason.mi.us,Mason,MI,City,Mason,not_found,,,2026-09-01
+mason.mi.us,Mason,MI,City,Mason,found,https://mason.mi.us/how_do_i_/learn_about/bid_notices_.php,agency,2026-11-02
 fhgov.com,Farmington Hills,MI,City,Farmington Hills,found,https://fhgov.com/department-and-services/purchasing/,custom,2026-09-01
 portagemi.com,Portage,MI,City,Portage,not_found,,,2026-09-01
 ci.monroe.mi.us,Monroe,MI,City,Monroe,not_found,,,2026-09-01
@@ -15038,17 +15038,17 @@ cityofrichmond.net,Richmond,MI,City,Richmond,found,https://cityofrichmond.net/pu
 cityofbath.com,Bath,ME,City,Bath,not_found,,,2026-09-01
 lathrupvillage.org,Lathrup Village,MI,City,Lathrup Village,not_found,,,2026-09-01
 visitmarinecity.com,Marine City,MI,City,Marine City,not_found,,,2026-09-01
-rochesterhills.org,Rochester Hills,MI,City,Rochester Hills,not_found,,,2026-09-01
+rochesterhills.org,Rochester Hills,MI,City,Rochester Hills,found,https://rochesterhills.org/procurement,custom,2026-11-02
 rockford.mi.us,Rockford,MI,City,Rockford,not_found,,,2026-09-01
 cityofscottville.com,Scottville,MI,City,Scottville,not_found,,,2026-09-01
 saultcity.com,Sault Ste. Marie,MI,City,Sault Ste. Marie,not_found,,,2026-09-01
 ci.royal-oak.mi.us,Royal Oak,MI,City,Royal Oak,not_found,,,2026-09-01
 cityofmountclemens.com,Mount Clemens,MI,City,Mount Clemens,not_found,,,2026-09-01
-south-haven.com,South Haven,MI,City,South Haven,not_found,,,2026-09-01
+south-haven.com,South Haven,MI,City,South Haven,found,https://south-haven.com/help_center/bids_and_rfps.php,custom,2026-11-02
 cityofmarysvillemi.com,Marysville,MI,City,Marysville,not_found,,,2026-09-01
 southlyonmi.org,South Lyon,MI,City,South Lyon,not_found,,,2026-09-01
 ci.walker.mi.us,Walker,MI,City,Walker,not_found,,,2026-09-01
-cityofeatonrapids.com,Eaton Rapids,MI,City,Eaton Rapids,not_found,,,2026-09-01
+cityofeatonrapids.com,Eaton Rapids,MI,City,Eaton Rapids,found,https://cityofeatonrapids.com/Bids.aspx,civicplus,2026-11-02
 cityofswartzcreek.org,Swartz Creek,MI,City,Swartz Creek,found,https://www.bidnetdirect.com/mitn/cityofswartzcreek,bidnetdirect,2026-09-01
 rockwoodmi.org,Rockwood,MI,City,Rockwood,not_found,,,2026-09-01
 southgate-mi.org,Southgate,MI,City,Southgate,not_found,,,2026-09-01
@@ -15078,7 +15078,7 @@ atwaterminnesota.com,Atwater,MN,City,Atwater,not_found,,,2026-09-01
 aurora-mn.com,Aurora,MN,City,Aurora,not_found,,,2026-09-01
 ci.argyle.mn.us,Argyle,MN,City,Argyle,not_found,,,2026-09-01
 ci.dearborn-heights.mi.us,Dearborn Heights,MI,City,Dearborn Heights,not_found,,,2026-09-01
-anokaminnesota.com,Anoka,MN,City,Anoka,not_found,,,2026-09-01
+anokaminnesota.com,Anoka,MN,City,Anoka,found,https://anokaminnesota.com/Bids.aspx,civicplus,2026-11-02
 backusmn.com,Backus,MN,City,Backus,not_found,,,2026-09-01
 farmington-maine.org,Farmington,ME,City,Farmington,not_found,,,2026-09-01
 babbitt-mn.com,Babbitt,MN,City,Babbitt,not_found,,,2026-09-01
@@ -15103,7 +15103,7 @@ centercitymn.us,Center City,MN,City,Center City,not_found,,,2026-09-01
 ci.casslake.mn.us,Cass Lake,MN,City,Cass Lake,not_found,,,2026-09-01
 cityofbigfork.com,Bigfork,MN,City,Bigfork,not_found,,,2026-09-01
 barnummn.us,Barnum,MN,City,Barnum,not_found,,,2026-09-01
-ci.champlin.mn.us,Champlin,MN,City,Champlin,not_found,,,2026-09-01
+ci.champlin.mn.us,Champlin,MN,City,Champlin,found,https://ci.champlin.mn.us/Bids.aspx,civicplus,2026-11-02
 breckenridgemn.net,Breckenridge,MN,City,Breckenridge,not_found,,,2026-09-01
 ashbyminnesota.org,Ashby,MN,City,Ashby,not_found,,,2026-09-01
 cityofchandlermn.com,Chandler,MN,City,Chandler,not_found,,,2026-09-01
@@ -15148,10 +15148,10 @@ co.otter-tail.mn.us,Erhard,MN,City,Erhard,found,https://co.otter-tail.mn.us/Bids
 cityofdundas.org,Dundas,MN,City,Dundas,not_found,,,2026-09-01
 birchwood.govoffice.com,Birchwood Village,MN,City,Birchwood Village,not_found,,,2026-09-01
 cityoffairfax-mn.gov,Fairfax,MN,City,Fairfax,not_found,,,2026-09-01
-edgertonmn.com,Edgerton,MN,City,Edgerton,not_found,,,2026-09-01
+edgertonmn.com,Edgerton,MN,City,Edgerton,found,https://edgertonmn.com/bids-and-rfps,custom,2026-11-02
 cityofriverrouge.com,River Rouge,MI,City,River Rouge,not_found,,,2026-09-01
 ci.circle-pines.mn.us,Circle Pines,MN,City,Circle Pines,not_found,,,2026-09-01
-ci.faribault.mn.us,Faribault,MN,City,Faribault,not_found,,,2026-09-01
+ci.faribault.mn.us,Faribault,MN,City,Faribault,found,https://ci.faribault.mn.us/Bids.aspx,civicplus,2026-11-02
 cityoffertile.org,Fertile,MN,City,Fertile,not_found,,,2026-09-01
 freeportmn.org,Freeport,MN,City,Freeport,not_found,,,2026-09-01
 ellendalemn.com,Ellendale,MN,City,Ellendale,not_found,,,2026-09-01
@@ -15215,7 +15215,7 @@ comfrey.govoffice.com,Comfrey,MN,City,Comfrey,not_found,,,2026-09-01
 ci.burnsville.mn.us,Burnsville,MN,City,Burnsville,not_found,,,2026-09-01
 lakeelmo.org,Lake Elmo,MN,City,Lake Elmo,not_found,,,2026-09-01
 ci.lake-crystal.mn.us,Lake Crystal,MN,City,Lake Crystal,not_found,,,2026-09-01
-kennedymn.org,Kennedy,MN,City,Kennedy,not_found,,,2026-09-01
+kennedymn.org,Kennedy,MN,City,Kennedy,found,https://kennedymn.org/government/purchasing,custom,2026-11-02
 ci.hutchinson.mn.us,Hutchinson,MN,City,Hutchinson,not_found,,,2026-09-01
 cityofkasson.com,Kasson,MN,City,Kasson,not_found,,,2026-09-01
 lakelandmn.com,Lakeland,MN,City,Lakeland,not_found,,,2026-09-01
@@ -15271,7 +15271,7 @@ lakebentonminnesota.com,Lake Benton,MN,City,Lake Benton,not_found,,,2026-09-01
 cityofmelrose.com,Melrose,MN,City,Melrose,not_found,,,2026-09-01
 menahga.com,Menahga,MN,City,Menahga,not_found,,,2026-09-01
 cityofgrant.com,Grant,MN,City,Grant,not_found,,,2026-09-01
-mapleplain.com,Maple Plain,MN,City,Maple Plain,not_found,,,2026-09-01
+mapleplain.com,Maple Plain,MN,City,Maple Plain,found,https://mapleplain.com/bids,custom,2026-11-02
 cityofmendota.org,Mendota,MN,City,Mendota,not_found,,,2026-09-01
 ci.monticello.mn.us,Monticello,MN,City,Monticello,not_found,,,2026-09-01
 montrose-mn.com,Montrose,MN,City,Montrose,not_found,,,2026-09-01
@@ -15287,8 +15287,8 @@ ci.loretto.mn.us,Loretto,MN,City,Loretto,not_found,,,2026-09-01
 ci.new-hope.mn.us,New Hope,MN,City,New Hope,not_found,,,2026-09-01
 hinckley.govoffice2.com,Hinckley,MN,City,Hinckley,not_found,,,2026-09-01
 ci.mounds-view.mn.us,Mounds View,MN,City,Mounds View,not_found,,,2026-09-01
-ci.morris.mn.us,Morris,MN,City,Morris,not_found,,,2026-09-01
-ci.northfield.mn.us,Northfield,MN,City,Northfield,not_found,,,2026-09-01
+ci.morris.mn.us,Morris,MN,City,Morris,found,https://www.ci.morris.mn.us/comprehensive-plan-rfp/,agency,2026-11-02
+ci.northfield.mn.us,Northfield,MN,City,Northfield,found,https://ci.northfield.mn.us/Bids.aspx,civicplus,2026-11-02
 lakelandshores.govoffice.com,Lakeland Shores,MN,City,Lakeland Shores,not_found,,,2026-09-01
 cityoflowrymn.com,Lowry,MN,City,Lowry,not_found,,,2026-09-01
 lilydale.govoffice.com,Lilydale,MN,City,Lilydale,not_found,,,2026-09-01
@@ -15297,7 +15297,7 @@ cityofnya.com,Norwood Young America,MN,City,Norwood Young America,not_found,,,20
 cityofortonville.wordpress.com,Ortonville,MN,City,Ortonville,not_found,,,2026-09-01
 nicollet.org,Nicollet,MN,City,Nicollet,not_found,,,2026-09-01
 mapletonmn.com,Mapleton,MN,City,Mapleton,not_found,,,2026-09-01
-ci.orono.mn.us,Orono,MN,City,Orono,not_found,,,2026-09-01
+ci.orono.mn.us,Orono,MN,City,Orono,found,https://ci.orono.mn.us/Bids.aspx,civicplus,2026-11-02
 ci.newport.mn.us,Newport,MN,City,Newport,not_found,,,2026-09-01
 olivia.mn.us,Olivia,MN,City,Olivia,not_found,,,2026-09-01
 ci.madison-lake.mn.us,Madison Lake,MN,City,Madison Lake,not_found,,,2026-09-01
@@ -15322,7 +15322,7 @@ ci.plymouth.mn.us,Plymouth,MN,City,Plymouth,not_found,,,2026-09-01
 cityofrice.com,Rice,MN,City,Rice,not_found,,,2026-09-01
 marine.govoffice.com,Marine on St. Croix,MN,City,Marine on St. Croix,not_found,,,2026-09-01
 cityofrichfield.org,Richfield,MN,City,Richfield,not_found,,,2026-09-01
-cityofpriorlake.com,Prior Lake,MN,City,Prior Lake,not_found,,,2026-09-01
+cityofpriorlake.com,Prior Lake,MN,City,Prior Lake,found,https://cityofpriorlake.com/Bids.aspx,civicplus,2026-11-02
 ci.newfolden.mn.us,Newfolden,MN,City,Newfolden,not_found,,,2026-09-01
 milanmn.com,Milan,MN,City,Milan,not_found,,,2026-09-01
 cityofmayer.com,Mayer,MN,City,Mayer,not_found,,,2026-09-01
@@ -15352,15 +15352,15 @@ stmaryspoint.org,Saint Mary's Point,MN,City,Saint Mary's Point,not_found,,,2026-
 sebeka.com,Sebeka,MN,City,Sebeka,not_found,,,2026-09-01
 cityofoakparkheights.com,Oak Park Heights,MN,City,Oak Park Heights,not_found,,,2026-09-01
 sleepyeye-mn.com,Sleepy Eye,MN,City,Sleepy Eye,not_found,,,2026-09-01
-ci.scandia.mn.us,Scandia,MN,City,Scandia,not_found,,,2026-09-01
+ci.scandia.mn.us,Scandia,MN,City,Scandia,found,https://www.cityofscandia.com/city_services/stream_city_meetings/notice_of_public_hearings.php,custom,2026-11-02
 ci.saint-anthony.mn.us,St. Anthony,MN,City,St. Anthony,not_found,,,2026-09-01
 milroymn.govoffice2.com,Milroy,MN,City,Milroy,not_found,,,2026-09-01
 ci.stjames.mn.us,St. James,MN,City,St. James,not_found,,,2026-09-01
-southstpaul.org,South St. Paul,MN,City,South St. Paul,not_found,,,2026-09-01
+southstpaul.org,South St. Paul,MN,City,South St. Paul,found,https://southstpaul.org/Bids.aspx,civicplus,2026-11-02
 silverbay.com,Silver Bay,MN,City,Silver Bay,not_found,,,2026-09-01
 stfrancismn.org,St. Francis,MN,City,St. Francis,not_found,,,2026-09-01
 cityofsavage.com,Savage,MN,City,Savage,not_found,,,2026-09-01
-cityofstjoseph.com,St. Joseph,MN,City,St. Joseph,not_found,,,2026-09-01
+cityofstjoseph.com,St. Joseph,MN,City,St. Joseph,found,https://cityofstjoseph.com/Bids.aspx,civicplus,2026-11-02
 cityofrockford.org,Rockford,MN,City,Rockford,not_found,,,2026-09-01
 stacymn.org,Stacy,MN,City,Stacy,not_found,,,2026-09-01
 montgomery.govoffice.com,Montgomery,MN,City,Montgomery,not_found,,,2026-09-01
@@ -15393,7 +15393,7 @@ ci.waseca.mn.us,Waseca,MN,City,Waseca,not_found,,,2026-09-01
 cityofupsala.com,Upsala,MN,City,Upsala,not_found,,,2026-09-01
 wadena.org,Wadena,MN,City,Wadena,not_found,,,2026-09-01
 westconcordmn.com,West Concord,MN,City,West Concord,not_found,,,2026-09-01
-sandstone.govoffice.com,Sandstone,MN,City,Sandstone,not_found,,,2026-09-01
+sandstone.govoffice.com,Sandstone,MN,City,Sandstone,found,https://sandstone.govoffice.com/index.asp?SEC=4B57D16D-0496-4597-8B95-B70037C91942&DE=F6E9788D-5AD6-4D77-8536-5854548CFD75&Type=B_PR,custom,2026-11-02
 cityofwells.net,Wells,MN,City,Wells,not_found,,,2026-09-01
 waverlymn.org,Waverly,MN,City,Waverly,not_found,,,2026-09-01
 cityofwheaton.com,Wheaton,MN,City,Wheaton,not_found,,,2026-09-01
@@ -15411,7 +15411,7 @@ ci.sauk-centre.mn.us,Sauk Centre,MN,City,Sauk Centre,not_found,,,2026-09-01
 cityofwolverton.com,Wolverton,MN,City,Wolverton,not_found,,,2026-09-01
 augusta-missouri.com,Augusta,MO,City,Augusta,not_found,,,2026-09-01
 adrianmo.com,Adrian,MO,City,Adrian,not_found,,,2026-09-01
-whitebearlake.org,White Bear Lake,MN,City,White Bear Lake,not_found,,,2026-09-01
+whitebearlake.org,White Bear Lake,MN,City,White Bear Lake,found,https://whitebearlake.org/Bids.aspx,civicplus,2026-11-02
 battlefieldmo.org,Battlefield,MO,City,Battlefield,not_found,,,2026-09-01
 ci.sauk-rapids.mn.us,Sauk Rapids,MN,City,Sauk Rapids,not_found,,,2026-09-01
 batescity.net,Bates City,MO,City,Bates City,not_found,,,2026-09-01
@@ -15665,7 +15665,7 @@ ci.kinston.nc.us,Kinston,NC,City,Kinston,not_found,,,2026-09-01
 locustnc.com,Locust,NC,City,Locust,not_found,,,2026-09-01
 ci.albemarle.nc.us,Albemarle,NC,City,Albemarle,not_found,,,2026-09-01
 townofmurphync.com,Murphy,NC,City,Murphy,not_found,,,2026-09-01
-franklintonnc.us,Franklinton,NC,City,Franklinton,not_found,,,2026-09-01
+franklintonnc.us,Franklinton,NC,City,Franklinton,found,https://franklintonnc.us/procurement,custom,2026-11-02
 pope.af.mil,Pope Airfield,NC,City,Pope Airfield,not_found,,,2026-09-01
 ci.morganton.nc.us,Morganton,NC,City,Morganton,not_found,,,2026-09-01
 cityofforest.com,Forest,MS,City,Forest,not_found,,,2026-09-01
@@ -15981,12 +15981,12 @@ chardon.cc,Chardon,OH,City,Chardon,found,https://chardon.cc/bids,civicplus,2026-
 barnesvilleohio.com,Barnesville,OH,City,Barnesville,not_found,,,2026-09-01
 wantagh.li,North Wantagh,NY,City,North Wantagh,not_found,,,2026-09-01
 cityofolean.org,Olean,NY,City,Olean,not_found,,,2026-09-01
-cityofbayvillage.com,Bay Village,OH,City,Bay Village,not_found,,,2026-09-01
+cityofbayvillage.com,Bay Village,OH,City,Bay Village,found,https://cityofbayvillage.com/Bids.aspx,civicplus,2026-11-02
 amherstohio.org,Amherst,OH,City,Amherst,not_found,,,2026-09-01
 losalamosnm.us,Los Alamos,NM,City,Los Alamos,not_found,,,2026-09-01
 beachcityohio.org,Beach City,OH,City,Beach City,not_found,,,2026-09-01
 queensbp.org,Queens,NY,City,Queens,not_found,,,2026-09-01
-bgohio.org,Bowling Green,OH,City,Bowling Green,not_found,,,2026-09-01
+bgohio.org,Bowling Green,OH,City,Bowling Green,found,https://bgohio.org/Bids.aspx,civicplus,2026-11-02
 ci.canfield.oh.us,Canfield,OH,City,Canfield,not_found,,,2026-09-01
 cityoffairlawn.com,Fairlawn,OH,City,Fairlawn,found,https://cityoffairlawn.com/Bids.aspx,civicplus,2026-09-01
 townofporter.net,Ransomville,NY,City,Ransomville,not_found,,,2026-09-01
@@ -16009,7 +16009,7 @@ cityofbucyrusoh.us,Bucyrus,OH,City,Bucyrus,not_found,,,2026-09-01
 eatonoh.org,Eaton,OH,City,Eaton,not_found,,,2026-09-01
 manhattanbp.nyc.gov,Manhattan,NY,City,Manhattan,not_found,,,2026-09-01
 fremontohio.org,Fremont,OH,City,Fremont,not_found,,,2026-09-01
-cityofbarberton.com,Barberton,OH,City,Barberton,not_found,,,2026-09-01
+cityofbarberton.com,Barberton,OH,City,Barberton,found,https://cityofbarberton.com/legal-notices,custom,2026-11-02
 villageofcarrollton.com,Carrollton,OH,City,Carrollton,not_found,,,2026-09-01
 brunswick.oh.us,Brunswick,OH,City,Brunswick,not_found,,,2026-09-01
 germantown.oh.us,Germantown,OH,City,Germantown,not_found,,,2026-09-01
@@ -16018,12 +16018,12 @@ gatesmillsvillage.com,Gates Mills,OH,City,Gates Mills,not_found,,,2026-09-01
 ci.bellefontaine.oh.us,Bellefontaine,OH,City,Bellefontaine,not_found,,,2026-09-01
 grandriverohio.net,Grand River,OH,City,Grand River,not_found,,,2026-09-01
 cityofdelphos.com,Delphos,OH,City,Delphos,not_found,,,2026-09-01
-cityofashtabula.com,Ashtabula,OH,City,Ashtabula,not_found,,,2026-09-01
+cityofashtabula.com,Ashtabula,OH,City,Ashtabula,found,https://cityofashtabula.com/rfps,custom,2026-11-02
 villageofgreensprings.com,Green Springs,OH,City,Green Springs,not_found,,,2026-09-01
 delawareohio.net,Delaware,OH,City,Delaware,not_found,,,2026-09-01
-fairviewpark.org,Fairview Park,OH,City,Fairview Park,not_found,,,2026-09-01
+fairviewpark.org,Fairview Park,OH,City,Fairview Park,found,https://fairviewpark.org/Bids.aspx,civicplus,2026-11-02
 cityofgallipolis.com,Gallipolis,OH,City,Gallipolis,not_found,,,2026-09-01
-ironton-ohio.com,Ironton,OH,City,Ironton,not_found,,,2026-09-01
+ironton-ohio.com,Ironton,OH,City,Ironton,found,https://irontonohio.org/public-notices/,custom,2026-11-02
 laplaza.org,Cerro,NM,City,Cerro,not_found,,,2026-09-01
 jeffersonohio.us,Jefferson,OH,City,Jefferson,not_found,,,2026-09-01
 highlandhts.com,Highland Heights,OH,City,Highland Heights,not_found,,,2026-09-01
@@ -16041,7 +16041,7 @@ eastlakeohio.com,Eastlake,OH,City,Eastlake,not_found,,,2026-09-01
 massillonohio.com,Massillon,OH,City,Massillon,not_found,,,2026-09-01
 villageofharveysburg.org,Harveysburg,OH,City,Harveysburg,not_found,,,2026-09-01
 ci.celina.oh.us,Celina,OH,City,Celina,not_found,,,2026-09-01
-mayfieldheights.org,Mayfield Heights,OH,City,Mayfield Heights,not_found,,,2026-09-01
+mayfieldheights.org,Mayfield Heights,OH,City,Mayfield Heights,found,https://mayfieldheights.org/Bids.aspx,civicplus,2026-11-02
 cityofhubbard.com,Hubbard,OH,City,Hubbard,not_found,,,2026-09-01
 martinsferry.org,Martins Ferry,OH,City,Martins Ferry,not_found,,,2026-09-01
 wsmr.army.mil,White Sands Missile Range,NM,City,White Sands Missile Range,not_found,,,2026-09-01
@@ -16060,10 +16060,10 @@ ci.newark.oh.us,Newark,OH,City,Newark,not_found,,,2026-09-01
 ci.mansfield.oh.us,Mansfield,OH,City,Mansfield,not_found,,,2026-09-01
 medinaoh.org,Medina,OH,City,Medina,not_found,,,2026-09-01
 visitdublinohio.com,Dublin,OH,City,Dublin,not_found,,,2026-09-01
-thecityofniles.com,Niles,OH,City,Niles,not_found,,,2026-09-01
+thecityofniles.com,Niles,OH,City,Niles,found,https://thecityofniles.com/rfp,custom,2026-11-02
 ci.oregon.oh.us,Oregon,OH,City,Oregon,not_found,,,2026-09-01
 northroyalton.org,North Royalton,OH,City,North Royalton,not_found,,,2026-09-01
-ci.moraine.oh.us,Moraine,OH,City,Moraine,not_found,,,2026-09-01
+ci.moraine.oh.us,Moraine,OH,City,Moraine,found,https://ci.moraine.oh.us/legal-notices,custom,2026-11-02
 northcantonohio.com,North Canton,OH,City,North Canton,not_found,,,2026-09-01
 ci.miamisburg.oh.us,Miamisburg,OH,City,Miamisburg,not_found,,,2026-09-01
 newlexington.org,New Lexington,OH,City,New Lexington,not_found,,,2026-09-01
@@ -16080,13 +16080,13 @@ minsteroh.com,Minster,OH,City,Minster,not_found,,,2026-09-01
 newknoxville.com,New Knoxville,OH,City,New Knoxville,not_found,,,2026-09-01
 middlefieldohio.com,Middlefield,OH,City,Middlefield,not_found,,,2026-09-01
 riverside.oh.us,Riverside,OH,City,Riverside,not_found,,,2026-09-01
-portclinton.com,Port Clinton,OH,City,Port Clinton,not_found,,,2026-09-01
+portclinton.com,Port Clinton,OH,City,Port Clinton,found,http://www.portclinton.com/government/public_notices_bids.php,custom,2026-11-02
 shelbyohio.org,Shelby,OH,City,Shelby,not_found,,,2026-09-01
 kentoncity.com,Kenton,OH,City,Kenton,not_found,,,2026-09-01
 morley.ny.us,Morley,NY,City,Morley,not_found,,,2026-09-01
 ci.union.oh.us,Union,OH,City,Union,not_found,,,2026-09-01
 ci.steubenville.oh.us,Steubenville,OH,City,Steubenville,not_found,,,2026-09-01
-newcomerstownoh.com,Newcomerstown,OH,City,Newcomerstown,not_found,,,2026-09-01
+newcomerstownoh.com,Newcomerstown,OH,City,Newcomerstown,found,https://newcomerstownoh.com/bids,custom,2026-11-02
 norwalkoh.com,Norwalk,OH,City,Norwalk,not_found,,,2026-09-01
 stow.oh.us,Stow,OH,City,Stow,not_found,,,2026-09-01
 tiffinohio.com,Tiffin,OH,City,Tiffin,not_found,,,2026-09-01
@@ -16120,7 +16120,7 @@ cityofclevelandok.com,Cleveland,OK,City,Cleveland,not_found,,,2026-09-01
 commerceokla.com,Commerce,OK,City,Commerce,not_found,,,2026-09-01
 cityofwestlake.org,Westlake,OH,City,Westlake,not_found,,,2026-09-01
 cityofelreno.com,El Reno,OK,City,El Reno,not_found,,,2026-09-01
-vanwert.org,Van Wert,OH,City,Van Wert,not_found,,,2026-09-01
+vanwert.org,Van Wert,OH,City,Van Wert,found,https://tools.usps.com/find-location.htm?locationType=po&searchRadius=20&fdbid=1385728&,custom,2026-11-02
 cityofgroveok.webs.com,Grove,OK,City,Grove,not_found,,,2026-09-01
 heavenerok.org,Heavener,OK,City,Heavener,not_found,,,2026-09-01
 cityofhartshorneok.com,Hartshorne,OK,City,Hartshorne,not_found,,,2026-09-01
@@ -16142,7 +16142,7 @@ guymonok.org,Guymon,OK,City,Guymon,not_found,,,2026-09-01
 pragueok.org,Prague,OK,City,Prague,not_found,,,2026-09-01
 hillsboroohio.net,Hillsboro,OH,City,Hillsboro,not_found,,,2026-09-01
 brokenbowchamber.com,Broken Bow,OK,City,Broken Bow,not_found,,,2026-09-01
-cityofsylvania.com,Sylvania,OH,City,Sylvania,not_found,,,2026-09-01
+cityofsylvania.com,Sylvania,OH,City,Sylvania,found,https://www.cityofsylvania.com/government/bid-invitations/,custom,2026-11-02
 cityofperkins.net,Perkins,OK,City,Perkins,found,https://cityofperkins.net/939,custom,2026-09-01
 cityofnoble.org,Noble,OK,City,Noble,not_found,,,2026-09-01
 cityofmannford.com,Mannford,OK,City,Mannford,not_found,,,2026-09-01
@@ -17070,11 +17070,11 @@ cityofmonroe.org,Monroe,WI,City,Monroe,not_found,,,2026-09-01
 beckley.org,Beckley,WV,City,Beckley,not_found,,,2026-09-01
 cityofladysmithwi.com,Ladysmith,WI,City,Ladysmith,not_found,,,2026-09-01
 cityofowen.com,Owen,WI,City,Owen,not_found,,,2026-09-01
-cityoflacrosse.org,La Crosse,WI,City,La Crosse,not_found,,,2026-09-01
+cityoflacrosse.org,La Crosse,WI,City,La Crosse,found,https://www.cityoflacrosse.org/News-articles/Planning-News/City-Issues-Request-for-Proposals-for-Community-Policing-Center,custom,2026-11-02
 cityofmuskego.org,Muskego,WI,City,Muskego,not_found,,,2026-09-01
 buckhannonwv.org,Buckhannon,WV,City,Buckhannon,not_found,,,2026-09-01
 ci.west-allis.wi.us,West Allis,WI,City,West Allis,not_found,,,2026-09-01
-oakcreekwi.org,Oak Creek,WI,City,Oak Creek,not_found,,,2026-09-01
+oakcreekwi.org,Oak Creek,WI,City,Oak Creek,found,https://oakcreekwi.org/Bids.aspx,civicplus,2026-11-02
 cityofelkinswv.com,Elkins,WV,City,Elkins,not_found,,,2026-09-01
 madisonwva.com,Madison,WV,City,Madison,not_found,,,2026-09-01
 ci.wausau.wi.us,Wausau,WI,City,Wausau,not_found,,,2026-09-01
@@ -17087,7 +17087,7 @@ cityoftacoma.org,Tacoma,WA,City,Tacoma,not_found,,,2026-09-01
 montgomerywv.org,Montgomery,WV,City,Montgomery,not_found,,,2026-09-01
 kingwoodwv.org,Kingwood,WV,City,Kingwood,not_found,,,2026-09-01
 cityofkenova.com,Kenova,WV,City,Kenova,not_found,,,2026-09-01
-wauwatosa.net,Wauwatosa,WI,City,Wauwatosa,not_found,,,2026-09-01
+wauwatosa.net,Wauwatosa,WI,City,Wauwatosa,found,https://wauwatosa.net/purchasing,custom,2026-11-02
 chesterwv.org,Chester,WV,City,Chester,not_found,,,2026-09-01
 roncevertewv.com,Ronceverte,WV,City,Ronceverte,not_found,,,2026-09-01
 local.wv.gov,McMechen,WV,City,McMechen,not_found,,,2026-09-01
@@ -17464,11 +17464,11 @@ marioncountyga.org,Marion County,GA,City,Marion County,found,https://marioncount
 johnsonco.org,Johnson County,GA,City,Johnson County,not_found,,,2026-09-01
 letchercounty.ky.gov,Letcher County,KY,City,Letcher County,not_found,,,2026-09-01
 barrowga.org,Barrow County,GA,City,Barrow County,found,https://barrowga.org/Bids.aspx,civicplus,2026-09-01
-cookcountyga.us,Cook County,GA,City,Cook County,not_found,,,2026-09-01
+cookcountyga.us,Cook County,GA,City,Cook County,found,https://cookcountyga.us/public-notices,custom,2026-11-02
 crispcounty.com,Crisp County,GA,City,Crisp County,found,https://crispcounty.com/bids-rfp-s-rfq-s,custom,2026-09-01
 glynncounty.org,Glynn County,GA,City,Glynn County,found,https://glynncounty.org/Bids.aspx,civicplus,2026-09-01
 cherokeega.com,Cherokee County,GA,City,Cherokee County,found,https://cherokeega.com/procurement,custom,2026-09-01
-gordoncounty.org,Gordon County,GA,City,Gordon County,not_found,,,2026-09-01
+gordoncounty.org,Gordon County,GA,City,Gordon County,found,https://gordoncounty.org/Bids.aspx,civicplus,2026-11-02
 worthcountyboc.com,Worth County,GA,City,Worth County,not_found,,,2026-09-01
 bartowga.org,Bartow County,GA,City,Bartow County,found,https://bartowga.org/bids,custom,2026-09-01
 schleycountyga.us,Schley County,GA,City,Schley County,not_found,,,2026-09-01
@@ -17496,7 +17496,7 @@ atkinson-ga.org,Atkinson County,GA,City,Atkinson County,not_found,,,2026-09-01
 bakercountyga.com,Baker County,GA,City,Baker County,not_found,,,2026-09-01
 calhouncountyga.com,Calhoun County,GA,City,Calhoun County,not_found,,,2026-09-01
 wilcoxcounty.live-website.com,Wilcox County,GA,City,Wilcox County,found,https://wilcoxcounty.live-website.com/bid-opportunity,custom,2026-09-01
-libertycountyga.com,Liberty County,GA,City,Liberty County,not_found,,,2026-09-01
+libertycountyga.com,Liberty County,GA,City,Liberty County,found,https://libertycountyga.com/Bids.aspx,civicplus,2026-11-02
 bleckley.org,Bleckley County,GA,City,Bleckley County,not_found,,,2026-09-01
 douglascountygeorgia.com,Douglas County,GA,City,Douglas County,not_found,,,2026-09-01
 pikecounty.us,Pike County,GA,City,Pike County,not_found,,,2026-09-01
@@ -17560,7 +17560,7 @@ ocillachamber.net,Irwin County,GA,City,Irwin County,not_found,,,2026-09-01
 clark-co.id.gov,Clark County,ID,City,Clark County,not_found,,,2026-09-01
 mitchellcountyga.net,Mitchell County,GA,City,Mitchell County,found,https://mitchellcountyga.net/bid-opportunities,custom,2026-09-01
 monroecountygeorgia.com,Monroe County,GA,City,Monroe County,found,https://www.monroecoga.org/bids-solicitations/,custom,2026-09-01
-morganga.org,Morgan County,GA,City,Morgan County,not_found,,,2026-09-01
+morganga.org,Morgan County,GA,City,Morgan County,found,https://morganga.org/Bids.aspx,civicplus,2026-11-02
 webstercountyga.org,Webster County,GA,City,Webster County,not_found,,,2026-09-01
 troupcountyga.org,Troup County,GA,City,Troup County,not_found,,,2026-09-01
 chathamcounty.org,Chatham County,GA,City,Chatham County,found,https://purchasing.chathamcountyga.gov/,custom,2026-09-01
@@ -17699,7 +17699,7 @@ lakecounty-michigan.com,Lake County,MI,City,Lake County,not_found,,,2026-09-01
 masoncounty.net,Mason County,MI,City,Mason County,found,https://masoncounty.net/services/bids.php,custom,2026-09-01
 grantcounty.net,Grant County,IN,City,Grant County,not_found,,,2026-09-01
 tiptongov.com,Tipton County,IN,City,Tipton County,not_found,,,2026-09-01
-osceola-county.org,Osceola County,MI,City,Osceola County,not_found,,,2026-09-01
+osceola-county.org,Osceola County,MI,City,Osceola County,found,https://osceola-county.org/bids,custom,2026-11-02
 spencercounty.in.gov,Spencer County,IN,City,Spencer County,not_found,,,2026-09-01
 whitleygov.com,Whitley County,IN,City,Whitley County,not_found,,,2026-09-01
 clareco.net,Clare County,MI,City,Clare County,found,https://clareco.net/department/treasurer/#landbank,custom,2026-09-01
@@ -17712,9 +17712,9 @@ sjcindiana.gov,St. Joseph County,IN,City,St. Joseph County,not_found,,,2026-09-0
 calhouncoms.com,Calhoun County,MS,City,Calhoun County,not_found,,,2026-09-01
 fannincountyga.org,Fannin County,GA,City,Fannin County,not_found,,,2026-09-01
 walthallchamber.com,Walthall County,MS,City,Walthall County,found,https://walthallchamber.com/purchasing,custom,2026-09-01
-mecostacounty.org,Mecosta County,MI,City,Mecosta County,not_found,,,2026-09-01
+mecostacounty.org,Mecosta County,MI,City,Mecosta County,found,https://mecostacounty.org/bids-and-rfps,custom,2026-11-02
 kalcounty.com,Kalamazoo County,MI,City,Kalamazoo County,found,https://kalcounty.com/Bids.aspx,civicplus,2026-09-01
-tuscolacounty.org,Tuscola County,MI,City,Tuscola County,not_found,,,2026-09-01
+tuscolacounty.org,Tuscola County,MI,City,Tuscola County,found,https://tuscolacounty.org/rfp,custom,2026-11-02
 claycountyms.com,Clay County,MS,City,Clay County,found,https://claycountyms.com/purchasing,custom,2026-09-01
 lenawee.mi.us,Lenawee County,MI,City,Lenawee County,found,https://lenawee.mi.us/Bids.aspx,civicplus,2026-09-01
 casscountymi.org,Cass County,MI,City,Cass County,found,https://casscountymi.org/Bids.aspx,civicplus,2026-09-01
@@ -17727,7 +17727,7 @@ vigocounty.in.gov,Vigo County,IN,City,Vigo County,not_found,,,2026-09-01
 alpenacounty.org,Alpena County,MI,City,Alpena County,found,https://alpenacounty.org/Bids.aspx,civicplus,2026-09-01
 benzieco.net,Benzie County,MI,City,Benzie County,found,https://benzieco.net/bids,custom,2026-09-01
 carrollcountyms.org,Carroll County,MS,City,Carroll County,not_found,,,2026-09-01
-twiggscounty.us,Twiggs County,GA,City,Twiggs County,not_found,,,2026-09-01
+twiggscounty.us,Twiggs County,GA,City,Twiggs County,found,https://twiggscounty.us/bids,custom,2026-11-02
 visitclarkecounty.com,Clarke County,MS,City,Clarke County,not_found,,,2026-09-01
 eatoncounty.org,Eaton County,MI,City,Eaton County,found,https://eatoncounty.org/Bids.aspx,civicplus,2026-09-01
 co.bolivar.ms.us,Bolivar County,MS,City,Bolivar County,not_found,,,2026-09-01
@@ -17751,17 +17751,17 @@ saginawcounty.com,Saginaw County,MI,City,Saginaw County,not_found,,,2026-09-01
 co.branch.mi.us,Branch County,MI,City,Branch County,not_found,,,2026-09-01
 switzerland-county.com,Switzerland County,IN,City,Switzerland County,not_found,,,2026-09-01
 alconacountymi.com,Alcona County,MI,City,Alcona County,not_found,,,2026-09-01
-co.huron.mi.us,Huron County,MI,City,Huron County,not_found,,,2026-09-01
+co.huron.mi.us,Huron County,MI,City,Huron County,found,https://co.huron.mi.us/departments/purchasing,agency,2026-11-02
 roscommoncounty.net,Roscommon County,MI,City,Roscommon County,found,https://roscommoncounty.net/Bids.aspx,civicplus,2026-09-01
 stjosephcountymi.org,St. Joseph County,MI,City,St. Joseph County,found,https://stjosephcountymi.gov/home/rfq-rfp-bids/,agency,2026-09-01
-crawfordco.org,Crawford County,MI,City,Crawford County,not_found,,,2026-09-01
+crawfordco.org,Crawford County,MI,City,Crawford County,found,https://crawfordco.org/rfp,custom,2026-11-02
 gc4me.com,Genesee County,MI,City,Genesee County,not_found,,,2026-09-01
 meadeco.org,Meade County,KS,City,Meade County,found,https://meadeco.org/Bids.aspx,civicplus,2026-09-01
 isabellacounty.org,Isabella County,MI,City,Isabella County,found,https://www.isabellacounty.org/rfp/material-recovery-facility-recycling-collection-transportation-services-rfp/,custom,2026-09-01
 keweenawcountyonline.org,Keweenaw County,MI,City,Keweenaw County,not_found,,,2026-09-01
 jfcountyks.com,Jefferson County,KS,City,Jefferson County,found,https://jfcountyks.com/Bids.aspx,civicplus,2026-09-01
 montmorencycountymichigan.us,Montmorency County,MI,City,Montmorency County,not_found,,,2026-09-01
-charlevoixcounty.org,Charlevoix County,MI,City,Charlevoix County,not_found,,,2026-09-01
+charlevoixcounty.org,Charlevoix County,MI,City,Charlevoix County,found,https://charlevoixcounty.org/bid_posting/index.php,custom,2026-11-02
 allegancounty.org,Allegan County,MI,City,Allegan County,not_found,,,2026-09-01
 co.marquette.mi.us,Marquette County,MI,City,Marquette County,found,https://co.marquette.mi.us/rfps_bids/index.php,agency,2026-09-01
 jonescounty.com,Jones County,MS,City,Jones County,not_found,,,2026-09-01
@@ -17799,7 +17799,7 @@ co.tishomingo.ms.us,Tishomingo County,MS,City,Tishomingo County,not_found,,,2026
 neoshocountyks.org,Neosho County,KS,City,Neosho County,found,https://neoshocountyks.org/Bids.aspx,civicplus,2026-09-01
 nesscountyks.com,Ness County,KS,City,Ness County,not_found,,,2026-09-01
 kingmancoks.com,Kingman County,KS,City,Kingman County,not_found,,,2026-09-01
-oakgov.com,Oakland County,MI,City,Oakland County,not_found,,,2026-09-01
+oakgov.com,Oakland County,MI,City,Oakland County,found,https://oakgov.com/purchasing,custom,2026-11-02
 oscodacountymi.com,Oscoda County,MI,City,Oscoda County,not_found,,,2026-09-01
 thomascountyks.com,Thomas County,KS,City,Thomas County,not_found,,,2026-09-01
 linncountyks.com,Linn County,KS,City,Linn County,found,https://linncountyks.com/Bids.aspx,civicplus,2026-09-01
@@ -18304,7 +18304,7 @@ co.clinton.oh.us,Clinton County,OH,City,Clinton County,found,https://co.clinton.
 lakeandpen.com,Lake and Peninsula Borough,AK,City,Lake and Peninsula Borough,found,https://lakeandpen.com/procurement,custom,2026-09-01
 scottcountymo.com,Scott County,MO,City,Scott County,not_found,,,2026-09-01
 shelbycountymo.com,Shelby County,MO,City,Shelby County,not_found,,,2026-09-01
-co.iredell.nc.us,Iredell County,NC,City,Iredell County,not_found,,,2026-09-01
+co.iredell.nc.us,Iredell County,NC,City,Iredell County,found,https://co.iredell.nc.us/Bids.aspx,civicplus,2026-11-02
 pemiscotcounty.org,Pemiscot County,MO,City,Pemiscot County,found,https://pemiscotcounty.org/bids.php,custom,2026-11-02
 monroecountymo.org,Monroe County,MO,City,Monroe County,not_found,,,2026-09-01
 madisoncountymo.us,Madison County,MO,City,Madison County,not_found,,,2026-09-01
@@ -18360,7 +18360,7 @@ columbusco.org,Columbus County,NC,City,Columbus County,found,https://columbusco.
 co.bertie.nc.us,Bertie County,NC,City,Bertie County,not_found,,,2026-09-01
 co.davidson.nc.us,Davidson County,NC,City,Davidson County,found,https://co.davidson.nc.us/Bids.aspx,civicplus,2026-09-01
 co.surry.nc.us,Surry County,NC,City,Surry County,found,https://co.surry.nc.us/departments/purchasing,agency,2026-09-01
-martincountyncgov.com,Martin County,NC,City,Martin County,not_found,,,2026-09-01
+martincountyncgov.com,Martin County,NC,City,Martin County,found,https://martincountyncgov.com/public_notices/index.php,custom,2026-11-02
 shannon-county.com,Shannon County,MO,City,Shannon County,not_found,,,2026-09-01
 gastongov.com,Gaston County,NC,City,Gaston County,found,https://gastongov.com/Bids.aspx,civicplus,2026-09-01
 vancecounty.org,Vance County,NC,City,Vance County,found,https://vancecounty.org/rfp,custom,2026-09-01
@@ -18373,7 +18373,7 @@ north-slope.org,North Slope Borough,AK,City,North Slope Borough,found,https://no
 co.forsyth.nc.us,Forsyth County,NC,City,Forsyth County,found,https://www.cityofws.org/672/Purchasing,custom,2026-09-01
 hendersoncountync.org,Henderson County,NC,City,Henderson County,not_found,,,2026-09-01
 transylvaniacounty.org,Transylvania County,NC,City,Transylvania County,found,https://www.transylvaniacounty.org/request-for-proposals-bids,custom,2026-09-01
-gatescounty.govoffice2.com,Gates County,NC,City,Gates County,not_found,,,2026-09-01
+gatescounty.govoffice2.com,Gates County,NC,City,Gates County,found,https://gatescountync.gov/MCCRFP2026,agency,2026-11-02
 madisoncounty.ny.gov,Madison County,NY,City,Madison County,not_found,,,2026-09-01
 comanchecounty.us,Comanche County,OK,City,Comanche County,found,https://comanchecounty.us/Bids.aspx,civicplus,2026-09-01
 co.robeson.nc.us,Robeson County,NC,City,Robeson County,not_found,,,2026-09-01
@@ -18424,7 +18424,7 @@ holmescounty.com,Holmes County,OH,City,Holmes County,not_found,,,2026-09-01
 co.shelby.oh.us,Shelby County,OH,City,Shelby County,found,https://co.shelby.oh.us/Bids.aspx,civicplus,2026-09-01
 washingtongov.org,Washington County,OH,City,Washington County,found,https://washingtongov.org/Bids.aspx,civicplus,2026-09-01
 lawrencecountyohio.org,Lawrence County,OH,City,Lawrence County,not_found,,,2026-09-01
-vanwertcounty.org,Van Wert County,OH,City,Van Wert County,not_found,,,2026-09-01
+vanwertcounty.org,Van Wert County,OH,City,Van Wert County,found,https://vanwertcounty.org/government/county_commissioners/legal_notices.php,custom,2026-11-02
 oklahomacounty.org,Oklahoma County,OK,City,Oklahoma County,found,https://oklahomacounty.org/departments/purchasing,custom,2026-09-01
 tillmancounty.org,Tillman County,OK,City,Tillman County,not_found,,,2026-09-01
 canadiancounty.org,Canadian County,OK,City,Canadian County,not_found,,,2026-09-01
@@ -18459,7 +18459,7 @@ roselandnj.org,Roseland,NJ,City,Roseland,found,https://roselandnj.org/Bids.aspx,
 holtcounty.org,Holt County,MO,City,Holt County,not_found,,,2026-09-01
 hamburgnj.org,Hamburg,NJ,City,Hamburg,found,https://hamburgnj.org/bids,custom,2026-09-01
 co.warren.oh.us,Warren County,OH,City,Warren County,not_found,,,2026-09-01
-perrycountyohio.net,Perry County,OH,City,Perry County,not_found,,,2026-09-01
+perrycountyohio.net,Perry County,OH,City,Perry County,found,https://perrycountyohio.gov/records/public-notices/,custom,2026-11-02
 hasbrouck-heights.nj.us,Hasbrouck Heights,NJ,City,Hasbrouck Heights,found,https://hasbrouck-heights.nj.us/bids-and-rfps,agency,2026-09-01
 co.greene.oh.us,Greene County,OH,City,Greene County,not_found,,,2026-09-01
 wclnj.com,Woodcliff Lake,NJ,City,Woodcliff Lake,not_found,,,2026-09-01
@@ -18486,7 +18486,7 @@ eriecounty.oh.gov,Erie County,OH,City,Erie County,not_found,,,2026-09-01
 clementonborough.com,Clementon,NJ,City,Clementon,not_found,,,2026-09-01
 tyrrellcounty.org,Tyrrell County,NC,City,Tyrrell County,not_found,,,2026-09-01
 wayneohio.org,Wayne County,OH,City,Wayne County,not_found,,,2026-09-01
-gallianet.net,Gallia County,OH,City,Gallia County,not_found,,,2026-09-01
+gallianet.net,Gallia County,OH,City,Gallia County,found,https://gallianet.net/public-notices,custom,2026-11-02
 collingswood.com,Collingswood,NJ,City,Collingswood,not_found,,,2026-09-01
 wildwoodcrest.org,Wildwood Crest,NJ,City,Wildwood Crest,found,https://wildwoodcrest.org/proposals.php,custom,2026-09-01
 mitchellcounty.org,Mitchell County,NC,City,Mitchell County,not_found,,,2026-09-01
@@ -19406,7 +19406,7 @@ taborcitync.org,Tabor City,NC,City,Tabor City,not_found,,,2026-09-01
 westnewyorknj.org,West New York,NJ,City,West New York,found,https://westnewyorknj.org/notice-to-bidders,custom,2026-09-01
 sandwich.il.us,Sandwich,IL,City,Sandwich,not_found,,,2026-09-01
 upperdeerfield.com,Upper Deerfield Township,NJ,City,Upper Deerfield Township,found,https://upperdeerfield.com/notice-to-bidders,custom,2026-09-01
-butnernc.org,Butner,NC,City,Butner,not_found,,,2026-09-01
+butnernc.org,Butner,NC,City,Butner,found,https://butnernc.org/Bids.aspx,civicplus,2026-11-02
 hainesporttownship.com,Hainesport,NJ,City,Hainesport,not_found,,,2026-09-01
 montclairnjusa.org,Montclair,NJ,City,Montclair,found,https://www.montclairnjusa.org/Public-Notices/Bids-RFPs-RFQs-and-Auctions,custom,2026-09-01
 elmhurst.org,Elmhurst,IL,City,Elmhurst,found,https://elmhurst.org/how_do_i/bid_opportunities/index.php,custom,2026-09-01
@@ -19443,7 +19443,7 @@ elkinnc.org,Elkin,NC,City,Elkin,not_found,,,2026-09-01
 townofbunn.com,Bunn,NC,City,Bunn,not_found,,,2026-09-01
 enfieldnc.org,Enfield,NC,City,Enfield,not_found,,,2026-09-01
 townofchadbournnc.gov,Chadbourn,NC,City,Chadbourn,not_found,,,2026-09-01
-minthill.com,Mint Hill,NC,City,Mint Hill,not_found,,,2026-09-01
+minthill.com,Mint Hill,NC,City,Mint Hill,found,https://minthill.com/departments/public_works/bids_and_rfqs.php,custom,2026-11-02
 townofmaggievalley.com,Maggie Valley,NC,City,Maggie Valley,not_found,,,2026-09-01
 peoriagov.org,Peoria,IL,City,Peoria,found,https://peoriagov.org/Bids.aspx,civicplus,2026-09-01
 townofwhitakers.org,Whitakers,NC,City,Whitakers,not_found,,,2026-09-01
@@ -19466,7 +19466,7 @@ villageofsimpsonnc.com,Simpson,NC,City,Simpson,not_found,,,2026-09-01
 redcross-nc.com,Red Cross,NC,City,Red Cross,not_found,,,2026-09-01
 summerscountywv.org,Summers County,WV,City,Summers County,not_found,,,2026-09-01
 townofmidland.us,Midland,NC,City,Midland,not_found,,,2026-09-01
-townofwallburg.com,Wallburg,NC,City,Wallburg,not_found,,,2026-09-01
+townofwallburg.com,Wallburg,NC,City,Wallburg,found,https://townofwallburg.com/public-notices,custom,2026-11-02
 ci.aberdeen.nc.us,Aberdeen,NC,City,Aberdeen,not_found,,,2026-09-01
 villageofflatrock.org,Flat Rock,NC,City,Flat Rock,not_found,,,2026-09-01
 villageofpinehurst.org,Pinehurst,NC,City,Pinehurst,not_found,,,2026-09-01
@@ -19513,7 +19513,7 @@ cantonnc.com,Canton,NC,City,Canton,found,https://www.cantonnc.com/rfqs-rfps-bids
 mocksvillenc.org,Mocksville,NC,City,Mocksville,not_found,,,2026-09-01
 ayden.com,Ayden,NC,City,Ayden,not_found,,,2026-09-01
 townofnewport.com,Newport,NC,City,Newport,not_found,,,2026-09-01
-troy.nc.us,Troy,NC,City,Troy,not_found,,,2026-09-01
+troy.nc.us,Troy,NC,City,Troy,found,https://troy.nc.us/government/public_notices.php,custom,2026-11-02
 walnutcreeknc.com,Walnut Creek,NC,City,Walnut Creek,not_found,,,2026-09-01
 salemburg-nc.com,Salemburg,NC,City,Salemburg,not_found,,,2026-09-01
 townofnavassa.org,Navassa,NC,City,Navassa,found,https://townofnavassa.org/bids-and-rfps,custom,2026-09-01
@@ -19610,7 +19610,7 @@ townofbethania.org,Bethania,NC,City,Bethania,not_found,,,2026-09-01
 hookertonnc.com,Hookerton,NC,City,Hookerton,not_found,,,2026-09-01
 tarboro-nc.com,Tarboro,NC,City,Tarboro,found,https://tarboro-nc.com/departments/financial_services/current_bidding_opportunities.php,custom,2026-09-01
 townofwallace.com,Wallace,NC,City,Wallace,not_found,,,2026-09-01
-cramerton.org,Cramerton,NC,City,Cramerton,not_found,,,2026-09-01
+cramerton.org,Cramerton,NC,City,Cramerton,found,https://cramerton.org/about_cramerton/news_and_announcements.php,custom,2026-11-02
 townofmaysville.org,Maysville,NC,City,Maysville,not_found,,,2026-09-01
 townofrobbinsville.com,Robbinsville,NC,City,Robbinsville,not_found,,,2026-09-01
 atlanticbeach-nc.com,Atlantic Beach,NC,City,Atlantic Beach,not_found,,,2026-09-01
@@ -19633,7 +19633,7 @@ burnhamborough.net,Burnham,PA,City,Burnham,not_found,,,2026-09-01
 norwoodnc.com,Norwood,NC,City,Norwood,not_found,,,2026-09-01
 townofbannerelk.org,Banner Elk,NC,City,Banner Elk,not_found,,,2026-09-01
 matamorasborough.com,Matamoras,PA,City,Matamoras,not_found,,,2026-09-01
-townofmayodan.com,Mayodan,NC,City,Mayodan,not_found,,,2026-09-01
+townofmayodan.com,Mayodan,NC,City,Mayodan,found,https://townofmayodan.com/bids---rfps,custom,2026-11-02
 nazarethboroughpa.com,Nazareth,PA,City,Nazareth,not_found,,,2026-09-01
 swepsonvilletownof.net,Swepsonville,NC,City,Swepsonville,not_found,,,2026-09-01
 morrisville-boro-gov.com,Morrisville,PA,City,Morrisville,not_found,,,2026-09-01
@@ -20425,7 +20425,7 @@ bayfieldcounty.wi.gov,Bayfield County,WI,City,Bayfield County,found,https://bayf
 co.plymouth.ia.us,Plymouth County,IA,City,Plymouth County,not_found,,,2026-09-01
 co.aitkin.mn.us,Aitkin County,MN,City,Aitkin County,not_found,,,2026-09-01
 co.becker.mn.us,Becker County,MN,City,Becker County,not_found,,,2026-09-01
-co.benton.mn.us,Benton County,MN,City,Benton County,not_found,,,2026-09-01
+co.benton.mn.us,Benton County,MN,City,Benton County,found,https://co.benton.mn.us/Bids.aspx,civicplus,2026-11-02
 co.buchanan.ia.us,Buchanan County,IA,City,Buchanan County,not_found,,,2026-09-01
 co.door.wi.gov,Door County,WI,City,Door County,found,https://co.door.wi.gov/Bids.aspx,civicplus,2026-09-01
 floydcoia.org,Floyd County,IA,City,Floyd County,not_found,,,2026-09-01
@@ -20446,11 +20446,11 @@ grundycounty.org,Grundy County,IA,City,Grundy County,not_found,,,2026-09-01
 co.adams.wi.us,Adams County,WI,City,Adams County,not_found,,,2026-09-01
 hamiltoncounty.org,Hamilton County,IA,City,Hamilton County,not_found,,,2026-09-01
 co.green.wi.gov,Green County,WI,City,Green County,not_found,,,2026-09-01
-co.chippewa.wi.us,Chippewa County,WI,City,Chippewa County,not_found,,,2026-09-01
+co.chippewa.wi.us,Chippewa County,WI,City,Chippewa County,found,https://co.chippewa.wi.us/Bids.aspx,civicplus,2026-11-02
 co.eau-claire.wi.us,Eau Claire County,WI,City,Eau Claire County,not_found,,,2026-09-01
 obriencounty.com,O'Brien County,IA,City,O'Brien County,not_found,,,2026-09-01
 co.columbia.wi.us,Columbia County,WI,City,Columbia County,not_found,,,2026-09-01
-co.chippewa.mn.us,Chippewa County,MN,City,Chippewa County,not_found,,,2026-09-01
+co.chippewa.mn.us,Chippewa County,MN,City,Chippewa County,found,https://co.chippewa.mn.us/Bids.aspx,civicplus,2026-11-02
 wrightcounty.org,Wright County,IA,City,Wright County,not_found,,,2026-09-01
 co.ashland.wi.us,Ashland County,WI,City,Ashland County,not_found,,,2026-09-01
 fdlco.wi.gov,Fond du Lac County,WI,City,Fond du Lac County,not_found,,,2026-09-01
@@ -20469,12 +20469,12 @@ countyofdane.com,Dane County,WI,City,Dane County,found,https://countyofdane.com/
 co.waushara.wi.us,Waushara County,WI,City,Waushara County,not_found,,,2026-09-01
 co.winnebago.wi.us,Winnebago County,WI,City,Winnebago County,found,https://co.winnebago.wi.us/Bids.aspx,civicplus,2026-09-01
 co.price.wi.us,Price County,WI,City,Price County,found,https://co.price.wi.us/Bids.aspx,civicplus,2026-09-01
-co.waupaca.wi.us,Waupaca County,WI,City,Waupaca County,not_found,,,2026-09-01
+co.waupaca.wi.us,Waupaca County,WI,City,Waupaca County,found,https://co.waupaca.wi.us/businesses/bids_and_proposals.php,agency,2026-11-02
 ruskcounty.org,Rusk County,WI,City,Rusk County,not_found,,,2026-09-01
 co.washington.wi.us,Washington County,WI,City,Washington County,not_found,,,2026-09-01
 co.manitowoc.wi.us,Manitowoc County,WI,City,Manitowoc County,not_found,,,2026-09-01
 co.vilas.wi.us,Vilas County,WI,City,Vilas County,not_found,,,2026-09-01
-sawyercountygov.org,Sawyer County,WI,City,Sawyer County,not_found,,,2026-09-01
+sawyercountygov.org,Sawyer County,WI,City,Sawyer County,found,https://sawyercountygov.org/Bids.aspx,civicplus,2026-11-02
 co.polk.wi.us,Polk County,WI,City,Polk County,found,https://co.polk.wi.us/government/divisions_and_departments/general_government_division/administration_finance/rfp___bids.php,agency,2026-09-01
 co.vernon.wi.gov,Vernon County,WI,City,Vernon County,not_found,,,2026-09-01
 co.jackson.wi.us,Jackson County,WI,City,Jackson County,not_found,,,2026-09-01
@@ -20494,7 +20494,7 @@ co.taylor.wi.us,Taylor County,WI,City,Taylor County,not_found,,,2026-09-01
 henrycty.com,Henry County,IL,City,Henry County,found,https://henrycty.com/Bids.aspx,civicplus,2026-09-01
 kenoshacounty.org,Kenosha County,WI,City,Kenosha County,not_found,,,2026-09-01
 co.steele.nd.us,Steele County,ND,City,Steele County,not_found,,,2026-09-01
-co.ozaukee.wi.us,Ozaukee County,WI,City,Ozaukee County,not_found,,,2026-09-01
+co.ozaukee.wi.us,Ozaukee County,WI,City,Ozaukee County,found,https://co.ozaukee.wi.us/Bids.aspx,civicplus,2026-11-02
 co.stutsman.nd.us,Stutsman County,ND,City,Stutsman County,not_found,,,2026-09-01
 tremplocounty.com,Trempealeau County,WI,City,Trempealeau County,not_found,,,2026-09-01
 co.traill.nd.us,Traill County,ND,City,Traill County,not_found,,,2026-09-01
@@ -20529,7 +20529,7 @@ montgomeryco.com,Montgomery County,IL,City,Montgomery County,not_found,,,2026-09
 marinettecounty.com,Marinette County,WI,City,Marinette County,found,https://marinettecounty.com/government/page_b0db60e995c9/,custom,2026-09-01
 kewauneeco.org,Kewaunee County,WI,City,Kewaunee County,found,https://kewauneeco.org/government/page/land-rental-bids-7db2d5086479/,custom,2026-09-01
 co.monroe.wi.us,Monroe County,WI,City,Monroe County,not_found,,,2026-09-01
-outagamie.org,Outagamie County,WI,City,Outagamie County,not_found,,,2026-09-01
+outagamie.org,Outagamie County,WI,City,Outagamie County,found,https://www.outagamie.gov/County-FinancialsBids-Proposals/Bids-Proposals,agency,2026-11-02
 monroecountyil.org,Monroe County,IL,City,Monroe County,not_found,,,2026-09-01
 racineco.com,Racine County,WI,City,Racine County,not_found,,,2026-09-01
 pulaskicountyil.net,Pulaski County,IL,City,Pulaski County,not_found,,,2026-09-01
@@ -20833,7 +20833,7 @@ prowerscounty.net,Prowers County,CO,City,Prowers County,not_found,,,2026-09-01
 lasanimascounty.org,Las Animas County,CO,City,Las Animas County,not_found,,,2026-09-01
 manchester.govoffice2.com,Manchester,ME,City,Manchester,not_found,,,2026-09-01
 kiowacountycolo.com,Kiowa County,CO,City,Kiowa County,not_found,,,2026-11-02
-bibbal.com,Bibb County,AL,City,Bibb County,not_found,,,2026-09-01
+bibbal.com,Bibb County,AL,City,Bibb County,found,https://bibbal.com/public-notices/,custom,2026-11-02
 kitcarsoncounty.org,Kit Carson County,CO,City,Kit Carson County,not_found,,,2026-09-01
 hinsdalecountycolorado.us,Hinsdale County,CO,City,Hinsdale County,not_found,,,2026-09-01
 woodburyct.org,Woodbury,CT,City,Woodbury,not_found,,,2026-09-01
@@ -20922,16 +20922,16 @@ co.renville.mn.us,Renville County,MN,City,Renville County,not_found,,,2026-09-01
 greenlee.az.gov,Greenlee County,AZ,City,Greenlee County,not_found,,,2026-09-01
 co.cook.mn.us,Cook County,MN,City,Cook County,found,https://co.cook.mn.us/bidopportunities,agency,2026-09-01
 co.morgan.al.us,Morgan County,AL,City,Morgan County,not_found,,,2026-09-01
-co.polk.mn.us,Polk County,MN,City,Polk County,not_found,,,2026-09-01
+co.polk.mn.us,Polk County,MN,City,Polk County,found,https://co.polk.mn.us/Bids.aspx,civicplus,2026-11-02
 wilcoxcountyal.org,Wilcox County,AL,City,Wilcox County,not_found,,,2026-09-01
 halecountyal.com,Hale County,AL,City,Hale County,not_found,,,2026-09-01
 dallascounty-al.org,Dallas County,AL,City,Dallas County,not_found,,,2026-09-01
 co.rice.mn.us,Rice County,MN,City,Rice County,found,https://co.rice.mn.us/Bids.aspx,civicplus,2026-09-01
 co.sherburne.mn.us,Sherburne County,MN,City,Sherburne County,found,https://co.sherburne.mn.us/Bids.aspx,civicplus,2026-09-01
-co.fillmore.mn.us,Fillmore County,MN,City,Fillmore County,not_found,,,2026-09-01
+co.fillmore.mn.us,Fillmore County,MN,City,Fillmore County,found,https://co.fillmore.mn.us/bid_rfps/index.php,agency,2026-11-02
 co.kittson.mn.us,Kittson County,MN,City,Kittson County,not_found,,,2026-09-01
 co.mower.mn.us,Mower County,MN,City,Mower County,found,https://co.mower.mn.us/Bids.aspx,civicplus,2026-09-01
-lqpco.com,Lac qui Parle County,MN,City,Lac qui Parle County,not_found,,,2026-09-01
+lqpco.com,Lac qui Parle County,MN,City,Lac qui Parle County,found,https://lqpco.com/Bids.aspx,civicplus,2026-11-02
 co.grant.mn.us,Grant County,MN,City,Grant County,not_found,,,2026-09-01
 co.clearwater.mn.us,Clearwater County,MN,City,Clearwater County,not_found,,,2026-09-01
 co.todd.mn.us,Todd County,MN,City,Todd County,not_found,,,2026-09-01
@@ -20946,7 +20946,7 @@ co.teller.co.us,Teller County,CO,City,Teller County,not_found,,,2026-09-01
 co.meeker.mn.us,Meeker County,MN,City,Meeker County,not_found,,,2026-09-01
 co.del-norte.ca.us,Del Norte County,CA,City,Del Norte County,not_found,,,2026-09-01
 maderacounty.com,Madera County,CA,City,Madera County,not_found,,,2026-09-01
-co.nicollet.mn.us,Nicollet County,MN,City,Nicollet County,not_found,,,2026-09-01
+co.nicollet.mn.us,Nicollet County,MN,City,Nicollet County,found,https://co.nicollet.mn.us/Bids.aspx,civicplus,2026-11-02
 mendocinocounty.org,Mendocino County,CA,City,Mendocino County,not_found,,,2026-09-01
 co.scott.mn.us,Scott County,MN,City,Scott County,found,https://co.scott.mn.us/Bids.aspx,civicplus,2026-09-01
 sedgwickcountygov.net,Sedgwick County,CO,City,Sedgwick County,found,https://sedgwickcountygov.net/purchasing/bids,custom,2026-09-01
@@ -20961,13 +20961,13 @@ kanabeccounty.org,Kanabec County,MN,City,Kanabec County,not_found,,,2026-09-01
 co.wadena.mn.us,Wadena County,MN,City,Wadena County,not_found,,,2026-09-01
 co.pine.mn.us,Pine County,MN,City,Pine County,found,https://co.pine.mn.us/government/administrator/request_for_bids.php,agency,2026-09-01
 co.jackson.mn.us,Jackson County,MN,City,Jackson County,not_found,,,2026-09-01
-co.wright.mn.us,Wright County,MN,City,Wright County,not_found,,,2026-09-01
+co.wright.mn.us,Wright County,MN,City,Wright County,found,https://co.wright.mn.us/Bids.aspx,civicplus,2026-11-02
 co.traverse.mn.us,Traverse County,MN,City,Traverse County,not_found,,,2026-09-01
 co.sibley.mn.us,Sibley County,MN,City,Sibley County,not_found,,,2026-09-01
 co.mille-lacs.mn.us,Mille Lacs County,MN,City,Mille Lacs County,not_found,,,2026-09-01
 co.nobles.mn.us,Nobles County,MN,City,Nobles County,not_found,,,2026-09-01
 co.cass.nd.us,Cass County,ND,City,Cass County,not_found,,,2026-09-01
-co.lake.mn.us,Lake County,MN,City,Lake County,not_found,,,2026-09-01
+co.lake.mn.us,Lake County,MN,City,Lake County,found,https://co.lake.mn.us/Bids.aspx,civicplus,2026-11-02
 co.winona.mn.us,Winona County,MN,City,Winona County,not_found,,,2026-09-01
 co.red-lake.mn.us,Red Lake County,MN,City,Red Lake County,not_found,,,2026-09-01
 murray-countymn.com,Murray County,MN,City,Murray County,not_found,,,2026-09-01
@@ -21892,7 +21892,7 @@ milan-in-gov.net,Milan,IN,City,Milan,not_found,,,2026-09-01
 sinclairwyoming.com,Sinclair,WY,City,Sinclair,not_found,,,2026-09-01
 shelterislandtown.us,Shelter Island,NY,City,Shelter Island,found,https://shelterislandtown.us/Bids.aspx,civicplus,2026-09-01
 ashlandmass.com,Ashland,MA,City,Ashland,found,https://ashlandmass.com/Bids.aspx,civicplus,2026-09-01
-townofhomerga.com,Homer,GA,City,Homer,not_found,,,2026-09-01
+townofhomerga.com,Homer,GA,City,Homer,found,https://townofhomerga.com/News.aspx?CNID=4345 ,custom,2026-11-02
 town.milliken.co.us,Milliken,CO,City,Milliken,not_found,,,2026-09-01
 townofcantonct.org,Canton,CT,City,Canton,found,https://www.townofcantonct.gov/bids.aspx,civicplus,2026-09-01
 ridgelandsc.gov:80,Ridgeland,SC,City,Ridgeland,not_found,,,2026-09-01
@@ -22124,7 +22124,7 @@ townofclarksville.com,Clarksville,IN,City,Clarksville,found,https://townofclarks
 foxfieldco.us,Foxfield,CO,City,Foxfield,not_found,,,2026-09-01
 lisbonme.org,Lisbon,ME,City,Lisbon,found,https://lisbonme.org/Bids.aspx,civicplus,2026-09-01
 townofnaples.org,Naples,ME,City,Naples,found,https://townofnaples.org/bids,custom,2026-09-01
-frankfortmich.com,Frankfort,MI,City,Frankfort,not_found,,,2026-09-01
+frankfortmich.com,Frankfort,MI,City,Frankfort,found,https://frankfortmich.com/bids-and-rfps,custom,2026-11-02
 salemsc.us,Salem,SC,City,Salem,not_found,,,2026-09-01
 townofghent.org,Ghent,NY,City,Ghent,found,https://townofghent.org/rfp,custom,2026-09-01
 westpelzer.com,West Pelzer,SC,City,West Pelzer,not_found,,,2026-09-01
@@ -22139,7 +22139,7 @@ whitesburgcity.com,Whitesburg,GA,City,Whitesburg,not_found,,,2026-09-01
 flaglercolorado.com,Flagler,CO,City,Flagler,not_found,,,2026-09-01
 townofblanchard.us,Blanchard,LA,City,Blanchard,not_found,,,2026-09-01
 jacksonla.com,Jackson,LA,City,Jackson,not_found,,,2026-09-01
-westlakeland.govoffice2.com,West Lakeland Township,MN,City,West Lakeland Township,not_found,,,2026-09-01
+westlakeland.govoffice2.com,West Lakeland Township,MN,City,West Lakeland Township,found,https://westlakeland.govoffice2.com/index.asp?SEC=579A7403-5076-46FA-B182-002A58F885AE&Type=B_BASIC,custom,2026-11-02
 hamptonny.org,Hampton,NY,City,Hampton,not_found,,,2026-09-01
 townofladoga.org,Ladoga,IN,City,Ladoga,not_found,,,2026-09-01
 frasercolorado.com,Fraser,CO,City,Fraser,found,https://frasercolorado.com/Bids.aspx,civicplus,2026-09-01
@@ -22652,7 +22652,7 @@ dextermaine.org,Dexter,ME,City,Dexter,not_found,,,2026-09-01
 winonalake.net,Winona Lake,IN,City,Winona Lake,not_found,,,2026-09-01
 villageofmagnolia.com,Magnolia,OH,City,Magnolia,not_found,,,2026-09-01
 unioncityvillage.homestead.com,Union City,OH,City,Union City,not_found,,,2026-09-01
-chagrin-falls.org,Chagrin Falls,OH,City,Chagrin Falls,not_found,,,2026-09-01
+chagrin-falls.org,Chagrin Falls,OH,City,Chagrin Falls,found,https://chagrin-falls.org/Bids.aspx,civicplus,2026-11-02
 evendaleohio.org,Evendale,OH,City,Evendale,not_found,,,2026-09-01
 clarksburgma.us,Clarksburg,MA,City,Clarksburg,not_found,,,2026-09-01
 ashvilleohio.net,Ashville,OH,City,Ashville,not_found,,,2026-09-01
@@ -22755,10 +22755,10 @@ northkingsvilleohio.org,North Kingsville,OH,City,North Kingsville,not_found,,,20
 montpelieroh.net,Montpelier,OH,City,Montpelier,found,https://montpelieroh.net/invitation-to-bid,custom,2026-09-01
 spencervillageohio.com,Spencer,OH,City,Spencer,not_found,,,2026-09-01
 villageofgrafton.org,Grafton,OH,City,Grafton,not_found,,,2026-09-01
-villageofcoldwater.com,Coldwater,OH,City,Coldwater,not_found,,,2026-09-01
+villageofcoldwater.com,Coldwater,OH,City,Coldwater,found,https://villageofcoldwater.com/legal-notices,custom,2026-11-02
 mtoraboh.us,Mount Orab,OH,City,Mount Orab,not_found,,,2026-09-01
-newbremen.com,New Bremen,OH,City,New Bremen,not_found,,,2026-09-01
-spencervilleoh.com,Spencerville,OH,City,Spencerville,not_found,,,2026-09-01
+newbremen.com,New Bremen,OH,City,New Bremen,found,https://newbremen.com/legal-public-notices-announcements/,custom,2026-11-02
+spencervilleoh.com,Spencerville,OH,City,Spencerville,found,https://spencervilleoh.com/special-announcements/,custom,2026-11-02
 townofleicester.org,Leicester,NY,City,Leicester,not_found,,,2026-09-01
 oakharbor.oh.us,Oak Harbor,OH,City,Oak Harbor,not_found,,,2026-09-01
 leipsic.com,Leipsic,OH,City,Leipsic,not_found,,,2026-09-01
@@ -22782,7 +22782,7 @@ hurleynm.com,Hurley,NM,City,Hurley,not_found,,,2026-09-01
 bellaireohio.net,Bellaire,OH,City,Bellaire,not_found,,,2026-09-01
 villageofwellington.com,Wellington,OH,City,Wellington,not_found,,,2026-09-01
 ci.toledo.oh.us,Empire,OH,City,Empire,not_found,,,2026-09-01
-greenfieldohio.net,Greenfield,OH,City,Greenfield,not_found,,,2026-09-01
+greenfieldohio.net,Greenfield,OH,City,Greenfield,found,https://www.greenfieldohio.net/news_detail_T31_R384.php,custom,2026-11-02
 villageofannaoh.com,Anna,OH,City,Anna,not_found,,,2026-09-01
 baltimoreohio.org,Baltimore,OH,City,Baltimore,not_found,,,2026-09-01
 adaoh.org,Ada,OH,City,Ada,not_found,,,2026-09-01
@@ -22807,7 +22807,7 @@ townofsebago.org,Sebago,ME,City,Sebago,not_found,,,2026-09-01
 bullsgaptn.us,Bulls Gap,TN,City,Bulls Gap,not_found,,,2026-09-01
 townofislesboro.com,Islesboro,ME,City,Islesboro,not_found,,,2026-09-01
 obetz.oh.us,Obetz,OH,City,Obetz,not_found,,,2026-09-01
-lithopolis.com,Lithopolis,OH,City,Lithopolis,not_found,,,2026-09-01
+lithopolis.com,Lithopolis,OH,City,Lithopolis,found,https://www.lithopolis.org/current-bids/,custom,2026-11-02
 voelida.com,Elida,OH,City,Elida,not_found,,,2026-09-01
 maineshighpeaks.com,Eustis,ME,City,Eustis,not_found,,,2026-09-01
 edon-ohio.com,Edon,OH,City,Edon,not_found,,,2026-09-01
@@ -22833,7 +22833,7 @@ greenvilleme.com,Greenville,ME,City,Greenville,not_found,,,2026-09-01
 townofbuckfield.com,Buckfield,ME,City,Buckfield,not_found,,,2026-09-01
 starksme.com,Starks,ME,City,Starks,not_found,,,2026-09-01
 townofwaldo.com,Waldo,ME,City,Waldo,not_found,,,2026-09-01
-greenhillsohio.us,Greenhills,OH,City,Greenhills,not_found,,,2026-09-01
+greenhillsohio.us,Greenhills,OH,City,Greenhills,found,https://greenhillsohio.gov/solicitation/,agency,2026-11-02
 baileyville.org,Baileyville,ME,City,Baileyville,not_found,,,2026-09-01
 thorndikeme.com,Thorndike,ME,City,Thorndike,not_found,,,2026-09-01
 cambridgemaine.com,Cambridge,ME,City,Cambridge,not_found,,,2026-09-01
@@ -22926,7 +22926,7 @@ villageofmarshallville.org,Marshallville,OH,City,Marshallville,not_found,,,2026-
 evergreenpark-ill.com,Evergreen Park,IL,City,Evergreen Park,found,https://evergreenpark-ill.com/Bids.aspx,civicplus,2026-09-01
 northbridgemass.org,Northbridge,MA,City,Northbridge,not_found,,,2026-11-02
 clintonvillageohio.com,Clinton,OH,City,Clinton,not_found,,,2026-09-01
-northrandall.com,North Randall,OH,City,North Randall,not_found,,,2026-09-01
+northrandall.com,North Randall,OH,City,North Randall,found,https://northrandall.com/avsystemrfp/,custom,2026-11-02
 hanoverparkillinois.org,Hanover Park,IL,City,Hanover Park,found,https://hanoverparkillinois.org/Bids.aspx,civicplus,2026-09-01
 oak-park.us,Oak Park,IL,City,Oak Park,found,https://oak-park.us/bids,custom,2026-09-01
 villageoflombard.org,Lombard,IL,City,Lombard,found,https://villageoflombard.org/Bids.aspx,civicplus,2026-09-01
@@ -23494,9 +23494,9 @@ ci.brillion.wi.us,Brillion,WI,City,Brillion,not_found,,,2026-09-01
 cityofniagara.org,Niagara,WI,City,Niagara,not_found,,,2026-09-01
 cityofosseo.us,Osseo,WI,City,Osseo,not_found,,,2026-09-01
 mellenwi.com,Mellen,WI,City,Mellen,not_found,,,2026-09-01
-ci.verona.wi.us,Verona,WI,City,Verona,not_found,,,2026-09-01
+ci.verona.wi.us,Verona,WI,City,Verona,found,https://ci.verona.wi.us/Bids.aspx,civicplus,2026-11-02
 fennimore.com,Fennimore,WI,City,Fennimore,not_found,,,2026-09-01
-algomacity.org,Algoma,WI,City,Algoma,not_found,,,2026-09-01
+algomacity.org,Algoma,WI,City,Algoma,found,https://algomacity.org/Bids.aspx,civicplus,2026-11-02
 ci.peshtigo.wi.us,Peshtigo,WI,City,Peshtigo,not_found,,,2026-09-01
 cityofmarshfieldwi.gov,Marshfield,WI,City,Marshfield,found,https://cityofmarshfieldwi.gov/business/bids_rfps_and_quotes.php,agency,2026-09-01
 cityoffoxlake.org,Fox Lake,WI,City,Fox Lake,not_found,,,2026-09-01
@@ -23513,7 +23513,7 @@ cityofberlin.net,Berlin,WI,City,Berlin,not_found,,,2026-09-01
 angelfire.com,Monument,OR,City,Monument,not_found,,,2026-09-01
 cityofnenana.com,Nenana,AK,City,Nenana,not_found,,,2026-09-01
 ci.delavan.wi.us,Delavan,WI,City,Delavan,found,https://ci.delavan.wi.us/departments/public_works/bid_postings.php,agency,2026-09-01
-cityofdelafield.com,Delafield,WI,City,Delafield,not_found,,,2026-09-01
+cityofdelafield.com,Delafield,WI,City,Delafield,found,https://cityofdelafield.com/Bids.aspx,civicplus,2026-11-02
 stgeorgealaska.com,St. George,AK,City,St. George,not_found,,,2026-09-01
 ci.whitewater.wi.us,Whitewater,WI,City,Whitewater,not_found,,,2026-09-01
 hillsborowi.com,Hillsboro,WI,City,Hillsboro,found,https://hillsborowi.com/request-for-proposals,custom,2026-09-01
@@ -23525,7 +23525,7 @@ cityofcornell.com,Cornell,WI,City,Cornell,not_found,,,2026-09-01
 ci.middleton.wi.us,Middleton,WI,City,Middleton,not_found,,,2026-09-01
 mineralpoint.com,Mineral Point,WI,City,Mineral Point,not_found,,,2026-09-01
 ci.marshfield.wi.us,Marshfield,WI,City,Marshfield,found,https://ci.marshfield.wi.us/business/bids_rfps_and_quotes.php,agency,2026-09-01
-cityofbeaverdam.com,Beaver Dam,WI,City,Beaver Dam,not_found,,,2026-09-01
+cityofbeaverdam.com,Beaver Dam,WI,City,Beaver Dam,found,https://cityofbeaverdam.com/Bids.aspx,civicplus,2026-11-02
 coquille.k12.or.us,Coquille School District No. 8,OR,City,Coquille School District No. 8,not_found,,,2026-09-01
 cityofmcgrath.org,McGrath,AK,City,McGrath,not_found,,,2026-09-01
 cityofsalemin.com,Salem,IN,City,Salem,not_found,,,2026-09-01
@@ -23747,7 +23747,7 @@ co.schuylkill.pa.us,Schuylkill,PA,County,Schuylkill County,not_found,,,2026-09-0
 saludacounty.sc.gov,Saluda,SC,County,Saluda County,found,https://saludacounty.sc.gov/services/bids-and-awards,agency,2026-09-01
 prestoncountywv.org,Preston,WV,County,Preston County,not_found,,,2026-09-01
 shelbycounty-il.com,Shelby,IL,County,Shelby County,not_found,,,2026-09-01
-co.hertford.nc.us,Hertford,NC,County,Hertford County,not_found,,,2026-09-01
+co.hertford.nc.us,Hertford,NC,County,Hertford County,found,https://co.hertford.nc.us/Bids.aspx,civicplus,2026-11-02
 skamaniacounty.org,Skamania,WA,County,Skamania County,not_found,,,2026-09-01
 co.menominee.wi.us,Menominee,WI,County,Menominee County,not_found,,,2026-09-01
 co.burlington.nj.us,Burlington,NJ,County,Burlington County,not_found,,,2026-09-01
@@ -23845,7 +23845,7 @@ tulareid.org,Tulare County,CA,Special district,Tulare Irrigation District,not_fo
 redrosetransit.com,Lancaster County,PA,Special district,Red Rose Transit Authority,found,https://redrosetransit.com/procurement,custom,2026-09-01
 lctabus.com,Luzerne County,PA,Special district,Luzerne County Transportation Authority,not_found,,,2026-09-01
 napervilleparks.org,Naperville,IL,Special district,Naperville Park District,found,https://napervilleparks.org/bidrfpsplanholderlist,custom,2026-09-01
-summitmetroparks.org,Summit County,OH,Special district,Summit Metro Parks,not_found,,,2026-09-01
+summitmetroparks.org,Summit County,OH,Special district,Summit Metro Parks,found,https://summitmetroparks.org/public-notices,custom,2026-11-02
 mercedid.com,Merced,CA,Special district,Merced Irrigation District,not_found,,,2026-09-01
 nocccd.edu,Orange County,CA,Special district,North Orange County Community College District,not_found,,,2026-09-01
 lcrda.org,Leon County,FL,Special district,Leon County Research and Development Authority,not_found,,,2026-09-01
@@ -23869,7 +23869,7 @@ metroparksgolf.net,Kentucky,KY,Special district,Louisville Parks and Recreation,
 bataviaparks.org,Batavia,IL,Special district,Batavia Park District,found,https://bataviaparks.org/bids,custom,2026-09-01
 gepark.org,Glen Ellyn,IL,Special district,Glen Ellyn Park District,found,https://gepark.org/bids,custom,2026-09-01
 cpi.coop,Oregon,OR,Special district,"Consumers Power, Inc.",not_found,,,2026-09-01
-loraincountymetroparks.com,Lorain County,OH,Special district,Lorain County Metro Parks,not_found,,,2026-09-01
+loraincountymetroparks.com,Lorain County,OH,Special district,Lorain County Metro Parks,found,https://loraincountymetroparks.com/public-notices,custom,2026-11-02
 clevelandmetroparks.com,Cuyahoga County,OH,Special district,Cleveland Metroparks,found,https://clevelandmetroparks.com/about/cleveland-metroparks-organization/finance-reports/purchasing-bid-information,custom,2026-09-01
 fargoparks.com,Fargo,ND,Special district,Fargo Park District,not_found,,,2026-09-01
 plfdparks.org,Plainfield,IL,Special district,Plainfield Park District,not_found,,,2026-09-01
