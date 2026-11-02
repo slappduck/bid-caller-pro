@@ -847,3 +847,15 @@ Chatham, IL did). The scanner treats that as unreachable, so those towns'
 bids are never read. Falling back to plain http for a public listing would
 recover them, but it is a security trade-off and was left for the owner to
 decide.
+
+### School districts (2026-11-02)
+
+The directory held about 700 school districts of roughly 13,500 regular
+public districts, and districts let summer concrete work (parking lots,
+sidewalks, bus lanes). `data/nces_school_districts.csv` is every open
+regular district with a website from the NCES Common Core of Data, LEA
+universe 2023-24 (public domain), minus districts already in the
+directory: 11,205 domains. Run through discovery with
+`--registry data/nces_school_districts.csv --state XX --out ...`, then
+merge the verified rows into the directory. Nebraska's records carry no
+websites.
