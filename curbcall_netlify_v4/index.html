@@ -761,13 +761,20 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
           var near=(d.nearest||[]).length
             ? '<div style="margin-top:0.45rem;color:var(--text3);font-size:0.85rem;">Nearest: '
               + d.nearest.slice(0,5).map(esc).join(" · ") + '</div>' : "";
+          var lists=d.state_lists||[];
           var verdict = d.agencies>=40 ? "Strong coverage here."
                       : d.agencies>=15 ? "Solid coverage here."
+                      : lists.length   ? "Fewer town bid pages here, but the state lists below cover the small towns."
                       : d.agencies>0   ? "Thin coverage here — a wider radius will help."
                                        : "No verified pages in range yet — a scan would fall back to search only.";
+          // Small towns with no bid page of their own still post federal-aid
+          // work with the state, and the scan reads those lists too.
+          var plus=lists.length
+            ? '<div style="margin-top:0.45rem;color:var(--text2);font-size:0.9rem;">Also read on every scan: '
+              + lists.map(esc).join("; ") + '.</div>' : "";
           out.innerHTML='<b style="color:var(--text);font-size:1.05rem;">'
             + d.agencies + ' verified agencies</b> within ' + d.radius
-            + ' mi of ' + esc(d.location) + '. ' + esc(verdict) + near
+            + ' mi of ' + esc(d.location) + '. ' + esc(verdict) + near + plus
             + '<div id="cov-bids"></div>';
           showOpenBids(loc, radius);
         })

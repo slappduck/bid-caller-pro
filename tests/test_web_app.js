@@ -941,7 +941,8 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
         return route.fulfill({
           status: 200, contentType: "application/json",
           body: JSON.stringify({ ok: true, agencies: 104, radius: 125,
-            location: "Kansas City, KS", nearest: [] }),
+            location: "Kansas City, KS", nearest: [],
+            state_lists: ["MoDOT's list of every city and county federal-aid bid in Missouri"] }),
         });
       }
       if (host.endsWith("fonts.googleapis.com") || host.endsWith("fonts.gstatic.com")
@@ -962,6 +963,8 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     check("the radius matches what the email states", radiusValue === "125", radiusValue);
     check("the check actually ran, not just filled the box",
       /104 verified agencies/.test(outText), outText);
+    check("the state lists that cover small towns are named",
+      /Also read on every scan: MoDOT/.test(outText), outText);
 
     // A slug with no entry in go_locations.json must not break the page --
     // it just falls through to the ordinary empty box.

@@ -785,3 +785,60 @@ is the differentiated asset -- platform aggregators are bounded by their own
 customer lists and cannot reach a township that posts a PDF on its own site.
 Effort is better spent there, or on making existing bids better, than on a
 fifth state.
+
+---
+
+## Phase 7 — Town and county notices published by the state (built 2026-11-02)
+
+Small towns let federal-aid work (sidewalks, trails, Safe Routes to School)
+themselves, and several states require that notice be posted on a state
+site. One state page then covers hundreds of towns that have no bid page of
+their own. All of these live in `LOCAL_NOTICE_SOURCES`
+(`license_server/search_sources.py`), each with a plain parser in
+`bid_sources.LOCAL_NOTICE_PARSERS`, no model calls, cached 30 minutes.
+Tests run on captured copies in `data/recall_fixtures/`.
+
+| State | Source | What it adds (live, 2026-11-02) |
+|---|---|---|
+| MO | MoDOT "Local Projects Administered by Cities and Counties" table | 18 open jobs: sidewalks in Milan, Bethany, Creve Coeur, Desloge, Linn Creek; Ozark and Maryville trails |
+| AR | ARDOT "Currently Advertised Local Projects" | Lake Village, Tyronza, Alma sidewalks; Green Forest trail |
+| IA | Iowa DOT Notice to Bidders PDF (monthly letting) | 31 proposals with flatwork quantities, many county and city projects |
+| IL | IDOT Notice to Contractors Bulletin (weekly PDF, newest 4 read) | ~15 town and county jobs a month: Joliet, Kinmundy, Country Club Hills |
+| OK | ODOT letting spreadsheets (next 4 lettings within 75 days) | Tulsa, Warr Acres, Cleveland County sidewalks; Tahlequah pedestrian work |
+
+### Looked at and not used
+
+- **Newspaper public-notice sites** (mopublicnotices.com and the same
+  platform in other states). Their Terms of Use forbid automated collection
+  and set liquidated damages at $10,000 per incident. Not used, and should
+  not be, short of a written data agreement with the press association.
+- **Kansas DOT**: the site refuses automated readers outright (Akamai 403).
+  Its lettings are published in the Kansas Register, but each issue's
+  address is unpredictable and the jobs are mostly signing, guardrail and
+  bridges. Not built.
+- **Tennessee DOT local programs page**: answers 403 to an honest user
+  agent, although the bid-ad PDFs themselves load. Not worked around.
+- **Oklahoma county bid list (SB 2173)**: county, bid number and date only,
+  no description; mostly road materials. Not built.
+- **Kentucky, Nebraska**: no public list of locally let work found.
+
+### Discovery changes the same day
+
+- Homepage links labelled Public Notices or Legal Notices are followed, and
+  `/public-notices`, `/legal-notices`, `/projects-bids`, `/projectsbids`
+  are probed. A page still has to read as procurement.
+- A page is no longer recorded when it is an error page served with status
+  200, a file decoded as text, or a single news post (`news-detail`,
+  `CivicAlerts.aspx?AID=`, a long `/news/` article slug). News categories
+  such as `/news/bids/` still count.
+- `tools/discover_bid_portals.py --reverify-found` re-checks recorded pages
+  and demotes those that load and fail these checks. A page that fails to
+  load is kept: unreachable proves nothing.
+
+### Open decision: expired certificates
+
+Small towns let their HTTPS certificate expire (Greene County, MO and
+Chatham, IL did). The scanner treats that as unreachable, so those towns'
+bids are never read. Falling back to plain http for a public listing would
+recover them, but it is a security trade-off and was left for the owner to
+decide.

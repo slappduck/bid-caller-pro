@@ -408,6 +408,17 @@ class CoverageEndpointTests(unittest.TestCase):
         self.assertEqual(r.status_code, 500)
         self.assertFalse(r.get_json()["ok"])
 
+    def test_the_state_lists_that_cover_small_towns_are_named(self):
+        """Springfield, MO reaches the Missouri and Arkansas lists at 125 mi,
+        which cover towns with no bid page that the agency count misses."""
+        lists = self._get({"location": "65806", "radius": 125}).get_json()["state_lists"]
+        self.assertTrue(any("MoDOT" in x for x in lists), lists)
+        self.assertTrue(any("ARDOT" in x for x in lists), lists)
+        far = self._get({"location": "x", "radius": 25},
+                        center={"lat": 44.98, "lon": -93.27, "city": "Minneapolis",
+                                "state": "MN"}).get_json()["state_lists"]
+        self.assertEqual(far, [])
+
     def test_it_costs_no_search_credits_or_ai_calls(self):
         # A public endpoint that spent money per request would be a way to
         # run up the bill from outside.

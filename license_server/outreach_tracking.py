@@ -109,7 +109,29 @@ def coverage():
         "nearest_mi": (round(_miles_between(center["lat"], center["lon"],
                                             towns[0][2], towns[0][3]), 1)
                        if towns else None),
+        # State-published lists of town and county lettings the radius
+        # touches (see LOCAL_NOTICE_SOURCES). These cover towns with no bid
+        # page at all, which the agency count above cannot show.
+        "state_lists": _state_lists_near(center, radius),
     })
+
+
+LOCAL_NOTICE_LABELS = {
+    "MO": "MoDOT's list of every city and county federal-aid bid in Missouri",
+    "AR": "ARDOT's list of town and county federal-aid bids in Arkansas",
+    "IA": "Iowa DOT's monthly letting, county and city jobs included, with quantities",
+    "IL": "IDOT's weekly bulletin of town and county lettings in Illinois",
+    "OK": "ODOT's lettings, city sidewalk and street jobs included",
+}
+
+
+def _state_lists_near(center, radius):
+    try:
+        states = counties.states_within(center["lat"], center["lon"], radius)
+    except Exception:
+        states = [center.get("state", "")]
+    return [LOCAL_NOTICE_LABELS[st] for st in states
+            if st in LOCAL_NOTICE_SOURCES and st in LOCAL_NOTICE_LABELS]
 
 
 # ── Open bids near a ZIP, before anyone signs up ──
