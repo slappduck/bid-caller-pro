@@ -7336,7 +7336,46 @@ LOCAL_NOTICE_SOURCES = {
     # letting. The Notice to Bidders PDF is always at this address and lists
     # every proposal with its county and item quantities. robots.txt allows it.
     "IA": [("https://iowadot.gov/contracts/lettings/NoticeToBidders.pdf", "iowa_ntb_pdf")],
+    # Illinois' weekly Notice to Contractors Bulletin, where counties,
+    # townships and towns advertise what they let themselves. The page lists
+    # each week's PDF; a notice is printed in full only the week it first
+    # runs, so the newest few are read. idot.illinois.gov allows all agents.
+    "IL": [("https://idot.illinois.gov/doing-business/procurements/construction-services/contractors-bulletin.html",
+            "il_bulletin")],
 }
+IL_BULLETINS_READ = int(os.environ.get("IL_BULLETINS_READ", "4"))
+# These pages change at most daily, and Illinois alone is five downloads, so
+# each source's text is kept in memory this long instead of refetched by every
+# scan that touches the state.
+LOCAL_SOURCE_TTL_SEC = int(os.environ.get("LOCAL_SOURCE_TTL_SEC", "1800"))
+_local_source_cache = {}
+
+
+def _cached_local_source(url, load):
+    hit = _local_source_cache.get(url)
+    if hit and time.time() - hit[0] < LOCAL_SOURCE_TTL_SEC:
+        return hit[1], hit[2]
+    text, outcome = load()
+    if text:
+        _local_source_cache[url] = (time.time(), text, outcome)
+    return text, outcome
+_IL_BULLETIN_LINK_RE = re.compile(r'href="([^"]*/local-roads/bulletins/[^"]+\.pdf)"', re.I)
+
+
+def _il_bulletin_text(index_html, index_url):
+    """The newest few weekly bulletins, joined with a marker naming each."""
+    links = []
+    for href in _IL_BULLETIN_LINK_RE.findall(index_html or ""):
+        url = urllib.parse.urljoin(index_url, bid_sources._unescape(href))
+        if url not in links:
+            links.append(url)
+    parts = []
+    for url in links[:IL_BULLETINS_READ]:
+        raw, _ctype, outcome = _fetch_document(url)
+        text = _pdf_all_text(raw) if outcome == "ok" else ""
+        if text:
+            parts.append(bid_sources.IL_BULLETIN_MARK + url + "\n" + text)
+    return "\n".join(parts)
 # Sources that are a PDF rather than a page; read as text, every page.
 _LOCAL_PDF_KINDS = {"iowa_ntb_pdf"}
 LOCAL_PDF_MAX_PAGES = 120
@@ -7598,6 +7637,21 @@ def _attach_plan_holders(bids, letting_html, letting_url, stats=None):
     return found
 
 
+def _load_local_source(url, kind):
+    """(text, outcome) for one local-notices source, whatever its format."""
+    if kind in _LOCAL_PDF_KINDS:
+        raw, _ctype, outcome = _fetch_document(url)
+        text = _pdf_all_text(raw) if outcome == "ok" else ""
+        return text, (outcome if outcome != "ok" or text else "unreadable")
+    page, outcome = _fetch_page(url, timeout=STATE_SOURCE_TIMEOUT)
+    if outcome != "ok" or not page:
+        return "", outcome
+    if kind == "il_bulletin":
+        text = _il_bulletin_text(page, url)
+        return text, ("ok" if text else "unreadable")
+    return page, "ok"
+
+
 def _run_state_sources(center, radius, grouped, city_coords=None, stats=None):
     """Read the letting page of every verified state the radius touches.
 
@@ -7634,15 +7688,12 @@ def _run_state_sources(center, radius, grouped, city_coords=None, stats=None):
     def _load(item):
         st, url, kind = item
         try:
-            if kind in _LOCAL_PDF_KINDS:
-                raw, _ctype, outcome = _fetch_document(url)
-                text = _pdf_all_text(raw) if outcome == "ok" else ""
-                return st, url, (text or None), (outcome if outcome != "ok" or text else "unreadable")
+            if kind in bid_sources.LOCAL_NOTICE_PARSERS:
+                text, outcome = _cached_local_source(url, lambda: _load_local_source(url, kind))
+                return st, url, (text or None), outcome
             page, outcome = _fetch_page(url, timeout=STATE_SOURCE_TIMEOUT)
             if outcome != "ok" or not page:
                 return st, url, None, outcome
-            if kind in bid_sources.LOCAL_NOTICE_PARSERS:
-                return st, url, page, "ok"
             url, page = _resolve_state_listing(url, kind, page)
             return st, url, page, "ok"
         except Exception as ex:

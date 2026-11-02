@@ -16,6 +16,15 @@ sys.path.insert(0, ROOT)
 import bid_sources  # noqa: E402
 import license_server as ls  # noqa: E402
 
+
+def setUpModule():
+    ls._local_source_cache.clear()
+
+
+class _FreshCache(unittest.TestCase):
+    def setUp(self):
+        ls._local_source_cache.clear()
+
 FIXTURE = os.path.join(ROOT, "data", "recall_fixtures", "ardot_local_projects.html")
 URL = ls.LOCAL_NOTICE_SOURCES["AR"][0][0]
 
@@ -112,7 +121,7 @@ class PlacementTests(unittest.TestCase):
         self.assertIn("Green Forest, AR", grouped)
 
 
-class ScanWiringTests(unittest.TestCase):
+class ScanWiringTests(_FreshCache):
     def test_a_scan_touching_arkansas_reads_the_page(self):
         fetched = []
 
@@ -232,7 +241,7 @@ def ia_rows():
         return bid_sources.parse_iowa_notice_to_bidders(f.read(), "IA", IA_URL)
 
 
-class IowaNoticeToBiddersTests(unittest.TestCase):
+class IowaNoticeToBiddersTests(_FreshCache):
     """Iowa DOT's letting, which carries county and city work with quantities."""
 
     def find(self, ident):
@@ -287,3 +296,85 @@ class IowaNoticeToBiddersTests(unittest.TestCase):
                                   grouped, {}, stats)
         self.assertEqual(stats.get("state_local_rows_read"), len(ia_rows()))
         self.assertIn("Johnson County, IA", grouped)
+
+
+IL_FIXTURE = os.path.join(ROOT, "data", "recall_fixtures", "idot_contractors_bulletins.txt")
+
+
+def il_rows():
+    with open(IL_FIXTURE, encoding="utf-8") as f:
+        text = f.read().split("\n", 1)[1]           # drop the provenance line
+    return bid_sources.parse_il_contractors_bulletin(text, "IL", "x")
+
+
+class IllinoisBulletinTests(unittest.TestCase):
+    """IDOT's weekly bulletin of contracts towns and counties let themselves."""
+
+    def by_place(self):
+        out = {}
+        for r in il_rows():
+            out.setdefault(r.get("town") or r.get("county") + " County", []).append(r)
+        return out
+
+    def test_town_jobs_are_read_with_their_letting_date(self):
+        got = self.by_place()
+        self.assertEqual(got["Joliet"][0]["deadline"], "November 5, 2026")
+        self.assertIn("PCC curb", got["Joliet"][0]["title"])
+        self.assertIn("Kinmundy", got)                   # curb & gutter at a crossing
+
+    def test_a_county_is_told_from_a_town_by_the_district_list(self):
+        got = self.by_place()
+        self.assertIn("Rock Island County", got)         # printed bare, "Rock Island"
+        self.assertIn("Kane County", got)                # printed "Kane County DOT"
+
+    def test_each_row_links_the_bulletin_it_came_from(self):
+        for r in il_rows():
+            self.assertTrue(r["url"].endswith(".pdf"), r["url"])
+        joliet = self.by_place()["Joliet"][0]
+        self.assertIn("october-22", joliet["url"])
+
+    def test_a_notice_in_two_bulletins_is_kept_once(self):
+        self.assertEqual(len(self.by_place()["Elgin"]), 1)
+
+    def test_other_trades_are_left_out(self):
+        titles = " ".join(r["title"].lower() for r in il_rows())
+        self.assertNotIn("tree remov", titles)
+        self.assertNotIn("traffic signal detection", titles)
+        self.assertNotIn("sign material", titles)
+
+    def test_pdf_glyph_noise_is_removed(self):
+        for r in il_rows():
+            self.assertFalse(any(ord(c) < 32 or 0x7f <= ord(c) <= 0x9f for c in r["title"]), r["title"])
+            self.assertNotIn("¶", r["scope"])
+
+    def test_the_scan_reads_the_newest_bulletins_from_the_index(self):
+        index = ('<a href="/content/dam/x/local-roads/bulletins/october-29.pdf">a</a>'
+                 '<a href="/content/dam/x/local-roads/bulletins/october-22.pdf">b</a>'
+                 '<a href="/content/dam/x/local-roads/bulletins/october-15.pdf">c</a>'
+                 '<a href="/content/dam/x/local-roads/bulletins/october-8.pdf">d</a>'
+                 '<a href="/content/dam/x/local-roads/bulletins/october-1.pdf">e</a>')
+        got = []
+        with patch("license_server._fetch_document",
+                   side_effect=lambda u: (got.append(u) or (b"%PDF", "application/pdf", "ok"))), \
+             patch("license_server._pdf_all_text", return_value="PART II"):
+            text = ls._il_bulletin_text(index, "https://idot.illinois.gov/a/b.html")
+        self.assertEqual(len(got), ls.IL_BULLETINS_READ)
+        self.assertTrue(got[0].startswith("https://idot.illinois.gov/content/dam/"))
+        self.assertIn(bid_sources.IL_BULLETIN_MARK + got[0], text)
+
+
+class LocalSourceCacheTests(_FreshCache):
+    def test_a_second_scan_reuses_the_fetched_text(self):
+        calls = []
+
+        def fake_fetch(url, timeout=None):
+            calls.append(url)
+            return page(), "ok"
+
+        with patch("license_server._state_sources", return_value={}), \
+             patch("license_server._fetch_page", side_effect=fake_fetch), \
+             patch("license_server._city_coords", return_value=[35.4776, -94.2219]), \
+             patch("license_server.counties.states_within", return_value=["AR"]):
+            for _ in range(2):
+                ls._run_state_sources({"lat": 35.39, "lon": -94.40, "state": "AR"}, 50, {}, {}, {})
+        self.assertEqual(calls, [URL])

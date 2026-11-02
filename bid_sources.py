@@ -2033,12 +2033,120 @@ def parse_iowa_notice_to_bidders(text, state="IA", base_url=""):
     return rows
 
 
+# Illinois: the Bureau of Local Roads and Streets publishes a weekly Notice to
+# Contractors Bulletin where counties, townships and towns advertise the
+# contracts they let themselves. A notice appears in full once, in the week
+# it is first advertised, so the caller passes the last few bulletins joined
+# with a marker line naming each one's address. Each district header lists
+# its counties, which is how a county is told apart from a town here without
+# a lookup table.
+IL_BULLETIN_MARK = "@@BULLETIN "
+_IL_BLOCK_HEAD = "City/County Section No. Time Date Location of Letting"
+_IL_SECTION_RE = re.compile(r"\b\d{2}-[A-Z0-9]{4,6}-\d{2}-[A-Z]{2}\b|\bNon-MFT\b|\bN/A\b")
+_IL_TIME_RE = re.compile(r"\b\d{1,2}:\d{2}\s*[ap]m\b", re.I)
+_IL_DATE_RE = re.compile(r"\b(\d{1,2})/(\d{1,2})/(\d{4})\b")
+_IL_DISTRICT_RE = re.compile(r"District:\s*\d+\s+([A-Z][A-Za-z .,'\n]+?)(?=\n(?:City/County|No New|No Adv))")
+_IL_URL_RE = re.compile(r"(https?://\S+|www\.\S+)", re.I)
+
+
+def _il_field(block, start, ends):
+    i = block.find(start)
+    if i < 0:
+        return ""
+    i += len(start)
+    j = min([k for k in (block.find(e, i) for e in ends) if k >= 0] or [len(block)])
+    return re.sub(r"\s+", " ", block[i:j]).strip()
+
+
+def parse_il_contractors_bulletin(text, state="IL", base_url=""):
+    """Rows for this trade's notices in Illinois' local-roads bulletins."""
+    rows, seen = [], set()
+    # The PDF's text layer turns some quotes and spaces into ¶ ´ ±.
+    text = re.sub(r"[\u00b6\u00b4\u00b1\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]+", " ",
+                  str(text or ""))
+    chunks = text.split(IL_BULLETIN_MARK)
+    for chunk in chunks:
+        url, _, body = chunk.partition("\n")
+        url = url.strip() if chunk is not chunks[0] or text.startswith(IL_BULLETIN_MARK) else base_url
+        if not body.strip():
+            continue
+        # Only new advertisements carry details (Part II); awards follow in Part III.
+        part2 = body.split("PART II", 1)[-1].split("PART III", 1)[0]
+        county_names = set()
+        for m in _IL_DISTRICT_RE.finditer(part2):
+            for name in m.group(1).replace("\n", " ").split(","):
+                name = name.strip().lower()
+                if name:
+                    county_names.add(name)
+        for block in part2.split(_IL_BLOCK_HEAD)[1:]:
+            block = re.split(r"\nPage \d+ of \d+|\nDistrict:", block)[0]
+            first = block.strip().splitlines()[0] if block.strip() else ""
+            cut = [m.start() for m in (_IL_SECTION_RE.search(first), _IL_TIME_RE.search(first)) if m]
+            agency = re.sub(r"\s+", " ", first[:min(cut)] if cut else first).strip(" ,")
+            dm = _IL_DATE_RE.search(block)
+            if not agency or not dm:
+                continue
+            deadline = "%s %d, %s" % (_MONTHS[int(dm.group(1)) - 1], int(dm.group(2)), dm.group(3))
+            desc = _il_field(block, "Description:", ("Project Location:", "Proposal Available:"))
+            where = _il_field(block, "Project Location:", ("Proposal Available:",))
+            plans = _il_field(block, "Proposal Available:", ("Proposal Fee:",))
+            if not desc:
+                continue
+            title = re.split(r"(?<=[a-z0-9)])\.\s", desc, maxsplit=1)[0].strip(" .")
+            if title[:1].islower():
+                title = title[0].upper() + title[1:]
+            if title.upper() == title:
+                title = title[:1] + title[1:].lower()
+            if len(title) > 110:
+                title = title[:110].rsplit(" ", 1)[0].rstrip(" ,;") + "…"
+            if not looks_relevant(title, desc + " " + where):
+                continue
+            cm = re.match(r"(.+?)\s+(?:county|co\.)\b", agency, re.I)
+            name = cm.group(1).strip() if cm else agency
+            m = re.match(r"(?:city|village|town) of (.+)$", name, re.I)
+            if m:
+                kind, place = "town", m.group(1)
+            elif cm or name.lower() in county_names:
+                kind, place = "county", name.title() if name.isupper() else name
+            else:
+                kind, place = "town", name.title() if name.isupper() else name
+            # The same notice printed in two bulletins can differ in spacing
+            # and stray glyphs, so compare letters and digits only.
+            key = (place.lower(), deadline, re.sub(r"[^a-z0-9]", "", title.lower())[:30])
+            if key in seen:
+                continue
+            seen.add(key)
+            docs = [{"name": "Notice to Contractors Bulletin", "url": url or base_url}]
+            link = _IL_URL_RE.search(plans) or _IL_URL_RE.search(desc)
+            if link:
+                href = link.group(1).rstrip(".,;)")
+                if not href.lower().startswith("http"):
+                    href = "https://" + href
+                docs.append({"name": "Plans and proposal", "url": href})
+            scope = desc + (" Location: %s." % where if where else "") + \
+                (" Plans: %s" % plans if plans else "")
+            rows.append({
+                "title": title,
+                "scope": scope[:1200],
+                "url": url or base_url,
+                "deadline": deadline,
+                "status": status_from_title(title) or "Open",
+                "agency": agency.title() if agency.isupper() else agency,
+                kind: place,
+                "state": str(state or "IL").upper(),
+                "source": "state_local",
+                "documents": docs,
+            })
+    return rows
+
+
 # Which reader a local-notices source uses. Keyed by the kind named in
 # license_server's LOCAL_NOTICE_SOURCES.
 LOCAL_NOTICE_PARSERS = {
     "local_notices": parse_local_agency_notices,
     "lpa_table": parse_lpa_table,
     "iowa_ntb_pdf": parse_iowa_notice_to_bidders,
+    "il_bulletin": parse_il_contractors_bulletin,
 }
 
 
