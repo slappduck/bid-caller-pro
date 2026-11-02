@@ -7899,6 +7899,10 @@ function openDetail(city,b){
         :"<b>Pre-bid meeting.</b> Check the posting for date and place."}</span></div>`:""}
     ${b.addenda?`<div class="alert alert-amber">
       <span><b>This bid has addenda.</b> Read them before pricing \u2014 the scope may have changed.</span></div>`:""}
+    ${b.source==="state_local"?`<div class="alert alert-amber">
+      <span><b>Federal-aid town project.</b> The town lets it, so a small crew can
+      bid it as prime. Federal wage rates (Davis-Bacon) and a DBE goal usually
+      apply; the bid notice says which.</span></div>`:""}
     ${b.source==="state_dot"?`<div class="alert alert-amber">
       <span><b>State highway job.</b> Most states require prequalification to bid
       one of these as prime, and the whole contract is usually bigger than a

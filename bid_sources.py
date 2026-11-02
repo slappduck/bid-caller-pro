@@ -1692,6 +1692,122 @@ def _state_row(ident, desc, text, places, state, base_url, call="",
     }
 
 
+# ── Local-agency notices on a state page ───────────────────────────────────
+# Federal-aid money for small towns (sidewalks, trails, Safe Routes to School)
+# flows through the state DOT, and some DOTs re-post each town's own bid
+# notice on one page. Arkansas does: "Currently Advertised Local Projects",
+# where the town's name links to its notice and a paragraph of the notice
+# follows. Tyronza and Lake Village have no bid page of their own anywhere
+# discovery could find, so this page is the only place their sidewalk jobs
+# show up online outside the newspaper.
+#
+# Each entry is a town or a county letting its own job, which is the whole
+# difference from a state letting row: it is placed at the town, not a county
+# centroid, and it is labelled with the town, the way a city posting is.
+_LOCAL_AGENCY_SPLIT_RE = re.compile(r'<p\b[^>]*class="[^"]*has-medium-font-size[^"]*"[^>]*>', re.I)
+_LOCAL_AGENCY_HEAD_RE = re.compile(r'\s*<a\b[^>]*href="([^"]+)"[^>]*>(.*?)</a>', re.I | re.S)
+_LOCAL_DATE_RE = re.compile(
+    r"\b(January|February|March|April|May|June|July|August|September|October|"
+    r"November|December)\s+(\d{1,2})\s*(?:st|nd|rd|th)?\s*,?\s+(20\d\d)\b", re.I)
+# The notice says what the job is in one of a few set phrases. Ordered from
+# the most to the least specific; the first that matches wins.
+_LOCAL_TITLE_RES = (
+    re.compile(r"following project:\s*(?:job no\.?\s*\d+\s*)?(.+?)(?:\s+\.|\.\s+(?=[A-Z][a-z])|$)", re.I),
+    re.compile(r"\bJOB\s+\d{5,6},\s*(.+?)(?:,\s*F\.A\.P\.|$)"),
+    re.compile(r"\bfor (?:the )?construction of (?:the )?(.+?)(?:\.\s+(?=[A-Z][a-z])|\.$| will be received)", re.I),
+    re.compile(r"\bbids for (?:the )?(.+?)(?: FAP No| will be received| until )", re.I),
+    re.compile(r"\bfor the (.+?) project\b", re.I),
+    re.compile(r"\bnecessary to construct (?:an? |the )?(.+?)(?:\.\s|\.$)", re.I),
+)
+_LOCAL_TITLE_NOISE_RE = re.compile(
+    r"\((?:TAP|SRTS|STP|CMAQ|RTP)[^)]*\)|\(S\)|\(ARDOT Job[^)]*\)|\bARDOT Job (?:No\.?\s*)?\d+\b", re.I)
+_LOCAL_ABBREV = ((r"\bImpvts?\.?", "Improvements"), (r"\bPed\.", "Pedestrian"),
+                 (r"\bPkwy\.", "Parkway"), (r"\bPh\.", "Phase"))
+
+
+def _local_title(text, agency):
+    title = ""
+    for rx in _LOCAL_TITLE_RES:
+        m = rx.search(text)
+        if m and len(m.group(1).strip()) >= 8:
+            title = m.group(1)
+            break
+    title = _LOCAL_TITLE_NOISE_RE.sub(" ", title)
+    for pat, rep in _LOCAL_ABBREV:
+        title = re.sub(pat, rep, title)
+    title = re.sub(r"\s+", " ", title).strip(" ,.;:-")
+    if title and title.upper() == title:
+        # str.title() would print "Crowley’S": it starts a word after an
+        # apostrophe. Capitalize on spaces only.
+        title = " ".join(re.sub(r"[a-z]", lambda m: m.group(0).upper(), w.lower(), count=1)
+                         for w in title.split(" "))
+    if len(title) > 140:
+        title = title[:140].rsplit(" ", 1)[0]
+    if not title:
+        return agency
+    if title[:1].islower():
+        title = title[0].upper() + title[1:]
+    return title
+
+
+def _local_place(agency):
+    """("town", name) or ("county", name) for 'City of X' / 'X County'."""
+    a = re.sub(r"\s+", " ", str(agency or "")).strip()
+    m = re.match(r"(?:city|town|village) of (.+)$", a, re.I)
+    if m:
+        return "town", m.group(1).strip()
+    m = re.match(r"(.+?) county$", a, re.I)
+    if m:
+        return "county", m.group(1).strip()
+    return "", ""
+
+
+def parse_local_agency_notices(html, state, base_url=""):
+    """Rows for each town's bid notice on a state local-programs page.
+
+    Pure: text in, rows out. The caller puts each row on the map, from its
+    "town" or "county". A notice that is not this trade's work, or names no
+    place we can find, does not come back. An "Addendum" entry belongs to the
+    notice above it and is added to that notice's documents.
+    """
+    rows = []
+    parts = _LOCAL_AGENCY_SPLIT_RE.split(str(html or ""))
+    for part in parts[1:]:
+        head = _LOCAL_AGENCY_HEAD_RE.match(part)
+        if not head:
+            continue
+        href = urllib.parse.urljoin(base_url, _unescape(head.group(1)))
+        agency = _clean(head.group(2))
+        body = re.split(r"_{10,}", part)[0]
+        text = _clean(body)
+        if re.match(r"addend", agency, re.I):
+            if rows:
+                rows[-1]["documents"].append({"name": agency, "url": href})
+            continue
+        kind, place = _local_place(agency)
+        if not place:
+            continue
+        rest = text[len(agency):].strip() if text.startswith(agency) else text
+        title = _local_title(rest, agency)
+        if not looks_relevant(title, rest):
+            continue
+        m = _LOCAL_DATE_RE.search(rest)
+        deadline = ("%s %s, %s" % (m.group(1).title(), int(m.group(2)), m.group(3))) if m else ""
+        rows.append({
+            "title": title,
+            "scope": rest[:1200],
+            "url": href,
+            "deadline": deadline,
+            "status": status_from_title(title) or "Open",
+            "agency": agency,
+            kind: place,
+            "state": str(state or "").upper(),
+            "source": "state_local",
+            "documents": [{"name": "Bid notice", "url": href}],
+        })
+    return rows
+
+
 # ── Plan holders ────────────────────────────────────────────────────────────
 # A state highway job is not something a three-truck concrete crew wins as
 # prime. The way in is as a sub, and the letting page names exactly who to
