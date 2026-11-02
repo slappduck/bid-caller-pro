@@ -98,15 +98,47 @@ def _plain_text(html):
 # changes, so the scan re-reads one frozen solicitation on every run forever,
 # and the town looks covered while its real bid page goes unread.
 _NOT_A_LISTING_RE = re.compile(
-    r"\.(?:pdf|docx?|xlsx?|rtf)(?:$|[?#])"
+    r"\.(?:pdf|docx?|xlsx?|rtf|jpe?g|png|gif)(?:$|[?#])"
     r"|docs\.google\.com|drive\.google\.com|dropbox\.com"
-    r"|/wp-content/uploads/|/sites/default/files/|/uploads/dm/",
+    r"|/wp-content/uploads/|/sites/default/files/|/uploads/dm/"
+    # One news post or alert is one announcement, frozen: Holden's
+    # "news-detail?item_id=35064" was a trash-hauler RFP from August.
+    # A news CATEGORY is a listing (Allendale's /news/bids/, Bayville's
+    # /news/bid-notices); an article slug runs three words or more.
+    r"|news-detail|CivicAlerts\.aspx\?AID=|/news/[^/?#]*-[^/?#]*-[^/?#]+/?$"
+    r"|[?&](?:item_?id|AID|article_?id)=\d",
     re.I)
 
 
 def is_listing_url(url):
     """False for a URL that can only ever be one document."""
     return not _NOT_A_LISTING_RE.search(str(url or ""))
+
+
+# A server that answers 200 to everything. Liberal, MO's /purchasing/bids is
+# its "404 | City of Liberal" page, and the site navigation carries enough
+# procurement words to pass the text test.
+_ERROR_PAGE_RE = re.compile(
+    r"<title>[^<]*(?:\b404\b|not found|page cannot be found|error)[^<]*</title>"
+    r"|\b(?:page|file) (?:was )?not found\b|\bnothing (?:was )?found\b|"
+    r"the page you (?:are looking|requested|were looking)",
+    re.I)
+
+
+def _is_error_page(html):
+    head = html[:20000]
+    return bool(_ERROR_PAGE_RE.search(head)) or \
+        bool(re.match(r"\s*404\b", _plain_text(head)))
+
+
+def _is_binary(text):
+    """True for an image or other file decoded as text (Paris, MO's address
+    returned a JPEG, and its bytes happened to contain "bid")."""
+    sample = text[:4000]
+    if not sample:
+        return False
+    odd = sum(1 for c in sample if c == "\ufffd" or (ord(c) < 32 and c not in "\r\n\t"))
+    return odd / len(sample) > 0.05 or sample.lstrip()[:4] in ("\xff\xd8\xff\xe0", "GIF8", "\x89PNG")
 
 
 def _looks_like_a_bid_page(html):
@@ -118,6 +150,8 @@ def _looks_like_a_bid_page(html):
     catches every platform bid_sources doesn't have a dedicated reader for
     yet -- which is most of them)."""
     if not html or len(html) < 200:
+        return False, ""
+    if _is_binary(html) or _is_error_page(html):
         return False, ""
     rows = bid_sources.parse_civicplus_html(html)
     if rows:
@@ -327,6 +361,64 @@ def _recheck_missing(args):
           flush=True)
 
 
+def _reverify_verdict(row):
+    """"keep", or the reason a recorded bid page should be dropped.
+
+    Only a page that LOADS and is plainly not a listing is dropped. A fetch
+    that fails proves nothing about the page (the site may be down for an
+    hour, or unreachable from wherever this runs), so it is kept.
+    """
+    url = row.get("bid_url") or ""
+    if not is_listing_url(url):
+        return "single_document"
+    html = _fetch(url)
+    if not html:
+        return "keep"
+    if _is_binary(html):
+        return "binary"
+    if _is_error_page(html):
+        return "error_page"
+    ok, _ = _looks_like_a_bid_page(html)
+    return "keep" if ok else "not_a_bid_page"
+
+
+def _reverify_found(args):
+    """Re-check every recorded bid page and demote the false ones in place."""
+    with open(OUT_CSV, newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    targets = [r for r in rows if r.get("status") == "found"
+               and (not args.state or (r.get("state") or "").upper() == args.state.upper())]
+    if args.limit:
+        targets = targets[:args.limit]
+    print(f"[reverify] {len(targets)} recorded bid page(s) to re-check", flush=True)
+    verdicts, t0 = {}, time.time()
+    with ThreadPoolExecutor(max_workers=args.workers) as ex:
+        futures = {ex.submit(_reverify_verdict, r): r["domain"] for r in targets}
+        for i, fut in enumerate(as_completed(futures), 1):
+            try:
+                v = fut.result()
+            except Exception:
+                v = "keep"
+            if v != "keep":
+                verdicts[futures[fut]] = v
+            if i % 200 == 0 or i == len(targets):
+                print(f"[reverify] {i}/{len(targets)}, {len(verdicts)} to drop "
+                      f"({time.time() - t0:.0f}s)", flush=True)
+    today = time.strftime("%Y-%m-%d")
+    for row in rows:
+        why = verdicts.get(row["domain"])
+        if why and row.get("status") == "found":
+            row.update({"status": "not_found", "bid_url": "", "platform": "",
+                        "checked_date": today})
+    with open(OUT_CSV, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=FIELDS)
+        w.writeheader()
+        w.writerows(rows)
+    from collections import Counter
+    print(f"[reverify] done. Dropped {len(verdicts)}: {dict(Counter(verdicts.values()))}",
+          flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -360,10 +452,17 @@ def main():
                           "and rewrite their rows in place. For after CANDIDATE_BID_PATHS "
                           "is widened -- --resume would skip exactly these, since they are "
                           "already in the file.")
+    ap.add_argument("--reverify-found", action="store_true",
+                     help="re-check every recorded bid page and demote the ones "
+                          "that load but are an error page, a file, a single "
+                          "news post, or not a bid page at all. A page that "
+                          "fails to load is kept.")
     args = ap.parse_args()
 
     if args.recheck_missing:
         return _recheck_missing(args)
+    if args.reverify_found:
+        return _reverify_found(args)
 
     # Rebinding the module global rather than threading a path through: every
     # writer below already reads OUT_CSV, and --out is a whole-run choice.
