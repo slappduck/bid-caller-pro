@@ -348,6 +348,16 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
   .trust{margin-top:0.85rem;}
   .mapwrap{margin-top:1.1rem;}
 }
+/* Open bids near the visitor, under the coverage check. */
+.nb{margin-top:1rem;padding:0.9rem 1rem;border:1px solid rgba(34,197,94,0.35);border-radius:12px;background:rgba(34,197,94,0.05);}
+.nb-h{color:var(--text);font-weight:800;font-size:0.95rem;margin-bottom:0.4rem;}
+.nb ul{list-style:none;margin:0 0 0.8rem;padding:0;}
+.nb li{padding:0.45rem 0;border-bottom:1px solid var(--line);}
+.nb li:last-child{border-bottom:none;}
+.nb li b{display:block;color:var(--text);font-size:0.92rem;line-height:1.35;}
+.nb li span{color:var(--text3);font-size:0.82rem;}
+.nb .btn{display:block;text-align:center;}
+.nb-note{color:var(--text3);font-size:0.8rem;margin-top:0.5rem;}
 </style>
 </head>
 <body>
@@ -741,10 +751,38 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
                                        : "No verified pages in range yet — a scan would fall back to search only.";
           out.innerHTML='<b style="color:var(--text);font-size:1.05rem;">'
             + d.agencies + ' verified agencies</b> within ' + d.radius
-            + ' mi of ' + esc(d.location) + '. ' + esc(verdict) + near;
+            + ' mi of ' + esc(d.location) + '. ' + esc(verdict) + near
+            + '<div id="cov-bids"></div>';
+          showOpenBids(loc, radius);
         })
         .catch(function(){btn.disabled=false;
           out.textContent="Couldn't reach the server. Try again in a moment.";});
+    }
+    // The work itself, not just the agency count: open bids that scans have
+    // already found near this place (see /bids-near on the server). Shown
+    // only when there are some; the agency count stands on its own if not.
+    var MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    function dueText(iso){
+      var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(iso||"");
+      return m ? "due " + MON[+m[2]-1] + " " + (+m[3]) : "due date on the posting";
+    }
+    function showOpenBids(loc, radius){
+      fetch(SERVER+"/bids-near",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({location:loc,radius:parseInt(radius,10)})})
+        .then(function(r){return r.json();})
+        .then(function(d){
+          var box=document.getElementById("cov-bids");
+          if(!box||!d||!d.ok||!d.count)return;
+          var more=d.count>d.bids.length ? "See all " + d.count + " and price them" : "Open them and price them";
+          box.innerHTML='<div class="nb"><div class="nb-h">Open right now near ' + esc(d.location) + '</div><ul>'
+            + d.bids.map(function(b){
+                return '<li><b>' + esc(b.title) + '</b><span>' + esc(b.town) + ' &middot; '
+                  + esc(String(b.miles)) + ' mi &middot; ' + esc(dueText(b.due)) + '</span></li>';
+              }).join("")
+            + '</ul><a class="btn btn-amber" href="/app.html">Start free: ' + esc(more) + '</a>'
+            + '<div class="nb-note">Free for 7 days, no card. The app reads each one\'s bid form and gives you a target price.</div></div>';
+        })
+        .catch(function(){});
     }
     btn.addEventListener("click",check);
     zip.addEventListener("keydown",function(e){if(e.key==="Enter")check();});

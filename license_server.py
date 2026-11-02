@@ -986,6 +986,113 @@ def coverage():
     })
 
 
+# ── Open bids near a ZIP, before anyone signs up ──
+#
+# The landing page could only say "74 verified agencies within 50 miles",
+# which is a promise, not proof. The proof is the work itself: "Elm St
+# Sidewalk, Aurora, due Nov 20". Every scan anyone runs (a customer, the
+# Monday digest, the daily alerts) already finds that work, so the open
+# bids it finds are kept here by location and the landing page shows the
+# ones near a visitor's ZIP. Nothing is scanned for a visitor: a lookup is
+# a geocode (cached) and arithmetic, like /coverage.
+#
+# Only what the agency published goes in: title, town, due date, place.
+# Nothing about who ran the scan. Undated bids are dropped after
+# OPEN_BIDS_UNDATED_DAYS since they were last seen, dated ones the day
+# after they're due.
+_OPEN_BIDS_KEY = "bidcaller:open_bids"
+_OPEN_BIDS_RATE_KEY = "bidcaller:open_bids_rate"
+OPEN_BIDS_MAX = int(os.environ.get("OPEN_BIDS_MAX", "4000"))
+OPEN_BIDS_UNDATED_DAYS = 21
+OPEN_BIDS_SHOWN = 6
+OPEN_BIDS_PER_IP_PER_DAY = int(os.environ.get("OPEN_BIDS_PER_IP_PER_DAY", "60"))
+_open_bids_lock = threading.Lock()
+
+
+def _open_bid_rows():
+    got = kv_backend.get(_OPEN_BIDS_KEY, None)
+    return got if isinstance(got, dict) else {}
+
+
+def _prune_open_bids(rows, today):
+    """Rows still worth showing: not past due, recently seen if undated."""
+    stale = (today - datetime.timedelta(days=OPEN_BIDS_UNDATED_DAYS)).isoformat()
+    keep = {k: r for k, r in rows.items()
+            if (r.get("due") and r["due"] >= today.isoformat())
+            or (not r.get("due") and (r.get("seen") or "") >= stale)}
+    if len(keep) > OPEN_BIDS_MAX:
+        newest = sorted(keep, key=lambda k: keep[k].get("seen") or "", reverse=True)[:OPEN_BIDS_MAX]
+        keep = {k: keep[k] for k in newest}
+    return keep
+
+
+def _remember_open_bids(grouped, city_coords):
+    """Keep the open bids a scan found, by place. Never raises."""
+    try:
+        today = datetime.date.today()
+        fresh = {}
+        for town, bids in (grouped or {}).items():
+            place = (city_coords or {}).get(town) or {}
+            for b in bids or []:
+                if not _is_open_bid(b):
+                    continue
+                lat = b.get("lat", place.get("lat"))
+                lon = b.get("lon", place.get("lon"))
+                title = re.sub(r"\s+", " ", str(b.get("title") or "")).strip()[:140]
+                if lat is None or lon is None or not title:
+                    continue
+                due = _parse_deadline(b.get("deadline"))
+                if due and due < today:
+                    continue
+                key = hashlib.sha256(f"{title.lower()}|{town.lower()}".encode()).hexdigest()[:16]
+                fresh[key] = {"title": title, "town": str(town)[:80], "lat": float(lat), "lon": float(lon),
+                              "due": due.isoformat() if due else "", "seen": today.isoformat()}
+        if not fresh:
+            return 0
+        with _open_bids_lock:
+            rows = _open_bid_rows()
+            rows.update(fresh)
+            kv_backend.set(_OPEN_BIDS_KEY, _prune_open_bids(rows, today))
+        return len(fresh)
+    except Exception as ex:
+        print(f"[open-bids] not kept: {ex}", flush=True)
+        return 0
+
+
+@app.route("/bids-near", methods=["POST"])
+def bids_near():
+    """Open bids recently found within a radius of somewhere. Public, like
+    /coverage: it is what a contractor sees before deciding to sign up."""
+    data = request.get_json(force=True, silent=True) or {}
+    location = (data.get("location") or "").strip()[:80]
+    try:
+        radius = float(data.get("radius") or 50)
+    except (TypeError, ValueError):
+        radius = 50.0
+    radius = max(5.0, min(radius, 125.0))
+    if not location:
+        return jsonify({"ok": False, "reason": "no_location"}), 400
+    if not _ip_rate_ok(_OPEN_BIDS_RATE_KEY, _client_ip(), OPEN_BIDS_PER_IP_PER_DAY):
+        return jsonify({"ok": False, "reason": "rate_limited"}), 429
+    center = _resolve_center(location)
+    if not center:
+        return jsonify({"ok": False, "reason": "unresolved_location"}), 404
+    rows = _prune_open_bids(_open_bid_rows(), datetime.date.today())
+    near = []
+    for r in rows.values():
+        mi = _miles_between(center["lat"], center["lon"], r["lat"], r["lon"])
+        if mi <= radius:
+            near.append((r.get("due") or "9999", mi, r))
+    # Soonest due first; undated after the dated ones, nearest first.
+    near.sort(key=lambda x: (x[0], x[1]))
+    return jsonify({
+        "ok": True, "location": f"{center['city']}, {center['state']}".strip(", "),
+        "radius": int(radius), "count": len(near),
+        "bids": [{"title": r["title"], "town": r["town"], "due": r.get("due") or "",
+                  "miles": round(mi)} for _d, mi, r in near[:OPEN_BIDS_SHOWN]],
+    })
+
+
 @app.route("/health", methods=["GET"])
 def health_detail():
     """Which backends are actually wired up, and is local search still working.
@@ -8535,6 +8642,9 @@ def _perform_scan(location, radius, force=False, _progress_token=""):
     result = {"bids": grouped, "total": total, "city_coords": city_coords,
               "center": {"lat": center["lat"], "lon": center["lon"],
                         "label": f"{center['city']}, {center['state']}"}}
+
+    # The open bids, kept by place for the landing page (see /bids-near).
+    _remember_open_bids(grouped, city_coords)
 
     # cache (today only) + persist geo cache
     cache[ckey] = {"ts": datetime.datetime.now().isoformat(), **result}

@@ -2449,6 +2449,51 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── The landing page shows real open bids near the visitor ──
+  console.log("\nThe landing page shows open bids near a ZIP, not just an agency count");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    let nearBody = null, empty = false;
+    await page.route("**/*", (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      const json = (o) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(o) });
+      if (u.endsWith("/coverage")) return json({ ok: true, location: "Kansas City, KS", radius: 125, agencies: 74, nearest: ["Olathe, KS"] });
+      if (u.endsWith("/bids-near")) {
+        nearBody = JSON.parse(route.request().postData() || "{}");
+        if (empty) return json({ ok: true, location: "Nowhere, KS", radius: 50, count: 0, bids: [] });
+        return json({ ok: true, location: "Kansas City, KS", radius: 125, count: 9, bids: [
+          { title: "Oak Ave Curb & Gutter", town: "Olathe", due: "2099-11-05", miles: 18 },
+          { title: "Sidewalk <Repair> Phase 2", town: "Lenexa", due: "", miles: 22 }] });
+      }
+      if (u.endsWith("/click") || u.endsWith("/visit")) return json({ ok: true });
+      if (host === "127.0.0.1") return route.continue();
+      return route.abort();
+    });
+    // Arriving from an outreach link fills in the town and shows the work.
+    await page.goto(`${BASE}/go/redbird-ks-kc`, { waitUntil: "load" });
+    await page.waitForTimeout(1200);
+    const box = await page.textContent("#cov-out");
+    check("an outreach visitor sees open bids near their town without typing anything",
+          nearBody && nearBody.location === "Kansas City, KS" && nearBody.radius === 125
+          && /Open right now near Kansas City, KS/.test(box) && /Oak Ave Curb & Gutter/.test(box) && /Olathe · 18 mi · due Nov 5/.test(box), box);
+    check("...an undated one says the date is on the posting, and titles are shown as text",
+          /due date on the posting/.test(box) && (await page.$$eval("#cov-bids li b", (els) => els.map((e) => e.textContent))).includes("Sidewalk <Repair> Phase 2"));
+    check("...with a way straight into the trial", (await page.getAttribute("#cov-bids a.btn", "href")) === "/app.html"
+          && /See all 9 and price them/.test(await page.textContent("#cov-bids a.btn")));
+    // Nowhere with bids: just the agency count, no empty box.
+    empty = true;
+    await page.fill("#cov-zip", "67801");
+    await page.click("#cov-go");
+    await page.waitForTimeout(800);
+    check("with nothing found yet, the agency count stands alone", (await page.$$("#cov-bids .nb")).length === 0);
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   // ── A statewide bid is placed by its own name ──
   console.log("\nA bid from a statewide search is placed by the site its name gives");
   {
