@@ -7338,6 +7338,11 @@ async function refreshPlanStatus(){
   if(planStatus&&Date.now()-(planStatus.at||0)<4*3600000)return;
   planChecking=true;
   try{
+    // Someone who paid on another device or from the website may not have
+    // the key on this phone yet: look for a purchase before telling them
+    // their trial is over.
+    try{await autoUnlock();}catch(e){}
+    if(licenseKey()){planStatus={state:"paid",at:Date.now()};store.set(PLAN_KEY,planStatus);return;}
     const token=await getSupabaseToken();
     const r=await fetchRetry(SERVER+"/trial",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({device_id:deviceId(),supabase_token:token})},30000);

@@ -2563,6 +2563,12 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     const acct = await page.textContent("#screen-account");
     check("the plan card recaps the trial", /What your trial found/.test(acct) && /2 open bids found near you/.test(acct), acct.slice(0, 500));
     check("...and the plans sell the work, not the features", /Bid documents read, line items filled in/.test(acct) && /bid form filled in for you/.test(acct));
+    // Paid on another device: the purchase is found before any "ended" message.
+    await page.route("**/mykey", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, key: "CCP-PAID" }) }));
+    await page.evaluate(() => { planStatus = null; localStorage.removeItem("plan_status"); lastUnlockCheck = 0; goTo("home"); renderHome(); });
+    await page.waitForTimeout(800);
+    check("a customer who paid elsewhere isn't told the trial ended", (await page.$$(".plan-banner")).length === 0
+          && await page.evaluate(() => licenseKey() === "CCP-PAID" && planStatus.state === "paid"));
     // Paying: no banner.
     await page.evaluate(() => { localStorage.setItem("license_key", JSON.stringify("CCP-TEST")); planStatus = null; goTo("home"); renderHome(); });
     await page.waitForTimeout(400);
