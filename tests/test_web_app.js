@@ -2494,6 +2494,74 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── The end of the trial, said where people look ──
+  console.log("\nThe trial's end shows on Home, and the paywall says what the trial found");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    let trial = { ok: true, active: true, days_left: 1, expires_at: new Date(Date.now() + 30 * 3600000).toISOString() };
+    let trialCalls = 0;
+    await page.route("**/*", (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      const json = (o) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(o) });
+      if (u.endsWith("/trial")) { trialCalls++; return json(trial); }
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem("last_user_email", JSON.stringify("trial@example.com"));
+      localStorage.setItem("last_feed", JSON.stringify({ "Aurora, MO": [
+        { title: "Elm St Sidewalk", scope: "Sidewalk", deadline: "2099-11-20", status: "open", url: "https://e.gov/1" },
+        { title: "Oak Ave Curb", scope: "Curb", deadline: "2099-11-10", status: "open", url: "https://e.gov/2" }] }));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(600);
+    await page.evaluate(() => { currentUser = { id: "u1", email: "trial@example.com" }; window.getSupabaseToken = async () => "tok";
+      window.isOffline = () => false; localStorage.removeItem("plan_status"); planStatus = null;
+      const c = "Aurora, MO", i = bidId(c, bidData[c][0]); docsReady[i] = { items: 5 }; });
+    await page.evaluate(() => { goTo("home"); renderHome(); });
+    await page.waitForTimeout(800);
+    let banner = await page.textContent("#home-main");
+    check("in the last two days, Home says the trial is ending, with what it found",
+          /Your free trial ends in 1d \d+h\./.test(banner) && /So far: 2 open bids found near you, 1 bid read from its documents/.test(banner), banner.slice(0, 300));
+    await page.click("[data-plan-go]");
+    await page.waitForTimeout(600);
+    check("...and one tap goes to the plans", await page.evaluate(() => document.getElementById("screen-account").classList.contains("active")));
+    // Not checked again for hours.
+    const calls = trialCalls;
+    await page.evaluate(() => { goTo("home"); renderHome(); });
+    await page.waitForTimeout(400);
+    check("the trial isn't asked about on every visit to Home", trialCalls === calls);
+    // Plenty of time left: nothing.
+    await page.evaluate(() => { planStatus = { state: "trial", expires_at: new Date(Date.now() + 5 * 86400000).toISOString(), at: Date.now() }; renderHome(); });
+    check("with days to go, no banner", (await page.$$(".plan-banner")).length === 0);
+    // Ended.
+    trial = { ok: false, active: false, reason: "trial_expired" };
+    await page.evaluate(() => { planStatus = null; localStorage.removeItem("plan_status"); renderHome(); });
+    await page.waitForTimeout(800);
+    banner = await page.textContent("#home-main");
+    check("after it ends, Home says so and that the saved work is still there",
+          /Your free trial has ended\./.test(banner) && /saved bids and prices are still here/.test(banner), banner.slice(0, 300));
+    // Account: the recap and plans that say what you get.
+    await page.evaluate(() => goTo("account"));
+    await page.waitForTimeout(1200);
+    const acct = await page.textContent("#screen-account");
+    check("the plan card recaps the trial", /What your trial found/.test(acct) && /2 open bids found near you/.test(acct), acct.slice(0, 500));
+    check("...and the plans sell the work, not the features", /Bid documents read, line items filled in/.test(acct) && /bid form filled in for you/.test(acct));
+    // Paying: no banner.
+    await page.evaluate(() => { localStorage.setItem("license_key", JSON.stringify("CCP-TEST")); planStatus = null; goTo("home"); renderHome(); });
+    await page.waitForTimeout(400);
+    check("a subscriber never sees it", (await page.$$(".plan-banner")).length === 0);
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   // ── A statewide bid is placed by its own name ──
   console.log("\nA bid from a statewide search is placed by the site its name gives");
   {

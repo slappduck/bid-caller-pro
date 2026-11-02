@@ -7304,9 +7304,63 @@ function homeSinceLabel(t){
   if(days<7)return d.toLocaleDateString([],{weekday:"long"});
   return d.toLocaleDateString([],{month:"short",day:"numeric"});
 }
+// ── Where the trial stands, for Home ──
+// The trial's end was only ever shown on the Account tab, which nobody opens
+// on day 6. Checked at most every few hours (the same /trial call Account
+// makes), kept on the phone, and shown on Home in the last two days and
+// after it ends.
+const PLAN_KEY="plan_status";
+let planStatus=store.get(PLAN_KEY,null);
+let planChecking=false;
+async function refreshPlanStatus(){
+  if(planChecking||isOffline()||!currentUser)return;
+  if(licenseKey()){planStatus={state:"paid",at:Date.now()};store.set(PLAN_KEY,planStatus);return;}
+  if(planStatus&&Date.now()-(planStatus.at||0)<4*3600000)return;
+  planChecking=true;
+  try{
+    const token=await getSupabaseToken();
+    const r=await fetchRetry(SERVER+"/trial",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({device_id:deviceId(),supabase_token:token})},30000);
+    const d=await r.json();
+    if(d&&d.active)planStatus={state:"trial",expires_at:d.expires_at||"",at:Date.now()};
+    else if(d&&d.reason==="trial_expired")planStatus={state:"expired",at:Date.now()};
+    else return;
+    store.set(PLAN_KEY,planStatus);
+    const main=document.getElementById("home-main");
+    if(main&&document.getElementById("screen-home")&&document.getElementById("screen-home").classList.contains("active"))renderHome();
+  }catch(e){}finally{planChecking=false;}
+}
+// What the trial turned up, from what's on this phone. Only the lines that
+// aren't zero: "0 forms filled" sells nothing.
+function trialRecap(){
+  let open=0;
+  Object.keys(bidData).forEach(c=>{open+=visibleBidsIn(c).length;});
+  const ids=Object.keys(bidPrep);
+  const read=new Set(ids.filter(i=>bidPrep[i]&&bidPrep[i].docInfo&&bidPrep[i].docInfo.read_at)
+    .concat(Object.keys(docsReady).filter(i=>docsReady[i]&&docsReady[i].items)));
+  const filled=ids.filter(i=>bidPrep[i]&&bidPrep[i].formFilledAt).length;
+  const bits=[open&&plural(open,"open bid")+" found near you",read.size&&plural(read.size,"bid")+(read.size===1?" read from its documents":" read from their documents"),
+    ids.length&&plural(ids.length,"bid")+" prepared",filled&&plural(filled,"bid form")+" filled in",
+    Object.keys(saved).length&&plural(Object.keys(saved).length,"bid")+" saved"].filter(Boolean);
+  return bits;
+}
+function planBannerHTML(){
+  const ps=planStatus;
+  if(!ps||ps.state==="paid"||licenseKey())return"";
+  const recap=trialRecap();
+  if(ps.state==="expired")return`<div class="plan-banner ended"><b>Your free trial has ended.</b>
+    <span>${recap.length?`It found ${esc(recap.slice(0,2).join(" and "))}. `:""}Your saved bids and prices are still here; subscribe to keep scanning and reading bid documents.</span>
+    <button class="btn-primary" data-plan-go>See plans</button></div>`;
+  const left=ps.expires_at?(new Date(ps.expires_at)-new Date())/86400000:99;
+  if(!(left<=2))return"";
+  return`<div class="plan-banner"><b>Your free trial ends in ${esc(timeLeftLabel(ps.expires_at)||"a day").replace(/ left$/,"")}.</b>
+    <span>${recap.length?`So far: ${esc(recap.slice(0,2).join(", "))}. `:""}Keep it going for $49 a month, or $399 a year.</span>
+    <button class="btn-primary" data-plan-go>Keep my bids</button></div>`;
+}
 function renderHome(){
   const main=document.getElementById("home-main");
   if(!main)return;
+  refreshPlanStatus();
   const rows=[];
   Object.keys(bidData).forEach(c=>visibleBidsIn(c).forEach(b=>rows.push([c,b])));
   const total=rows.length;
@@ -7325,7 +7379,7 @@ function renderHome(){
     .sort((a,b)=>daysUntil(a[1])-daysUntil(b[1]))
     .slice(0,3);
 
-  main.innerHTML=`
+  main.innerHTML=`${planBannerHTML()}
     <div class="account-card">
       <div class="account-email hdr-ic" style="font-size:var(--fs-base);margin-bottom:0.6rem;"><svg class="icon-svg"><use href="#i-activity"/></svg>Your week</div>
       <div class="stats-grid">
@@ -7342,6 +7396,8 @@ function renderHome(){
       :emptyHTML("i-list","No bids yet","Run a scan and the work near you shows up here.")}`;
 
   document.getElementById("home-scan-btn").onclick=()=>goTo("scan");
+  main.querySelectorAll("[data-plan-go]").forEach(b=>b.onclick=()=>{goTo("account");
+    setTimeout(()=>{const u=document.getElementById("upgrade-section");if(u)u.scrollIntoView({behavior:"smooth"});},300);});
   const all=document.getElementById("home-all-btn");
   if(all)all.onclick=()=>goTo("feed");
   const soon=document.getElementById("home-soon");
@@ -8311,14 +8367,14 @@ function renderAccount(){
       <div class="plan featured">
         <div class="plan-name">Pro Monthly</div>
         <div class="plan-price">$49<span> / month</span></div>
-        <ul>${["Unlimited nationwide bid scans","AI bid extraction","Federal + local bids","Save &amp; track leads","Cancel anytime"].map(planLi).join("")}</ul>
+        <ul>${["Every open sidewalk, curb &amp; ramp bid near you, checked daily","Bid documents read, line items filled in","Target prices from what the work actually went for","The agency's bid form filled in for you","Addendum and due-date alerts on your phone","Cancel anytime"].map(planLi).join("")}</ul>
         <a class="btn-primary" style="text-decoration:none;" href="${mLink}" target="_blank">Subscribe Monthly</a>
         <p class="renew-note">Renews automatically at $49/month until you cancel. Cancel anytime under Billing above.</p>
       </div>
       <div class="plan">
         <div class="plan-name">Pro Annual &mdash; best value, save $189</div>
         <div class="plan-price">$399<span> / year</span></div>
-        <ul>${["Everything in Monthly","About 4 months free","Priority support"].map(planLi).join("")}</ul>
+        <ul>${["Everything in Monthly","About 4 months free: one won job pays for years of it","Priority support"].map(planLi).join("")}</ul>
         <a class="btn-ghost" style="text-decoration:none;display:block;text-align:center;" href="${aLink}" target="_blank">Subscribe Annual</a>
         <p class="renew-note">Renews automatically at $399/year until you cancel. Cancel anytime under Billing above.</p>
       </div>
@@ -8850,9 +8906,17 @@ async function loadAccountStatus(){
       if(d.active){
         trialExpiresAt=d.expires_at||null;
         const countdown=timeLeftLabel(trialExpiresAt)||`${d.days_left||""} days left`;
-        html=`<div class="plan-name">Free Trial Active</div><div class="plan-price"><span id="trial-countdown">${esc(countdown)}</span></div><p style="color:var(--text2);font-size:var(--fs-base);">Full access. Subscribe to keep going after trial.</p>`;featured=true;
+        const recap=trialRecap();
+        html=`<div class="plan-name">Free Trial Active</div><div class="plan-price"><span id="trial-countdown">${esc(countdown)}</span></div><p style="color:var(--text2);font-size:var(--fs-base);">Full access. Subscribe to keep going after trial.</p>
+          ${recap.length?`<div class="trial-recap"><b>Your trial so far</b>${recap.map(x=>`<span>${esc(x)}</span>`).join("")}</div>`:""}`;featured=true;
+        planStatus={state:"trial",expires_at:d.expires_at||"",at:Date.now()};store.set(PLAN_KEY,planStatus);
       }
-      else html=`<div class="plan-name" style="color:var(--red);">Trial expired</div><p style="color:var(--text2);font-size:var(--fs-base);margin-top:0.5rem;">Subscribe below to keep scanning.</p>`;
+      else{
+        const recap=trialRecap();
+        html=`<div class="plan-name" style="color:var(--red);">Trial expired</div><p style="color:var(--text2);font-size:var(--fs-base);margin-top:0.5rem;">Subscribe below to keep scanning and reading bid documents. Your saved bids and prices stay here.</p>
+          ${recap.length?`<div class="trial-recap"><b>What your trial found</b>${recap.map(x=>`<span>${esc(x)}</span>`).join("")}</div>`:""}`;
+        if(d&&d.reason==="trial_expired"){planStatus={state:"expired",at:Date.now()};store.set(PLAN_KEY,planStatus);}
+      }
     }catch{
       html=`<div class="plan-name" style="color:var(--text2);">Couldn't reach the server</div><p style="color:var(--text3);font-size:var(--fs-base);margin-top:0.5rem;">Your plan status will show once the connection's back. Try again in a bit.</p>`;
     }
