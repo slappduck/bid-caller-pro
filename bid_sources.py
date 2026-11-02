@@ -141,6 +141,11 @@ CANDIDATE_BID_PATHS = (
     "/RFP.aspx",
     "/Purchasing.aspx",
     "/bids.html",
+    # ── small towns that post bids among their notices ──
+    "/projects-bids",
+    "/projectsbids",
+    "/public-notices",
+    "/legal-notices",
 )
 
 
@@ -168,7 +173,12 @@ def candidate_bid_urls(domain, limit=None):
 # the same as it being about the city that was searched for.
 _HOMEPAGE_LINK_RE = re.compile(r'<a[^>]+href="([^"#][^"]*)"[^>]*>(.*?)</a>', re.I | re.S)
 _HOMEPAGE_LINK_HINTS = ("bid", "rfp", "rfq", "solicitation", "procurement",
-                        "purchasing", "vendor")
+                        "purchasing", "vendor",
+                        # A small town with no bid page posts its "Notice to
+                        # Bidders" under Public Notices or Legal Notices. The
+                        # page still has to read as procurement to be kept.
+                        "public notice", "public-notice", "publicnotice",
+                        "legal notice", "legal-notice", "legalnotice")
 _HOMEPAGE_LINK_NOISE = ("facebook.com", "twitter.com", "x.com", "instagram.com",
                         "youtube.com", "linkedin.com", "mailto:", "tel:", "javascript:")
 
@@ -1933,11 +1943,102 @@ def parse_lpa_table(html, state, base_url="", today=None):
     return rows
 
 
+# Iowa lets county and city federal-aid work through the DOT's own monthly
+# letting, and the Notice to Bidders PDF lists every proposal with its county,
+# work type and full item list. That item list is the point: a flatwork crew
+# can see "244 sq yd sidewalk, P.C.C." before opening a single plan sheet.
+# The 2026-11-17 letting carried 63 proposals. A proposal is kept only when
+# it has flatwork items of its own, so a steel-girder bridge with nothing a
+# concrete crew pours outside the deck does not come back.
+_IA_ORDER_SPLIT_RE = re.compile(r"BID ORDER NUMBER:\s*\d+")
+_IA_PROPOSAL_RE = re.compile(r"PROPOSAL ID:\s*(\S+)\s+COUNTY:\s*([A-Z' .\-]+?)\s*$", re.M)
+_IA_WORK_RE = re.compile(r"WORK TYPE:\s*(.+)$", re.M)
+_IA_LETTING_RE = re.compile(r"FOR THE\s+LETTING\s*-+\s*(\d{4})/(\d{2})/(\d{2})")
+_IA_ITEM_RE = re.compile(
+    r"^\s*([\d,]+\.\d{2})\s+(SQUARE YARD|SQUARE FOOT|LINEAR FOOT|CUBIC YARD|EACH|TON|STATION)\s+(.+?)\s*$",
+    re.M)
+# Paved shoulders are left out: on these lettings they are usually asphalt,
+# and a bridge job with nothing else would read as flatwork work.
+_IA_FLATWORK_RE = re.compile(
+    r"SIDEWALK|P\.\s?C\.\s?C\.|\bPCC\b|CURB|DRIVES?\b|DRIVEWAY|\bRAMP|"
+    r"DETECTABLE WARNING|MEDIAN|PATCH", re.I)
+_IA_ACRONYMS = {"PCC", "HMA", "RCB", "CCS", "PPCB", "CMP", "RCP", "ADA", "DBE"}
+_IA_UNITS = {"SQUARE YARD": "sq yd", "SQUARE FOOT": "sq ft", "LINEAR FOOT": "ft",
+             "CUBIC YARD": "cu yd", "EACH": "each", "TON": "ton", "STATION": "sta"}
+
+
+def _ia_case(text):
+    text = re.sub(r"P\.\s?C\.\s?C\.?", "PCC", str(text or ""))
+    out = []
+    for w in text.split():
+        core = w.strip(",.;:()")
+        if core.upper() in _IA_ACRONYMS or not w.isupper():
+            out.append(w)
+        else:
+            out.append(w[:1].upper() + w[1:].lower())
+    return " ".join(out)
+
+
+def parse_iowa_notice_to_bidders(text, state="IA", base_url=""):
+    """Rows for proposals with flatwork items in Iowa DOT's Notice to Bidders.
+
+    Takes the PDF's extracted text. Pure, like the other readers; each row
+    names its county for the caller to place.
+    """
+    text = str(text or "")
+    m = _IA_LETTING_RE.search(text)
+    deadline = ""
+    if m:
+        deadline = "%s %d, %s" % (_MONTHS[int(m.group(2)) - 1], int(m.group(3)), m.group(1))
+    rows = []
+    for block in _IA_ORDER_SPLIT_RE.split(text)[1:]:
+        pm = _IA_PROPOSAL_RE.search(block)
+        if not pm:
+            continue
+        ident, county = pm.group(1), pm.group(2).strip().split(",")[0].strip()
+        work = (_IA_WORK_RE.search(block) or [None, ""])[1].strip()
+        items = []
+        for q, unit, name in _IA_ITEM_RE.findall(block):
+            up = name.upper()
+            if up.startswith("REMOVAL") or "HMA" in up or not _IA_FLATWORK_RE.search(name):
+                continue
+            qty = q.rstrip("0").rstrip(".") if "." in q else q
+            items.append("%s %s %s" % (qty, _IA_UNITS[unit], _ia_case(name).rstrip(".")))
+        if not items:
+            continue
+        where = ""
+        for line in block.splitlines():
+            line = line.strip()
+            if line.startswith(("On ", "In ")) and len(line) > 8:
+                where = line
+                break
+        title = _ia_case(work) or "Iowa DOT letting"
+        if where:
+            title = "%s, %s" % (title, where)
+        rows.append({
+            "title": title[:160],
+            "scope": ("Proposal %s. Flatwork items: %s." % (ident, "; ".join(items[:12])))[:1200],
+            "url": base_url,
+            "deadline": deadline,
+            "status": "Open",
+            "agency": "Iowa DOT letting",
+            "call": ident,
+            "county": _ia_case(county),
+            "state": str(state or "IA").upper(),
+            "source": "state_dot",
+            "documents": [{"name": "Notice to Bidders (all projects)", "url": base_url},
+                          {"name": "Plans and bidding (Bid Express)",
+                           "url": "https://www.bidx.com/ia/main"}],
+        })
+    return rows
+
+
 # Which reader a local-notices source uses. Keyed by the kind named in
 # license_server's LOCAL_NOTICE_SOURCES.
 LOCAL_NOTICE_PARSERS = {
     "local_notices": parse_local_agency_notices,
     "lpa_table": parse_lpa_table,
+    "iowa_ntb_pdf": parse_iowa_notice_to_bidders,
 }
 
 

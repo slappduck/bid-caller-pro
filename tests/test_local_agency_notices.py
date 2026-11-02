@@ -221,3 +221,69 @@ class MissouriTableTests(unittest.TestCase):
             ls._place_local_notice({}, closed, {"lat": 37.2, "lon": -93.3, "state": "MO"},
                                    100, {}, {})
         geo.assert_not_called()
+
+
+IA_FIXTURE = os.path.join(ROOT, "data", "recall_fixtures", "iowadot_notice_to_bidders.txt")
+IA_URL = ls.LOCAL_NOTICE_SOURCES["IA"][0][0]
+
+
+def ia_rows():
+    with open(IA_FIXTURE, encoding="utf-8") as f:
+        return bid_sources.parse_iowa_notice_to_bidders(f.read(), "IA", IA_URL)
+
+
+class IowaNoticeToBiddersTests(unittest.TestCase):
+    """Iowa DOT's letting, which carries county and city work with quantities."""
+
+    def find(self, ident):
+        return next(r for r in ia_rows() if r["call"] == ident)
+
+    def test_the_letting_date_is_the_due_date(self):
+        self.assertTrue(all(r["deadline"] == "November 17, 2026" for r in ia_rows()))
+
+    def test_a_sidewalk_job_carries_its_quantities(self):
+        r = self.find("52-3715-674")
+        self.assertEqual(r["county"], "Johnson")
+        self.assertIn("Iowa City", r["title"])
+        self.assertIn("5,231 sq yd Recreational Trail, PCC", r["scope"])
+        self.assertIn("609 sq yd Sidewalk, PCC", r["scope"])
+
+    def test_county_projects_are_included(self):
+        """Proposal IDs with C in the middle are let for a county."""
+        r = self.find("08-C008-091")
+        self.assertEqual(r["county"], "Boone")
+        self.assertIn("22,084 sq yd Pavement, PCC", r["scope"])
+
+    def test_a_job_with_no_flatwork_is_left_out(self):
+        """A paved shoulder alone is usually asphalt, not this trade."""
+        ids = {r["call"] for r in ia_rows()}
+        self.assertNotIn("10-1503-079", ids)      # deck overlay, paved shoulders only
+        self.assertNotIn("40-1757-024", ids)      # HMA resurfacing, paved shoulders only
+
+    def test_asphalt_items_do_not_count(self):
+        for r in ia_rows():
+            self.assertNotIn("HMA", r["scope"].split("Flatwork items:")[1], r["call"])
+
+    def test_abbreviations_read_cleanly(self):
+        for r in ia_rows():
+            self.assertNotIn("P.c.c", r["scope"])
+            self.assertNotIn("Ccs", r["title"])
+
+    def test_documents_point_at_the_notice_and_bid_express(self):
+        docs = self.find("52-3715-674")["documents"]
+        self.assertEqual(docs[0]["url"], IA_URL)
+        self.assertIn("bidx.com", docs[1]["url"])
+
+    def test_a_scan_reads_the_pdf_through_the_document_fetcher(self):
+        with open(IA_FIXTURE, encoding="utf-8") as f:
+            text = f.read()
+        grouped, stats = {}, {}
+        with patch("license_server._state_sources", return_value={}), \
+             patch("license_server._fetch_document", return_value=(b"%PDF-", "application/pdf", "ok")), \
+             patch("license_server._pdf_all_text", return_value=text), \
+             patch("license_server._is_open_bid", return_value=True), \
+             patch("license_server.counties.states_within", return_value=["IA"]):
+            ls._run_state_sources({"lat": 41.661, "lon": -91.530, "state": "IA"}, 30,
+                                  grouped, {}, stats)
+        self.assertEqual(stats.get("state_local_rows_read"), len(ia_rows()))
+        self.assertIn("Johnson County, IA", grouped)

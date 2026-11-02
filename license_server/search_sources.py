@@ -2854,7 +2854,24 @@ LOCAL_NOTICE_SOURCES = {
     "AR": [("https://ardot.gov/divisions/local-programs/currently-advertised-local-projects/",
             "local_notices")],
     "MO": [("https://www.modot.org/projects-be-let-others", "lpa_table")],
+    # Iowa lets county and city federal-aid work in the DOT's own monthly
+    # letting. The Notice to Bidders PDF is always at this address and lists
+    # every proposal with its county and item quantities. robots.txt allows it.
+    "IA": [("https://iowadot.gov/contracts/lettings/NoticeToBidders.pdf", "iowa_ntb_pdf")],
 }
+# Sources that are a PDF rather than a page; read as text, every page.
+_LOCAL_PDF_KINDS = {"iowa_ntb_pdf"}
+LOCAL_PDF_MAX_PAGES = 120
+
+
+def _pdf_all_text(raw, max_pages=LOCAL_PDF_MAX_PAGES):
+    """Text of every page of a PDF, or "" if it cannot be read."""
+    try:
+        from pypdf import PdfReader
+        reader = PdfReader(io.BytesIO(raw))
+        return "\n".join((p.extract_text() or "") for p in reader.pages[:max_pages])
+    except Exception:
+        return ""
 # Towns named on those pages, geocoded once per process.
 _LOCAL_NOTICE_GEO = {}
 
@@ -2871,7 +2888,7 @@ def _place_local_notice(grouped, row, center, radius, city_coords=None, stats=No
             stats[reason] = stats.get(reason, 0) + 1
 
     bid = {k: row[k] for k in ("title", "scope", "url", "deadline", "status",
-                               "source", "documents", "agency") if k in row}
+                               "source", "documents", "agency", "call") if k in row}
     _apply_deadline_status(bid)
     if not _is_open_bid(bid):
         _count("state_letting_already_held")
@@ -3139,6 +3156,10 @@ def _run_state_sources(center, radius, grouped, city_coords=None, stats=None):
     def _load(item):
         st, url, kind = item
         try:
+            if kind in _LOCAL_PDF_KINDS:
+                raw, _ctype, outcome = _fetch_document(url)
+                text = _pdf_all_text(raw) if outcome == "ok" else ""
+                return st, url, (text or None), (outcome if outcome != "ok" or text else "unreadable")
             page, outcome = _fetch_page(url, timeout=STATE_SOURCE_TIMEOUT)
             if outcome != "ok" or not page:
                 return st, url, None, outcome
