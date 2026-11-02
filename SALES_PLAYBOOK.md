@@ -166,3 +166,122 @@ the first one: nobody arrives.
 - **14-day trial**, as above.
 - **Annual at $399** is already about 4 months free. Mention it to anyone who
   wins a job in their first month.
+
+## 9. Paid ads ($10 a day)
+
+About $300 a month. Spend it in one place first, where people are already
+looking for this, and judge it on trials, not clicks.
+
+### Start with Google Search ads
+
+Someone searching "sidewalk bids" or "concrete bid leads" is looking for
+exactly this. Facebook can come later (below).
+
+**Campaign settings** (Google Ads, New campaign, Website traffic, Search):
+
+- **Networks:** Search only. Untick Search Partners and the Display Network:
+  that's where small budgets go to die.
+- **Not** Performance Max and not a "Smart" campaign. Both spend on traffic
+  you can't see or control.
+- **Budget:** $10 a day. **Bidding:** Maximize clicks, with a maximum
+  cost-per-click of $3 for the first two weeks, so a few expensive clicks
+  can't eat the day.
+- **Locations:** start where the app is strongest and you can check the
+  results yourself: Missouri plus the states around it (Kansas, Arkansas,
+  Oklahoma, Iowa, Illinois). Choose "people in" the locations, not
+  "interested in". Before adding a state, check a few of its towns on the
+  landing page.
+- **Schedule:** Monday to Saturday, 6am to 7pm. Contractors search during
+  the work day.
+- **Final URL:** `https://curbcallpro.com/?utm_source=google&utm_medium=cpc&utm_campaign=search-1`
+  Google adds its own click id, and the site counts these as `google-ad`.
+
+**Keywords** (phrase match, in quotes):
+
+"sidewalk bids", "concrete bids", "concrete bid leads", "curb and gutter
+bids", "ada ramp bids", "public works bids", "city bids", "municipal bids",
+"government construction bids", "construction bid leads", "find construction
+bids", "concrete contracts", "flatwork bids"
+
+**Negative keywords** (add from day one; they stop homeowners and job
+seekers):
+
+jobs, job, hiring, career, careers, salary, employment, resume, near me,
+cost, price per, calculator, diy, how to, repair my, homeowner, residential,
+contractor near me, for sale, free template, class, course, school
+
+**The ad** (responsive search ad; every line is within Google's limits):
+
+Headlines (up to 30 characters):
+
+- Sidewalk & Curb Bids Near You
+- Find City Concrete Bids
+- ADA Ramp & Curb Bids
+- See Open Bids by ZIP Code
+- Bid Forms Filled In for You
+- Know What the Work Goes For
+- Free 7-Day Trial, No Card
+- Built for Concrete Contractors
+- Town & County Bids, Daily
+- Stop Hunting for Bids
+- Small-Town & County Bids
+- Price Bids From Real Results
+- $49/mo, Cancel Anytime
+- Public Concrete Work Near You
+- Get Bids Before They Close
+
+Descriptions (up to 90 characters):
+
+- Open sidewalk, curb and ADA ramp bids from cities and counties near you, checked daily.
+- The bid form read for you: line items, what the work went for, and a target price.
+- Type your ZIP and see what's open near you right now. Free for 7 days, no card needed.
+- Addendum and due-date alerts on your phone. Bid forms filled in. Made for flatwork.
+
+Pin "Sidewalk & Curb Bids Near You" to position 1 so every version says
+what it is.
+
+### Reading the results
+
+The Monday numbers email has a **Sources** section. For the ads, watch:
+
+- `visits: google-ad`: clicks that reached the site
+- `trials_by_link: google-ad`: trials those clicks started
+- `paid_said: google-ad`: customers who said they found you through an ad
+
+**Rule of thumb:** aim for **a trial for every $25 or less** of ad spend at
+first. At $49 a month, if about 1 trial in 4 pays, that's roughly $100 of ads
+per customer, earned back in about two months.
+
+**After two weeks (about $140):**
+
+- **No trials at all:** open the search terms report (Keywords, Search
+  terms) and add every irrelevant term as a negative. If the clicks look
+  right and still nobody starts a trial, the landing page is the problem;
+  tell Claude what the search terms were.
+- **Trials but nobody pays:** the problem is in the app, not the ads. Sign
+  up through an ad yourself and see what a new contractor sees.
+- **Working:** raise the budget in the states that produce trials, and add
+  more of the keywords that bring them.
+
+### Facebook and Instagram, later
+
+Test it with half the budget ($5 a day), and only after Google has run for
+two weeks.
+
+- **Audience:** people in Missouri and the states around it, with interests
+  in concrete, construction, general contracting or small business; age
+  25 to 65.
+- **The ad:** a screenshot of the landing page's "Open right now near
+  Springfield, MO" list, with the text: "Open sidewalk, curb and ADA ramp bids
+  near you. Type your ZIP to see them, free." Link to
+  `https://curbcallpro.com/?utm_source=facebook&utm_medium=paid&utm_campaign=fb-1`
+  (counted as `facebook-ad`).
+
+### Don't
+
+- Run ads before the open pull request is merged: trials wouldn't get the
+  automatic reading, and visits wouldn't be counted by source.
+- Send ads to `/app.html`. The landing page is what shows bids near their ZIP
+  and counts where the visit came from.
+- Add ad pixels or tracking tags. The privacy policy says the site runs none,
+  and the Sources counts work without them.

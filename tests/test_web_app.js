@@ -2489,7 +2489,8 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await page.fill("#cov-zip", "67801");
     await page.click("#cov-go");
     await page.waitForTimeout(800);
-    check("with nothing found yet, the agency count stands alone", (await page.$$("#cov-bids .nb")).length === 0);
+    check("with nothing found yet, it offers to scan the area now", /We haven't scanned around Nowhere, KS lately/.test(await page.textContent("#cov-bids"))
+          && /scan it now/.test(await page.textContent("#cov-bids a.btn")));
     // The ZIP box at the top of the page runs the same check.
     empty = false; nearBody = null;
     await page.goto(`${BASE}/index.html`, { waitUntil: "load" });

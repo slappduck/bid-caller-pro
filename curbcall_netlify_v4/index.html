@@ -788,7 +788,15 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
         .then(function(r){return r.json();})
         .then(function(d){
           var box=document.getElementById("cov-bids");
-          if(!box||!d||!d.ok||!d.count)return;
+          if(!box||!d||!d.ok)return;
+          if(!d.count){
+            // No scan has covered this area lately. Say so, and make the next
+            // step the scan itself rather than a dead end.
+            box.innerHTML='<div class="nb"><div class="nb-h">We haven\'t scanned around ' + esc(d.location) + ' lately</div>'
+              + '<div class="nb-note" style="margin:0 0 0.7rem;">Start free and the app reads every agency above for open sidewalk, curb and ramp bids, in about a minute.</div>'
+              + '<a class="btn btn-amber" href="/app.html">Start free: scan it now</a></div>';
+            return;
+          }
           var more=d.count>d.bids.length ? "See all " + d.count + " and price them" : "Open them and price them";
           box.innerHTML='<div class="nb"><div class="nb-h">Open right now near ' + esc(d.location) + '</div><ul>'
             + d.bids.map(function(b){
