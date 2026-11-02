@@ -2372,7 +2372,15 @@ function onbCheckCoverage(){
         method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({location:loc.trim(),radius:onbRadius})},20000);
       const d=await r.json();
-      if(d.ok)el.textContent=`${d.agencies} agencies posting bids within ${onbRadius} miles`;
+      if(d.ok){
+        el.textContent=`${d.agencies} agencies posting bids within ${onbRadius} miles`;
+        // And the work itself, when scans have already found some there.
+        const r2=await fetchRetry(SERVER+"/bids-near",{method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({location:loc.trim(),radius:onbRadius})},20000);
+        const n=await r2.json();
+        if(n&&n.ok&&n.count&&(document.getElementById("onb-loc")||{}).value===loc)
+          el.textContent=`${d.agencies} agencies posting bids within ${onbRadius} miles \u00b7 ${plural(n.count,"open bid")} found there lately`;
+      }
       else el.textContent="We couldn't find that place — try a ZIP code";
     }catch(e){el.textContent="";}
   },600);
@@ -7955,7 +7963,12 @@ function openDetail(city,b){
 }
 window.shareBid=async function(city,id){
   const b=findBid(id);if(!b)return;
-  const text=`${b.title||"Bid"} \u2014 ${city}${b.value?" \u2022 "+b.value:""}${b.deadline?" \u2022 Due "+b.deadline:""}${b.url?"\n"+b.url:""}`;
+  // A forwarded bid goes to a partner, an estimator or another contractor:
+  // it says where it came from, with the sender's referral link when they
+  // have one, so the person it lands with can find their own.
+  const code=store.get("referral_code","");
+  const site=code?`https://curbcallpro.com/?ref=${encodeURIComponent(code)}`:"https://curbcallpro.com";
+  const text=`${b.title||"Bid"} \u2014 ${city}${b.value?" \u2022 "+b.value:""}${b.deadline?" \u2022 Due "+b.deadline:""}${b.url?"\n"+b.url:""}\n\nFound with CurbCall Pro: ${site}`;
   try{
     if(navigator.share){await navigator.share({title:b.title||"Bid",text});}
     else{await navigator.clipboard.writeText(text);toast("Copied to clipboard");}

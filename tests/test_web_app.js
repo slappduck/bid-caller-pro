@@ -2601,6 +2601,52 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── Word of mouth: setup shows the work, a shared bid says where it came from ──
+  console.log("\nSetup shows open bids found nearby, and a shared bid carries the link back");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      const json = (o) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(o) });
+      if (u.endsWith("/coverage")) return json({ ok: true, location: "Aurora, MO", radius: 50, agencies: 23, nearest: [] });
+      if (u.endsWith("/bids-near")) return json({ ok: true, location: "Aurora, MO", radius: 50, count: 7, bids: [] });
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem("last_user_email", JSON.stringify("new@example.com"));
+      localStorage.setItem("last_feed", JSON.stringify({ "Aurora, MO": [
+        { title: "Elm St Sidewalk", scope: "Sidewalk", deadline: "2099-11-20", status: "open", url: "https://e.gov/bids/17" }] }));
+      localStorage.setItem("referral_code", JSON.stringify("AB12CD34"));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => { window.isOffline = () => false; showOnboarding(); });
+    await page.fill("#onb-loc", "65605");
+    await page.dispatchEvent("#onb-loc", "input");
+    await page.waitForTimeout(1500);
+    const cov = await page.textContent("#onb-cov");
+    check("setup shows the open bids already found there", /23 agencies posting bids within \d+ miles · 7 open bids found there lately/.test(cov), cov);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(600);
+    const shared = await page.evaluate(async () => {
+      let got = null;
+      Object.defineProperty(navigator, "share", { configurable: true, value: async (d) => { got = d; } });
+      const c = "Aurora, MO";
+      await shareBid(c, bidId(c, bidData[c][0]));
+      return got && got.text;
+    });
+    check("a shared bid says it was found with CurbCall, with the sender's referral link",
+          /https:\/\/e\.gov\/bids\/17\n\nFound with CurbCall Pro: https:\/\/curbcallpro\.com\/\?ref=AB12CD34$/.test(shared || ""), shared);
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   // ── A statewide bid is placed by its own name ──
   console.log("\nA bid from a statewide search is placed by the site its name gives");
   {
