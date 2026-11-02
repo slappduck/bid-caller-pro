@@ -2571,6 +2571,36 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── The state price pages show open bids near a ZIP too ──
+  console.log("\nSomeone reading what sidewalk costs can see the open bids near them");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    let asked = null;
+    await page.route("**/*", (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      if (u.endsWith("/bids-near")) {
+        asked = JSON.parse(route.request().postData() || "{}");
+        return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, location: "Joplin, MO",
+          radius: 50, count: 4, bids: [{ title: "Main St Sidewalk", town: "Carthage", due: "2099-11-19", miles: 15 }] }) });
+      }
+      if (host === "127.0.0.1") return route.continue();
+      return route.abort();
+    });
+    await page.goto(`${BASE}/concrete-cost/missouri.html`, { waitUntil: "load" });
+    await page.fill("#nz-in", "64801");
+    await page.click("#nz button");
+    await page.waitForTimeout(600);
+    const out = await page.textContent("#nz-out");
+    check("a state price page lists open bids near the reader's ZIP", asked && asked.location === "64801"
+          && /Main St Sidewalk/.test(out) && /Carthage · 15 mi · due Nov 19/.test(out) && /see all 4 and price them/.test(out), out);
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   // ── A statewide bid is placed by its own name ──
   console.log("\nA bid from a statewide search is placed by the site its name gives");
   {
