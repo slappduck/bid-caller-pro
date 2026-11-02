@@ -128,7 +128,7 @@ def coverage():
 # after they're due.
 _OPEN_BIDS_KEY = "bidcaller:open_bids"
 _OPEN_BIDS_RATE_KEY = "bidcaller:open_bids_rate"
-OPEN_BIDS_MAX = int(os.environ.get("OPEN_BIDS_MAX", "4000"))
+OPEN_BIDS_MAX = int(os.environ.get("OPEN_BIDS_MAX", "2000"))  # one stored value; ~200 bytes a row
 OPEN_BIDS_UNDATED_DAYS = 21
 OPEN_BIDS_SHOWN = 6
 OPEN_BIDS_PER_IP_PER_DAY = int(os.environ.get("OPEN_BIDS_PER_IP_PER_DAY", "60"))
