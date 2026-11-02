@@ -806,6 +806,7 @@ Tests run on captured copies in `data/recall_fixtures/`.
 | IL | IDOT Notice to Contractors Bulletin (weekly PDF, newest 4 read) | ~15 town and county jobs a month: Joliet, Kinmundy, Country Club Hills |
 | OK | ODOT letting spreadsheets (next 4 lettings within 75 days) | Tulsa, Warr Acres, Cleveland County sidewalks; Tahlequah pedestrian work |
 | WI | WisDOT Notice to Contractors PDF per letting (next 3) | 20 proposals with concrete flatwork on the Nov 10 letting: Madison, Middleton, Deforest, Milwaukee, Pleasant Prairie |
+| IN | INDOT Notice to Highway Contractors PDF per letting (next 3) | 29 contracts on the Nov 5 letting: Lake County sidewalks; Hancock, Porter, Harrison bike and pedestrian facilities |
 | KY | KYTC Notice to Contractors PDF per letting (next 3) | 18 contracts on the Nov 19 letting, county road and city street work among them |
 
 ### Looked at and not used
@@ -823,6 +824,7 @@ Tests run on captured copies in `data/recall_fixtures/`.
 - **Oklahoma county bid list (SB 2173)**: county, bid number and date only,
   no description; mostly road materials. Not built.
 - **Nebraska**: current letting details are on Bid Express (a commercial site, not read); NDOT's own upcoming-projects PDF lists about 8 jobs a month with no county. Not built.
+- **Minnesota**: city and county ads are gathered on eAdvert (run by the county and city engineers' associations), which this sandbox cannot reach, so its terms are unchecked. Worth a look from a normal connection.
 - **Texas**: TxDOT's notices are in a Tableau dashboard; the old monthly pages are gone. Not built.
 
 ### Discovery changes the same day

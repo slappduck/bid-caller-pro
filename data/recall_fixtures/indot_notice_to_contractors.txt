@@ -1,0 +1,726 @@
+# INDOT Notice to Highway Contractors for the Nov 5, 2026 letting, extracted with pypdf on 2026-11-02 and joined the way the scan joins it. Public.
+@@LETTING November 5, 2026 https://www.in.gov/indot/files/20261105-REG-NTC.pdf
+NOTICE TO HIGHWAY CONTRACTORS
+November 5, 2026
+Sealed proposals for certain highway improvements as described below will be received from contractors holding a valid Certificate of Qualification
+issued by the Indiana Department of Transportation (INDOT) until the above stated letting date and time.
+ELECTRONIC BIDDING: All contracts within this notice are designated for electronic bidding via the Bid Express Online Bidding Exchange (Bid
+Express). Only electronic bids submitted via Bid Express will be accepted on contracts designated for electronic bidding.
+LOCATION OF OPENING: All submitted proposal bids will be downloaded from Bid Express immediately after the above stated letting date & time.
+Due to the time required to download and import them into the processing database, the reading and immediate public release of the proposal bids will
+begin at 11:30 AM on the INDOT webpage. With advanced notice, INDOT will accommodate anyone wishing to attend in-person the reading of the
+proposal bids.* To request in-person attendance of proposal bid readings please contact Contract Administration at indotbidders@indot.in.gov at least
+24 hours prior to the letting. Proposal bids will be considered as provided for in the Rules governing INDOT bidding.
+LETTING DOCUMENTS: Detailed Construction Contract letting documents will be available for downloading via the INDOT internet Documents
+Download webpage at no cost. Those document files are copyright free without restrictions on duplication or distribution. Required electronic bidding
+files will be available from the Bid Express website. It is the bidder's responsibility to check the Bid Express website for all amendment files prior to the
+deadline. An amendment file may not be communicated by the issuance of an INDOT revision notice.
+BIDDER REGISTRATION: Contractors planning to submit electronic bids via Bid Express must register in advance by emailing their request to bid to:
+INDOTbidders@indot.in.gov. Requests must indicate the contracts desired to bid with call number(s) and include the Contractor’s FEIN number. Only
+registered valid bidders may submit bids via Bid Express. Bidder registration requests must may be received no later than 9:00 AM (local time) on the
+bid opening date.
+BID BONDS: An executed bid bond shall be included with all bids. Only electronic bid bonds submitted through the designated electronic medium,
+either Surety2000 or Tinubu Surety Solution, will be accepted with the bid.
+PERFORMANCE BONDS: A fully executed performance bond shall be included with all bids, except on contracts for roadside mowing, vegetation
+control, demolition, landscaping, fencing, seeding and sodding, bridge painting, and guardrail installations of $100,000 or less, when the bidder may
+elect not to furnish a performance bond. Bid Express does not support submittal of the performance bond. The performance bond must be submitted
+to the Construction Letting email inbox or be delivered on paper by the time set for receipt of proposal bids.
+CONTRACTOR EMPLOYEE DRUG TESTING PLAN: Each contractor that submits a proposal bid in the amount of $150,000 or more for highway
+improvements described in this notice is required to submit with that bid a written plan for a program to test the contractor’s employees for drugs. The
+plan shall be in compliance with Indiana Code 4-13-18. The plan must be submitted to the Construction Letting email inbox or deposited with the
+INDOT Prequalification Engineer by the time set for receipt of proposal bids.
+October 07, 2026Published:
+Letting Date & Time:
+INDIANA DEPARTMENT OF TRANSPORTATION
+10:00 AMat
+INDIANA DEPARTMENT OF TRANSPORTATION
+Contract Administration Division
+100 North Senate Avenue, N758-Cont
+Indianapolis, IN 46204
+For more information call (317)232-5300.
+INTERNET WEBPAGE ADDRESSES:
+Documents Download webpage - http://erms.indot.in.gov/ViewDocs/
+Rules for Bidding webpage - http://www.in.gov/dot/div/contracts/letting/general/105iac11.pdf
+Letting Information Index webpage - http://www.in.gov/dot/div/contracts/letting/index.html
+Bid Express website - https://www.bidx.com/
+TITLE VI ASSURANCES: In accordance with Title VI of the Civil Rights Act of 1964, 78 Stat. 252, 42 U.S.C. 2000d to 2000d-4 and Title 49, Code of
+Federal Regulations, Department of Transportation, Sub Title A, Office of the Secretary, Part 21, Nondiscrimination in Federally assisted programs of
+the Department of Transportation, the Indiana Department of Transportation assures minority business enterprises will be afforded full opportunity to
+submit bids in response to this invitation and will not be discriminated against on the grounds of race, color, sex, age, national origin, religion, sexual
+orientation, gender identity, disability/handicap or income status in consideration for an award.
+Page 1 of 17
+NOTICE TO HIGHWAY CONTRACTORS
+atNovember 5, 2026 10:00 AMLetting Date & Time:
+111
+R -39073-A BIKE AND PEDESTRIAN FACILITIES
+Greenfield DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+1592448 BIKE AND PEDESTRIAN FACILITIES1592448
+HANCOCK COUNTY - ALONG CR 200W FROM 600 FT S OF WEST
+900N TO N FORTVILLE PIKE
+June      02, 2028 0.00
+C(B) E(A) E(E)
+Completion Date DBE Goal:
+Qualifications:
+121
+R -42227-A INTERSECTION IMPROVEMENT, ROUNDABOUT, BIKE
+AND PED FACILITY
+Greenfield DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+1901880 INTERSECTION IMPROVEMENT, ROUNDABOUT1901880
+HAMILTON COUNTY - ON SR 38 AT LOGAN STREET
+2500934 BIKE AND PEDESTRIAN FACILITIES2500934
+HAMILTON COUNTY - ON SR 38 AT LOGAN STREET
+May       19, 2028 0.00
+B(A) C(B) E(F)
+Completion Date DBE Goal:
+Qualifications:
+131
+R -42446-A SMALL STRUCTURE REPLACEMENT
+LaPorte DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+1900028 SMALL STRUCTURE REPLACEMENT CV 421-046-227.00 CULVERT1900028
+LAPORTE COUNTY - ON US 421 OVER E ARM LITTLE CALUMET
+RIVER, 3.22 MI S OF I-94
+1900029 SMALL STRUCTURE REPLACEMENT CV 421-046-229.10 CULVERT1900029
+LAPORTE COUNTY - ON US 421 OVER WEST BRANCH TRAIL
+CREEK, 1.2 MILES S OF I-94
+June      30, 2028 0.00
+C(B) E(E)
+Completion Date DBE Goal:
+Qualifications:
+Page 2 of 17
+NOTICE TO HIGHWAY CONTRACTORS
+atNovember 5, 2026 10:00 AMLetting Date & Time:
+141
+R -43210-A SMALL STRUCTURES AND DRAINS CONSTRUCTION
+LaPorte DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2001612 SMALL STRUCTURES AND DRAINS CONSTRUCTION2001612
+JASPER COUNTY - ON SR 10 AT VARIOUS LOCATIONS
+2001615 SMALL STRUCTURES AND DRAINS CONSTRUCTION2001615
+JASPER COUNTY - ON SR 110 AT VARIOUS LOCATIONS
+September 24, 2027 0.00
+C(B) E(E)
+Completion Date DBE Goal:
+Qualifications:
+211
+R -43746-A HMA OVERLAY, PREVENTIVE MAINTENANCE
+Seymour DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2100170 HMA OVERLAY, PREVENTIVE MAINTENANCE2100170
+WASHINGTON COUNTY - ON SR 60 FROM 2.86 MILES W OF SR 335
+TO 100 FEET W OF SR 335
+July      30, 2027 0.00
+B(A) E(R)
+Completion Date DBE Goal:
+Qualifications:
+221
+R -43809-A SMALL STRUCTURE REPLACEMENT
+LaPorte DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+1701334 SMALL STRUCTURE REPLACEMENT CV 030-064-18.75 CULVERT1701334
+PORTER COUNTY - ON US 30 OVER UNT, 4.73 MILES EAST OF SR
+51
+1701335 SMALL STRUCTURE REPLACEMENT CV 030-064-19.10 CULVERT1701335
+PORTER COUNTY - ON US 30 OVER UNT TO LAKE LOUISE, 5.26
+MILES WEST OF SR 2
+June      02, 2028 0.00
+B(A) C(B) 0112E(E)
+Completion Date DBE Goal:
+Qualifications:
+Page 3 of 17
+NOTICE TO HIGHWAY CONTRACTORS
+atNovember 5, 2026 10:00 AMLetting Date & Time:
+231
+R -43915-A SMALL STRUCTURE PIPE LINING
+LaPorte DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2100762 SMALL STRUCTURE PIPE LINING CV 049-064-37.65 CULVERT2100762
+PORTER COUNTY - ALONG SR 49 OVER UNT TO DAMON RUN, 0.7
+MILE SOUTH OF I-90
+August    01, 2027 0.00
+E(E) 0290
+Completion Date DBE Goal:
+Qualifications:
+251
+R -43950-A INTERCHANGE MODIFICATION
+Greenfield DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2000159 INTERCHANGE MODIFICATION2000159
+MARION COUNTY - ON I-465 AT KEYSTONE AVENUE
+October   05, 2027 0.00
+E(D) E(G)
+Completion Date DBE Goal:
+Qualifications:
+261
+R -44008-A BIKE AND PEDESTRIAN FACILITIES
+LaPorte DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2101141 BIKE AND PEDESTRIAN FACILITIES2101141
+PORTER COUNTY - ALONG THE TOD PARKING LOT TO NAPOLEON
+ST AND INDIANA STREET
+November  15, 2028 0.00
+A(B) C(B) 0120
+Completion Date DBE Goal:
+Qualifications:
+Page 4 of 17
+NOTICE TO HIGHWAY CONTRACTORS
+atNovember 5, 2026 10:00 AMLetting Date & Time:
+271
+R -44293-A BIKE AND PEDESTRIAN FACILITIES
+Seymour DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2101688 BIKE AND PEDESTRIAN FACILITIES2101688
+HARRISON COUNTY - ON MULBERRY ST FROM E POPLAR ST TO
+COLLEGE AVE
+May       07, 2028 0.00
+A(B) C(B) E(F)E(A)
+Completion Date DBE Goal:
+Qualifications:
+281
+R -44392-A SMALL STRUCTURES AND DRAINS CONSTRUCTION
+Crawfordsville DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2200503 SMALL STRUCTURES AND DRAINS CONSTRUCTION CV 040-084-
+15.65 CULVERT
+2200503
+VIGO COUNTY - ON US 40, 7.40 MILES EAST OF I-70
+June      30, 2028 0.00
+C(B) E(E)
+Completion Date DBE Goal:
+Qualifications:
+Page 5 of 17
+NOTICE TO HIGHWAY CONTRACTORS
+atNovember 5, 2026 10:00 AMLetting Date & Time:
+291
+R -44432-A SMALL STRUCTURE REPLACEMENT AND  PIPE LINING
+Seymour DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2200495 SMALL STRUCTURES AND DRAINS CONSTRUCTION2200495
+DECATUR COUNTY - ON SR 46 OVER UNT TO COBBS FORK, 5.3
+MILES EAST OF US 421
+2200601 SMALL STRUCTURE PIPE LINING CV 003-016-73.10 CULVERT2200601
+DECATUR COUNTY - ON SR 3 OVER UNNAMED DITCH, 1.43 MILES
+NORTH OF US 421
+2200603 SMALL STRUCTURE PIPE LINING CV 003-016-67.41 CULVERT2200603
+DECATUR COUNTY - ON SR 3 OVER UNT TO FALL FORK, 0.69 MILE
+EAST OF SR 46
+2200605 SMALL STRUCTURE REPLACEMENT CV 003-016-61.68 CULVERT2200605
+DECATUR COUNTY - ON SR 3 OVER UNT TO WYALOOSING CREEK,
+5.04 MILES S OF SR 46
+July      19, 2027 0.00
+C(B) E(E) 02900112
+Completion Date DBE Goal:
+Qualifications:
+301
+R -44492-A SMALL STRUCTURE REPLACEMENT AND PIPE LINING
+Vincennes DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2200571 SMALL STRUCTURE REPLACEMENT CV 056-059-62.26 CULVERT2200571
+ORANGE COUNTY - ON SR 56 OVER UNT TO DAVIS CREEK, 4.66
+MILES WEST OF SR 145
+2500553 SMALL STRUCTURE PIPE LINING CV 145-059-35.26 CULVERT2500553
+ORANGE COUNTY - ON SR 145 OVER UNT TO PATOKA LAKE, 3.60
+MILES N OF SR 164
+August    01, 2027 0.00
+C(B) E(E) 0290
+Completion Date DBE Goal:
+Qualifications:
+Page 6 of 17
+NOTICE TO HIGHWAY CONTRACTORS
+atNovember 5, 2026 10:00 AMLetting Date & Time:
+321
+R -44635-A HMA OVERLAY, MINOR STRUCTURAL AND BRIDGE
+THIN DECK OVERLAY
+LaPorte DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2200750 BRIDGE THIN DECK OVERLAY (I94)I80-16-04296 COMPOSITE
+CONTINUOUS STEEL BEAM
+2200750
+LAKE COUNTY - ON I-94W OVER I-90, 0.46 MILE EAST OF I-80
+2200751 BRIDGE THIN DECK OVERLAY (I94)I80-16-04296 COMPOSITE
+CONTINUOUS STEEL BEAM
+2200751
+LAKE COUNTY - ON I-94E OVER I-90, 0.46 MILE EAST OF I-80
+2200821 HMA OVERLAY, MINOR STRUCTURAL2200821
+PORTER COUNTY - ON I-94 FROM I-80/90 TO 0.52 MILE EAST OF SR
+249
+June      01, 2028 0.00
+B(A) D(B) E(C)
+Completion Date DBE Goal:
+Qualifications:
+341
+R -45582-A PAVEMENT PATCHING
+Fort Wayne DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2400568 PAVEMENT PATCHING2400568
+ALLEN COUNTY - ON I-469 FROM 0.54 MI EAST OF I-69 TO 0.57 MI
+WEST OF SR 1
+October   30, 2027 0.00
+A(A) E(Q)
+Completion Date
+Qualifications:
+WBE Goal: 0.00 IVOSB Goal: 0.00MBE Goal:
+351
+R -45664-A SMALL STRUCTURE REPLACEMENT
+LaPorte DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2300980 SMALL STRUCTURE REPLACEMENT CV 016-037-20.50 CULVERT2300980
+JASPER COUNTY - ON SR 16 OVER SPURGEON DITCH, 5.74 MILES
+EAST OF US 231
+October   15, 2027 0.00
+C(B) E(E)
+Completion Date DBE Goal:
+Qualifications:
+Page 7 of 17
+NOTICE TO HIGHWAY CONTRACTORS
+atNovember 5, 2026 10:00 AMLetting Date & Time:
+361
+R -45794-A PAVEMENT PATCHING
+Greenfield DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2400726 PAVEMENT PATCHING2400726
+MARION COUNTY - ON I-65 FROM 5.77 MILES S OF I-465S TO 0.18
+MILE N OF I-465S
+November  02, 2027 0.00
+A(A) B(A) E(Q)
+Completion Date
+Qualifications:
+WBE Goal: 0.00 IVOSB Goal: 3.00MBE Goal:
+371
+R -45886-A PAVEMENT MARKINGS AND SIGN MODERNIZATION
+Crawfordsville DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2401657 PAVEMENT MARKINGS2401657
+FOUNTAIN COUNTY - ON VARIOUS ROADS THROUGHOUT THE
+COUNTY
+2401658 SIGN MODERNIZATION2401658
+FOUNTAIN COUNTY - ALONG VARIOUS ROADS THROUGHOUT THE
+COUNTY
+September 01, 2027 0.00
+E(D) E(G)
+Completion Date DBE Goal:
+Qualifications:
+381
+R -46136-A INTERSECTION IMPROVEMENT WITH ADDED TURN
+LANES
+LaPorte DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2000022 INTERSECTION IMPROVEMENT WITH ADDED TURN LANES2000022
+LAKE COUNTY - ON US 20 AT SR 152
+June      05, 2028 0.00
+B(A) C(B)
+Completion Date DBE Goal:
+Qualifications:
+Page 8 of 17
+NOTICE TO HIGHWAY CONTRACTORS
+atNovember 5, 2026 10:00 AMLetting Date & Time:
+391
+R -46147-A HMA OVERLAY, PREVENTIVE MAINTENANCE
+Seymour DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2200834 HMA OVERLAY, PREVENTIVE MAINTENANCE2200834
+BARTHOLOMEW COUNTY - ON I-65 FROM 0.44 MILE N OF US 31 TO
+0.54 MILE N OF SR 252
+October   30, 2027 0.00
+B(A)
+Completion Date DBE Goal:
+Qualifications:
+401
+R -46447-A SIDEWALK CONSTRUCTION AND DRAINAGE
+IMPROVEMENTS
+LaPorte DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2501048 SIDEWALK CONSTRUCTION AND DRAINAGE IMPROVEMENTS2501048
+LAKE COUNTY - ALONG CATHERINE ST, 71ST AVE AND 70TH AVE IN
+MERRILLVILLE
+July      16, 2027 0.00
+C(B) E(E) E(F)
+Completion Date DBE Goal:
+Qualifications:
+411
+R -46935-A TREE REMOVAL AND TRIMMING
+Greenfield DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2600938 TREE REMOVAL AND TRIMMING2600938
+HAMILTON COUNTY - ALONG SR 32 FROM 520 FT E OF EAST ST TO
+625 FT W OF RIVER AV
+January   01, 2028 0.00
+C(B) 0380
+Completion Date
+Qualifications:
+WBE Goal: 0.00 IVOSB Goal: 3.00MBE Goal:
+Page 9 of 17
+NOTICE TO HIGHWAY CONTRACTORS
+atNovember 5, 2026 10:00 AMLetting Date & Time:
+471
+B -43912-A BRIDGE THIN DECK OVERLAY
+LaPorte DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2400455 BRIDGE THIN DECK OVERLAY 002-45-09632 CONTINUOUS
+REINFORCED CONCRETE SLAB
+2400455
+LAKE COUNTY - ON SR 2 OVER MJ BROWN DITCH, 2.70 MILES
+EAST OF I-65
+April     30, 2027 0.00
+C(B) E(C) 0272
+Completion Date DBE Goal:
+Qualifications:
+481
+B -44260-A BRIDGE DECK OVERLAY AND REHABILITATION OR
+REPAIR
+Crawfordsville DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2101713 BRIDGE DECK OVERLAY 54-00175 CONTINUOUS REINFORCED
+CONCRETE SLAB
+2101713
+MONTGOMERY COUNTY - ON CR 550E OVER BIG RACCOON
+CREEK, 0.40 MILE S OF SR 234
+2101715 BRIDGE REHABILITATION OR REPAIR 54-00066 CONTINUOUS
+REINFORCED CONCRETE SLAB
+2101715
+MONTGOMERY COUNTY - ON CR 300S OVER WALNUT FORK
+SUGAR CRK, 0.10 MI OF US 136
+2101723 BRIDGE DECK OVERLAY 54-00063 CONTINUOUS REINFORCED
+CONCRETE SLAB
+2101723
+MONTGOMERY COUNTY - ON CR 625E OVER SUGAR CREEK, 0.10
+MILE NORTH OF SR 32
+August    15, 2027 0.00
+C(B) D(A) E(C)
+Completion Date DBE Goal:
+Qualifications:
+Page 10 of 17
+NOTICE TO HIGHWAY CONTRACTORS
+atNovember 5, 2026 10:00 AMLetting Date & Time:
+491
+B -44266-A BRIDGE REPLACEMENT
+Greenfield DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2101729 BRIDGE REPLACEMENT 38-00093 CONTINUOUS REINFORCED
+CONCRETE SLAB
+2101729
+JAY COUNTY - ON CR 350W OVER SIPE DITCH, 0.90 MILE NORTH
+OF SR 26
+September 17, 2027 0.00
+C(B) D(A) 0250
+Completion Date DBE Goal:
+Qualifications:
+501
+B -44268-A BRIDGE REHABILITATION OR REPAIR
+Greenfield DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2101735 BRIDGE REHABILITATION OR REPAIR 18-00030 CONTINUOUS
+REINFORCED CONCRETE SLAB
+2101735
+DELAWARE COUNTY - ON EATON-ALBANY PIKE OVER REES DITCH,
+0.55 MILE E OF FW AVE
+September 17, 2027 0.00
+C(B) D(A)
+Completion Date DBE Goal:
+Qualifications:
+511
+B -44466-A BRIDGE DECK OVERLAY AND COPING REPLACEMENT
+Seymour DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2200670 BRIDGE DECK OVERLAY AND COPING REPLACEMENT 050-36-06788
+CONTINUOUS REINFORCED CONCRETE SLAB
+2200670
+JACKSON COUNTY - ON US 50 OVER VON FANGE DITCH, 0.82 MILE
+WEST OF SR 11
+October   01, 2027 0.00
+D(A) E(C)
+Completion Date DBE Goal:
+Qualifications:
+Page 11 of 17
+NOTICE TO HIGHWAY CONTRACTORS
+atNovember 5, 2026 10:00 AMLetting Date & Time:
+521
+B -44533-A REPLACE SUPERSTRUCTURE
+Fort Wayne DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2200710 REPLACE SUPERSTRUCTURE I469-18-07027 CONTINUOUS
+COMPOSITE PLATE GIRDER
+2200710
+ALLEN COUNTY - ON MINNICH ROAD NB OVER I-469, 1.73 MILES
+WEST OF US 30
+2200711 REPLACE SUPERSTRUCTURE I469-18-07027 CONTINUOUS
+COMPOSITE PLATE GIRDER
+2200711
+ALLEN COUNTY - ON MINNICH ROAD SB OVER I-469, 1.73 MILES
+WEST OF US 30
+October   30, 2027 0.00
+D(B)
+Completion Date DBE Goal:
+Qualifications:
+531
+B -44534-A BRIDGE DECK OVERLAY
+Fort Wayne DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2200786 BRIDGE DECK OVERLAY I69-311-07303 BSBL CONTINUOUS
+PRESTRESSED CONCRETE I-BEAM
+2200786
+ALLEN COUNTY - ON I-69S OVER WASHINGTON CENTER ROAD,
+0.62 MI N OF SR 3
+2200787 BRIDGE DECK OVERLAY I69-311-07303 BNBL CONTINUOUS
+PRESTRESSED CONCRETE I-BEAM
+2200787
+ALLEN COUNTY - ON I-69N OVER WASHINGTON CENTER ROAD,
+0.62 MI N OF SR 3
+2200788 BRIDGE DECK OVERLAY I69-310-04550 DSBL CONTINUOUS
+PRESTRESSED CONCRETE I-BEAM
+2200788
+ALLEN COUNTY - ON I-69S OVER SPY RUN CREEK, 0.42 MI S OF SR
+3
+2200789 BRIDGE DECK OVERLAY I69-310-04550 DNBL CONTINUOUS
+PRESTRESSED CONCRETE I-BEAM
+2200789
+ALLEN COUNTY - ON I-69N OVER SPY RUN CREEK, 0.42 MI S OF SR
+3
+October   30, 2027 0.00
+D(B) E(C)
+Completion Date DBE Goal:
+Qualifications:
+Page 12 of 17
+NOTICE TO HIGHWAY CONTRACTORS
+atNovember 5, 2026 10:00 AMLetting Date & Time:
+541
+B -44535-A BRIDGE THIN DECK OVERLAY AND NEW SIGNAL
+INSTALLATION
+Fort Wayne DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2200984 BRIDGE THIN DECK OVERLAY I469-00-07031 COMPOSITE
+CONTINUOUS STEEL BEAM
+2200984
+ALLEN COUNTY - ON I-469E OVER I-69, 5.51 MILES SOUTH OF US
+24
+2200985 BRIDGE THIN DECK OVERLAY I469-00-07031 COMPOSITE
+CONTINUOUS STEEL BEAM
+2200985
+ALLEN COUNTY - ON I-469W OVER I-69, 5.51 MILES SOUTH OF US
+24
+2400753 NEW SIGNAL INSTALLATION2400753
+ALLEN COUNTY - ON SR 1 AND I-469 RAMPS
+August    21, 2027 0.00
+D(B) E(A) 0272
+Completion Date DBE Goal:
+Qualifications:
+551
+B -44536-A BRIDGE DECK OVERLAY
+Fort Wayne DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2200548 BRIDGE DECK OVERLAY 003-44-07156 REINFORCED CONCRETE
+SLAB
+2200548
+LAGRANGE COUNTY - ON SR 3 OVER MILL RACE, 2.98 MILES
+NORTH OF US 20
+November  01, 2027 0.00
+C(B) D(A) 0250
+Completion Date DBE Goal:
+Qualifications:
+Page 13 of 17
+NOTICE TO HIGHWAY CONTRACTORS
+atNovember 5, 2026 10:00 AMLetting Date & Time:
+561
+B -44548-A BRIDGE REPLACEMENT AND REHABILITATION
+Fort Wayne DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2200564 BRIDGE REPLACEMENT CV 016-035-101.75 CULVERT2200564
+HUNTINGTON COUNTY - ON SR 16 OVER SILVER CREEK BRANCH,
+1.47 MILES E OF SR 105
+2200955 BRIDGE DECK OVERLAY 105-35-06867 CONTINUOUS REINFORCED
+CONCRETE SLAB
+2200955
+HUNTINGTON COUNTY - ON SR 105 OVER SILVER CREEK, 1.57
+MILES SOUTH OF SR 16
+October   31, 2027 0.00
+D(A) E(E)
+Completion Date DBE Goal:
+Qualifications:
+571
+B -44588-A SMALL STRUCTURES AND DRAINS CONSTRUCTION
+Greenfield DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2200497 SMALL STRUCTURES AND DRAINS CONSTRUCTION 48288
+CULVERT
+2200497
+DELAWARE COUNTY - ON SR 32 OVER UNT TO TRUITT DITCH, 0.95
+MILE EAST OF US 35
+June      25, 2027 0.00
+E(E) E(K)
+Completion Date DBE Goal:
+Qualifications:
+581
+B -44653-A BRIDGE COATING
+LaPorte DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2200537 BRIDGE COATING I80-03-07553 CONTINUOUS COMPOSITE PLATE
+GIRDER
+2200537
+LAKE COUNTY - ON I-80 OVER KENNEDY AVENUE, 0.97 MILE EAST
+OF US 41
+June      30, 2027 0.00
+D(B) E(M)
+Completion Date DBE Goal:
+Qualifications:
+Page 14 of 17
+NOTICE TO HIGHWAY CONTRACTORS
+atNovember 5, 2026 10:00 AMLetting Date & Time:
+591
+B -45063-A BRIDGE REPLACEMENT
+Fort Wayne DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+1900048 BRIDGE REPLACEMENT 035-27-10469 PRESTRESSED CONCRETE
+BULB-T BEAM
+1900048
+GRANT COUNTY - ON US 35 OVER DEER CREEK, 0.25 MILE WEST
+OF SR 9
+October   31, 2027 0.00
+D(A)
+Completion Date DBE Goal:
+Qualifications:
+601
+B -45410-A BRIDGE THIN DECK OVERLAY
+Seymour DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2300825 BRIDGE THIN DECK OVERLAY 203-72-03078 PRESTRESSED
+CONCRETE I-BEAM
+2300825
+SCOTT COUNTY - ON SR 203 OVER WOODS FORK CREEK, 1.52
+MILES SOUTH OF SR 3
+July      30, 2027 0.00
+D(A) 0272
+Completion Date DBE Goal:
+Qualifications:
+611
+B -45648-A BRIDGE THIN DECK OVERLAY
+LaPorte DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2300840 BRIDGE THIN DECK OVERLAY 912-45-06599 COMPOSITE
+CONTINUOUS STEEL BEAM
+2300840
+LAKE COUNTY - ON SR 912 OVER GUTHRIE STREET, 0.32 MILE
+WEST OF US 12
+June      11, 2027 0.00
+D(B) 0272
+Completion Date DBE Goal:
+Qualifications:
+Page 15 of 17
+NOTICE TO HIGHWAY CONTRACTORS
+atNovember 5, 2026 10:00 AMLetting Date & Time:
+621
+B -46218-A SMALL STRUCTURE REPLACEMENT
+Seymour DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2200547 SMALL STRUCTURE REPLACEMENT CV 262-058-8.80 CULVERT2200547
+OHIO COUNTY - ON SR 262 OVER UNNAMED DITCH, 8.80 MILES S
+OF US 50
+August    13, 2027 0.00
+C(B) 0103
+Completion Date DBE Goal:
+Qualifications:
+631
+B -46893-A TREE REMOVAL AND TRIMMING
+Greenfield DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2600795 TREE REMOVAL AND TRIMMING2600795
+VARIOUS COUNTIES - ALONG VARIOUS ROADS THROUGHOUT THE
+GREENFIELD DISTRICT
+March     12, 2027 0.00
+0380
+Completion Date
+Qualifications:
+WBE Goal: 0.00 IVOSB Goal: 3.00MBE Goal:
+701
+M -46855-A TREE REMOVAL AND TRIMMING
+LaPorte DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2500498 TREE REMOVAL AND TRIMMING2500498
+VARIOUS COUNTIES - ALONG VARIOUS ROADS THROUGHOUT THE
+LAPORTE DISTRICT
+March     31, 2027 0.00
+0380
+Completion Date
+Qualifications:
+WBE Goal: 0.00 IVOSB Goal: 3.00MBE Goal:
+Page 16 of 17
+NOTICE TO HIGHWAY CONTRACTORS
+atNovember 5, 2026 10:00 AMLetting Date & Time:
+751
+T -44553-A RAISED PAVEMENT MARKINGS, REFURBISHED
+Fort Wayne DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2201087 RAISED PAVEMENT MARKINGS, REFURBISHED2201087
+VARIOUS COUNTIES - ON VARIOUS ROADS THROUGHOUT THE
+FORT WAYNE DISTRICT
+November  15, 2027 0.00
+0320
+Completion Date DBE Goal:
+Qualifications:
+761
+T -46088-A RAISED PAVEMENT MARKINGS, REFURBISHED
+Crawfordsville DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+2500040 RAISED PAVEMENT MARKINGS, REFURBISHED2500040
+VARIOUS COUNTIES - ALONG VARIOUS ROADS THROUGHOUT THE
+CRAWFORDSVILLE DISTRICT
+July      31, 2027 0.00
+0320
+Completion Date DBE Goal:
+Qualifications:
+771
+T -46195-A TRAFFIC SIGNALS MODERNIZATION
+Crawfordsville DistrictCall
+Contract
+Project Control No. LocationFederal/State No.
+1800215 TRAFFIC SIGNALS MODERNIZATION1800215
+TIPPECANOE COUNTY - ON SR 26 AT CR 900E, 4.71 MILES EAST OF
+I-65
+June      30, 2028 0.00
+B(A) E(A)
+Completion Date DBE Goal:
+Qualifications:
+Page 17 of 17

@@ -2337,6 +2337,67 @@ def parse_wi_notice_to_contractors(text, state="WI", base_url=""):
     return rows
 
 
+# Indiana: each INDOT letting's Notice to Highway Contractors PDF is at
+# /indot/files/<YYYYMMDD>-REG-NTC.pdf. Every contract gives its call number,
+# contract id, the work, its district and a "<COUNTY> COUNTY - ON ..." line
+# for each project in it.
+_IN_CONTRACT_RE = re.compile(r"^\s*([A-Z])\s*-(\d{5})-([A-Z])\s+(.+)$", re.M)
+_IN_COUNTY_RE = re.compile(r"^\s*([A-Z][A-Z .'-]+?) COUNTY\s*-\s*(.+)$", re.M)
+_IN_TOWN_RE = re.compile(r"^\s*(?:CITY|TOWN) OF ([A-Z][A-Z .'-]+?)\s*-\s*(.+)$", re.M)
+
+
+def parse_in_notice_to_contractors(text, state="IN", base_url=""):
+    rows = []
+    for chunk in str(text or "").split(OK_LETTING_MARK)[1:]:
+        head, _, body = chunk.partition("\n")
+        m = re.match(r"(.+?\d{4})\s+(\S+)\s*$", head.strip())
+        if not m:
+            continue
+        deadline, url = m.group(1), m.group(2)
+        hits = list(_IN_CONTRACT_RE.finditer(body))
+        for n, cm in enumerate(hits):
+            end = hits[n + 1].start() if n + 1 < len(hits) else len(body)
+            block = body[cm.end():end]
+            ident = "%s-%s-%s" % (cm.group(1), cm.group(2), cm.group(3))
+            work = cm.group(4).strip()
+            more = re.split(r"\n\s*[A-Za-z ]+ ?District\s*Call", block, maxsplit=1)
+            if len(more) == 2:
+                work = (work + " " + re.sub(r"\s+", " ", more[0])).strip()
+            before = body[max(0, cm.start() - 40):cm.start()].strip().splitlines()
+            call = before[-1].strip() if before and before[-1].strip().isdigit() else ""
+            places = _IN_TOWN_RE.findall(block)
+            counties = _IN_COUNTY_RE.findall(block)
+            if not (places or counties):
+                continue
+            where = re.sub(r"\s+", " ", (places or counties)[0][1]).strip()
+            title = re.sub(r"\s+", " ", _ok_case(work) + ": " + _ok_case(where))
+            if len(title) > 140:
+                title = title[:140].rsplit(" ", 1)[0].rstrip(" ,") + "…"
+            if not looks_relevant(work, block):
+                continue
+            row = {
+                "title": title,
+                "scope": ("Contract %s%s. %s, %s." % (
+                    ident, (", call %s" % call) if call else "", _ok_case(work), _ok_case(where)))[:1200],
+                "url": url,
+                "deadline": deadline,
+                "status": "Open",
+                "agency": "INDOT letting",
+                "call": call or ident,
+                "state": str(state or "IN").upper(),
+                "source": "state_dot",
+                "documents": [{"name": "Notice to Contractors", "url": url},
+                              {"name": "Plans and bidding (Bid Express)",
+                               "url": "https://www.bidx.com/in/main"}],
+            }
+            if places:
+                row["town"] = _ok_case(places[0][0].strip())
+            else:
+                row["county"] = _ok_case(counties[0][0].strip())
+            rows.append(row)
+    return rows
+
+
 # Which reader a local-notices source uses. Keyed by the kind named in
 # license_server's LOCAL_NOTICE_SOURCES.
 LOCAL_NOTICE_PARSERS = {
@@ -2347,6 +2408,7 @@ LOCAL_NOTICE_PARSERS = {
     "ok_letting": parse_ok_letting_csv,
     "ky_ntc": parse_ky_notice_to_contractors,
     "wi_ntc": parse_wi_notice_to_contractors,
+    "in_ntc": parse_in_notice_to_contractors,
 }
 
 

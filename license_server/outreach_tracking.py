@@ -124,6 +124,7 @@ LOCAL_NOTICE_LABELS = {
     "OK": "ODOT's lettings, city sidewalk and street jobs included",
     "KY": "KYTC's lettings, county and city road jobs included",
     "WI": "WisDOT's lettings, city, village and county street jobs included",
+    "IN": "INDOT's lettings, sidewalk and trail jobs included",
 }
 
 

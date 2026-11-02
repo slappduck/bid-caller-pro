@@ -1085,6 +1085,7 @@ LOCAL_NOTICE_LABELS = {
     "OK": "ODOT's lettings, city sidewalk and street jobs included",
     "KY": "KYTC's lettings, county and city road jobs included",
     "WI": "WisDOT's lettings, city, village and county street jobs included",
+    "IN": "INDOT's lettings, sidewalk and trail jobs included",
 }
 
 
@@ -7372,6 +7373,7 @@ LOCAL_NOTICE_SOURCES = {
             "ky_ntc")],
     "WI": [("https://wisconsindot.gov/Pages/doing-bus/contractors/hcci/bid-let.aspx",
             "wi_ntc")],
+    "IN": [("https://www.in.gov/indot/doing-business-with-indot/home/contracts/", "in_ntc")],
 }
 # Oklahoma: ODOT's contracts page links one page per upcoming letting, each
 # naming the folder of its spreadsheet. odot.org has no robots.txt of its own
@@ -7465,6 +7467,38 @@ def _wi_letting_text(today=None):
     for when in sorted(dates)[:WI_LETTINGS_READ]:
         url = ("https://wisconsindot.gov/hccidocs/bid-let/%d/%s/advertisement.pdf"
                % (when.year, when.strftime("%Y%m%d")))
+        raw, _ctype, outcome = _fetch_document(url)
+        text = _pdf_all_text(raw) if outcome == "ok" else ""
+        if text:
+            label = "%s %d, %d" % (when.strftime("%B"), when.day, when.year)
+            parts.append("%s%s %s\n%s" % (bid_sources.OK_LETTING_MARK, label, url, text))
+    return "\n".join(parts)
+
+
+# Indiana: INDOT's contracts page links each upcoming letting's page by a
+# dated slug ("thursday-november-5-2026-regular-letting"), and that
+# letting's Notice to Contractors is /indot/files/<YYYYMMDD>-REG-NTC.pdf.
+IN_LETTINGS_READ = int(os.environ.get("IN_LETTINGS_READ", "3"))
+_IN_LETTING_RE = re.compile(
+    r"(january|february|march|april|may|june|july|august|september|october|november|december)"
+    r"-(\d{1,2}),?-(\d{4})-regular-letting", re.I)
+
+
+def _in_letting_text(index_html, today=None):
+    today = today or datetime.date.today()
+    months = ["january", "february", "march", "april", "may", "june", "july",
+              "august", "september", "october", "november", "december"]
+    dates = set()
+    for mon, day, year in _IN_LETTING_RE.findall(index_html or ""):
+        try:
+            when = datetime.date(int(year), months.index(mon.lower()) + 1, int(day))
+        except ValueError:
+            continue
+        if today <= when <= today + datetime.timedelta(days=OK_LETTING_HORIZON_DAYS):
+            dates.add(when)
+    parts = []
+    for when in sorted(dates)[:IN_LETTINGS_READ]:
+        url = "https://www.in.gov/indot/files/%s-REG-NTC.pdf" % when.strftime("%Y%m%d")
         raw, _ctype, outcome = _fetch_document(url)
         text = _pdf_all_text(raw) if outcome == "ok" else ""
         if text:
@@ -7787,6 +7821,9 @@ def _load_local_source(url, kind):
         return text, ("ok" if text else "unreadable")
     if kind == "wi_ntc":
         text = _wi_letting_text()
+        return text, ("ok" if text else "unreadable")
+    if kind == "in_ntc":
+        text = _in_letting_text(page)
         return text, ("ok" if text else "unreadable")
     return page, "ok"
 

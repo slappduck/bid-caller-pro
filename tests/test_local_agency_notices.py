@@ -520,3 +520,42 @@ class WisconsinNoticeTests(_FreshCache):
              patch("license_server._pdf_all_text", return_value="x"):
             ls._wi_letting_text(today=datetime.date(2026, 11, 2))
         self.assertEqual(got, ["https://wisconsindot.gov/hccidocs/bid-let/2026/20261110/advertisement.pdf"])
+
+
+IN_FIXTURE = os.path.join(ROOT, "data", "recall_fixtures", "indot_notice_to_contractors.txt")
+
+
+def in_rows():
+    with open(IN_FIXTURE, encoding="utf-8") as f:
+        return bid_sources.parse_in_notice_to_contractors(f.read().split("\n", 1)[1], "IN")
+
+
+class IndianaNoticeTests(_FreshCache):
+    def find(self, call):
+        return next(r for r in in_rows() if r["call"] == call)
+
+    def test_a_sidewalk_contract_is_read_with_its_county(self):
+        r = self.find("401")
+        self.assertEqual(r["county"], "Lake")
+        self.assertIn("Sidewalk Construction", r["title"])
+        self.assertEqual(r["deadline"], "November 5, 2026")
+
+    def test_bike_and_pedestrian_work_is_kept(self):
+        self.assertIn("Bike And Pedestrian", self.find("111")["title"])
+
+    def test_titles_have_no_double_spaces(self):
+        for r in in_rows():
+            self.assertNotIn("  ", r["title"])
+
+    def test_the_scan_builds_the_pdf_address_from_the_letting_slug(self):
+        import datetime
+        page = ('<a href="/indot/doing-business-with-indot/wednesday-october-7-2026-regular-letting">a</a>'
+                '<a href="/indot/doing-business-with-indot/thursday-november-5-2026-regular-letting">b</a>'
+                '<a href="/indot/doing-business-with-indot/home/contracts/december-09-2026-regular-letting">c</a>')
+        got = []
+        with patch("license_server._fetch_document",
+                   side_effect=lambda u: (got.append(u) or (b"%PDF", "application/pdf", "ok"))), \
+             patch("license_server._pdf_all_text", return_value="x"):
+            ls._in_letting_text(page, today=datetime.date(2026, 11, 2))
+        self.assertEqual(got, ["https://www.in.gov/indot/files/20261105-REG-NTC.pdf",
+                               "https://www.in.gov/indot/files/20261209-REG-NTC.pdf"])
