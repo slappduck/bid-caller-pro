@@ -1,7 +1,7 @@
 name: Remind trials that are about to end
 
 # There was a reminder for people already paying and none for people who had
-# not started yet. A seven-day trial that ends without a word is a
+# not started yet. A free trial that ends without a word is a
 # cancellation nobody had to decide on.
 #
 # One email, two days out, once per trial. Not a sequence: the acquisition

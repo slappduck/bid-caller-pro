@@ -747,7 +747,7 @@ function setAuthMode(mode){
   authMode=mode;
   const isSignup=mode==="signup";
   document.getElementById("auth-title").textContent=isSignup?"Create your free account":"Welcome back";
-  document.getElementById("auth-sub").textContent=isSignup?"7-day free trial \u2014 no card required":"Sign in to your account";
+  document.getElementById("auth-sub").textContent=isSignup?"14-day free trial \u2014 no card required":"Sign in to your account";
   document.getElementById("email-btn").textContent=isSignup?"Create Account":"Sign In";
   document.getElementById("password-wrap").style.display=isSignup?"block":"block";
   document.getElementById("magic-btn").style.display=isSignup?"block":"block";

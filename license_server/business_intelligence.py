@@ -472,7 +472,7 @@ def _trial_identity(email):
     license-key lookups, which must stay exact. Strips a +tag from the local
     part: josh+1@gmail.com and josh+2@gmail.com deliver to the same inbox on
     Gmail, Outlook, Fastmail and most other providers, so without this, a free
-    7-day trial (no card required, and every scan spends real OpenAI/search
+    trial (no card required, and every scan spends real OpenAI/search
     budget) could be farmed indefinitely from one real inbox."""
     email = (email or "").strip().lower()
     local, sep, domain = email.partition("@")

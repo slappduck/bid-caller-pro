@@ -19,9 +19,8 @@ The goal for the first 30 days: **10 paying customers.** Not more features.
 3. **Buy it once.** Subscribe monthly with your own card, check the app
    unlocks within a minute or two, then refund yourself in Stripe. A broken
    checkout loses every sale silently.
-4. **Decide the trial length.** Seven days is short for bid work: a contractor
-   may not have a bid due that week and never sees what the app does. 14 days
-   fits better. (Claude can change it; it's one number.)
+4. **The trial is 14 days** (changed from 7 on November 2, 2026), so a
+   contractor has time to see a bid come and go before deciding.
 
 ## 2. The 60-second demo
 
@@ -54,7 +53,7 @@ have nobody whose job is finding it.
 > there are [N] open within 50 miles of you, [one by name, e.g. "Republic's
 > sidewalk extension, due the 20th"]. Do you bid that kind of work?
 >
-> (yes) Can I text you the link? It's free for a week, no card. If you want,
+> (yes) Can I text you the link? It's free for two weeks, no card. If you want,
 > I'll stop by and show you on your phone in five minutes.
 
 Look up their area on the landing page before you call, so you can name a
@@ -64,7 +63,7 @@ real bid near them. That one detail is what makes it a call they listen to.
 
 - *"I already get bids from [BidNet / Dodge / the city's email list]."*
   "This covers the small towns and counties those miss, and it reads the bid
-  form and prices it for you. Run it next to what you use for a week and see
+  form and prices it for you. Run it next to what you use for two weeks and see
   what it finds that they don't."
 - *"$49 a month is a lot."* "One job pays for years of it. If it doesn't find
   you a bid worth bidding in the trial, don't pay."
@@ -136,7 +135,7 @@ replies. Look up their town on the landing page first.
 >
 > I built CurbCall Pro to find these and price them: it reads each bid form
 > and gives a target price from what the same work went for. Your area is at
-> curbcallpro.com/go/[slug], free for a week, no card.
+> curbcallpro.com/go/[slug], free for two weeks, no card.
 >
 > Joshua Hukel
 > CurbCall Pro, Oblique Systems, LLC
@@ -163,7 +162,6 @@ the first one: nobody arrives.
   for as long as they stay." A reason to decide now, and a thank-you to the
   people who take a chance on a new product. (Needs a Stripe price; Claude
   can wire the app side.)
-- **14-day trial**, as above.
 - **Annual at $399** is already about 4 months free. Mention it to anyone who
   wins a job in their first month.
 
@@ -220,7 +218,7 @@ Headlines (up to 30 characters):
 - See Open Bids by ZIP Code
 - Bid Forms Filled In for You
 - Know What the Work Goes For
-- Free 7-Day Trial, No Card
+- Free 14-Day Trial, No Card
 - Built for Concrete Contractors
 - Town & County Bids, Daily
 - Stop Hunting for Bids
@@ -234,7 +232,7 @@ Descriptions (up to 90 characters):
 
 - Open sidewalk, curb and ADA ramp bids from cities and counties near you, checked daily.
 - The bid form read for you: line items, what the work went for, and a target price.
-- Type your ZIP and see what's open near you right now. Free for 7 days, no card needed.
+- Type your ZIP and see what's open near you right now. Free for 14 days, no card needed.
 - Addendum and due-date alerts on your phone. Bid forms filled in. Made for flatwork.
 
 Pin "Sidewalk & Curb Bids Near You" to position 1 so every version says

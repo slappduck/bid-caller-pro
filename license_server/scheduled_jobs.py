@@ -298,7 +298,7 @@ def _cron_watchdog():
 # ── Telling somebody their trial is about to end ──
 #
 # There was a reminder for people already paying and none for people who had
-# not started. A seven-day trial that ends without a word is a cancellation
+# not started. A free trial that ends without a word is a cancellation
 # nobody had to decide on, and the whole funnel to date has converted zero.
 #
 # One email, two days out, once. Not a sequence: five a day of hand-written

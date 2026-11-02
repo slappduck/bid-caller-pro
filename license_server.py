@@ -171,7 +171,7 @@ def _admin_ok(supplied):
     """Constant-time admin token check. Compare with hmac, never ==, so the
     response time can't be used to guess the token a character at a time."""
     return _admin_configured() and hmac.compare_digest(supplied or "", ADMIN_TOKEN)
-TRIAL_DAYS = 7
+TRIAL_DAYS = 14
 
 # ── Persistence ──────────────────────────────────────────────────────────
 # License data (trials/keys/customers) is stored in Upstash Redis via its REST
@@ -881,7 +881,7 @@ def _trial_identity(email):
     license-key lookups, which must stay exact. Strips a +tag from the local
     part: josh+1@gmail.com and josh+2@gmail.com deliver to the same inbox on
     Gmail, Outlook, Fastmail and most other providers, so without this, a free
-    7-day trial (no card required, and every scan spends real OpenAI/search
+    trial (no card required, and every scan spends real OpenAI/search
     budget) could be farmed indefinitely from one real inbox."""
     email = (email or "").strip().lower()
     local, sep, domain = email.partition("@")
@@ -1732,7 +1732,7 @@ def _supabase_delete_user(user_id):
 # weak when the Terms change; "they accepted 2026-06-17" is evidence. These
 # constants must match the dates published on terms.html and privacy.html,
 # and a test fails if they drift.
-TERMS_VERSION = os.environ.get("TERMS_VERSION", "2026-10-10")
+TERMS_VERSION = os.environ.get("TERMS_VERSION", "2026-11-02")
 PRIVACY_VERSION = os.environ.get("PRIVACY_VERSION", "2026-10-21")
 # "reaccept" is an existing user agreeing to a version published after
 # they signed up. Recorded distinctly so the record shows which
@@ -1998,7 +1998,7 @@ def account_delete():
     _trial_identity() produces rather than the address as typed. That does
     mean deleting an account frees up a fresh trial on the same email, which
     is a real trade: the alternative is keeping a record of someone who asked
-    to be forgotten, and a seven-day trial is not worth that. The trade is the
+    to be forgotten, and a free trial is not worth that. The trade is the
     same one for a tagged address -- it just was not honoured for those, which
     is the bug this note exists to stop coming back.
     """
@@ -2354,7 +2354,7 @@ def _cron_watchdog():
 # ── Telling somebody their trial is about to end ──
 #
 # There was a reminder for people already paying and none for people who had
-# not started. A seven-day trial that ends without a word is a cancellation
+# not started. A free trial that ends without a word is a cancellation
 # nobody had to decide on, and the whole funnel to date has converted zero.
 #
 # One email, two days out, once. Not a sequence: five a day of hand-written
@@ -11926,7 +11926,7 @@ def digest_confirm():
                         f"<b>{html_escape(rec['place'])}</b>. Each email has a one-click "
                         "unsubscribe.</p><p>Want them now, with the going rate and a target "
                         f"price for each? <a style=\"color:#f59e0b;\" href=\"{SITE_URL}/app.html?loc={zip_code}\">"
-                        "Try CurbCall Pro free for 7 days</a>.</p>")
+                        "Try CurbCall Pro free for 14 days</a>.</p>")
 
 
 def _digest_week():
@@ -11964,7 +11964,7 @@ def _bid_email_text(email, rec, rows):
     lines += ["",
               "Want the going rate for each one, a target price from what won, the bid form "
               "filled in, and a phone alert when an addendum drops? Try CurbCall Pro free "
-              f"for 7 days: {SITE_URL}/app.html?loc={rec.get('zip') or ''}",
+              f"for 14 days: {SITE_URL}/app.html?loc={rec.get('zip') or ''}",
               "",
               f"Concrete prices by state: {SITE_URL}/concrete-cost/index.html",
               "",

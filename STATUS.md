@@ -93,7 +93,7 @@ for getting customers is `SALES_PLAYBOOK.md`.
 |---|---|
 | **Merge the open branch** | Trial users get the automatic document reading (it checked for a paid key, which trials don't have). Also: the landing page and state price pages show real open bids near a ZIP (`/bids-near`); "See bids near me" in the hero; the trial's end shown on Home; the paywall recaps the trial; the simpler Job tab; outreach towns scanned twice a week (`warm-areas.yml`) |
 | **Sign up as a stranger, then buy once** | Fresh email, your own phone: scan, open a bid marked "items ready", check its line items against the real bid form. Then subscribe with your own card, confirm it unlocks, refund in Stripe. Nothing built since 2026-10-20 has been tried against live agency sites |
-| **Trial length: 7 or 14 days?** | Seven is short for bid work: a contractor may have nothing due that week. `TRIAL_DAYS` in `core.py` plus the "7-day" copy on the site |
+| ~~**Trial length: 7 or 14 days?**~~ | DONE 2026-11-02: 14 days. `TRIAL_DAYS` in `core.py`, the site copy, and the Terms (new version 2026-11-02, so signed-in users are asked to accept again) |
 | **Founding-customer price?** | e.g. $29/mo locked for the first 20. Needs a Stripe price; the app side is small |
 | **Restart outreach, bid-first** | On hold since October. Template in `SALES_PLAYBOOK.md` section 6 |
 | **Optional: `WARM_EXTRA_AREAS` in Render** | Extra places for the twice-weekly scan, e.g. `Springfield, MO;Joplin, MO`. `WARM_AREAS_PER_RUN=0` turns it off |
