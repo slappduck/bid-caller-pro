@@ -15,8 +15,8 @@
 //
 // API calls (Render backend, Supabase REST) and map tiles are still never
 // cached — bid data, auth, and the map must never be served stale.
-const SHELL_CACHE = "curbcall-shell-v127";
-const ASSET_CACHE = "curbcall-assets-v127";
+const SHELL_CACHE = "curbcall-shell-v128";
+const ASSET_CACHE = "curbcall-assets-v128";
 const KEEP = [SHELL_CACHE, ASSET_CACHE];
 
 // The published Terms and Privacy Policy, which must never be served stale.

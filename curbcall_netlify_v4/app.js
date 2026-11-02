@@ -1635,6 +1635,23 @@ async function syncPullSavedSearches(){
   store.set("saved_searches",savedSearches);
   renderSavedSearches();
   for(const s of localOnly)await pushSavedSearch(s.location,s.radius);
+  autoWatchHome();
+}
+// The daily new-bid email goes only to saved searches, and almost nobody
+// finds the button. So the area they gave in setup is watched by default:
+// once per account on this device, and only when they have no saved search,
+// so one they deleted on purpose is not put back.
+function autoWatchHome(){
+  if(!sb||!currentUser||store.get("auto_watch_checked",false))return;
+  store.set("auto_watch_checked",true);
+  if(savedSearches.length)return;
+  const location=String(store.get(HOME_LOC_KEY,"")||"").trim();
+  if(!location)return;
+  const r=Number(store.get(HOME_RADIUS_KEY,50))||50;
+  savedSearches.push({location,radius:r});
+  store.set("saved_searches",savedSearches);
+  pushSavedSearch(location,r);
+  renderSavedSearches();
 }
 byId("save-search-btn").onclick=()=>{
   const location=document.getElementById("loc-input").value.trim();
@@ -1644,7 +1661,7 @@ byId("save-search-btn").onclick=()=>{
   savedSearches.push({location,radius});
   store.set("saved_searches",savedSearches);
   pushSavedSearch(location,radius);
-  toast("Saved — we'll check this every time you open the app");
+  toast("Saved. We'll email you new bids here every morning.");
   renderSavedSearches();
 };
 function renderSavedSearches(){

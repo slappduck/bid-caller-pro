@@ -109,6 +109,9 @@ class RunUpcomingAlertsJobTests(unittest.TestCase):
             patch("license_server._fetch_all_saved_searches",
                   return_value=[{"user_id": "u1", "location": "Aurora, MO", "radius": 50}]),
             patch("license_server._get_user_email", return_value="josh@example.com"),
+            # Who is paying is tested in test_alert_gating.py.
+            patch("license_server._alerts_active", return_value=True),
+            patch("license_server._db", return_value={}),
             patch("license_server._send_email",
                   side_effect=lambda to, subj, text, **k: (
                       self.sent.append((to, subj, text)) or True)),

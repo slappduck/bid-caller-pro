@@ -2708,6 +2708,48 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── The setup area gets the daily bid email by default ──
+  console.log("\nThe area given in setup is watched for new bids without a tap");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const host = new URL(route.request().url()).hostname;
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      return route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    const r = await page.evaluate(async () => {
+      const inserted = [];
+      let cloud = [];
+      const q = { select: async () => ({ data: cloud, error: null }), insert: async (row) => { inserted.push(row); return {}; } };
+      sb.from = (t) => t === "saved_searches" ? q : { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }) }) }), upsert: async () => ({}) };
+      currentUser = { id: "u1", email: "new@example.com" };
+      store.set(HOME_LOC_KEY, "Aurora, MO"); store.set(HOME_RADIUS_KEY, 75);
+      store.set("auto_watch_checked", false); savedSearches = []; store.set("saved_searches", []);
+      await syncPullSavedSearches();
+      const first = inserted.slice();
+      // They delete it on purpose: the next sync must not put it back.
+      savedSearches = []; store.set("saved_searches", []); cloud = [];
+      await syncPullSavedSearches();
+      const afterDelete = inserted.length;
+      // Another account that already watches somewhere else is left alone.
+      store.set("auto_watch_checked", false); cloud = [{ location: "Joplin, MO", radius: 50 }];
+      await syncPullSavedSearches();
+      return { first, afterDelete, total: inserted.length, shown: (document.getElementById("saved-searches-wrap").textContent || "") };
+    });
+    check("the setup area becomes a watched search",
+          r.first.length === 1 && r.first[0].location === "Aurora, MO" && r.first[0].radius === 75, JSON.stringify(r));
+    check("a deleted one is not put back", r.afterDelete === 1, JSON.stringify(r));
+    check("an account with its own search is left alone", r.total === 1 && /Joplin/.test(r.shown), JSON.stringify(r));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   // ── A statewide bid is placed by its own name ──
   console.log("\nA bid from a statewide search is placed by the site its name gives");
   {
