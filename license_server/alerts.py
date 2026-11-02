@@ -59,7 +59,7 @@ def _send_alert_email(email, location, radius, new_bids):
     if len(new_bids) > 20:
         lines.append(f"...and {len(new_bids) - 20} more.")
     lines.append("")
-    lines.append("Open Bid Caller Pro to see full details or save any of these to your pipeline.")
+    lines.append("Open CurbCall Pro to see full details or save any of these to your pipeline.")
     body = json.dumps({
         "from": FROM_EMAIL,
         "to": [email],

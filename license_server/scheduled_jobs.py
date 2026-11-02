@@ -38,11 +38,12 @@ def _send_key_email(email, key, plan="monthly"):
     """Email the license key to the buyer (only if Resend is configured)."""
     if not email:
         return
-    _send_email(email, "Your Bid Caller Pro license key",
-                "Thanks for subscribing to Bid Caller Pro!\n\n"
+    _send_email(email, "Your CurbCall Pro license key",
+                "Thanks for subscribing to CurbCall Pro!\n\n"
                 f"Your license key:\n\n    {key}\n\n"
-                "If the app didn't unlock automatically, open it, go to the Plan "
-                "tab, paste the key under 'Have a license key?', and tap Activate.\n\n"
+                "If the app didn't unlock automatically, open it (" + APP_URL + "), "
+                "go to the Account tab, paste the key under 'Have a license key?', "
+                "and tap Activate.\n\n"
                 + _renewal_terms_text(plan) + "\n\n"
                 + (MAILING_ADDRESS or ""))
 

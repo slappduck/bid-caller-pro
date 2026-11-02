@@ -2007,11 +2007,12 @@ def _send_key_email(email, key, plan="monthly"):
     """Email the license key to the buyer (only if Resend is configured)."""
     if not email:
         return
-    _send_email(email, "Your Bid Caller Pro license key",
-                "Thanks for subscribing to Bid Caller Pro!\n\n"
+    _send_email(email, "Your CurbCall Pro license key",
+                "Thanks for subscribing to CurbCall Pro!\n\n"
                 f"Your license key:\n\n    {key}\n\n"
-                "If the app didn't unlock automatically, open it, go to the Plan "
-                "tab, paste the key under 'Have a license key?', and tap Activate.\n\n"
+                "If the app didn't unlock automatically, open it (" + APP_URL + "), "
+                "go to the Account tab, paste the key under 'Have a license key?', "
+                "and tap Activate.\n\n"
                 + _renewal_terms_text(plan) + "\n\n"
                 + (MAILING_ADDRESS or ""))
 
@@ -2586,7 +2587,7 @@ def _send_alert_email(email, location, radius, new_bids):
     if len(new_bids) > 20:
         lines.append(f"...and {len(new_bids) - 20} more.")
     lines.append("")
-    lines.append("Open Bid Caller Pro to see full details or save any of these to your pipeline.")
+    lines.append("Open CurbCall Pro to see full details or save any of these to your pipeline.")
     body = json.dumps({
         "from": FROM_EMAIL,
         "to": [email],
@@ -3369,8 +3370,8 @@ def _apply_referral_reward(db, ref_code, referred_email, referred_device):
 def _send_referral_email(email, days):
     if not email:
         return
-    _send_email(email, "You earned a free month on Bid Caller Pro",
-                "Someone you referred just subscribed to Bid Caller Pro -- "
+    _send_email(email, "You earned a free month on CurbCall Pro",
+                "Someone you referred just subscribed to CurbCall Pro -- "
                 f"we've added {days} free days to your plan. Thanks for "
                 "spreading the word!")
 

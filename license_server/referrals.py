@@ -86,8 +86,8 @@ def _apply_referral_reward(db, ref_code, referred_email, referred_device):
 def _send_referral_email(email, days):
     if not email:
         return
-    _send_email(email, "You earned a free month on Bid Caller Pro",
-                "Someone you referred just subscribed to Bid Caller Pro -- "
+    _send_email(email, "You earned a free month on CurbCall Pro",
+                "Someone you referred just subscribed to CurbCall Pro -- "
                 f"we've added {days} free days to your plan. Thanks for "
                 "spreading the word!")
 
