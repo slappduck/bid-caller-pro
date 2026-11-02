@@ -1707,6 +1707,9 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await page.waitForTimeout(800);
     const id = await page.evaluate(() => bidId("Aurora, MO", bidData["Aurora, MO"][0]));
     await page.evaluate(() => { currentUser = { id: "u1", email: "tester@example.com" }; window.getSupabaseToken = async () => "tok"; });
+    // Signed in, so it would read the documents by itself; this checks the
+    // steps for doing it by hand, as on a day the automatic read already ran.
+    await page.evaluate((i) => { prepFor(i).autoTried = { docs: Date.now(), locate: Date.now() }; }, id);
     await page.evaluate((i) => openPrep("Aurora, MO", i, "steps"), id);
     await page.waitForTimeout(500);
     check("the documents step offers to get them from email once the server has an address",
@@ -2370,6 +2373,78 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     check("...the posting is sent to be searched for the form", hits.fill.length === 1 && hits.fill[0].url === "https://e.gov/bids/18");
     const names = await page.evaluate(async (i) => (await bidFiles.list(i, "filled")).map((f) => f.name), b2);
     check("...and the filled copy is named after the form found", names.includes("Bid Proposal Form (filled).pdf"), JSON.stringify(names));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
+  // ── A trial reads documents too, and the first scan shows it ──
+  console.log("\nA trial gets the automatic reading, and a scan's best bids arrive ready");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    const reads = [];
+    let licensed = true;
+    await page.route("**/*", (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      const json = (o, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(o) });
+      if (u.endsWith("/bid-documents/read")) {
+        const body = JSON.parse(route.request().postData() || "{}");
+        reads.push(body);
+        if (!licensed) return json({ ok: false, reason: "not_licensed" }, 403);
+        if (body.kind === "addendum") return json({ ok: false, reason: "ai_error" });
+        return json({ ok: true, line_items: [{ item_no: "1", description: "Sidewalk", quantity: 900, unit: "SY" },
+          { item_no: "2", description: "Curb", quantity: 300, unit: "LF" }, { item_no: "3", description: "Ramps", quantity: 6, unit: "EA" }],
+          sources: ["Bid Form"] });
+      }
+      if (u.endsWith("/bid/locate")) return json({ ok: false });
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem("last_user_email", JSON.stringify("trial@example.com"));
+      localStorage.setItem("last_feed", JSON.stringify({ "Aurora, MO": [
+        { title: "Elm St Sidewalk", scope: "Sidewalk", deadline: "2099-11-20", status: "open", url: "https://e.gov/bids/17",
+          documents: [{ name: "Bid Form", url: "https://e.gov/bid-form.pdf" }] },
+        { title: "Oak Ave Curb", scope: "Curb", deadline: "2099-11-10", status: "open", url: "https://e.gov/bids/18",
+          documents: [{ name: "Specs", url: "https://e.gov/specs.pdf" }] },
+        { title: "Pine St Ramps", scope: "Ramps", deadline: "2099-11-30", status: "open", url: "https://e.gov/bids/19" },
+        { title: "Due Tomorrow", scope: "Sidewalk", deadline: new Date(Date.now() + 86400000).toISOString().slice(0, 10), status: "open",
+          url: "https://e.gov/bids/20", documents: [{ name: "Bid Form", url: "https://e.gov/soon.pdf" }] }] }));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(800);
+    // A trial: signed in, no license key on the phone.
+    await page.evaluate(() => { currentUser = { id: "u1", email: "trial@example.com" }; window.getSupabaseToken = async () => "tok";
+      window.isOffline = () => false; localStorage.removeItem("license_key"); });
+    check("a signed-in trial counts for reading", await page.evaluate(() => canAutoRead() && !licenseKey()));
+    await page.evaluate(() => preReadAfterScan(["Aurora, MO"]));
+    await page.waitForTimeout(500);
+    const urls = reads.map((r) => r.url);
+    check("after a scan, the two best bids with documents are read, soonest workable first",
+          JSON.stringify(urls) === JSON.stringify(["https://e.gov/specs.pdf", "https://e.gov/bid-form.pdf"]), JSON.stringify(urls));
+    check("...not one due too soon to bid, nor one with no files when two have them", !urls.includes("https://e.gov/soon.pdf"));
+    await page.evaluate(() => { goTo("feed"); renderFeed(); });
+    await page.waitForTimeout(300);
+    const chips = await page.$$eval(".chip.ready", (els) => els.map((e) => e.textContent));
+    check("their cards say the items are ready", chips.length === 2 && chips.every((t) => t === "3 items ready"), JSON.stringify(chips));
+    check("...without starring or saving them", await page.evaluate(() => Object.keys(saved).length === 0 && Object.keys(bidPrep).length === 0));
+    // Opening one fills it in with no license key.
+    const id = await page.evaluate(() => bidId("Aurora, MO", bidData["Aurora, MO"][1]));
+    await page.evaluate((i) => openPrep("Aurora, MO", i, "steps"), id);
+    await page.waitForTimeout(800);
+    check("a trial's bid fills in from its documents", await page.evaluate((i) => prepFor(i).linesFrom === "documents" && prepFor(i).lines.length === 3, id));
+    // An expired trial: no reading, and no "couldn't read" message blaming the documents.
+    licensed = false;
+    const id2 = await page.evaluate(() => bidId("Aurora, MO", bidData["Aurora, MO"][0]));
+    await page.evaluate((i) => openPrep("Aurora, MO", i, "steps"), id2);
+    await page.waitForTimeout(800);
+    check("an expired trial isn't told the documents couldn't be read", !(await page.evaluate((i) => prepFor(i).autoFilled && prepFor(i).autoFilled.failed, id2)));
     check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
     await ctx.close();
   }

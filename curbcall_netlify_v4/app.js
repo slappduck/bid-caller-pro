@@ -240,6 +240,10 @@ function deviceId(){
   return id;
 }
 function licenseKey(){return store.get("license_key","");}
+// Reading documents and watching bids: a paid key, or a signed-in account.
+// A trial has no key on the phone; the server knows it by the account, so it
+// decides, and a trial gets the same automatic reading as a subscription.
+function canAutoRead(){return!!(licenseKey()||currentUser);}
 
 let bidData=store.get("last_feed",{});
 let saved=store.get("saved",{});
@@ -250,6 +254,7 @@ let notes=store.get("notes",{}); // bid id -> freeform text, private/local only
 // "let" line has run would throw instead of rendering.
 let bidPrep=store.get("bid_prep",{}); // bid id -> Prepare-bid workspace
 let dismissed=store.get("dismissed",{}); // bid id -> true, hidden from the feed even if a rescan brings it back
+let docsReady=store.get("docs_ready",{}); // bid id -> {items}: documents read after a scan, see preReadAfterScan
 let companyProfile=store.get("company_profile",{}); // used to personalize AI proposal drafts
 
 // Re-keys locally stored bids from the old truncated-text id to the hashed one
@@ -3185,6 +3190,7 @@ async function runScan(force){
     }
     const total=d.total_bids||0;
     const added=mergeOpenBids(d.bids||{},Object.keys(d.city_coords||{}));
+    setTimeout(()=>preReadAfterScan(Object.keys(d.bids||{})).catch(()=>{}),1500);
     // Unconditional: the empty-result branch below stays on this screen
     // (no goTo("feed")), so without this the Find-screen summary would
     // keep showing last scan's count after one that found nothing new.
@@ -4287,7 +4293,7 @@ function diffWatch(prev,cur){
   return"";
 }
 async function checkSavedBids(){
-  if(bidWatchRunning||isOffline()||!licenseKey())return;
+  if(bidWatchRunning||isOffline()||!canAutoRead())return;
   const ids=watchCandidates().slice(0,25);
   if(!ids.length)return;
   bidWatchRunning=true;
@@ -5019,7 +5025,7 @@ function linesUntouched(p,b,city){
 async function preReadBid(city,id){
   try{
     const b=findBid(id);
-    if(!b||!licenseKey()||isOffline())return;
+    if(!b||!canAutoRead()||isOffline())return;
     const p=prepFor(id);
     if(p.docInfo&&p.docInfo.read_at)return;
     const st=bidState(city,b);
@@ -5031,11 +5037,41 @@ async function preReadBid(city,id){
     loadSuppliers(city,false,jobAddress(p),b).catch(()=>{});
   }catch(e){}
 }
+// Right after a scan, the two bids most worth a look have their documents
+// read in the background. Nothing is saved to the bid: the server keeps the
+// reading, so when one is opened (or starred) it fills in at once, and the
+// card says the items are ready. This is what a new trial sees first.
+function preReadPicks(cities){
+  const out=[];
+  for(const city of cities||[]){
+    for(const b of (bidData[city]||[])){
+      const id=bidId(city,b),d=daysUntil(b);
+      if(dismissed[id]||docsReady[id]||(bidPrep[id]&&bidPrep[id].docInfo)||!isOpen(b))continue;
+      if(d!=null&&d<3)continue;
+      const links=docsToRead(b);
+      if(!links.length)continue;
+      const files=links.filter(x=>x.name!=="Original posting").length;
+      out.push({city,b,id,links,score:(files?0:1)*1000+(d==null?500:d)});
+    }
+  }
+  return out.sort((x,y)=>x.score-y.score).slice(0,2);
+}
+async function preReadAfterScan(cities){
+  if(!canAutoRead()||isOffline())return;
+  for(const x of preReadPicks(cities)){
+    const res=await readBidDocument(x.links[0].url,x.links.slice(1).map(d=>d.url));
+    if(res&&res.reason==="not_licensed")return;
+    if(!res||!res.ok)continue;
+    docsReady[x.id]={items:(res.line_items||[]).length,at:Date.now()};
+    store.set("docs_ready",docsReady);
+    if(document.getElementById("screen-feed").classList.contains("active"))renderFeed();
+  }
+}
 const _autoRunning={};
 function autoDue(p,k){const t=p.autoTried&&p.autoTried[k];return!t||Date.now()-t>86400000;}
 async function autoPrepare(id,city,b){
   const p=prepFor(id);
-  if(_autoRunning[id]||isOffline()||!licenseKey())return;
+  if(_autoRunning[id]||isOffline()||!canAutoRead())return;
   const docsNeeded=!(p.docInfo&&p.docInfo.read_at&&!SITEWIDE_DOC_RE.test(p.docInfo.source||""))&&autoDue(p,"docs");
   const w=bidWatch[id]||{};
   const seen=new Set();
@@ -5096,7 +5132,7 @@ async function autoPrepare(id,city,b){
          [info.bid_security,"the bond"],[(info.required_forms||[]).length,"required forms"],[info.submission,"how to submit"],
          [info.questions_due,"the questions deadline"]].forEach(([v,label])=>{if(v)filled.push(label);});
         p.autoFilled={at:Date.now(),source:doc.name,what:filled.slice(),lines:p.linesFrom==="documents"&&!!p.autoUndo};
-      }else p.autoFilled={at:Date.now(),failed:true,source:doc&&doc.name};
+      }else if(!(res&&res.reason==="not_licensed"))p.autoFilled={at:Date.now(),failed:true,source:doc&&doc.name};
       changed=true;
     }
     for(const a of addDocs){
@@ -5781,7 +5817,7 @@ async function readBidDocument(url,urls){
     if(d&&d.ok)return d;
     const msg=d&&d.reason==="fetch_failed"?(FETCH_ERRORS[d.detail]||"Couldn't download that document.")
       :(d&&(DOC_ERRORS[d.reason]||d.detail))||"Couldn't read that document.";
-    return{ok:false,msg};
+    return{ok:false,msg,reason:(d&&d.reason)||""};
   }catch(e){return{ok:false,msg:offlineOrServer()};}
 }
 async function renderDocPicker(body,city,id,b){
@@ -7471,7 +7507,8 @@ function bidCard(city,b){
         ${watchAlert(id)?`<span class="chip watch-alert">${esc(watchAlert(id))}</span>`:""}
         ${pipeline[id]?`<span class="chip status-${esc(pipeline[id])}">${esc(String(pipeline[id]).toUpperCase())}</span>`:""}
         ${notes[id]?`<span class="chip">Note</span>`:""}
-        ${(()=>{const pg=bidPrep[id]&&prepProgress(id,b);return pg?`<span class="chip">Prep ${pg.done}/${pg.total}</span>`:"";})()}
+        ${(()=>{const pg=bidPrep[id]&&prepProgress(id,b);return pg?`<span class="chip">Prep ${pg.done}/${pg.total}</span>`
+          :docsReady[id]&&docsReady[id].items?`<span class="chip ready">${docsReady[id].items} items ready</span>`:"";})()}
       </div>
     </div>
   </div>`;
