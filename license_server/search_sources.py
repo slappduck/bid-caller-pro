@@ -1067,7 +1067,11 @@ def _ddg_search(query, count=6):
 FETCH_TIMEOUT = int(os.environ.get("SCAN_FETCH_TIMEOUT", "18"))
 PROBE_TIMEOUT = int(os.environ.get("SCAN_PROBE_TIMEOUT", "6"))
 PORTAL_WORKERS = int(os.environ.get("SCAN_PORTAL_WORKERS", "6"))
-PORTALS_PER_TOWN = int(os.environ.get("SCAN_PORTALS_PER_TOWN", "8"))
+# Every verified page a town holds should be read. Adding public school
+# districts took Houston to 11 and San Antonio to 10, metros with many
+# districts; no other town is above 8, so the higher cap costs nothing
+# elsewhere (tests/test_seed_merge.py checks it).
+PORTALS_PER_TOWN = int(os.environ.get("SCAN_PORTALS_PER_TOWN", "12"))
 # Contact details live on each individual posting, so reading them costs one
 # fetch per bid. Bounded per portal, and given the shorter probe timeout: a
 # missing phone number degrades a lead, a blown request budget loses every one.
