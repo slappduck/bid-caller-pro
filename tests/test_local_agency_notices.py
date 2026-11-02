@@ -434,3 +434,48 @@ class OklahomaLettingTests(_FreshCache):
             "https://oklahoma.gov/odot/business-center/contracts-and-proposals/nov-12-2026.html",
             "https://www.odot.org/contracts/2026/26111201/letting-spreadsheet.csv"])
         self.assertIn(bid_sources.OK_LETTING_MARK + "November 12, 2026 ", text)
+
+
+KY_FIXTURE = os.path.join(ROOT, "data", "recall_fixtures", "kytc_notice_to_contractors.txt")
+
+
+def ky_rows():
+    with open(KY_FIXTURE, encoding="utf-8") as f:
+        return bid_sources.parse_ky_notice_to_contractors(f.read().split("\n", 1)[1], "KY")
+
+
+class KentuckyNoticeTests(_FreshCache):
+    def find(self, call):
+        return next(r for r in ky_rows() if r["call"] == call)
+
+    def test_contracts_carry_county_and_letting_date(self):
+        r = self.find("100")
+        self.assertEqual(r["county"], "Fayette")
+        self.assertEqual(r["deadline"], "November 19, 2026")
+        self.assertIn("Main Street (US 421)", r["title"])
+
+    def test_a_concrete_pavement_job_is_kept(self):
+        self.assertIn("JPC Pavement", self.find("200")["title"])
+
+    def test_casing_of_routes_and_names(self):
+        titles = " ".join(r["title"] for r in ky_rows())
+        self.assertIn("KY-465", titles)
+        self.assertNotIn("Us 421", titles)
+        self.assertIn("McCreary", {r["county"] for r in ky_rows()})
+
+    def test_bridge_replacement_with_no_flatwork_is_left_out(self):
+        self.assertNotIn("104", {r["call"] for r in ky_rows()})
+
+    def test_the_scan_builds_the_pdf_address_from_upcoming_dates_only(self):
+        import datetime
+        index = ('<a href="Lettings.aspx?letting=10/22/2026">x</a>'
+                 '<a href="Lettings.aspx?letting=11/19/2026">y</a>'
+                 '<a href="Lettings.aspx?letting=12/10/2026">z</a>')
+        got = []
+        with patch("license_server._fetch_document",
+                   side_effect=lambda u: (got.append(u) or (b"%PDF", "application/pdf", "ok"))), \
+             patch("license_server._pdf_all_text", return_value="CALL 1"):
+            ls._ky_letting_text(index, today=datetime.date(2026, 11, 2))
+        self.assertEqual(got, [
+            "https://transportation.ky.gov/Construction-Procurement/Publications/2026-11-19/Notice%20to%20Contractors.pdf",
+            "https://transportation.ky.gov/Construction-Procurement/Publications/2026-12-10/Notice%20to%20Contractors.pdf"])

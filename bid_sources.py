@@ -2203,15 +2203,72 @@ def parse_ok_letting_csv(text, state="OK", base_url=""):
 def _ok_case(text):
     """Title case that leaves route names, compass points and ordinals right."""
     t = str(text or "").title()
-    t = re.sub(r"\b(Sh|Us|Ih|I|Ok)-(\d)", lambda m: m.group(1).upper() + "-" + m.group(2), t)
+    t = re.sub(r"\b(Sh|Us|Ih|I|Ok|Ky|Cr|Sr)([- ])(\d)",
+               lambda m: m.group(1).upper() + m.group(2) + m.group(3), t)
     t = re.sub(r"(\d)(St|Nd|Rd|Th)\b", lambda m: m.group(1) + m.group(2).lower(), t)
-    t = re.sub(r"\b(Nw|Ne|Sw|Se|Ota|Bnsf|Ada)\b", lambda m: m.group(1).upper(), t)
+    t = re.sub(r"\b(Nw|Ne|Sw|Se|Nb|Sb|Eb|Wb|Ota|Bnsf|Ada|Jpc|Pcc|Hma|Mp|Emp|Kytc)\b",
+               lambda m: m.group(1).upper(), t)
+    t = re.sub(r"\bMc([a-z])", lambda m: "Mc" + m.group(1).upper(), t)
     return t
 
 
 def io_lines(text):
     """Lines of a CSV body, with a byte-order mark dropped."""
     return str(text or "").lstrip("﻿").splitlines()
+
+
+# Kentucky: each KYTC letting has a Notice to Contractors PDF at a fixed
+# address built from the letting date. Every contract gives its call number,
+# county and a description; city and county projects let by the Cabinet are
+# among them. Same marker convention as Oklahoma's reader.
+_KY_CALL_RE = re.compile(r"CALL\s+(\d+)\s+CONTRACT ID\s+(\d+)")
+_KY_COUNTY_RE = re.compile(r"^\s*([A-Z][A-Z .'-]+?) COUNTY\s*$", re.M)
+
+
+def parse_ky_notice_to_contractors(text, state="KY", base_url=""):
+    rows = []
+    for chunk in str(text or "").split(OK_LETTING_MARK)[1:]:
+        head, _, body = chunk.partition("\n")
+        m = re.match(r"(.+?\d{4})\s+(\S+)\s*$", head.strip())
+        if not m:
+            continue
+        deadline, url = m.group(1), m.group(2)
+        parts = _KY_CALL_RE.split(body)
+        for i in range(1, len(parts) - 2, 3):
+            call, ident, block = parts[i], parts[i + 1], parts[i + 2]
+            block = re.split(r"BIDS WILL BE RECEIVED|POSTED:", block)[0]
+            cm = _KY_COUNTY_RE.search(block)
+            if not cm:
+                continue
+            descs = []
+            for seg in re.findall(r":\s*(.+?)(?:SYP NO\.|THE DBE|$)", block, re.S):
+                seg = re.sub(r"\s+", " ", seg).strip(" .")
+                if seg and seg not in descs:
+                    descs.append(seg)
+            if not descs:
+                continue
+            desc = " / ".join(descs)
+            title = _ok_case(descs[0])
+            if len(title) > 120:
+                title = title[:120].rsplit(" ", 1)[0].rstrip(" ,;") + "…"
+            if not looks_relevant(title, desc):
+                continue
+            rows.append({
+                "title": title,
+                "scope": ("Call %s, contract %s. %s." % (call, ident, desc.capitalize()))[:1200],
+                "url": url,
+                "deadline": deadline,
+                "status": "Open",
+                "agency": "KYTC letting",
+                "call": call,
+                "county": _ok_case(cm.group(1).strip()),
+                "state": str(state or "KY").upper(),
+                "source": "state_dot",
+                "documents": [{"name": "Notice to Contractors", "url": url},
+                              {"name": "Plans and bidding (Bid Express)",
+                               "url": "https://www.bidx.com/ky/main"}],
+            })
+    return rows
 
 
 # Which reader a local-notices source uses. Keyed by the kind named in
@@ -2222,6 +2279,7 @@ LOCAL_NOTICE_PARSERS = {
     "iowa_ntb_pdf": parse_iowa_notice_to_bidders,
     "il_bulletin": parse_il_contractors_bulletin,
     "ok_letting": parse_ok_letting_csv,
+    "ky_ntc": parse_ky_notice_to_contractors,
 }
 
 

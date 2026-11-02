@@ -2866,6 +2866,8 @@ LOCAL_NOTICE_SOURCES = {
             "il_bulletin")],
     "OK": [("https://oklahoma.gov/odot/business-center/contracts-and-proposals.html",
             "ok_letting")],
+    "KY": [("https://transportation.ky.gov/Construction-Procurement/Pages/default.aspx",
+            "ky_ntc")],
 }
 # Oklahoma: ODOT's contracts page links one page per upcoming letting, each
 # naming the folder of its spreadsheet. odot.org has no robots.txt of its own
@@ -2902,6 +2904,35 @@ def _ok_letting_text(index_html, index_url, today=None):
         if outcome == "ok" and body:
             label = "%s %d, %d" % (when.strftime("%B"), when.day, when.year)
             parts.append("%s%s %s\n%s" % (bid_sources.OK_LETTING_MARK, label, csv_url, body))
+    return "\n".join(parts)
+
+
+# Kentucky: KYTC's Construction Procurement page links each letting date, and
+# each letting's Notice to Contractors sits at a fixed address built from it.
+# robots.txt disallows /Lists/, which this never touches.
+KY_LETTINGS_READ = int(os.environ.get("KY_LETTINGS_READ", "3"))
+_KY_LETTING_RE = re.compile(r"Lettings\.aspx\?letting=(\d{1,2})/(\d{1,2})/(\d{4})")
+
+
+def _ky_letting_text(index_html, today=None):
+    today = today or datetime.date.today()
+    dates = set()
+    for mo, dy, yr in _KY_LETTING_RE.findall(index_html or ""):
+        try:
+            when = datetime.date(int(yr), int(mo), int(dy))
+        except ValueError:
+            continue
+        if today <= when <= today + datetime.timedelta(days=OK_LETTING_HORIZON_DAYS):
+            dates.add(when)
+    parts = []
+    for when in sorted(dates)[:KY_LETTINGS_READ]:
+        url = ("https://transportation.ky.gov/Construction-Procurement/Publications/"
+               "%s/Notice%%20to%%20Contractors.pdf" % when.isoformat())
+        raw, _ctype, outcome = _fetch_document(url)
+        text = _pdf_all_text(raw) if outcome == "ok" else ""
+        if text:
+            label = "%s %d, %d" % (when.strftime("%B"), when.day, when.year)
+            parts.append("%s%s %s\n%s" % (bid_sources.OK_LETTING_MARK, label, url, text))
     return "\n".join(parts)
 
 
@@ -3213,6 +3244,9 @@ def _load_local_source(url, kind):
         return text, ("ok" if text else "unreadable")
     if kind == "ok_letting":
         text = _ok_letting_text(page, url)
+        return text, ("ok" if text else "unreadable")
+    if kind == "ky_ntc":
+        text = _ky_letting_text(page)
         return text, ("ok" if text else "unreadable")
     return page, "ok"
 

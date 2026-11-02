@@ -805,6 +805,7 @@ Tests run on captured copies in `data/recall_fixtures/`.
 | IA | Iowa DOT Notice to Bidders PDF (monthly letting) | 31 proposals with flatwork quantities, many county and city projects |
 | IL | IDOT Notice to Contractors Bulletin (weekly PDF, newest 4 read) | ~15 town and county jobs a month: Joliet, Kinmundy, Country Club Hills |
 | OK | ODOT letting spreadsheets (next 4 lettings within 75 days) | Tulsa, Warr Acres, Cleveland County sidewalks; Tahlequah pedestrian work |
+| KY | KYTC Notice to Contractors PDF per letting (next 3) | 18 contracts on the Nov 19 letting, county road and city street work among them |
 
 ### Looked at and not used
 
@@ -820,7 +821,7 @@ Tests run on captured copies in `data/recall_fixtures/`.
   agent, although the bid-ad PDFs themselves load. Not worked around.
 - **Oklahoma county bid list (SB 2173)**: county, bid number and date only,
   no description; mostly road materials. Not built.
-- **Kentucky, Nebraska**: no public list of locally let work found.
+- **Nebraska**: no public list of locally let work found.
 
 ### Discovery changes the same day
 
