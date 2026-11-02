@@ -2140,6 +2140,80 @@ def parse_il_contractors_bulletin(text, state="IL", base_url=""):
     return rows
 
 
+# Oklahoma: each upcoming ODOT letting has its own page, and the page's table
+# is filled from a spreadsheet at odot.org/contracts/<year>/<folder>/letting-
+# spreadsheet.csv. The caller joins the spreadsheets of the next few lettings,
+# each after a marker line "@@LETTING <Month D, YYYY> <spreadsheet url>".
+# The Nov 12, 2026 letting carried sidewalk jobs in Tulsa and Oklahoma City
+# and pedestrian work in Tahlequah, let by ODOT for those cities.
+OK_LETTING_MARK = "@@LETTING "
+_OK_CITY_RE = re.compile(r"\b(?:IN|NEAR) THE CITY OF ([A-Z][A-Z .'-]+?)(?:[.,<]|$)")
+
+
+def parse_ok_letting_csv(text, state="OK", base_url=""):
+    import csv as _csv
+    rows = []
+    for chunk in str(text or "").split(OK_LETTING_MARK)[1:]:
+        head, _, body = chunk.partition("\n")
+        m = re.match(r"(.+?\d{4})\s+(\S+)\s*$", head.strip())
+        if not m:
+            continue
+        deadline, url = m.group(1), m.group(2)
+        for rec in _csv.reader(io_lines(body)):
+            if len(rec) < 10:
+                continue
+            call, ident, county_cell, raw = rec[1].strip(), rec[7].strip(), rec[8], rec[9]
+            lines = [re.sub(r"\s+", " ", _unescape(x)).strip()
+                     for x in re.split(r"<br\s*/?>", raw, flags=re.I)]
+            lines = [x for x in lines if x and not x.lower().startswith(
+                ("there will be", "prequalification", "project length"))]
+            if not lines:
+                continue
+            desc = " ".join(lines)
+            work = _ok_case(lines[0])
+            where = lines[1] if len(lines) > 1 else ""
+            title = work + (": " + _ok_case(where.rstrip(":")) if where else "")
+            title = re.sub(r"\s+", " ", title)[:150]
+            if not looks_relevant(work, desc):
+                continue
+            cm = _OK_CITY_RE.search(desc.upper())
+            county = county_cell.split("/")[0].strip().title()
+            row = {
+                "title": title,
+                "scope": ("Call %s, project %s. %s" % (call, ident, desc.capitalize()))[:1200],
+                "url": url,
+                "deadline": deadline,
+                "status": "Open",
+                "agency": "ODOT letting",
+                "call": call,
+                "state": str(state or "OK").upper(),
+                "source": "state_dot",
+                "documents": [{"name": "Letting spreadsheet", "url": url},
+                              {"name": "Plans and bidding (Bid Express)",
+                               "url": "https://www.bidx.com/OKDOT/main"}],
+            }
+            if cm:
+                row["town"] = cm.group(1).strip().title()
+            else:
+                row["county"] = county
+            rows.append(row)
+    return rows
+
+
+def _ok_case(text):
+    """Title case that leaves route names, compass points and ordinals right."""
+    t = str(text or "").title()
+    t = re.sub(r"\b(Sh|Us|Ih|I|Ok)-(\d)", lambda m: m.group(1).upper() + "-" + m.group(2), t)
+    t = re.sub(r"(\d)(St|Nd|Rd|Th)\b", lambda m: m.group(1) + m.group(2).lower(), t)
+    t = re.sub(r"\b(Nw|Ne|Sw|Se|Ota|Bnsf|Ada)\b", lambda m: m.group(1).upper(), t)
+    return t
+
+
+def io_lines(text):
+    """Lines of a CSV body, with a byte-order mark dropped."""
+    return str(text or "").lstrip("﻿").splitlines()
+
+
 # Which reader a local-notices source uses. Keyed by the kind named in
 # license_server's LOCAL_NOTICE_SOURCES.
 LOCAL_NOTICE_PARSERS = {
@@ -2147,6 +2221,7 @@ LOCAL_NOTICE_PARSERS = {
     "lpa_table": parse_lpa_table,
     "iowa_ntb_pdf": parse_iowa_notice_to_bidders,
     "il_bulletin": parse_il_contractors_bulletin,
+    "ok_letting": parse_ok_letting_csv,
 }
 
 

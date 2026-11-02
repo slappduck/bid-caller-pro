@@ -378,3 +378,59 @@ class LocalSourceCacheTests(_FreshCache):
             for _ in range(2):
                 ls._run_state_sources({"lat": 35.39, "lon": -94.40, "state": "AR"}, 50, {}, {}, {})
         self.assertEqual(calls, [URL])
+
+
+OK_FIXTURE = os.path.join(ROOT, "data", "recall_fixtures", "odot_ok_lettings.txt")
+
+
+def ok_rows():
+    with open(OK_FIXTURE, encoding="utf-8") as f:
+        text = f.read().split("\n", 1)[1]
+    return bid_sources.parse_ok_letting_csv(text, "OK")
+
+
+class OklahomaLettingTests(_FreshCache):
+    """ODOT lettings, read from each letting's spreadsheet."""
+
+    def test_city_sidewalk_jobs_are_placed_at_the_city(self):
+        tulsa = [r for r in ok_rows() if r.get("town") == "Tulsa"]
+        self.assertTrue(any("Sidewalks" in r["title"] for r in tulsa))
+        self.assertIn("Warr Acres", {r.get("town") for r in ok_rows()})
+
+    def test_a_job_with_no_city_is_placed_at_its_county(self):
+        self.assertIn("Cleveland", {r.get("county") for r in ok_rows()})
+
+    def test_the_letting_date_is_the_due_date(self):
+        dates = {r["deadline"] for r in ok_rows()}
+        self.assertEqual(dates, {"November 12, 2026", "November 19, 2026"})
+
+    def test_route_names_and_ordinals_are_cased_right(self):
+        titles = " ".join(r["title"] for r in ok_rows())
+        self.assertIn("US-270", titles)
+        self.assertIn("31st", titles)
+        self.assertNotIn("Sh-", titles)
+
+    def test_the_airport_taxilane_is_left_out(self):
+        """Shawnee's taxilane is airport work, not a city's flatwork."""
+        self.assertFalse(any("Taxilane" in r["title"] for r in ok_rows()))
+
+    def test_the_scan_reads_upcoming_lettings_only(self):
+        import datetime
+        index = ('<a href="/odot/business-center/contracts-and-proposals/oct-22-2026.html">old</a>'
+                 '<a href="/odot/business-center/contracts-and-proposals/nov-12-2026.html">a</a>'
+                 '<a href="/odot/business-center/contracts-and-proposals/future-bid-openings/feb-11-2027.html">far</a>')
+        fetched = []
+
+        def fake(url, timeout=None):
+            fetched.append(url)
+            if url.endswith(".html"):
+                return '<meta name="description" content="b2026/26111201"/>', "ok"
+            return "XX,028,400 Days,AD,1,--,1,ID,TULSA,\"PEDESTRIAN IMPROVEMENTS (SIDEWALKS)<br>X\"", "ok"
+
+        with patch("license_server._fetch_page", side_effect=fake):
+            text = ls._ok_letting_text(index, "https://oklahoma.gov/odot/x.html",
+                                       today=datetime.date(2026, 11, 2))
+        self.assertEqual(fetched, [
+            "https://oklahoma.gov/odot/business-center/contracts-and-proposals/nov-12-2026.html",
+            "https://www.odot.org/contracts/2026/26111201/letting-spreadsheet.csv"])
+        self.assertIn(bid_sources.OK_LETTING_MARK + "November 12, 2026 ", text)

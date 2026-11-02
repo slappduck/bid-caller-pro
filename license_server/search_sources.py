@@ -2864,7 +2864,47 @@ LOCAL_NOTICE_SOURCES = {
     # runs, so the newest few are read. idot.illinois.gov allows all agents.
     "IL": [("https://idot.illinois.gov/doing-business/procurements/construction-services/contractors-bulletin.html",
             "il_bulletin")],
+    "OK": [("https://oklahoma.gov/odot/business-center/contracts-and-proposals.html",
+            "ok_letting")],
 }
+# Oklahoma: ODOT's contracts page links one page per upcoming letting, each
+# naming the folder of its spreadsheet. odot.org has no robots.txt of its own
+# (it redirects to oklahoma.gov's home page); oklahoma.gov allows all agents.
+OK_LETTINGS_READ = int(os.environ.get("OK_LETTINGS_READ", "4"))
+OK_LETTING_HORIZON_DAYS = 75
+_OK_LETTING_LINK_RE = re.compile(
+    r'href="(/odot/business-center/contracts-and-proposals/(?:future-bid-openings/)?'
+    r'([a-z]{3})-(\d{1,2})-(\d{4})\.html)"', re.I)
+_OK_FOLDER_RE = re.compile(r'name="description"\s+content="b(\d{4}/\d{8})"', re.I)
+_OK_MONTHS = {m: i + 1 for i, m in enumerate(
+    ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"))}
+
+
+def _ok_letting_text(index_html, index_url, today=None):
+    """Spreadsheets of the next few ODOT lettings, joined with markers."""
+    today = today or datetime.date.today()
+    picks = {}
+    for path, mon, day, year in _OK_LETTING_LINK_RE.findall(index_html or ""):
+        try:
+            when = datetime.date(int(year), _OK_MONTHS[mon.lower()], int(day))
+        except (KeyError, ValueError):
+            continue
+        if today <= when <= today + datetime.timedelta(days=OK_LETTING_HORIZON_DAYS):
+            picks.setdefault(when, urllib.parse.urljoin(index_url, path))
+    parts = []
+    for when in sorted(picks)[:OK_LETTINGS_READ]:
+        page, outcome = _fetch_page(picks[when], timeout=STATE_SOURCE_TIMEOUT)
+        m = _OK_FOLDER_RE.search(page or "")
+        if outcome != "ok" or not m:
+            continue
+        csv_url = "https://www.odot.org/contracts/%s/letting-spreadsheet.csv" % m.group(1)
+        body, outcome = _fetch_page(csv_url, timeout=STATE_SOURCE_TIMEOUT)
+        if outcome == "ok" and body:
+            label = "%s %d, %d" % (when.strftime("%B"), when.day, when.year)
+            parts.append("%s%s %s\n%s" % (bid_sources.OK_LETTING_MARK, label, csv_url, body))
+    return "\n".join(parts)
+
+
 IL_BULLETINS_READ = int(os.environ.get("IL_BULLETINS_READ", "4"))
 # These pages change at most daily, and Illinois alone is five downloads, so
 # each source's text is kept in memory this long instead of refetched by every
@@ -3170,6 +3210,9 @@ def _load_local_source(url, kind):
         return "", outcome
     if kind == "il_bulletin":
         text = _il_bulletin_text(page, url)
+        return text, ("ok" if text else "unreadable")
+    if kind == "ok_letting":
+        text = _ok_letting_text(page, url)
         return text, ("ok" if text else "unreadable")
     return page, "ok"
 
