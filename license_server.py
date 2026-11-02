@@ -323,8 +323,21 @@ def trial():
         return jsonify({"ok": False, "active": False, "reason": "trial_expired"})
 
     trial_key = f"email:{email}" if email else None
+    heard = str(data.get("heard") or "").strip().lower()
+    heard = heard if heard in HEARD_OPTIONS else ""
     if trial_key and trial_key in trials:
-        return _status(trials[trial_key])
+        rec = trials[trial_key]
+        # Their answer to "How did you hear about CurbCall?", given in setup,
+        # which may come after the trial already started.
+        if heard and not rec.get("heard"):
+            rec["heard"] = heard
+            _save_db(db)
+            _tally_source("h", heard)
+        if data.get("source") and not rec.get("source_counted"):
+            rec["source_counted"] = True
+            _save_db(db)
+            _tally_source("t", data.get("source"))
+        return _status(rec)
     if device and device in trials:
         # Legacy/anonymous trial already running — honor it either way.
         return _status(trials[device])
@@ -336,8 +349,15 @@ def trial():
 
     started = datetime.datetime.now()
     trials[trial_key] = {"started": started.isoformat(), "email": email}
+    if heard:
+        trials[trial_key]["heard"] = heard
+    if data.get("source"):
+        trials[trial_key]["source_counted"] = True
     _bi_note(db, "trial_started", email)
     _save_db(db)
+    _tally_source("t", data.get("source") or "direct")
+    if heard:
+        _tally_source("h", heard)
     end = started + datetime.timedelta(days=TRIAL_DAYS)
     return jsonify({"ok": True, "active": True, "days_left": TRIAL_DAYS,
                     "expires": end.isoformat()[:10], "expires_at": end.isoformat(), "new": True})
@@ -491,6 +511,71 @@ _VISIT_KEY = "bidcaller:site_visits"
 _VISIT_DAYS = int(os.environ.get("SITE_VISIT_DAYS", "60"))
 _visit_lock = threading.Lock()
 
+# ── Where people come from (ads, search, outreach, referrals) ──
+#
+# Paid ads need one answer: which source produces trials, and which produces
+# customers. Counted the same way visits are -- a tally per day per source,
+# no identifier, nothing that follows anyone across sites. The landing page
+# works the source out from the link it was opened with (an ad's gclid or
+# utm_source, a /go/ outreach link, a referral link, a search engine) and
+# reports it with the visit; the app reports it again when a trial starts.
+# Who paid is matched to the source the CUSTOMER told us during setup ("How
+# did you hear about CurbCall?"), which is their own answer, kept on their
+# trial record.
+_SOURCE_KEY = "bidcaller:source_tally"
+_SOURCE_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
+HEARD_OPTIONS = ("google-ad", "google-search", "facebook", "email", "friend",
+                 "ready-mix-plant", "supply-house", "other")
+_source_lock = threading.Lock()
+
+
+def _clean_source(s):
+    s = str(s or "").strip().lower()[:32]
+    return s if _SOURCE_RE.match(s) else ""
+
+
+def _tally_source(kind, label):
+    """kind: v (visit), t (trial started), h (trial said how they heard),
+    p (paid, by how they said they heard). Never raises."""
+    label = _clean_source(label)
+    if not label:
+        return
+    day = datetime.datetime.now().strftime("%Y-%m-%d")
+    try:
+        with _source_lock:
+            store = kv_backend.get(_SOURCE_KEY, None)
+            store = store if isinstance(store, dict) else {}
+            row = store.setdefault(day, {})
+            k = f"{kind}:{label}"
+            if k not in row and len(row) >= 200:
+                return              # bounded: a flood of made-up labels can't grow it
+            row[k] = int(row.get(k, 0)) + 1
+            for old in sorted(store)[:-_VISIT_DAYS]:
+                store.pop(old, None)
+            kv_backend.set(_SOURCE_KEY, store)
+    except Exception as ex:
+        print(f"[source] not counted: {ex}", flush=True)
+
+
+def _source_summary():
+    """Totals by source over the visit window, for the weekly note."""
+    try:
+        store = kv_backend.get(_SOURCE_KEY, None) or {}
+    except Exception:
+        store = {}
+    out = {"visits": {}, "trials_by_link": {}, "trials_said": {}, "paid_said": {}}
+    names = {"v": "visits", "t": "trials_by_link", "h": "trials_said", "p": "paid_said"}
+    for row in (store.values() if isinstance(store, dict) else []):
+        for k, n in (row or {}).items():
+            kind, _, label = k.partition(":")
+            if kind in names:
+                d = out[names[kind]]
+                d[label] = d.get(label, 0) + int(n or 0)
+    for k in out:
+        out[k] = dict(sorted(out[k].items(), key=lambda kv: -kv[1]))
+    out["window_days"] = _VISIT_DAYS
+    return out
+
 
 @app.route("/visit", methods=["POST"])
 def visit():
@@ -506,6 +591,8 @@ def visit():
     a tally, which is all the ratio needs.
     """
     day = datetime.datetime.now().strftime("%Y-%m-%d")
+    data = request.get_json(force=True, silent=True) or {}
+    _tally_source("v", data.get("source") or "direct")
     with _visit_lock:
         try:
             store = kv_backend.get(_VISIT_KEY, None)
@@ -2454,7 +2541,8 @@ def _digest_sections():
     for heading, fn in (("Funnel", _funnel_summary),
                         ("Lifecycle", _bi_summary),
                         ("Engagement", _engagement),
-                        ("Outcomes", _wins_summary)):
+                        ("Outcomes", _wins_summary),
+                        ("Sources", _source_summary)):
         try:
             data = fn()
         except Exception as ex:
@@ -3451,6 +3539,12 @@ def stripe_webhook():
             _apply_referral_reward(db, ref_code, email, device)
         _save_db(db)
         _bi_note(db, "subscribed", email, plan)
+        # Which source paid, by the customer's own answer in setup.
+        try:
+            rec = (db.get("trials") or {}).get(f"email:{(email or '').strip().lower()}") or {}
+            _tally_source("p", rec.get("heard") or "not-said")
+        except Exception:
+            pass
         _save_db(db)
         _send_key_email(email, key, plan)
         print(f"[stripe] issued {plan} key for {email or device}", flush=True)

@@ -2661,6 +2661,52 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── Which ad or link brought a visitor, carried into their trial ──
+  console.log("\nAn ad click is counted as an ad visit, and the trial says so too");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    const visits = [], trials = [];
+    await page.route("**/*", (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      const json = (o) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(o) });
+      if (u.endsWith("/visit")) { visits.push(JSON.parse(route.request().postData() || "{}")); return json({ ok: true }); }
+      if (u.endsWith("/trial")) { trials.push(JSON.parse(route.request().postData() || "{}")); return json({ ok: true, active: true, expires_at: new Date(Date.now() + 6 * 86400000).toISOString() }); }
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      return route.abort();
+    });
+    await page.goto(`${BASE}/index.html?gclid=abc123&utm_campaign=sidewalk-mo`, { waitUntil: "load" });
+    await page.waitForTimeout(500);
+    check("a Google ad click is counted as one", visits.length === 1 && visits[0].source === "google-ad", JSON.stringify(visits));
+    const kinds = await page.evaluate(() => {
+      const tries = { "?utm_source=facebook&utm_medium=paid": "facebook-ad", "?ref=AB12CD34": "referral", "": "direct", "?utm_source=Nextdoor": "nextdoor" };
+      const out = {};
+      for (const q in tries) { history.replaceState(null, "", location.pathname + q); out[q] = [visitSource(), tries[q]]; }
+      return out;
+    });
+    check("other sources are told apart", Object.values(kinds).every(([got, want]) => got === want), JSON.stringify(kinds));
+    // Into the app in the same tab: the trial carries the source and the setup answer.
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => { currentUser = { id: "u1", email: "ad@example.com" }; window.getSupabaseToken = async () => "tok";
+      window.isOffline = () => false;
+      // The test's stand-in database lacks a few calls finishing setup makes.
+      const q = { select: () => q, eq: () => q, maybeSingle: async () => ({ data: null, error: null }), upsert: async () => ({}) };
+      sb.from = () => q;
+      showOnboarding(); onbStep(2); });
+    await page.selectOption("#onb-heard", "google-ad");
+    await page.click("#onb-done");
+    await page.waitForTimeout(800);
+    check("setup's answer and the ad source go with the trial",
+          trials.some((t) => t.source === "google-ad" && t.heard === "google-ad"), JSON.stringify(trials));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   // ── A statewide bid is placed by its own name ──
   console.log("\nA bid from a statewide search is placed by the site its name gives");
   {

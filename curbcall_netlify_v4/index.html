@@ -1008,9 +1008,34 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
 // Once per browser session, so a reload or a scroll back to the top does not
 // inflate it. No identifier of any kind is sent -- the server keeps a tally
 // per day, which is all a ratio needs.
+// The source goes with it: which ad, search engine, outreach link or
+// referral brought the visit. A label only (google-ad, facebook, search,
+// outreach, referral, direct...), counted per day on the server with no
+// identifier. Kept for this browser session so the app can say the same
+// when a trial starts. No cookie, no third-party script.
+function visitSource() {
+  var q = new URLSearchParams(location.search), clean = function (s) {
+    return String(s || "").toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32);
+  };
+  var src = clean(q.get("utm_source")), med = clean(q.get("utm_medium"));
+  if (q.get("gclid") || q.get("gbraid") || q.get("wbraid") || (src === "google" && /cpc|ppc|paid/.test(med))) return "google-ad";
+  if (q.get("fbclid") || /^(facebook|fb|instagram|ig|meta)$/.test(src)) return /cpc|paid|ad/.test(med) || !src ? "facebook-ad" : "facebook";
+  if (src) return src;
+  if (/^\/go\//.test(location.pathname)) return "outreach";
+  if (q.get("ref")) return "referral";
+  var r = "";
+  try { r = new URL(document.referrer).hostname; } catch (e) {}
+  if (/(^|\.)(google|bing|duckduckgo|yahoo)\./.test(r)) return "search";
+  if (/(^|\.)(facebook|instagram)\.com$/.test(r)) return "facebook";
+  if (r && r !== location.hostname) return "link";
+  return "direct";
+}
 (function () {
+  var source = "direct";
+  try { source = visitSource(); } catch (e) {}
   try {
     var seen = "visit_counted";
+    if (!sessionStorage.getItem("visit_source") || source !== "direct") sessionStorage.setItem("visit_source", source);
     if (sessionStorage.getItem(seen)) return;
     sessionStorage.setItem(seen, "1");
   } catch (e) {
@@ -1020,7 +1045,7 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
     fetch("https://bid-caller-pro.onrender.com/visit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: "{}",
+      body: JSON.stringify({ source: source }),
       keepalive: true,
       mode: "cors"
     }).catch(function () {});

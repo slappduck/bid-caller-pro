@@ -167,6 +167,12 @@ def stripe_webhook():
             _apply_referral_reward(db, ref_code, email, device)
         _save_db(db)
         _bi_note(db, "subscribed", email, plan)
+        # Which source paid, by the customer's own answer in setup.
+        try:
+            rec = (db.get("trials") or {}).get(f"email:{(email or '').strip().lower()}") or {}
+            _tally_source("p", rec.get("heard") or "not-said")
+        except Exception:
+            pass
         _save_db(db)
         _send_key_email(email, key, plan)
         print(f"[stripe] issued {plan} key for {email or device}", flush=True)

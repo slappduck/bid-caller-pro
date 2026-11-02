@@ -2489,6 +2489,8 @@ function finishOnboarding(){
   if(done)done.onclick=()=>{
     const name=(document.getElementById("onb-co").value||"").trim();
     const trade=(document.getElementById("onb-trade").value||"").trim();
+    const heard=(document.getElementById("onb-heard")||{}).value||"";
+    if(heard){store.set("heard",heard);reportTrialSource();}
     if(name)companyProfile.name=name;
     if(trade)companyProfile.specialty=trade;
     if(name||trade){store.set("company_profile",companyProfile);pushCompanyProfile();}
@@ -7324,6 +7326,22 @@ function homeSinceLabel(t){
   if(days<7)return d.toLocaleDateString([],{weekday:"long"});
   return d.toLocaleDateString([],{month:"short",day:"numeric"});
 }
+// Which link brought them (worked out on the landing page, kept for the
+// browser session) and how they say they heard of us (setup). Both ride on
+// the /trial call; the server counts them, with no identifier for the link.
+function trialSourceFields(){
+  let source="";
+  try{source=sessionStorage.getItem("visit_source")||"";}catch(e){}
+  return{source:source||"direct",heard:store.get("heard","")||""};
+}
+async function reportTrialSource(){
+  if(!currentUser||isOffline())return;
+  try{
+    const token=await getSupabaseToken();
+    await fetchWithTimeout(SERVER+"/trial",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({device_id:deviceId(),supabase_token:token,...trialSourceFields()})},30000);
+  }catch(e){}
+}
 // ── Where the trial stands, for Home ──
 // The trial's end was only ever shown on the Account tab, which nobody opens
 // on day 6. Checked at most every few hours (the same /trial call Account
@@ -7345,7 +7363,7 @@ async function refreshPlanStatus(){
     if(licenseKey()){planStatus={state:"paid",at:Date.now()};store.set(PLAN_KEY,planStatus);return;}
     const token=await getSupabaseToken();
     const r=await fetchRetry(SERVER+"/trial",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({device_id:deviceId(),supabase_token:token})},30000);
+      body:JSON.stringify({device_id:deviceId(),supabase_token:token,...trialSourceFields()})},30000);
     const d=await r.json();
     if(d&&d.active)planStatus={state:"trial",expires_at:d.expires_at||"",at:Date.now()};
     else if(d&&d.reason==="trial_expired")planStatus={state:"expired",at:Date.now()};
@@ -8931,7 +8949,7 @@ async function loadAccountStatus(){
   if(!html){
     try{
       const token=await getSupabaseToken();
-      const r=await fetchWithTimeout(SERVER+"/trial",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({device_id:deviceId(),supabase_token:token})},60000);
+      const r=await fetchWithTimeout(SERVER+"/trial",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({device_id:deviceId(),supabase_token:token,...trialSourceFields()})},60000);
       const d=await r.json();
       if(d.active){
         trialExpiresAt=d.expires_at||null;

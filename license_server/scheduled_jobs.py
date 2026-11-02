@@ -485,7 +485,8 @@ def _digest_sections():
     for heading, fn in (("Funnel", _funnel_summary),
                         ("Lifecycle", _bi_summary),
                         ("Engagement", _engagement),
-                        ("Outcomes", _wins_summary)):
+                        ("Outcomes", _wins_summary),
+                        ("Sources", _source_summary)):
         try:
             data = fn()
         except Exception as ex:
