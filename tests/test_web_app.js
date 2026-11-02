@@ -2490,6 +2490,15 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await page.click("#cov-go");
     await page.waitForTimeout(800);
     check("with nothing found yet, the agency count stands alone", (await page.$$("#cov-bids .nb")).length === 0);
+    // The ZIP box at the top of the page runs the same check.
+    empty = false; nearBody = null;
+    await page.goto(`${BASE}/index.html`, { waitUntil: "load" });
+    await page.fill("#hero-zip-in", "65605");
+    await page.click("#hero-zip-go");
+    await page.waitForTimeout(1000);
+    check("the ZIP box at the top shows the bids near it", nearBody && nearBody.location === "65605" && nearBody.radius === 50
+          && (await page.$$("#cov-bids .nb li")).length === 2, JSON.stringify(nearBody));
+    check("the page doesn't scroll sideways on a phone", await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
     check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
     await ctx.close();
   }

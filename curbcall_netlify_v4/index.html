@@ -358,6 +358,12 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
 .nb li span{color:var(--text3);font-size:0.82rem;}
 .nb .btn{display:block;text-align:center;}
 .nb-note{color:var(--text3);font-size:0.8rem;margin-top:0.5rem;}
+.hero-grid>*{min-width:0;}
+.hero-zip{display:flex;gap:0.5rem;margin:1.2rem 0 0.9rem;max-width:30rem;width:100%;}
+.hero-zip input{flex:1;min-width:0;width:100%;background:var(--bg);border:1px solid var(--line);border-radius:10px;
+  padding:0.8rem 0.95rem;color:var(--text);font-family:var(--ui);font-size:1rem;}
+.hero-zip input:focus{outline:2px solid var(--amber);outline-offset:1px;}
+.hero-zip .btn{white-space:nowrap;}
 </style>
 </head>
 <body>
@@ -401,8 +407,16 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
       <span class="eyebrow">Concrete bid intelligence</span>
       <h1>Win more<br><span class="hi">flatwork.</span></h1>
       <p class="lead">Tell CurbCall Pro your ZIP and it finds the live sidewalk, ADA ramp and curb &amp; gutter bids near you.<span class="lead-more"> It reads the government and municipal sites around you and pulls the work out automatically — so you spend your time pouring concrete, not hunting for it.</span></p>
+      <!-- The proof, at the top: a ZIP shows the open bids near it (the same
+           check as the coverage section further down, which it fills in and
+           scrolls to). Most visitors never scroll that far. -->
+      <form class="hero-zip" id="hero-zip" onsubmit="return false;">
+        <input id="hero-zip-in" inputmode="numeric" autocomplete="postal-code" placeholder="Your ZIP code"
+               aria-label="Your ZIP code" maxlength="40" />
+        <button class="btn btn-amber" type="submit" id="hero-zip-go">See bids near me</button>
+      </form>
       <div class="cta-row">
-        <a class="btn btn-amber btn-lg" href="/app.html">Start free — open the app</a>
+        <a class="btn btn-line btn-lg" href="/app.html">Start free — open the app</a>
         <a class="btn btn-line btn-lg" href="#how">See how it works</a>
       </div>
       <!-- Links here are root-absolute (/app.html, not app.html) and must stay
@@ -786,6 +800,16 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
     }
     btn.addEventListener("click",check);
     zip.addEventListener("keydown",function(e){if(e.key==="Enter")check();});
+    var heroForm=document.getElementById("hero-zip");
+    if(heroForm)heroForm.addEventListener("submit",function(){
+      var v=(document.getElementById("hero-zip-in").value||"").trim();
+      if(!v){document.getElementById("hero-zip-in").focus();return;}
+      zip.value=v;
+      document.getElementById("cov-radius").value="50";
+      var sec=document.getElementById("coverage");
+      if(sec)sec.scrollIntoView({behavior:"smooth",block:"start"});
+      check();
+    });
   })();
 
   // Testimonials, read straight from Supabase with a plain fetch rather than
