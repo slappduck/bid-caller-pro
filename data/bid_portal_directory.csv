@@ -924,7 +924,7 @@ gardencityco.gov,Garden City,CO,City,Town of Garden City,not_found,,,2026-08-11
 rockyford-co.gov,Rocky Ford,CO,City,City of Rocky Ford,not_found,,,2026-08-11
 cityofvernonca.gov,Vernon,CA,City,City of Vernon,not_found,,,2026-08-11
 westminsterco.gov,Westminster,CO,City,CITY OF WESTMINSTER,found,https://westminsterco.gov/Bids.aspx,civicplus,2026-08-11
-gunnisonco.gov,Gunnison,CO,City,City of Gunnison,not_found,,,2026-08-11
+gunnisonco.gov,Gunnison,CO,City,City of Gunnison,found,https://gunnisonco.gov/bids,agency,2026-11-02
 parkerco.gov,Parker,CO,City,Town of Parker,found,https://parkerco.gov/bids,agency,2026-08-11
 townofhollyco.gov,HOLLY,CO,City,TOWN OF HOLLY,not_found,,,2026-08-11
 cityofholyoke-co.gov,Holyoke,CO,City,City of Holyoke,not_found,,,2026-08-11
@@ -997,7 +997,7 @@ lisbonct.gov,Lisbon,CT,City,Town of Lisbon,found,https://lisbonct.gov/Bids.aspx,
 middletownct.gov,Middletown,CT,City,City of Middletown,found,https://middletownct.gov/Bids.aspx,civicplus,2026-08-11
 townoflakecityco.gov,Lake City,CO,City,Town of Lake City,not_found,,,2026-08-11
 mansfieldct.gov,Mansfield,CT,City,Town of Mansfield,found,https://mansfieldct.gov/Bids.aspx,civicplus,2026-08-11
-coloradosprings.gov,Colorado Springs,CO,City,City of Colorado Springs,not_found,,,2026-08-11
+coloradosprings.gov,Colorado Springs,CO,City,City of Colorado Springs,found,https://coloradosprings.gov/procurement,agency,2026-11-02
 greeleyco.gov,Greeley,CO,City,City of Greeley,found,https://greeleyco.gov/finance/purchasing,agency,2026-08-11
 easthartfordct.gov,East Hartford,CT,City,Town of East Hartford,not_found,,,2026-08-11
 nederlandco.gov,Nederland,CO,City,"Town of Nederland, Colorado",not_found,,,2026-08-11
@@ -1063,7 +1063,7 @@ bridgewater-ct.gov,Bridgewater,CT,City,Town of Bridgewater CT,not_found,,,2026-0
 trumbull-ct.gov,Trumbull,CT,City,Town of Trumbull,found,https://trumbull-ct.gov/Bids.aspx,civicplus,2026-08-11
 newmilfordct.gov,New Milford,CT,City,Town of New Milford,not_found,,,2026-08-11
 torringtonct-pd.gov,Torrington,CT,City,City of Torrington,found,https://torringtonct-pd.gov/Bids.aspx,civicplus,2026-08-11
-louisvilleco.gov,Louisville,CO,City,City of Louisville,not_found,,,2026-08-11
+louisvilleco.gov,Louisville,CO,City,City of Louisville,found,https://louisvilleco.gov/bids,agency,2026-11-02
 wethersfieldct.gov,Wethersfield,CT,City,Town of Wethersfield,found,https://wethersfieldct.gov/Bids.aspx,civicplus,2026-08-11
 silverthorne.gov,Silverthorne,CO,City,Town of Silverthorne,not_found,,,2026-08-11
 piercecolo.gov,Pierce,CO,City,"Town of Pierce, Colorado",found,https://piercecolo.gov/government/departments/finance/pages/bids,agency,2026-08-11
@@ -1102,7 +1102,7 @@ manchesterct.gov,Manchester,CT,City,Town of Manchester,found,https://manchesterc
 griswoldct.gov,Griswold,CT,City,Town of Griswold,not_found,,,2026-08-11
 apopka.gov,Apopka,FL,City,City of Apopka,found,https://apopka.gov/Bids.aspx,civicplus,2026-08-11
 walnutca.gov,Walnut,CA,City,City of Walnut,found,https://www.walnutca.gov/For-Residents/Community-Relations/Public-Notices-Bids-and-RFPs,agency,2026-08-11
-lakewoodco.gov,Lakewood,CO,City,City of Lakewood,not_found,,,2026-08-11
+lakewoodco.gov,Lakewood,CO,City,City of Lakewood,found,https://www.lakewoodco.gov/Local-Government/Public-Notices,custom,2026-11-02
 ridgefieldct.gov,Ridgefield,CT,City,Town of Ridgefield,found,https://ridgefieldct.gov/departments/purchasing/bid_notices.php,agency,2026-08-11
 bayharborislands-fl.gov,Bay Harbor Islands,FL,City,Town of Bay Harbor Islands,found,https://bayharborislands-fl.gov/Bids.aspx,civicplus,2026-08-11
 ledyardct.gov,"Ledyard, CT",CT,City,Town of Ledyard,not_found,,,2026-08-11
@@ -1220,7 +1220,7 @@ thomastonct.gov,THOMASTON,CT,City,TOWN OF THOMASTON,found,https://thomastonct.go
 miamigardens-fl.gov,Miami Gardens,FL,City,City of Miami Gardens,found,https://miamigardens-fl.gov/Bids.aspx,civicplus,2026-08-11
 cityoffwb.gov,Fort Walton Beach,FL,City,City of Fort Walton Beach,not_found,,,2026-08-11
 wiltonct.gov,Wilton,CT,City,Town of Wilton,not_found,,,2026-08-11
-littletonco.gov,Littleton,CO,City,City of Littleton,not_found,,,2026-08-11
+littletonco.gov,Littleton,CO,City,City of Littleton,found,https://www.littletonco.gov/Government/Notices-Reports-Records/Legal-Notices,custom,2026-11-02
 loxahatcheegrovesfl.gov,Loxahatchee Groves,FL,City,Town of Loxahatchee Groves,found,https://loxahatcheegrovesfl.gov/Bids.aspx,civicplus,2026-08-11
 maitlandfl.gov,Maitland,FL,City,City of Maitland,found,https://maitlandfl.gov/Bids.aspx,civicplus,2026-08-11
 dadecityfl.gov,Dade City,FL,City,City of Dade City,found,https://dadecityfl.gov/our_government/government_business/bids_quotes_auctions.php,agency,2026-08-11
@@ -2086,7 +2086,7 @@ woodburnindiana.gov,Woodburn,IN,City,City of Woodburn,not_found,,,2026-08-11
 burnsks.gov,Burns,KS,City,City of Burns,not_found,,,2026-08-11
 rocktonil.gov,Rockton,IL,City,Village of Rockton,found,https://rocktonil.gov/index.asp?SEC=E60D7A18-704E-439B-A5ED-798DD14D6743,custom,2026-11-02
 woodridgeil.gov,Woodridge,IL,City,Village of Woodridge,found,https://woodridgeil.gov/my_government/finance/bids_purchasing.php,agency,2026-08-11
-gary.gov,Gary,IN,City,City of Gary,not_found,,,2026-08-11
+gary.gov,Gary,IN,City,City of Gary,found,https://gary.gov/public-notices,custom,2026-11-02
 indypdks.gov,Independence,KS,City,Independence Police Department,not_found,,,2026-08-11
 mulvaneks.gov,Mulvane,KS,City,City of Mulvane,found,https://mulvaneks.gov/Bids.aspx,civicplus,2026-08-11
 cityofelkhartin.gov,Elkhart,IN,City,City of Elkhart,not_found,,,2026-08-11
@@ -2112,7 +2112,7 @@ cityoflittleriverks.gov,Little River,KS,City,City of Little River,not_found,,,20
 lenexa-ks.gov,Lenexa,KS,City,"City of Lenexa, Kansas",not_found,,,2026-08-11
 havenks.gov,Haven,KS,City,The City of Haven,not_found,,,2026-08-11
 wycokck.gov,Kansas City,KS,City,"Unified Government of Wyandotte County and Kansas City, Kansas",not_found,,,2026-08-11
-lakestation-in.gov,Lake Station,IN,City,The City of Lake Station Indiana,not_found,,,2026-08-11
+lakestation-in.gov,Lake Station,IN,City,The City of Lake Station Indiana,found,https://lakestation-in.gov/departments/purchasing,agency,2026-11-02
 villageofyatescity.gov,Yates City,IL,City,Village of Yates City,not_found,,,2026-08-11
 cityofnewtonks.gov,Newton,KS,City,City of Newton,not_found,,,2026-08-11
 lsbpdks.gov,Louisburg,KS,City,Louisburg Kansas Police Department,not_found,,,2026-08-11
@@ -2145,7 +2145,7 @@ plainvilleks.gov,Plainville,KS,City,City of Plainville,not_found,,,2026-08-11
 leavenworthks.gov,Leavenworth,KS,City,City of Leavenworth,not_found,,,2026-08-11
 hendersonky.gov,Henderson,KY,City,"City of Henderson, KY",found,https://hendersonky.gov/Bids.aspx,civicplus,2026-08-11
 stjohnks.gov,St John,KS,City,City of St John,not_found,,,2026-08-11
-mountvernonin.gov,Mount Vernon,IN,City,City of Mount Vernon,not_found,,,2026-08-11
+mountvernonin.gov,Mount Vernon,IN,City,City of Mount Vernon,found,https://mountvernonin.gov/Bids.aspx,civicplus,2026-11-02
 georgetownky.gov,Georgetown,KY,City,City of Georgetown,found,https://georgetownky.gov/Bids.aspx,civicplus,2026-08-11
 northvernon-in.gov,North Vernon,IN,City,City of North Vernon,not_found,,,2026-08-11
 sedanks.gov,Sedan,KS,City,City of Sedan,not_found,,,2026-08-11
@@ -2184,7 +2184,7 @@ topeka.gov,Topeka,KS,City,City of Topeka,found,https://topeka.gov/business/index
 horsecaveky.gov,Horse Cave,KY,City,City Of Horse Cave,not_found,,,2026-08-11
 baldwincity.gov,Baldwin City,KS,City,"City of Baldwin City, KS",found,https://baldwincity.gov/services/bids-rfps,agency,2026-08-11
 jeffersontownky.gov,Jeffersontown,KY,City,City of Jeffersontown,not_found,,,2026-08-11
-ashlandky.gov,Ashland,KY,City,"The City of Ashland, KY",not_found,,,2026-08-11
+ashlandky.gov,Ashland,KY,City,"The City of Ashland, KY",found,https://www.ashlandky.gov/business/current_bid_requests.php,agency,2026-11-02
 bereaky.gov,Berea,KY,City,City of Berea,not_found,,,2026-08-11
 highlandheights-ky.gov,Highland Heights,KY,City,City of Highland Heights Kentucky,not_found,,,2026-08-11
 glenviewky.gov,Glenview,KY,City,City of Glenview,not_found,,,2026-08-11
@@ -2192,7 +2192,7 @@ winfieldks.gov,Winfield,KS,City,"City of Winfield, KS",not_found,,,2026-08-11
 lewisburgky.gov,Lewisburg,KY,City,City of Lewisburg,not_found,,,2026-08-11
 orchardgrasshills.gov,Crestwood,KY,City,City of Orchard Grass Hills,not_found,,,2026-08-11
 valleycenterks.gov,Valley Center,KS,City,The City of Valley Center,found,https://valleycenterks.gov/business/bids_and_rfq_rfps_for_city_projects.php,agency,2026-08-11
-danvilleky.gov,Danville,KY,City,"City of Danville, KY",not_found,,,2026-08-11
+danvilleky.gov,Danville,KY,City,"City of Danville, KY",found,https://danvilleky.gov/Bids.aspx,civicplus,2026-11-02
 cityofglasgow.gov,Glasgow,KY,City,City of Glasgow,not_found,,,2026-08-11
 hurstbourneacresky.gov,Hurstbourne Acres,KY,City,City of Hurstbourne Acres,not_found,,,2026-08-11
 crestviewky.gov,Crestview,KY,City,Crestview KY,not_found,,,2026-08-11
@@ -2213,7 +2213,7 @@ heritagecreekky.gov,Louisville,KY,City,City of Heritage Creek Kentucky,not_found
 burdenks.gov,Burden,KS,City,City of Burden,not_found,,,2026-11-02
 irvinekentucky.gov,Irvine,KY,City,City of Irvine,not_found,,,2026-08-11
 hillviewpolice.gov,Louisville,KY,City,Hillview Police Department,not_found,,,2026-08-11
-audubonparkky.gov,Louisville,KY,City,City of Audubon Park,not_found,,,2026-08-11
+audubonparkky.gov,Louisville,KY,City,City of Audubon Park,found,https://audubonparkky.gov/current-open-bidslegal-noticepublic-hearings.html,agency,2026-11-02
 louisvilleky.gov,Louisville,KY,City,Louisville Jefferson County Metro Government,not_found,,,2026-08-11
 cityoffergusonky.gov,Ferguson,KY,City,City of Ferguson,not_found,,,2026-08-11
 oberlinkansas.gov,Oberlin,KS,City,City of Oberlin,not_found,,,2026-08-11
@@ -2229,7 +2229,7 @@ olatheks.gov,Olathe,KS,City,City of Olathe,not_found,,,2026-08-11
 burnsharbor-in.gov,Burns Harbor,IN,City,Town of Burns Harbor,not_found,,,2026-08-11
 nicholasvilleky.gov,Nicholasville,KY,City,City of Nicholasville,not_found,,,2026-08-11
 blueridgemanorky.gov,Louisville,KY,City,City of Blue Ridge Manor,not_found,,,2026-08-11
-coldspringky.gov,Cold Spring,KY,City,City of Cold Spring,not_found,,,2026-08-11
+coldspringky.gov,Cold Spring,KY,City,City of Cold Spring,found,https://coldspringky.gov/public-notices,custom,2026-11-02
 middletownky.gov,Middletown,KY,City,City of Middletown,not_found,,,2026-08-11
 cityofgasks.gov,Gas,KS,City,City of Gas,not_found,,,2026-11-02
 brla.gov,Baton Rouge,LA,City,City of Baton Rouge / Parish of East Baton Rouge,found,https://brla.gov/Bids.aspx,civicplus,2026-08-11
@@ -2243,7 +2243,7 @@ cityofsebree.gov,Sebree,KY,City,City of Sebree,not_found,,,2026-08-11
 princetonky.gov,Princeton,KY,City,City of Princeton,not_found,,,2026-08-11
 maizeks.gov,Maize,KS,City,City of Maize,found,https://maizeks.gov/departments/finance/bids.php,agency,2026-08-11
 parsonspdks.gov,Parsons,KS,City,Parsons Police Department,not_found,,,2026-08-11
-covingtonky.gov,Covington,KY,City,City of Covington,not_found,,,2026-08-11
+covingtonky.gov,Covington,KY,City,City of Covington,found,https://covingtonky.gov/government/purchasing,agency,2026-11-02
 morehead-ky.gov,Morehead,KY,City,"City of Morehead, KY",not_found,,,2026-08-11
 leesvillela.gov,Leesville,LA,City,City of Leesville,found,https://leesvillela.gov/Bids.aspx,civicplus,2026-08-11
 southhutchinson.gov,South Hutchinson,KS,City,City of South Hutchinson,not_found,,,2026-08-11
@@ -2285,7 +2285,7 @@ franklinky.gov,Franklin,KY,City,"City of Franklin, KY",found,https://franklinky.
 acton-ma.gov,Acton,MA,City,"Town of Acton, Massachusetts",found,https://acton-ma.gov/Bids.aspx,civicplus,2026-08-11
 amherstma.gov,Amherst,MA,City,Town of Amherst,found,https://amherstma.gov/Bids.aspx,civicplus,2026-08-11
 stgeorgela.gov,Baton Rouge,LA,City,City of St. George Louisiana,not_found,,,2026-08-11
-richmondky.gov,Richmond,KY,City,City of Richmond KY,not_found,,,2026-08-11
+richmondky.gov,Richmond,KY,City,City of Richmond KY,found,https://richmondky.gov/business/bidopps.php,agency,2026-11-02
 fortwrightky.gov,Fort Wright,KY,City,City of Fort Wright,found,https://www.fortwrightky.gov/2026/07/09/solicitation-for-sealed-bids-and-proposals-3/,agency,2026-08-11
 ashburnham-ma.gov,Ashburnham,MA,City,Town of Ashburnham,found,https://ashburnham-ma.gov/Bids.aspx,civicplus,2026-08-11
 andoverma.gov,Andover,MA,City,Town of Andover,found,https://andoverma.gov/Bids.aspx,civicplus,2026-08-11
@@ -2303,7 +2303,7 @@ parkhillsky.gov,Park Hills,KY,City,City of Park Hills,found,https://parkhillsky.
 mooringsport.gov,mooringsport,LA,City,Village of Mooringsport,not_found,,,2026-08-11
 belmont-ma.gov,Belmont,MA,City,Town of Belmont,found,https://belmont-ma.gov/Bids.aspx,civicplus,2026-08-11
 wilderky.gov,Wilder,KY,City,City of Wilder,not_found,,,2026-08-11
-lexingtonky.gov,Lexington,KY,City,Lexington-Fayette Urban County Government,not_found,,,2026-08-11
+lexingtonky.gov,Lexington,KY,City,Lexington-Fayette Urban County Government,found,https://lexingtonky.gov/procurement,agency,2026-11-02
 billerica.gov,Billerica,MA,City,Town of Billerica,found,https://billerica.gov/Bids.aspx,civicplus,2026-08-11
 nolartcc.gov,New Orleans,LA,City,City of New Orleans,not_found,,,2026-08-11
 covla.gov,Covington,LA,City,City of Covington,not_found,,,2026-08-11
@@ -2323,7 +2323,7 @@ nolaeoc.gov,New Orleans,LA,City,City of New Orleans,not_found,,,2026-08-11
 stampinggroundky.gov,Stamping Ground,KY,City,City of Stamping Ground,not_found,,,2026-08-11
 haughtonla.gov,Haughton,LA,City,City Of Haughton,not_found,,,2026-08-11
 thibodaux.gov,Thibodaux,LA,City,"The City of Thibodaux, Louisiana",not_found,,,2026-08-11
-natchitochesla.gov,Natchitoches,LA,City,City of Natchitoches,not_found,,,2026-08-11
+natchitochesla.gov,Natchitoches,LA,City,City of Natchitoches,found,https://natchitochesla.gov/purchasing,agency,2026-11-02
 youngsvillela.gov,Youngsville,LA,City,City of Youngsville,not_found,,,2026-08-11
 villageofmorganza.gov,Morganza,LA,City,Village of Morganza,not_found,,,2026-08-11
 newburyma.gov,Byfield,MA,City,Town Of Newbury,found,https://newburyma.gov/Bids.aspx,civicplus,2026-08-11
@@ -2665,7 +2665,7 @@ townofeagleharbormd.gov,Aquasco,MD,City,"Town of Eagle Harbor, Inc.",not_found,,
 townofsykesville.gov,Sykesville,MD,City,Town of Sykesville,found,https://townofsykesville.gov/Bids.aspx,civicplus,2026-08-11
 seatpleasantmd.gov,Seat Pleasant,MD,City,City of Seat Pleasant,found,https://seatpleasantmd.gov/Bids.aspx,civicplus,2026-08-11
 wrenthampolice.gov,Wrentham,MA,City,Town of Wrentham,not_found,,,2026-08-11
-owensboroky.gov,Owensboro,KY,City,City of Owensboro,not_found,,,2026-08-11
+owensboroky.gov,Owensboro,KY,City,City of Owensboro,found,https://owensboro.org/departments/purchasing/index.php,custom,2026-11-02
 friendsvillemd.gov,Friendsville,MD,City,Town of Friendsville,not_found,,,2026-08-11
 chestertown.gov,Chestertown,MD,City,Town of Chestertown,not_found,,,2026-08-11
 bladensburgmd.gov,Bladensburg,MD,City,Town of Bladensburg,found,https://bladensburgmd.gov/rfps_and_bid_opportunities/index.php,agency,2026-08-11
@@ -3971,7 +3971,7 @@ cityofdeerlodgemt.gov,Deer Lodge,MT,City,City Of Deer Lodge,not_found,,,2026-08-
 townofansonville.gov,Ansonville,NC,City,Town of Ansonville,not_found,,,2026-08-11
 harlem-mt.gov,Harlem,MT,City,City of Harlem,not_found,,,2026-08-11
 corinthms.gov,Corinth,MS,City,City of Corinth,not_found,,,2026-08-11
-gulfport-ms.gov,Gulfport,MS,City,City of Gulfport Mississippi,not_found,,,2026-08-11
+gulfport-ms.gov,Gulfport,MS,City,City of Gulfport Mississippi,found,https://gulfport-ms.gov/government/public_notices.php,custom,2026-11-02
 richlandms.gov,Richland,MS,City,City of Richland,not_found,,,2026-08-11
 townofenterprisems.gov,Enterprise,MS,City,Town of Enterprise,not_found,,,2026-08-11
 fairfieldmt.gov,Fairfield,MT,City,Town of Fairfield,not_found,,,2026-08-11
@@ -6980,7 +6980,7 @@ jeffersonhillspd.gov,Jefferson Hills,PA,City,Jefferson Hills Police Department,n
 goodlettsville.gov,Goodlettsville,TN,City,"City of Goodlettsville, Tennessee",found,https://goodlettsville.gov/Bids.aspx,civicplus,2026-08-11
 townofchapelhilltn.gov,Chapel Hill,TN,City,Town of Chapel Hill,not_found,,,2026-08-11
 camdentn.gov,Camden,TN,City,City Of Camden,not_found,,,2026-08-11
-townofbrucetontn.gov,Bruceton,TN,City,Town of Bruceton,not_found,,,2026-08-11
+townofbrucetontn.gov,Bruceton,TN,City,Town of Bruceton,found,https://townofbrucetontn.gov/public_notices.html,custom,2026-11-02
 bluffcitytn.gov,City of Bluff City,TN,City,City of Bluff City Tennessee,not_found,,,2026-08-11
 ninetysixsc.gov,Ninety SIX,SC,City,Town of Ninety Six,not_found,,,2026-08-11
 ststephensc.gov,St. Stephen,SC,City,"Town of St. Stephen, South Carolina",not_found,,,2026-08-11
@@ -6998,7 +6998,7 @@ athentwpbcpapd.gov,Sayre,PA,City,Athens Township Police Department in Bradford C
 townofravenel.gov,Ravenel,SC,City,Town of Ravenel,not_found,,,2026-08-11
 eastridgetn.gov,East Ridge,TN,City,City of East Ridge,found,https://eastridgetn.gov/bids,agency,2026-08-11
 byrdstowntn.gov,Byrdstown,TN,City,Town of Byrdstown,not_found,,,2026-08-11
-collegedaletn.gov,Collegedale,TN,City,"City of Collegedale, Tennessee",not_found,,,2026-08-11
+collegedaletn.gov,Collegedale,TN,City,"City of Collegedale, Tennessee",found,https://collegedaletn.gov/Bids.aspx,civicplus,2026-11-02
 lavergnetn.gov,La Vergne,TN,City,City of La Vergne,found,https://lavergnetn.gov/Bids.aspx,civicplus,2026-08-11
 townofhallstn.gov,Halls,TN,City,Town of Halls,not_found,,,2026-08-11
 columbiatn.gov,Columbia,TN,City,City of Columbia,not_found,,,2026-08-11
@@ -7046,7 +7046,7 @@ townoflindentn.gov,Linden,TN,City,Town of Linden,not_found,,,2026-08-11
 maryville-tn.gov,Maryville,TN,City,City of Maryville,not_found,,,2026-08-11
 jaspertn.gov,Jasper,TN,City,Town of Jasper,not_found,,,2026-08-11
 lafayettetnfd.gov,Lafayette,TN,City,Lafayette Fire Department,not_found,,,2026-08-11
-kingsporttn.gov,Kingsport,TN,City,City of Kingsport,not_found,,,2026-08-11
+kingsporttn.gov,Kingsport,TN,City,City of Kingsport,found,https://kingsporttn.gov/bids,agency,2026-11-02
 hendersontn.gov,Henderson,TN,City,City of Henderson,not_found,,,2026-08-11
 cityofpigeonforgetn.gov,Pigeon Forge,TN,City,City of Pigeon Forge,found,https://cityofpigeonforgetn.gov/Bids.aspx,civicplus,2026-08-11
 jamestowntn.gov,Jamestown,TN,City,City of Jamestown,not_found,,,2026-08-11
@@ -7062,7 +7062,7 @@ jisnashville.gov,Nashville,TN,City,Justice Integration Services,not_found,,,2026
 knoxvilletn.gov,Knoxville,TN,City,City of Knoxville,found,https://knoxvilletn.gov/bids,agency,2026-08-11
 maynardville.gov,Maynardville,TN,City,City of Maynardville,not_found,,,2026-08-11
 norristn.gov,Norris,TN,City,City of Norris,not_found,,,2026-08-11
-johnsoncitytn.gov,Johnson City,TN,City,City of Johnson City,not_found,,,2026-08-11
+johnsoncitytn.gov,Johnson City,TN,City,City of Johnson City,found,https://johnsoncitytn.gov/purchasing,agency,2026-11-02
 atokatn.gov,Atoka,TN,City,Town of Atoka,not_found,,,2026-08-11
 somervilletn.gov,Town of Somerville,TN,City,Town of Somerville,found,https://somervilletn.gov/Bids.aspx,civicplus,2026-08-11
 cityofwarrenpa.gov,Warren,PA,City,City of Warren,not_found,,,2026-08-11
@@ -7084,7 +7084,7 @@ brownsvilletn.gov,Brownsville,TN,City,City of Brownsville,found,https://vrapp.ve
 oliversprings-tn.gov,Oliver Springs,TN,City,Town of Oliver Springs,not_found,,,2026-08-11
 townofpleasanthilltn.gov,Pleasant Hill,TN,City,City of Pleasant Hill,not_found,,,2026-08-11
 cityoferintn.gov,Erin,TN,City,City of Erin,not_found,,,2026-08-11
-lewisburgtn.gov,Lewisburg,TN,City,City of Lewisburg,not_found,,,2026-08-11
+lewisburgtn.gov,Lewisburg,TN,City,City of Lewisburg,found,https://lewisburgtn.gov/public-notices,custom,2026-11-02
 gatlinburgtn.gov,Gatlinburg,TN,City,City of Gatlinburg,not_found,,,2026-08-11
 kingstontn.gov,Kingston,TN,City,City of Kingston,found,https://kingstontn.gov/active-bid-rfp/,agency,2026-08-11
 petersburgtn.gov,Petersburg,TN,City,Town of Petersburg,not_found,,,2026-08-11
@@ -7102,7 +7102,7 @@ rockfordtn.gov,Rockford,TN,City,City of Rockford TN,not_found,,,2026-08-11
 townofsmyrna-tn.gov,Smyrna,TN,City,Town of Smyrna,not_found,,,2026-08-11
 trimbletn.gov,TRIMBLE,TN,City,TOWN OF TRIMBLE,not_found,,,2026-08-11
 sharonsc.gov,Sharon,SC,City,Town of Sharon,not_found,,,2026-08-11
-stantontn.gov,Stanton,TN,City,Town of Stanton,not_found,,,2026-08-11
+stantontn.gov,Stanton,TN,City,Town of Stanton,found,https://stantontn.gov/bids,agency,2026-11-02
 greenevilletn.gov,Greeneville,TN,City,Town of Greeneville,not_found,,,2026-08-11
 ashlandcitytn.gov,Ashland City,TN,City,Town of Ashland City,found,https://ashlandcitytn.gov/rfps,agency,2026-08-11
 germantown-tn.gov,Germantown,TN,City,City of Germantown,not_found,,,2026-08-11
@@ -7122,8 +7122,8 @@ cityofwataugatn.gov,Watauga,TN,City,City of Watauga,not_found,,,2026-08-11
 bedfordtx.gov,Bedford,TX,City,City of Bedford,found,https://bedfordtx.gov/Bids.aspx,civicplus,2026-08-11
 thefairgroundsnashville.gov,Nashville,TN,City,Metropolitan Government of Nashville and Davidson County,found,https://www.nashville.gov/departments/fairgrounds/services/apply-vendor-flea-market,custom,2026-08-11
 bellairetx.gov,Bellaire,TX,City,City of Bellaire,found,https://bellairetx.gov/Bids.aspx,civicplus,2026-08-11
-waldentn.gov,Walden,TN,City,Town of Walden,not_found,,,2026-08-11
-spartatn.gov,Sparta,TN,City,City of Sparta,not_found,,,2026-08-11
+waldentn.gov,Walden,TN,City,Town of Walden,found,https://waldentn.gov/building_development/bid_posting.php,agency,2026-11-02
+spartatn.gov,Sparta,TN,City,City of Sparta,found,https://spartatn.gov/purchasing,agency,2026-11-02
 jacksontn.gov,Jackson,TN,City,"City of Jackson, TN",not_found,,,2026-08-11
 bellmeadtx.gov,Bellmead,TX,City,City of Bellmead,found,https://bellmeadtx.gov/Bids.aspx,civicplus,2026-08-11
 benbrook-tx.gov,Benbrook,TX,City,City of Benbrook,found,https://benbrook-tx.gov/Bids.aspx,civicplus,2026-08-11
@@ -7150,9 +7150,9 @@ alton-tx.gov,Alton,TX,City,City of Alton,found,https://alton-tx.gov/business/bid
 budatx.gov,Buda,TX,City,City of Buda,found,https://budatx.gov/Bids.aspx,civicplus,2026-08-11
 pittmancentertn.gov,Sevierville,TN,City,Town of Pittman Center,not_found,,,2026-08-11
 laketanglewoodtx.gov,Amarillo,TX,City,Village of Lake Tanglewood,not_found,,,2026-08-11
-thompsons-station.gov,Thompsons Station,TN,City,Town of Thompsons Station,not_found,,,2026-08-11
+thompsons-station.gov,Thompsons Station,TN,City,Town of Thompsons Station,found,https://thompsons-station.gov/bid-postings,agency,2026-11-02
 arlington-tx.gov,Arlington,TX,City,"City of Arlington, Texas",found,https://arlington-tx.gov/Bids.aspx,civicplus,2026-08-11
-alvin.gov,Alvin,TX,City,City of Alvin,not_found,,,2026-08-11
+alvin.gov,Alvin,TX,City,City of Alvin,found,https://alvin.gov/Bids.aspx,civicplus,2026-11-02
 timbercreekcanyontx.gov,Amarillo,TX,City,Village of Timbercreek Canyon,not_found,,,2026-08-11
 metroartsnashville.gov,Nashville,TN,City,Metropolitan Government of Nashville and Davidson County,not_found,,,2026-08-11
 tullahomatn.gov,Tullahoma,TN,City,City of Tullahoma,found,https://tullahomatn.gov/departments/finance_department/vendor_registration.php,custom,2026-08-11
@@ -7165,18 +7165,18 @@ unioncitytn.gov,Union City,TN,City,City of Union City,found,https://unioncitytn.
 cityofmanchestertn.gov,Manchester,TN,City,City Of Manchester,found,https://vrapp.vendorregistry.com/Bids/View/BidsList?BuyerId=668ac183-1aa0-4dff-a4e8-3ffba912f053,custom,2026-08-11
 arlingtontx.gov,Arlington,TX,City,"City of Arlington, Texas",found,https://arlingtontx.gov/bids,agency,2026-08-11
 cityofboydtx.gov,Boyd,TX,City,City of Boyd,not_found,,,2026-08-11
-alvin-tx.gov,Alvin,TX,City,"City of Alvin, Texas",not_found,,,2026-08-11
+alvin-tx.gov,Alvin,TX,City,"City of Alvin, Texas",found,https://alvin-tx.gov/Bids.aspx,civicplus,2026-11-02
 celina-tx.gov,Celina,TX,City,City of Celina,found,https://celina-tx.gov/Bids.aspx,civicplus,2026-08-11
 austin.gov,Austin,TX,City,City of Austin,not_found,,,2026-08-11
 cedarparktexas.gov,Cedar Park,TX,City,City of Cedar Park,found,https://cedarparktexas.gov/Bids.aspx,civicplus,2026-08-11
 alvordtx.gov,Alvord,TX,City,City of Alvord,not_found,,,2026-08-11
-bigspringtx.gov,Big Spring,TX,City,City of Big Spring,not_found,,,2026-08-11
+bigspringtx.gov,Big Spring,TX,City,City of Big Spring,found,https://bigspringtx.gov/Bids.aspx,civicplus,2026-11-02
 bloominggrovetx.gov,Blooming Grove,TX,City,City of Blooming Grove,not_found,,,2026-08-11
 friendsvilletn.gov,Friendsville,TN,City,City of Friendsville,found,https://friendsvilletn.gov/administration/finance-purchasing,agency,2026-08-11
 annatexas.gov,Anna,TX,City,City of Anna,not_found,,,2026-08-11
 lafollettetn.gov,LaFollette,TN,City,City of LaFollette,not_found,,,2026-08-11
 banderatx.gov,Bandera,TX,City,City of Bandera Texas,not_found,,,2026-08-11
-nolensvilletn.gov,Nolensville,TN,City,Town of Nolensville,not_found,,,2026-08-11
+nolensvilletn.gov,Nolensville,TN,City,Town of Nolensville,found,https://nolensvilletn.gov/bids,agency,2026-11-02
 nashville.gov,Nashville,TN,City,"Metropolitan Government of Nashville & Davidson County, Tennessee",found,https://www.nashville.gov/departments/finance/procurement/how-do-business-metro,agency,2026-08-11
 visitoneidatn.gov,Oneida,TN,City,Town of Oneida,not_found,,,2026-08-11
 mayaguezpr.gov,Mayaguez,PR,City,Mayaguez Municipality,not_found,,,2026-08-11
@@ -7192,7 +7192,7 @@ dalharttx.gov,Dalhart,TX,City,City of Dalhart,found,https://dalharttx.gov/Bids.a
 andersontx.gov,ANDERSON,TX,City,Town of Anderson,not_found,,,2026-08-11
 deerparktx.gov,Deer Park,TX,City,City of Deer Park,found,https://deerparktx.gov/Bids.aspx,civicplus,2026-08-11
 brentwoodtn.gov,Brentwood,TN,City,City of Brentwood,found,https://www.brentwoodtn.gov/Departments/Finance/Purchasing-Program/Current-Bids-RFPs,agency,2026-08-11
-baycitytx.gov,Bay City,TX,City,City of Bay City,not_found,,,2026-08-11
+baycitytx.gov,Bay City,TX,City,City of Bay City,found,https://baycitytx.gov/Bids.aspx,civicplus,2026-11-02
 allentx.gov,Allen,TX,City,City of Allen,found,https://allentx.gov/purchasing,agency,2026-08-11
 averytx.gov,Avery,TX,City,City of Avery,not_found,,,2026-08-11
 buffalogaptx.gov,Buffalo Gap,TX,City,City of Buffalo Gap,not_found,,,2026-08-11
@@ -7214,7 +7214,7 @@ desototexas.gov,DeSoto,TX,City,City of DeSoto,found,https://desototexas.gov/Bids
 eaglepasstx.gov,Eagle Pass,TX,City,City of Eagle Pass,found,https://eaglepasstx.gov/Bids.aspx,civicplus,2026-08-11
 cityofcentervillesd.gov,Centerville,SD,City,City of Centerville,not_found,,,2026-08-11
 emeraldbay-tx.gov,Bullard,TX,City,Emerald Bay Municipal Utility District,not_found,,,2026-08-11
-annettatx.gov,Aledo,TX,City,Town of Annetta,not_found,,,2026-08-11
+annettatx.gov,Aledo,TX,City,Town of Annetta,found,https://annettatx.gov/government/purchasing,agency,2026-11-02
 clyde-tx.gov,Clyde,TX,City,City Of Clyde,not_found,,,2026-08-11
 brookshiretx.gov,Brookshire,TX,City,City of Brookshire,found,https://brookshiretx.gov/bids,agency,2026-08-11
 monckscornersc.gov,Moncks Corner,SC,City,Town of Moncks Corner,found,https://monckscornersc.gov/business/current-bids-projects,agency,2026-08-11
@@ -7223,7 +7223,7 @@ flowermound.gov,Flower Mound,TX,City,Town of Flower Mound,found,https://flowermo
 cityofconroe.gov,Conroe,TX,City,City of Conroe,not_found,,,2026-08-11
 lennoxsd.gov,Lennox,SD,City,"City of Lennox, South Dakota",not_found,,,2026-08-11
 caldwelltx.gov,Caldwell,TX,City,City of Caldwell,found,https://caldwelltx.gov/procurement,agency,2026-08-11
-breckenridgetx.gov,Breckenridge,TX,City,City of Breckenridge,not_found,,,2026-08-11
+breckenridgetx.gov,Breckenridge,TX,City,City of Breckenridge,found,https://breckenridgetx.gov/departments/city_secretary/public_notices.php,custom,2026-11-02
 cantontx.gov,Canton,TX,City,"City of Canton, Texas",not_found,,,2026-08-11
 comanchetexas.gov,Comanche,TX,City,City of Comanche,not_found,,,2026-08-11
 cityofcolemantx.gov,Coleman,TX,City,City of Coleman,not_found,,,2026-08-11
@@ -7233,7 +7233,7 @@ cityofdenton.gov,Denton,TX,City,City of Denton,not_found,,,2026-08-11
 downtownabilenetx.gov,ABILENE,TX,City,City of Abilene,not_found,,,2026-08-11
 ferristexas.gov,Ferris,TX,City,City of Ferris,found,https://ferristexas.gov/Bids.aspx,civicplus,2026-08-11
 amarillo.gov,Amarillo,TX,City,City of Amarillo,found,https://amarillo.gov/purchasing,agency,2026-08-11
-cibolotx.gov,Cibolo,TX,City,City of Cibolo,not_found,,,2026-08-11
+cibolotx.gov,Cibolo,TX,City,City of Cibolo,found,https://cibolotx.gov/bidopportunities,agency,2026-11-02
 forneytx.gov,Forney,TX,City,City of Forney,found,https://forneytx.gov/Bids.aspx,civicplus,2026-08-11
 castrovilletx.gov,Castroville,TX,City,City of Castroville,not_found,,,2026-08-11
 clutetexas.gov,Clute,TX,City,"City of Clute, Texas",not_found,,,2026-08-11
@@ -7248,12 +7248,12 @@ friscotexas.gov,Frisco,TX,City,City of Frisco,found,https://friscotexas.gov/Bids
 delriotx.gov,Del Rio,TX,City,City of Del Rio,not_found,,,2026-08-11
 glennheightstx.gov,Glenn Heights,TX,City,City of Glenn Heights,found,https://glennheightstx.gov/Bids.aspx,civicplus,2026-08-11
 garlandtx.gov,Garland,TX,City,City of Garland,found,https://garlandtx.gov/Bids.aspx,civicplus,2026-08-11
-fairoaksranch.gov,FAIR OAKS RANCH,TX,City,Fair Oaks Ranch,not_found,,,2026-08-11
+fairoaksranch.gov,FAIR OAKS RANCH,TX,City,Fair Oaks Ranch,found,https://fairoaksranch.gov/Bids.aspx,civicplus,2026-11-02
 elmendorftx.gov,Elmendorf,TX,City,City of Elmendorf,not_found,,,2026-08-11
 godleytx.gov,Godley,TX,City,"City of Godley, TX",found,https://godleytx.gov/Bids.aspx,civicplus,2026-08-11
 decaturtx.gov,Decatur,TX,City,City of Decatur,not_found,,,2026-08-11
-corsicanatx.gov,Corsicana,TX,City,City of Corsicana,not_found,,,2026-08-11
-corpuschristitx.gov,Corpus Christi,TX,City,City of Corpus Christi,not_found,,,2026-08-11
+corsicanatx.gov,Corsicana,TX,City,City of Corsicana,found,https://www.cityofcorsicana.com/Archive.aspx?AMID=45,custom,2026-11-02
+corpuschristitx.gov,Corpus Christi,TX,City,City of Corpus Christi,found,https://www.corpuschristitx.gov/department-directory/finance-procurement/contracts-and-procurement/,agency,2026-11-02
 cityofelectra.gov,Electra,TX,City,City of Electra,not_found,,,2026-08-11
 centervilletx.gov,Centerville,TX,City,City of Centerville,found,https://centervilletx.gov/public-notice-procurement-of-administrative-engineering-services-for-application-preparation-and-grant-contract-implementation-services/,agency,2026-08-11
 cityofblancotx.gov,Blanco,TX,City,City of Blanco,not_found,,,2026-08-11
@@ -7312,7 +7312,7 @@ freeporttx.gov,Freeport,TX,City,City of Freeport,found,https://freeporttx.gov/pu
 ennistx.gov,Ennis,TX,City,City of Ennis Texas,found,https://ennistx.gov/purchasing,agency,2026-08-11
 holidaylakes-tx.gov,holiday lakes,TX,City,Town Of Holiday Lakes,not_found,,,2026-08-11
 jerseyvillage.gov,Jersey Village,TX,City,City of Jersey Village,found,https://jerseyvillage.gov/Bids.aspx,civicplus,2026-08-11
-harkerheights.gov,Harker Heights,TX,City,City of Harker Heights,not_found,,,2026-08-11
+harkerheights.gov,Harker Heights,TX,City,City of Harker Heights,found,https://harkerheights.gov/Bids.aspx,civicplus,2026-11-02
 kemahtx.gov,Kemah,TX,City,City of Kemah,found,https://kemahtx.gov/Bids.aspx,civicplus,2026-08-11
 hondo-tx.gov,Hondo,TX,City,City of Hondo,not_found,,,2026-08-11
 kerrvilletx.gov,Kerrville,TX,City,City of Kerrville,found,https://kerrvilletx.gov/Bids.aspx,civicplus,2026-08-11
@@ -7326,7 +7326,7 @@ kermittx.gov,Kermit,TX,City,City of Kermit,found,https://kermittx.gov/Bids.aspx,
 eastlandtexas.gov,Eastland,TX,City,City of Eastland,not_found,,,2026-08-11
 cityofhondo-tx.gov,Hondo,TX,City,City of Hondo,not_found,,,2026-08-11
 conversetx.gov,Converse,TX,City,City of Converse,found,https://conversetx.gov/government/requests_for_bids.php,agency,2026-08-11
-drippingspringstx.gov,Dripping Springs,TX,City,"City of Dripping Springs, Texas",not_found,,,2026-08-11
+drippingspringstx.gov,Dripping Springs,TX,City,"City of Dripping Springs, Texas",found,https://drippingspringstx.gov/Bids.aspx,civicplus,2026-11-02
 bunkerhilltx.gov,Houston,TX,City,City of Bunker Hill Village,not_found,,,2026-08-11
 killeentexas.gov,Killeen,TX,City,"City of Killeen, Texas",found,https://killeentexas.gov/Bids.aspx,civicplus,2026-08-11
 ciscotexas.gov,Cisco,TX,City,City of Cisco,found,https://ciscotexas.gov/rfps,agency,2026-08-11
@@ -7350,7 +7350,7 @@ georgetowntexas.gov,Georgetown,TX,City,City of Georgetown Texas,found,https://ge
 lindaletx.gov,Lindale,TX,City,City of Lindale,found,https://lindaletx.gov/Bids.aspx,civicplus,2026-08-11
 leaguecitytx.gov,League City,TX,City,City of League City,found,https://leaguecitytx.gov/Bids.aspx,civicplus,2026-08-11
 longviewtexas.gov,Longview,TX,City,City of Longview,found,https://longviewtexas.gov/Bids.aspx,civicplus,2026-08-11
-farmersvilletx.gov,Farmersville,TX,City,City of Farmersville,not_found,,,2026-08-11
+farmersvilletx.gov,Farmersville,TX,City,City of Farmersville,found,https://farmersvilletx.gov/public-notices,custom,2026-11-02
 townofmonteagle-tn.gov,Monteagle,TN,City,Town of Monteagle,not_found,,,2026-08-11
 jaspertxpd.gov,Jasper,TX,City,Jasper Police Department,not_found,,,2026-08-11
 lakeway-tx.gov,Lakeway,TX,City,City of Lakeway,found,https://lakeway-tx.gov/Bids.aspx,civicplus,2026-08-11
@@ -7360,7 +7360,7 @@ grovestx.gov,Groves,TX,City,City of Groves,found,https://grovestx.gov/department
 houstontx.gov,Houston,TX,City,City of Houston,found,https://www.houstontx.gov/bizwithhou/,custom,2026-08-11
 eulesstx.gov,Euless,TX,City,"City of Euless, TX",not_found,,,2026-08-11
 littleelm.gov,Little Elm,TX,City,"Town of Little Elm, Texas",found,https://littleelm.gov/Bids.aspx,civicplus,2026-08-11
-dumastx.gov,Dumas,TX,City,City of Dumas,not_found,,,2026-08-11
+dumastx.gov,Dumas,TX,City,City of Dumas,found,https://www.dumastx.gov/newslist.php,custom,2026-11-02
 libertyhilltx.gov,Liberty Hill,TX,City,City of Liberty Hill,found,https://libertyhilltx.gov/Bids.aspx,civicplus,2026-08-11
 indianlaketx.gov,Indian Lake,TX,City,Town of Indian Lake,not_found,,,2026-08-11
 cityoflockhart.gov,Lockhart,TX,City,City of Lockhart Texas,found,https://cityoflockhart.gov/Bids.aspx,civicplus,2026-08-11
@@ -7417,7 +7417,7 @@ mctx.gov,Missouri City,TX,City,City of Missouri City,not_found,,,2026-08-11
 fortworthtexas.gov,Fort Worth,TX,City,City of Fortworth,found,https://fortworthtexas.gov/purchasing,agency,2026-08-11
 lakejacksonpd.gov,Lake Jackson,TX,City,Lake Jackson Police Department,not_found,,,2026-08-11
 knoxcitytexas.gov,Knox City,TX,City,City of Knox City,not_found,,,2026-08-11
-lakejacksontx.gov,Lake Jackson,TX,City,City of Lake Jackson,not_found,,,2026-08-11
+lakejacksontx.gov,Lake Jackson,TX,City,City of Lake Jackson,found,https://lakejacksontx.gov/Bids.aspx,civicplus,2026-11-02
 midlothiantx.gov,Midlothian,TX,City,City of Midlothian,not_found,,,2026-08-11
 longviewtx.gov,Longview,TX,City,"City of Longview, TX",not_found,,,2026-08-11
 portarthurtx.gov,Port Arthur,TX,City,City of Port Arthur,found,https://portarthurtx.gov/Bids.aspx,civicplus,2026-08-11
@@ -7519,13 +7519,13 @@ scurrytx.gov,Scurry,TX,City,City of Scurry,not_found,,,2026-08-11
 saladotx.gov,Salado,TX,City,Village of Salado Texas,not_found,,,2026-08-11
 universalcitytexas.gov,Universal City,TX,City,City of Universal City,found,https://universalcitytexas.gov/Bids.aspx,civicplus,2026-08-11
 southlaketx.gov,Southlake,TX,City,City of Southlake,not_found,,,2026-08-11
-sealypolice.gov,Sealy,TX,City,Sealy Police Department,not_found,,,2026-08-11
+sealypolice.gov,Sealy,TX,City,Sealy Police Department,found,https://www.ci.sealy.tx.us/departments/finance_department/purchasing/index.php,agency,2026-11-02
 shinertexas.gov,Shiner,TX,City,City of Shiner Texas,not_found,,,2026-08-11
 pineislandtx.gov,Hempstead,TX,City,City of Pine Island,not_found,,,2026-08-11
 merkeltx.gov,Merkel,TX,City,City of Merkel Texas,not_found,,,2026-08-11
 sonoratexas.gov,Sonora,TX,City,City of Sonora,not_found,,,2026-08-11
 wallertexas.gov,Waller,TX,City,City of Waller,found,https://wallertexas.gov/Bids.aspx,civicplus,2026-08-11
-shavanoparktx.gov,Shavano Park,TX,City,City of Shavano Park,not_found,,,2026-08-11
+shavanoparktx.gov,Shavano Park,TX,City,City of Shavano Park,found,https://shavanoparktx.gov/bids,agency,2026-11-02
 giddings.gov,GIDDINGS,TX,City,CITY OF GIDDINGS,not_found,,,2026-08-11
 thewoodlands-tx.gov,The Woodlands,TX,City,The Woodlands Township,not_found,,,2026-08-11
 santaclaratx.gov,Santa Clara,TX,City,City Of Santa Clara,not_found,,,2026-08-11
@@ -7539,7 +7539,7 @@ dallascityhall-tx.gov,Dallas,TX,City,City of Dallas,not_found,,,2026-08-11
 sanangelo.gov,San Angelo,TX,City,City of San Angelo,found,https://sanangelo.gov/bids,agency,2026-08-11
 webstertx.gov,Webster,TX,City,City of Webster,found,https://webstertx.gov/Bids.aspx,civicplus,2026-08-11
 sunrisebeachtx.gov,Sunrise Beach,TX,City,Sunrise Beach Village,not_found,,,2026-08-11
-jacintocity-tx.gov,Jacinto City,TX,City,City of Jacinto City,not_found,,,2026-08-11
+jacintocity-tx.gov,Jacinto City,TX,City,City of Jacinto City,found,https://jacintocity-tx.gov/public-notices,custom,2026-11-02
 victoriatx.gov,Victoria,TX,City,City of victoria,found,https://victoriatx.gov/Bids.aspx,civicplus,2026-08-11
 westlakehills.gov,West Lake Hills,TX,City,City of West Lake Hills,found,https://westlakehills.gov/Bids.aspx,civicplus,2026-08-11
 waxahachietx.gov,Waxahachie,TX,City,City of Waxahachie,found,https://waxahachietx.gov/Bids.aspx,civicplus,2026-08-11
@@ -7550,7 +7550,7 @@ staplestx.gov,Staples,TX,City,City of Staples,not_found,,,2026-08-11
 woodcreektx.gov,Woodcreek,TX,City,City of Woodcreek,found,https://woodcreektx.gov/Bids.aspx,civicplus,2026-08-11
 mustangridgetx.gov,Mustang Ridge,TX,City,City of Mustang Ridge,found,https://mustangridgetx.gov/rfps,agency,2026-08-11
 palmertx.gov,Palmer,TX,City,CIty of Palmer,not_found,,,2026-08-11
-templetx.gov,Temple,TX,City,"City of Temple, Texas",not_found,,,2026-08-11
+templetx.gov,Temple,TX,City,"City of Temple, Texas",found,https://templetx.gov/departments/city_departments/purchasing/index.php,agency,2026-11-02
 alpineut.gov,Alpine,UT,City,Alpine City Corporation,found,https://alpineut.gov/Bids.aspx,civicplus,2026-08-11
 newarktexas.gov,Newark,TX,City,City of Newark,found,https://newarktexas.gov/bidsandrfqs,agency,2026-08-11
 teaguepdtx.gov,Teague,TX,City,Teague Police Department,not_found,,,2026-08-11
@@ -7619,7 +7619,7 @@ heberut.gov,Heber City,UT,City,Heber City Corporation,found,https://heberut.gov/
 willowparktx.gov,Willow Park,TX,City,City of Willow Park,not_found,,,2026-08-11
 woodwaytexas.gov,Woodway,TX,City,City of Woodway,not_found,,,2026-08-11
 yoakumtx.gov,Yoakum,TX,City,City of Yoakum,found,https://yoakumtx.gov/community/businesses/bid_notices.php,agency,2026-08-11
-wylietexas.gov,Wylie,TX,City,City of Wylie,not_found,,,2026-08-11
+wylietexas.gov,Wylie,TX,City,City of Wylie,found,https://wylietexas.gov/departments/purchasing,agency,2026-11-02
 trinidadtexas.gov,Trinidad,TX,City,City of Trinidad,not_found,,,2026-08-11
 highlandut.gov,Highland,UT,City,Highland City,found,https://highlandut.gov/Bids.aspx,civicplus,2026-08-11
 weslacotx.gov,Weslaco,TX,City,City of Weslaco,found,https://weslacotx.gov/business/procurement/index.php,agency,2026-08-11
@@ -9213,7 +9213,7 @@ montgomerycountyar.gov,Mount Ida,AR,County,Montgomery County,not_found,,,2026-08
 standa.gov,"Modesto, Stanislaus",CA,County,Stanislaus County District Attorney's Office,not_found,,,2026-08-11
 jeffcosheriffco.gov,Golden,CO,County,Jefferson County Sheriff's Office,not_found,,,2026-08-11
 ocpubdef.gov,Santa Ana,CA,County,County of Orange Public Defender's Office,not_found,,,2026-08-11
-montezumacounty.gov,Cortez,CO,County,"Montezuma County, Colorado",not_found,,,2026-08-11
+montezumacounty.gov,Cortez,CO,County,"Montezuma County, Colorado",found,https://montezumacounty.gov/rfp,agency,2026-11-02
 bentcounty.gov,Las Animas,CO,County,Bent County,not_found,,,2026-08-11
 smcvote.gov,San Mateo,CA,County,County of San Mateo - ACRE,not_found,,,2026-08-11
 arapahoesheriff.gov,Littleton,CO,County,Arapahoe Conty,not_found,,,2026-08-11
@@ -9875,7 +9875,7 @@ cecilcountymd.gov,Elkton,MD,County,Cecil County Government,found,https://cecilco
 simpsoncountyky.gov,Franklin,KY,County,Simpson County Fiscal Court,not_found,,,2026-08-11
 mccrearycountyky.gov,Whitley City,KY,County,McCreary County Fiscal Court,not_found,,,2026-08-11
 greenupchdky.gov,Greenup,KY,County,Greenup County Health Department,not_found,,,2026-08-11
-campbellcountyky.gov,Newport,KY,County,Campbell County,not_found,,,2026-08-11
+campbellcountyky.gov,Newport,KY,County,Campbell County,found,https://campbellcountyky.gov/division/blocks.php?structureid=99,custom,2026-11-02
 hartcountyky.gov,Munfordville,KY,County,Hart County Fiscal Court,not_found,,,2026-08-11
 flemingcountyhealthky.gov,Flemingsburg,KY,County,Fleming County Health Dept.,found,https://flemingcountyhealthky.gov/bids-and-rfps,agency,2026-08-26
 frederickcountymd.gov,Frederick,MD,County,Frederick County Government,found,https://frederickcountymd.gov/Bids.aspx,civicplus,2026-08-11
@@ -9893,13 +9893,13 @@ gallatinky.gov,Warsaw,KY,County,Gallatin County,not_found,,,2026-08-11
 washingtoncountyky.gov,Springfield,KY,County,Washington County Fiscal Court,not_found,,,2026-08-11
 callowaycountyky.gov,Murray,KY,County,Calloway County Fiscal Court,not_found,,,2026-08-11
 clarkcountyattyky.gov,WINCHESTER,KY,County,Office of Clark County Atty,not_found,,,2026-08-11
-ascensionparishla.gov,Gonzales,LA,County,Ascension Parish Government,not_found,,,2026-08-11
+ascensionparishla.gov,Gonzales,LA,County,Ascension Parish Government,found,https://ascensionparishla.gov/departments/purchasing,agency,2026-11-02
 calcasieusheriff.gov,Lake Charles,LA,County,Calcasieu Parish Sheriff's Office,not_found,,,2026-08-11
 stpsola.gov,Slidell,LA,County,St. Tammany Parish Sheriff's Office,not_found,,,2026-08-11
 ibervilleoep.gov,Plaquemine,LA,County,Iberville Parish Office of Emergency Preparedness,not_found,,,2026-08-11
 dukescountysheriffma.gov,Edgartown,MA,County,Dukes County Sheriff's Office,not_found,,,2026-08-11
 stlandry.gov,Opelousas,LA,County,St Landry Parish Gov,not_found,,,2026-08-11
-spencercountyky.gov,Taylorsville,KY,County,Spencer County,not_found,,,2026-08-11
+spencercountyky.gov,Taylorsville,KY,County,Spencer County,found,https://spencercountyky.gov/nav/public_notices.php,custom,2026-11-02
 madisoncountyky.gov,Richmond,KY,County,Madison County Fiscal Court,not_found,,,2026-08-11
 vermilionsheriff.gov,Abbeville,LA,County,Vermilion Parish Sheriff's Office,not_found,,,2026-08-11
 assumptionoep-la.gov,Napoleonville,LA,County,Assumption Parish Police Jury,not_found,,,2026-08-11
@@ -9928,7 +9928,7 @@ stmarysmdsao.gov,Leonardtown,MD,County,St. Mary's County State's Attorney's Offi
 hendersonkydetention.gov,Henderson,KY,County,Henderson County Detention Center,not_found,,,2026-08-11
 constableward2westbatonrouge.gov,BRUSLY,LA,County,Constable Ward 2 West Baton Rouge Parish,not_found,,,2026-08-11
 sttammany.gov,Mandeville,LA,County,Parish of St Tammany,found,https://sttammany.gov/departments/procurement/index.php,agency,2026-08-11
-greenupcountyky.gov,Greenup,KY,County,County of Greenup,not_found,,,2026-08-11
+greenupcountyky.gov,Greenup,KY,County,County of Greenup,found,https://greenupcountyky.gov/departments/purchasing,agency,2026-11-02
 bonnevillecountyidaho.gov,Idaho Falls,ID,County,"Bonneville County, Idaho",not_found,,,2026-08-11
 pikecoclerkky.gov,Pikeville,KY,County,Pike County Clerk,not_found,,,2026-08-11
 talbotcountymd.gov,Easton,MD,County,Talbot County Government,found,https://talbotcountymd.gov/rfp,agency,2026-08-11
@@ -10229,7 +10229,7 @@ webstercountymo.gov,Marshfield,MO,County,Webster County,found,https://webstercou
 waynecountyms.gov,Waynesboro,MS,County,Wayne County Board of Supervisors,not_found,,,2026-08-11
 prcomt.gov,Broadus,MT,County,Powder River County,not_found,,,2026-08-11
 chickasawcountyms.gov,Houston,MS,County,Chickasaw County,not_found,,,2026-08-11
-warrencountyms.gov,Vicksburg,MS,County,Warren County MS Board of Supervisors,not_found,,,2026-08-11
+warrencountyms.gov,Vicksburg,MS,County,Warren County MS Board of Supervisors,found,https://warrencountyms.gov/government/purchasing,agency,2026-11-02
 bsbmt.gov,Butte,MT,County,City-County of Butte-Silver Bow,not_found,,,2026-08-11
 stanlycountync.gov,Albemarle,NC,County,County of Stanly,found,https://stanlycountync.gov/Bids.aspx,civicplus,2026-08-11
 jocomoema.gov,Warrensburg,MO,County,Johnson County Missouri Emergency Managment Agency,not_found,,,2026-08-11
@@ -10294,7 +10294,7 @@ onslowcountync.gov,Jacksonville,NC,County,Onslow County Government,found,https:/
 yellowstonecountymt.gov,Billings,MT,County,Yellowstone County,found,https://yellowstonecountymt.gov/purchasing,agency,2026-08-11
 readybrunswickcountync.gov,Bolivia,NC,County,Brunswick County Government,not_found,,,2026-08-11
 wheatlandcomt.gov,Harlowton,MT,County,Wheatland County,not_found,,,2026-08-11
-franklincountyms.gov,Meadville,MS,County,Franklin County Board of Supervisors,not_found,,,2026-08-11
+franklincountyms.gov,Meadville,MS,County,Franklin County Board of Supervisors,found,https://franklincountyms.gov/purchasing,agency,2026-11-02
 wataugacounty.gov,Boone,NC,County,Watauga County,not_found,,,2026-08-11
 broadwatercountymt.gov,Townsend,MT,County,Broadwater County,not_found,,,2026-08-11
 mitchellcountync.gov,Bakersville,NC,County,Mitchell County,not_found,,,2026-08-11
@@ -10307,7 +10307,7 @@ christiancountymo.gov,Ozark,MO,County,Christian County Government,found,https://
 marioncountyms.gov,Columbia,MS,County,"Marion County, Mississippi",not_found,,,2026-08-11
 surrycountync.gov,Dobson,NC,County,County of Surry,not_found,,,2026-08-11
 franklincountync.gov,Louisburg,NC,County,County of Franklin,found,https://franklincountync.gov/Bids.aspx,civicplus,2026-08-11
-scottcountyms.gov,Forest,MS,County,Scott County Board of Supervisors,not_found,,,2026-08-11
+scottcountyms.gov,Forest,MS,County,Scott County Board of Supervisors,found,https://scottcountyms.gov/government/purchasing,agency,2026-11-02
 mycumberlandncpay.gov,Fayetteville,NC,County,Cumberland County,not_found,,,2026-08-11
 readysurrync.gov,Dobson,NC,County,County of Surry,not_found,,,2026-08-11
 jeffersoncountysheriffmt.gov,Boulder,MT,County,Jefferson County Sheriff's Office,not_found,,,2026-08-11
@@ -10332,7 +10332,7 @@ hendersoncountync.gov,Hendersonville,NC,County,Henderson County,not_found,,,2026
 treasurecountymt.gov,Hysham,MT,County,Treasure County,not_found,,,2026-08-11
 darecountync.gov,Manteo,NC,County,Dare County,not_found,,,2026-08-11
 johnstonnc.gov,Smithfield,NC,County,Johnston County Technology Services,found,https://johnstonnc.gov/bids,agency,2026-08-11
-greenecountyms.gov,Leaksville,MS,County,Greene County MS Board of Supervisors,not_found,,,2026-08-11
+greenecountyms.gov,Leaksville,MS,County,Greene County MS Board of Supervisors,found,https://greenecountyms.gov/business/bids,agency,2026-11-02
 dconc.gov,Durham,NC,County,Durham County,found,https://dconc.gov/Finance/Purchasing/Bid-Opportunities,agency,2026-08-11
 alamancecountync.gov,Graham,NC,County,Alamance County Government,found,https://alamancecountync.gov/purchasing,agency,2026-08-11
 ponderacountymt.gov,Conrad,MT,County,Pondera County,not_found,,,2026-08-11
@@ -11076,7 +11076,7 @@ cartercountytn.gov,Elizabethton,TN,County,County of Carter,found,https://carterc
 scottcotnems.gov,Oneida,TN,County,Scott County Government EMS,not_found,,,2026-08-11
 bambergcountysc.gov,Bamberg,SC,County,Bamberg County Government,found,https://bambergcountysc.gov/projects-and-bids,agency,2026-08-11
 lauderdaletn.gov,Ripley,TN,County,Lauderdale County Government,not_found,,,2026-08-11
-warrencountytn.gov,McMinnville,TN,County,Warren County,not_found,,,2026-08-11
+warrencountytn.gov,McMinnville,TN,County,Warren County,found,https://warrencountytn.gov/bids,agency,2026-11-02
 loudoncounty-tn.gov,Loudon,TN,County,"Loudon County, Tennessee Government",found,https://loudoncounty-tn.gov/purchasing,agency,2026-08-11
 weakleycountytn.gov,Dresden,TN,County,Weakley County Government Department of Finance,found,https://weakleycountytn.gov/bids--purchasing.html,agency,2026-08-26
 wisecountytx.gov,Decatur,TX,County,Wise County,found,https://wisecountytx.gov/Bids.aspx,civicplus,2026-08-11
@@ -11104,7 +11104,7 @@ ottawaok.gov,Miami,OK,County,Ottawa County,found,https://ottawaok.gov/bids,agenc
 eastlandcounty.gov,Eastland,TX,County,"Eastland County, Texas",found,https://eastlandcounty.gov/Bids.aspx,civicplus,2026-08-11
 haakoncounty.gov,Philip,SD,County,Haakon County,not_found,,,2026-08-11
 graingercountytn.gov,Rutledge,TN,County,Grainger County Sherriff Office,not_found,,,2026-08-11
-bedfordcountytn.gov,Shelbyville,TN,County,Bedford County Government,not_found,,,2026-08-11
+bedfordcountytn.gov,Shelbyville,TN,County,Bedford County Government,found,https://bedfordcountytn.gov/community/bid_opportunities.php,agency,2026-11-02
 milamcounty.gov,Cameron,TX,County,Milam County,not_found,,,2026-08-11
 howardcountytx.gov,Big Spring,TX,County,Howard County Texas,not_found,,,2026-08-11
 franklincotn.gov,Winchester,TN,County,Franklin County Government,not_found,,,2026-08-11
@@ -11119,7 +11119,7 @@ swparegionalcad.gov,Beaver,PA,County,Beaver County Information Technology,not_fo
 jimwellscounty-tx.gov,Alice,TX,County,Jim Wells County Sheriff's Department,not_found,,,2026-08-11
 seviercountytn.gov,Sevierville,TN,County,Sevier County,found,https://seviercountytn.gov/how_do_i/submit_a_bid.php,agency,2026-08-11
 stephenscountytx.gov,Breckenridge,TX,County,Stephens County,not_found,,,2026-08-11
-houstoncountytn.gov,Erin,TN,County,Houston County Government,not_found,,,2026-08-11
+houstoncountytn.gov,Erin,TN,County,Houston County Government,found,https://www.houstoncountytn.gov,custom,2026-11-02
 bosquecounty.gov,Meridian,TX,County,Bosque County,found,https://bosquecounty.gov/Bids.aspx,civicplus,2026-08-11
 zavalacounty.gov,Crystal city,TX,County,Zavala county,not_found,,,2026-08-11
 gilescountytn.gov,Pulaski,TN,County,Giles County Government,found,https://gilescountytn.gov/rfp,agency,2026-08-11
@@ -11129,7 +11129,7 @@ nuecescountysheriff.gov,Corpus Christi,TX,County,Nueces County Sheriff's Office,
 nacogdochesco.gov,Nacogdoches,TX,County,Nacogdoches County,found,https://nacogdochesco.gov/Bids.aspx,civicplus,2026-08-11
 tarrantcountytx.gov,Fort Worth,TX,County,Tarrant County,not_found,,,2026-08-11
 ectorcountytx.gov,Odessa,TX,County,Ector County,found,https://ectorcountytx.gov/Bids.aspx,civicplus,2026-08-11
-coryellcountytx.gov,Gatesville,TX,County,Coryell County,not_found,,,2026-08-11
+coryellcountytx.gov,Gatesville,TX,County,Coryell County,found,https://coryellcountyclerk.com/open-meetings-notice/,custom,2026-11-02
 redrivercountytx.gov,Clarksville,TX,County,"Red River County, Texas",not_found,,,2026-08-11
 comalcounty.gov,NEW BRAUNFELS,TX,County,Comal County,found,https://comalcounty.gov/Bids.aspx,civicplus,2026-08-11
 bradleycountytnroaddept.gov,McDonald,TN,County,Bradley County Road Department,not_found,,,2026-08-11
@@ -11137,7 +11137,7 @@ eastlandcountytexas.gov,Eastland,TX,County,Eastland County Texas,not_found,,,202
 rutherfordcountytn.gov,Murfreesboro,TN,County,Rutherford County Govt,found,https://rutherfordcountytn.gov/bid-opportunities,agency,2026-08-26
 browncountytx.gov,Brownwood,TX,County,"Brown County, Texas",not_found,,,2026-08-11
 rainscounty.gov,Emory,TX,County,Rains County,not_found,,,2026-08-11
-webbcountytx.gov,Laredo,TX,County,Webb County,not_found,,,2026-08-11
+webbcountytx.gov,Laredo,TX,County,Webb County,found,https://webbcountytx.gov/Bids.aspx,civicplus,2026-11-02
 winklercotxtax.gov,Kermit,TX,County,Winkler County Tax Office,not_found,,,2026-08-11
 kentcountytx.gov,Jayton,TX,County,"Kent County, Texas",not_found,,,2026-08-11
 hamblencountytn.gov,Morristown,TN,County,"Hamblen County, TN Government",found,https://hamblencountytn.gov/purchasing,agency,2026-08-11
@@ -11202,7 +11202,7 @@ appomattoxcountyva.gov,Appomattox,VA,County,Appomattox County,found,https://appo
 throckmortoncountytx.gov,Throckmorton,TX,County,"Throckmorton County, Texas",not_found,,,2026-08-11
 bastropcounty.gov,Bastrop,TX,County,Bastrop County,found,https://bastropcounty.gov/page/pur.home,custom,2026-08-11
 swishercounty.gov,Tulia,TX,County,"Swisher County, Texas",not_found,,,2026-08-11
-kerrcountytx.gov,Kerrville,TX,County,Kerr County,not_found,,,2026-08-11
+kerrcountytx.gov,Kerrville,TX,County,Kerr County,found,https://kerrcountytx.gov/kerr-county-public-notices,custom,2026-11-02
 coronavirusfortbend.gov,Richmond,TX,County,Fort Bend County,not_found,,,2026-08-11
 accomack.gov,Accomac,VA,County,Accomack County,found,https://accomack.gov/Bids.aspx,civicplus,2026-08-11
 hardincountytx.gov,Kountze,TX,County,Hardin County,not_found,,,2026-08-11
@@ -11228,7 +11228,7 @@ summitcountytreasurerutah.gov,Coalville,UT,County,Summit County,not_found,,,2026
 sterlingcotx.gov,Sterling City,TX,County,Sterling County,not_found,,,2026-08-11
 blancocountytexas.gov,Johnson City,TX,County,Blanco County,not_found,,,2026-08-11
 weberhousingauthority.gov,Ogden,UT,County,Weber Housing Authority,not_found,,,2026-08-11
-lubbockcounty.gov,Lubbock,TX,County,Lubbock County,not_found,,,2026-08-11
+lubbockcounty.gov,Lubbock,TX,County,Lubbock County,found,https://lubbockcounty.gov/egov/apps/services/index.egov?view=item&id=78,custom,2026-11-02
 rockinghamcountyva.gov,Harrisonburg,VA,County,County of Rockingham,found,https://rockinghamcountyva.gov/Bids.aspx,civicplus,2026-08-11
 webercountyem.gov,Ogden,UT,County,Weber County,not_found,,,2026-08-11
 graysoncountyva.gov,Independence,VA,County,Grayson County,found,https://graysoncountyva.gov/Bids.aspx,civicplus,2026-08-11
@@ -11246,7 +11246,7 @@ montgomerycountyva.gov,Christiansburg,VA,County,"Montgomery County, Virginia",fo
 cameroncountytx.gov,Brownsville,TX,County,Cameron County,found,https://www.cameroncountytx.gov/purchasing-bids-rfpq-addms-tabs/,agency,2026-08-11
 capitalalert.gov,Fairfax,VA,County,Fairfax County Office of Public Affairs,not_found,,,2026-08-11
 kinggeorgecountyva.gov,King George,VA,County,King George County,found,https://kinggeorgecountyva.gov/Bids.aspx,civicplus,2026-08-11
-uvaldecounty.gov,Uvalde,TX,County,Uvalde County,not_found,,,2026-08-11
+uvaldecounty.gov,Uvalde,TX,County,Uvalde County,found,https://www.uvaldecounty.gov/uvalde-county-legal-notices,custom,2026-11-02
 kanecountyhospitalut.gov,KANAB,UT,County,Kane County Hospital,not_found,,,2026-08-11
 piute.gov,Junction,UT,County,Piute County,not_found,,,2026-08-11
 waynecountyutah.gov,Loa,UT,County,Wayne County,not_found,,,2026-08-11
@@ -11312,7 +11312,7 @@ votefloydva.gov,Floyd,VA,County,County of Floyd Office of Elections,not_found,,,
 jeffersoncountytn.gov,Dandridge,TN,County,"Jefferson County, Tennessee",found,https://jeffersoncountytn.gov/finance-department/#bids-rfps,custom,2026-08-26
 utahcounty.gov,Provo,UT,County,Utah County Government,not_found,,,2026-08-11
 cachesheriff.gov,Logan,UT,County,Cache County,not_found,,,2026-08-11
-victoriacountytx.gov,Victoria,TX,County,Victoria County,not_found,,,2026-08-11
+victoriacountytx.gov,Victoria,TX,County,Victoria County,found,https://victoriacountytx.gov/Bids.aspx,civicplus,2026-11-02
 campbellcountyva.gov,Rustburg,VA,County,County of Campbell,not_found,,,2026-08-11
 clallamcountywa.gov,Port Angeles,WA,County,Clallam County,found,https://clallamcountywa.gov/Bids.aspx,civicplus,2026-08-11
 wahkiakumcounty.gov,Cathlamet,WA,County,Wahkiakum County,not_found,,,2026-08-11
@@ -12438,14 +12438,14 @@ southsummitfd.gov,Kamas,UT,Special district,South Summit Fire Protection Distric
 ectoresd2.gov,Gardendale,TX,Special district,Ector County Emergency Services District No. 2,not_found,,,2026-08-11
 harriscountyesd11.gov,Spring,TX,Special district,Harris County ESD 11 Mobile Healthcare,found,https://harriscountyesd11.gov/procurement/,agency,2026-08-11
 denco911.gov,Lewisville,TX,Special district,Denco Area 9-1-1 District,not_found,,,2026-08-11
-hotcogtx.gov,Waco,TX,Special district,Heart of Texas Council of Governments,not_found,,,2026-08-11
+hotcogtx.gov,Waco,TX,Special district,Heart of Texas Council of Governments,found,https://hotcogtx.gov/about-hotcog/public-notices-transparency-and-reports/public-notices,custom,2026-11-02
 casscountyesd2tx.gov,Queen City,TX,Special district,Cass County Emergency Services District # 2,not_found,,,2026-08-11
 cuwcd.gov,Orem,UT,Special district,Central Utah Water Conservancy District,found,https://cuwcd.gov/bids,agency,2026-08-11
 aacog.gov,San Antonio,TX,Special district,Alamo Area Council of Governments,found,https://aacog.gov/member-government-services/procurement/,agency,2026-08-11
 timberlakeswaterssdut.gov,Heber City,UT,Special district,Timber Lakes Water Special Service District,not_found,,,2026-08-11
 hayscountyesd9.gov,San Marcos,TX,Special district,Hays County Emergency Services District 9,not_found,,,2026-08-11
 cachewaterut.gov,Logan,UT,Special district,Cache Water District,not_found,,,2026-08-11
-willacynavigation.gov,Raymondville,TX,Special district,Willacy County Navigation District,not_found,,,2026-08-11
+willacynavigation.gov,Raymondville,TX,Special district,Willacy County Navigation District,found,https://willacynavigation.gov/about-the-port/harbor-business#public-notices,custom,2026-11-02
 southdaviswater.gov,Bountiful,UT,Special district,South Davis Water District,not_found,,,2026-08-11
 portofcateslandingtn.gov,Tiptonville,TN,Special district,Northwest Tennessee Regional Port Authority,not_found,,,2026-08-11
 robertsoncountyesdtx.gov,Franklin,TX,Special district,Robertson County ESD,found,https://robertsoncountyesdtx.gov/beacon-bid,agency,2026-08-11
@@ -12453,7 +12453,7 @@ eastcentralsudtx.gov,Adkins,TX,Special district,East Central Special Utility Dis
 cachempo.gov,Logan,UT,Special district,Cache Metropolitan Planning Organization,not_found,,,2026-08-11
 lagranderuralfire.gov,La Grande,OR,Special district,La Grande Rural Fire Protection District,not_found,,,2026-08-11
 hcesd29tx.gov,Houston,TX,Special district,Harris County Emergency Services District No. 29,not_found,,,2026-08-11
-detcog.gov,Lufkin,TX,Special district,Deep East Texas Council of Governments (DETCOG),not_found,,,2026-08-11
+detcog.gov,Lufkin,TX,Special district,Deep East Texas Council of Governments (DETCOG),found,https://detcog.gov/public-notices,custom,2026-11-02
 summitcosa3ut.gov,park city,UT,Special district,Summit County Service Area #3,not_found,,,2026-08-11
 wfwrdutah.gov,Midvale,UT,Special district,Wasatch Front Waste and Recycling District,not_found,,,2026-08-11
 smssdutah.gov,Fairview,UT,Special district,Skyline Mountain Resort Special Service District,not_found,,,2026-08-11
@@ -12805,7 +12805,7 @@ sabinepass.net,Sabine Pass,TX,School district,Sabine Pass Independent School Dis
 agsd.us,Tok,AK,School district,Alaska Gateway School District,not_found,,,2026-08-31
 lc-ps.org,Clinton Township,MI,School district,L'Anse Creuse Public Schools,found,https://lc-ps.org/departments/business-office/vendor-information-bids-rfps/,custom,2026-08-31
 tcjackets.net,Thomasville,GA,School district,Thomas County School District,not_found,,,2026-08-31
-agisd.com,Alba,TX,School district,Alba-Golden Independent School District,not_found,,,2026-08-31
+agisd.com,Alba,TX,School district,Alba-Golden Independent School District,found,https://agisd.com/rfp,custom,2026-11-02
 oxfordasd.org,Oxford,PA,School district,Oxford Area School District,not_found,,,2026-08-31
 sausd.us,Santa Ana,CA,School district,Santa Ana Unified School District,not_found,,,2026-08-31
 redclayschools.com,Wilmington,DE,School district,Red Clay Consolidated School District,not_found,,,2026-08-31
@@ -12835,7 +12835,7 @@ sfusd.edu,San Francisco,CA,School district,San Francisco Unified School District
 alpineschools.org,American Fork,UT,School district,Alpine School District,not_found,,,2026-08-31
 airportschools.com,Carleton,MI,School district,Airport Community Schools,not_found,,,2026-08-31
 sweenyisd.org,Sweeny,TX,School district,Sweeny Independent School District,found,https://sweenyisd.org/departments/business-office/vendors,custom,2026-08-31
-aliefisd.net,Houston,TX,School district,Alief Independent School District,not_found,,,2026-08-31
+aliefisd.net,Houston,TX,School district,Alief Independent School District,found,https://aliefisd.net/bids,custom,2026-11-02
 sbpsb.org,Chalmette,LA,School district,St. Bernard Parish Public Schools,found,https://sbpsb.org/departments/business-finance/bid-advertisements-rfps,custom,2026-08-31
 alameda.k12.ca.us,Alameda,CA,School district,Alameda Unified School District,not_found,,,2026-08-31
 vistausd.org,Vista,CA,School district,Vista Unified School District,found,https://vistausd.org/departments/businessservices/fiscal-services/purchasing,custom,2026-08-31
@@ -13611,7 +13611,7 @@ cityofwildomar.org,Wildomar,CA,City,Wildomar,not_found,,,2026-09-01
 simivalley.org,Simi Valley,CA,City,Simi Valley,not_found,,,2026-09-01
 wheatland.ca.gov,Wheatland,CA,City,Wheatland,not_found,,,2026-09-01
 cityoffortmorgan.com,Fort Morgan,CO,City,Fort Morgan,found,https://cityoffortmorgan.com/Bids.aspx,civicplus,2026-09-01
-cityofblackhawk.org,Black Hawk,CO,City,Black Hawk,not_found,,,2026-09-01
+cityofblackhawk.org,Black Hawk,CO,City,Black Hawk,found,https://cityofblackhawk.org/Bids.aspx,civicplus,2026-11-02
 cityofwilliams.org,Williams,CA,City,Williams,not_found,,,2026-09-01
 ci.firebaugh.ca.us,Firebaugh,CA,City,Firebaugh,not_found,,,2026-09-01
 ci.commerce-city.co.us,Commerce City,CO,City,Commerce City,not_found,,,2026-09-01
@@ -13676,7 +13676,7 @@ cityofmiddletown.com,Middletown,CT,City,Middletown,not_found,,,2026-09-01
 mansfieldct.org,Mansfield,CT,City,Mansfield,not_found,,,2026-09-01
 ci.loveland.co.us,Loveland,CO,City,Loveland,not_found,,,2026-09-01
 townofsanluisco.org,San Luis,CO,City,San Luis,not_found,,,2026-09-01
-ci.ouray.co.us,Ouray,CO,City,Ouray,not_found,,,2026-09-01
+ci.ouray.co.us,Ouray,CO,City,Ouray,found,https://ci.ouray.co.us/rfp,agency,2026-11-02
 wethersfieldct.com,Wethersfield,CT,City,Wethersfield,not_found,,,2026-09-01
 woodbrookdelaware.org,Woodbrook,DE,City,Woodbrook,not_found,,,2026-09-01
 cityofannamaria.com,Anna Maria,FL,City,Anna Maria,not_found,,,2026-09-01
@@ -13701,7 +13701,7 @@ cityofbelleairbeach.com,Belleair Beach,FL,City,Belleair Beach,not_found,,,2026-0
 theardens.com,Ardencroft,DE,City,Ardencroft,not_found,,,2026-09-01
 blountstown.org,Blountstown,FL,City,Blountstown,not_found,,,2026-09-01
 cityofbelleislefl.org,Belle Isle,FL,City,Belle Isle,not_found,,,2026-09-01
-lakewood.org,Lakewood,CO,City,Lakewood,not_found,,,2026-09-01
+lakewood.org,Lakewood,CO,City,Lakewood,found,https://www.lakewoodco.gov/Local-Government/Public-Notices,custom,2026-11-02
 bowlinggreenfl.org,Bowling Green,FL,City,Bowling Green,not_found,,,2026-09-01
 capecoral.net,Cape Coral,FL,City,Cape Coral,not_found,,,2026-09-01
 cityofchattahoochee.com,Chattahoochee,FL,City,Chattahoochee,not_found,,,2026-09-01
@@ -14440,7 +14440,7 @@ sesser.org,Sesser,IL,City,Sesser,not_found,,,2026-09-01
 elwoodcity-in.org,Elwood,IN,City,Elwood,not_found,,,2026-09-01
 villagrove.org,Villa Grove,IL,City,Villa Grove,not_found,,,2026-09-01
 watsekacity.com,Watseka,IL,City,Watseka,not_found,,,2026-09-01
-carmel.in.gov,Carmel,IN,City,Carmel,not_found,,,2026-09-01
+carmel.in.gov,Carmel,IN,City,Carmel,found,https://carmel.in.gov/Bids.aspx,civicplus,2026-11-02
 franklin-in.gov,Franklin,IN,City,Franklin,not_found,,,2026-09-01
 cityofwestpeoria.org,West Peoria,IL,City,West Peoria,not_found,,,2026-09-01
 westfrankfort-il.com,West Frankfort,IL,City,West Frankfort,not_found,,,2026-09-01
@@ -14466,7 +14466,7 @@ zeigleril.com,Zeigler,IL,City,Zeigler,not_found,,,2026-09-01
 covington-city.org,Covington,IN,City,Covington,not_found,,,2026-09-01
 fishers.in.us,Fishers,IN,City,Fishers,not_found,,,2026-09-01
 newhavenin.org,New Haven,IN,City,New Haven,found,https://newhavenin.org/Bids.aspx,civicplus,2026-09-01
-garrettindiana.us,Garrett,IN,City,Garrett,not_found,,,2026-09-01
+garrettindiana.us,Garrett,IN,City,Garrett,found,https://garrettindiana.us/departments/purchasing,custom,2026-11-02
 lakestation.in.gov,Lake Station,IN,City,Lake Station,not_found,,,2026-09-01
 cityofdelphi.org,Delphi,IN,City,Delphi,not_found,,,2026-09-01
 ci.highland.il.us,Highland,IL,City,Highland,not_found,,,2026-09-01
@@ -14502,7 +14502,7 @@ rochester.in.us,Rochester,IN,City,Rochester,not_found,,,2026-09-01
 tellcityindiana.com,Tell City,IN,City,Tell City,not_found,,,2026-09-01
 cityoflogansport.org,Logansport,IN,City,Logansport,not_found,,,2026-09-01
 warsawcity.net,Warsaw,IN,City,Warsaw,not_found,,,2026-09-01
-terrehaute.in.gov,Terre Haute,IN,City,Terre Haute,not_found,,,2026-09-01
+terrehaute.in.gov,Terre Haute,IN,City,Terre Haute,found,https://terrehaute.in.gov/bids,agency,2026-11-02
 decaturin.org,Decatur,IN,City,Decatur,not_found,,,2026-09-01
 vincennes.org,Vincennes,IN,City,Vincennes,not_found,,,2026-09-01
 cityofmuncie.com,Muncie,IN,City,Muncie,not_found,,,2026-09-01
@@ -14525,7 +14525,7 @@ axtellks.com,Axtell,KS,City,Axtell,not_found,,,2026-09-01
 cityofalma-kansas.net,Alma,KS,City,Alma,not_found,,,2026-09-01
 whitingindiana.com,Whiting,IN,City,Whiting,not_found,,,2026-09-01
 cityofwabash.com,Wabash,IN,City,Wabash,not_found,,,2026-09-01
-cityofsullivan.org,Sullivan,IN,City,Sullivan,not_found,,,2026-09-01
+cityofsullivan.org,Sullivan,IN,City,Sullivan,found,https://www.cityofsullivan.org/legalnotices,custom,2026-11-02
 bentleyks.webs.com,Bentley,KS,City,Bentley,not_found,,,2026-09-01
 columbuscityhall.com,Columbus,KS,City,Columbus,found,https://columbuscityhall.com/bids-and-rfps,custom,2026-09-01
 baxtersprings.us,Baxter Springs,KS,City,Baxter Springs,not_found,,,2026-09-01
@@ -14767,7 +14767,7 @@ carlisle.ky.gov,Carlisle,KY,City,Carlisle,not_found,,,2026-09-01
 edgewoodky.com,Edgewood,KY,City,Edgewood,not_found,,,2026-09-01
 elktonky.com,Elkton,KY,City,Elkton,not_found,,,2026-09-01
 cityofcolumbiaky.com,Columbia,KY,City,Columbia,not_found,,,2026-09-01
-daytonky.com,Dayton,KY,City,Dayton,not_found,,,2026-09-01
+daytonky.com,Dayton,KY,City,Dayton,found,https://daytonky.com/legal-notices,custom,2026-11-02
 corinth.ky.gov,Corinth,KY,City,Corinth,not_found,,,2026-09-01
 crestviewhills.com,Crestview Hills,KY,City,Crestview Hills,not_found,,,2026-09-01
 cityofedmontonky.com,Edmonton,KY,City,Edmonton,not_found,,,2026-09-01
@@ -14791,13 +14791,13 @@ cityofelsmere.com,Elsmere,KY,City,Elsmere,not_found,,,2026-09-01
 horsecaveky.com,Horse Cave,KY,City,Horse Cave,not_found,,,2026-09-01
 cityofstaffordks.com,Stafford,KS,City,Stafford,not_found,,,2026-09-01
 kyhometown.com,Jackson,KY,City,Jackson,found,https://kyhometown.com/purchasing/bids,custom,2026-09-01
-cityofhendersonky.org,Henderson,KY,City,Henderson,not_found,,,2026-09-01
+cityofhendersonky.org,Henderson,KY,City,Henderson,found,https://cityofhendersonky.org/Bids.aspx,civicplus,2026-11-02
 cityofkingsley.org,Kingsley,KY,City,Kingsley,not_found,,,2026-09-01
 pomonaks.com,Pomona,KS,City,Pomona,not_found,,,2026-09-01
 flatwoodsky.org,Flatwoods,KY,City,Flatwoods,not_found,,,2026-09-01
 greensburgonline.com,Greensburg,KY,City,Greensburg,not_found,,,2026-09-01
 nicholasville.org,Nicholasville,KY,City,Nicholasville,found,https://nicholasville.org/purchasing,custom,2026-09-01
-graysonky.net,Grayson,KY,City,Grayson,not_found,,,2026-09-01
+graysonky.net,Grayson,KY,City,Grayson,found,https://graysonky.net/departments/purchasing,custom,2026-11-02
 inez.ky.gov,Inez,KY,City,Inez,not_found,,,2026-09-01
 ludlow.org,Ludlow,KY,City,Ludlow,not_found,,,2026-09-01
 lewisport.cityof.org,Lewisport,KY,City,Lewisport,not_found,,,2026-09-01
@@ -14903,7 +14903,7 @@ townofcentreville.org,Centreville,MD,City,Centreville,found,https://townofcentre
 easthampton.org,Easthampton,MA,City,Easthampton,not_found,,,2026-09-01
 franklinma.virtualtownhall.net,Franklin,MA,City,Franklin,not_found,,,2026-09-01
 cityofwinnfield.com,Winnfield,LA,City,Winnfield,not_found,,,2026-09-01
-portfourchon.com,Port Fourchon,LA,City,Port Fourchon,not_found,,,2026-09-01
+portfourchon.com,Port Fourchon,LA,City,Port Fourchon,found,https://portfourchon.com/news-events/public-notices,custom,2026-11-02
 fallriverma.org,Fall River,MA,City,Fall River,not_found,,,2026-09-01
 ci.lynn.ma.us,Lynn,MA,City,Lynn,not_found,,,2026-09-01
 cityofscott.org,Scott,LA,City,Scott,not_found,,,2026-09-01
@@ -14919,7 +14919,7 @@ ci.methuen.ma.us,Methuen,MA,City,Methuen,not_found,,,2026-09-01
 north-attleboro.ma.us,North Attleborough,MA,City,North Attleborough,not_found,,,2026-09-01
 madisonvillegov.com,Madisonville,KY,City,Madisonville,not_found,,,2026-09-01
 cityofnewburyport.com,Newburyport,MA,City,Newburyport,not_found,,,2026-09-01
-cityofhazard.com,Hazard,KY,City,Hazard,not_found,,,2026-09-01
+cityofhazard.com,Hazard,KY,City,Hazard,found,https://cityofhazard.com/Bids.aspx,civicplus,2026-11-02
 whbeach.com,White Horse Beach,MA,City,White Horse Beach,not_found,,,2026-09-01
 westmonroe.com,West Monroe,LA,City,West Monroe,not_found,,,2026-09-01
 weymouth.ma.us,Weymouth,MA,City,Weymouth,not_found,,,2026-09-01
@@ -15577,7 +15577,7 @@ cityofkosciusko.com,Kosciusko,MS,City,Kosciusko,not_found,,,2026-09-01
 lumbertonms.info,Lumberton,MS,City,Lumberton,not_found,,,2026-09-01
 wrightcity.org,Wright City,MO,City,Wright City,not_found,,,2026-09-01
 cityofwillard.org,Willard,MO,City,Willard,not_found,,,2026-09-01
-cityoflongbeachms.com,Long Beach,MS,City,Long Beach,not_found,,,2026-09-01
+cityoflongbeachms.com,Long Beach,MS,City,Long Beach,found,https://www.longbeachmsbids.com/,custom,2026-11-02
 cityofmagee.com,Magee,MS,City,Magee,not_found,,,2026-09-01
 baldwynliving.com,Baldwyn,MS,City,Baldwyn,not_found,,,2026-09-01
 meridianms.org,Meridian,MS,City,Meridian,not_found,,,2026-09-01
@@ -15607,7 +15607,7 @@ visitnewalbany.com,New Albany,MS,City,New Albany,not_found,,,2026-09-01
 yazoo.org,Yazoo City,MS,City,Yazoo City,not_found,,,2026-09-01
 monticello.ms.gov,Monticello,MS,City,Monticello,not_found,,,2026-09-01
 richlandms.org,Richland,MS,City,Richland,not_found,,,2026-09-01
-hattiesburgms.com,Hattiesburg,MS,City,Hattiesburg,not_found,,,2026-09-01
+hattiesburgms.com,Hattiesburg,MS,City,Hattiesburg,found,https://hattiesburgms.com/public-notices,custom,2026-11-02
 cityofbigtimber.com,Big Timber,MT,City,Big Timber,not_found,,,2026-09-01
 forsythmt.com,Forsyth,MT,City,Forsyth,not_found,,,2026-09-01
 cityofharlemmontana.com,Harlem,MT,City,Harlem,not_found,,,2026-09-01
@@ -16412,7 +16412,7 @@ cityofcowan.com,Cowan,TN,City,Cowan,not_found,,,2026-09-01
 mckenzietn.gov,McKenzie,TN,City,McKenzie,not_found,,,2026-09-01
 cityofvalleysprings.com,Valley Springs,SD,City,Valley Springs,not_found,,,2026-09-01
 dovertn.com,Dover,TN,City,Dover,not_found,,,2026-09-01
-johnsoncitytn.org,Johnson City,TN,City,Johnson City,not_found,,,2026-09-01
+johnsoncitytn.org,Johnson City,TN,City,Johnson City,found,https://johnsoncitytn.org/purchasing,custom,2026-11-02
 cityofforesthills.com,Forest Hills,TN,City,Forest Hills,not_found,,,2026-09-01
 cityofmiddleton.org,Middleton,TN,City,Middleton,not_found,,,2026-09-01
 cityofmedinatn.org,Medina,TN,City,Medina,not_found,,,2026-09-01
@@ -16458,7 +16458,7 @@ bairdtexas.com,Baird,TX,City,Baird,not_found,,,2026-09-01
 banderatex.com,Bandera,TX,City,Bandera,not_found,,,2026-09-01
 fairview-tn.org,Fairview,TN,City,Fairview,found,https://www.fairview-tn.org/city/bids-rfp-notifications/,custom,2026-09-01
 ci.millington.tn.us,Millington,TN,City,Millington,not_found,,,2026-09-01
-spartatn.com,Sparta,TN,City,Sparta,not_found,,,2026-09-01
+spartatn.com,Sparta,TN,City,Sparta,found,https://spartatn.com/purchasing,custom,2026-11-02
 tiptonville.org,Tiptonville,TN,City,Tiptonville,not_found,,,2026-09-01
 ci.buda.tx.us,Buda,TX,City,Buda,found,https://ci.buda.tx.us/purchasing,agency,2026-09-01
 aledo-texas.com,Aledo,TX,City,Aledo,not_found,,,2026-09-01
@@ -16474,7 +16474,7 @@ bayouvista.us,Bayou Vista,TX,City,Bayou Vista,not_found,,,2026-09-01
 baneberrytn.com,Baneberry,TN,City,Baneberry,not_found,,,2026-09-01
 cityofbigwells.org,Big Wells,TX,City,Big Wells,not_found,,,2026-09-01
 cortn.org,Oak Ridge,TN,City,Oak Ridge,not_found,,,2026-09-01
-cityofbaycity.org,Bay City,TX,City,Bay City,not_found,,,2026-09-01
+cityofbaycity.org,Bay City,TX,City,Bay City,found,https://cityofbaycity.org/Bids.aspx,civicplus,2026-11-02
 tyndallsd.com,Tyndall,SD,City,Tyndall,not_found,,,2026-09-01
 biglaketx.com,Big Lake,TX,City,Big Lake,not_found,,,2026-09-01
 cityofbrazoscountry.net,Brazos Country,TX,City,Brazos Country,not_found,,,2026-09-01
@@ -16500,14 +16500,14 @@ ci.corsicana.tx.us,Corsicana,TX,City,Corsicana,not_found,,,2026-09-01
 cityofdiboll.com,Diboll,TX,City,Diboll,found,https://cityofdiboll.com/Bids.aspx,civicplus,2026-09-01
 clevelandtexas.net,Cleveland,TX,City,Cleveland,not_found,,,2026-09-01
 ci.brownwood.tx.us,Brownwood,TX,City,Brownwood,not_found,,,2026-09-01
-combinetx.com,Combine,TX,City,Combine,not_found,,,2026-09-01
+combinetx.com,Combine,TX,City,Combine,found,https://combinetx.com/Bids.aspx,civicplus,2026-11-02
 cityofcranetexas.com,Crane,TX,City,Crane,not_found,,,2026-09-01
 crocketttexas.org,Crockett,TX,City,Crockett,not_found,,,2026-09-01
 crowelltex.com,Crowell,TX,City,Crowell,not_found,,,2026-09-01
 cityofcrystalcity.com,Crystal City,TX,City,Crystal City,not_found,,,2026-09-01
 cityofbastrop.org,Bastrop,TX,City,Bastrop,not_found,,,2026-09-01
 balconesheights.org,Balcones Heights,TX,City,Balcones Heights,not_found,,,2026-09-01
-cityofcrosbyton.org,Crosbyton,TX,City,Crosbyton,not_found,,,2026-09-01
+cityofcrosbyton.org,Crosbyton,TX,City,Crosbyton,found,https://cityofcrosbyton.org/city_government/public_notices.php,custom,2026-11-02
 bunkerhill.net,Bunker Hill Village,TX,City,Bunker Hill Village,not_found,,,2026-09-01
 dallascityhall.com,Dallas,TX,City,Dallas,not_found,,,2026-09-01
 ci.desoto.tx.us,DeSoto,TX,City,DeSoto,not_found,,,2026-09-01
@@ -16523,7 +16523,7 @@ cityofdeport.org,Deport,TX,City,Deport,not_found,,,2026-09-01
 eastbernardtx.com,East Bernard,TX,City,East Bernard,not_found,,,2026-09-01
 cityofelcenizo.com,El Cenizo,TX,City,El Cenizo,not_found,,,2026-09-01
 cityofblanco.com,Blanco,TX,City,Blanco,not_found,,,2026-09-01
-edentexas.com,Eden,TX,City,Eden,not_found,,,2026-09-01
+edentexas.com,Eden,TX,City,Eden,found,https://edentexas.com/Bids.aspx,civicplus,2026-11-02
 colleyville.com,Colleyville,TX,City,Colleyville,not_found,,,2026-09-01
 farmersbranch.info,Farmers Branch,TX,City,Farmers Branch,not_found,,,2026-09-01
 evermantx.net,Everman,TX,City,Everman,not_found,,,2026-09-01
@@ -16544,14 +16544,14 @@ gonzales.texas.gov,Gonzales,TX,City,Gonzales,not_found,,,2026-09-01
 ellago-tx.com,El Lago,TX,City,El Lago,not_found,,,2026-09-01
 cityofcouplandtx.us,Coupland,TX,City,Coupland,not_found,,,2026-09-01
 ci.greenville.tx.us,Greenville,TX,City,Greenville,not_found,,,2026-09-01
-ci.dumas.tx.us,Dumas,TX,City,Dumas,not_found,,,2026-09-01
+ci.dumas.tx.us,Dumas,TX,City,Dumas,found,https://www.dumastx.gov/newslist.php,custom,2026-11-02
 cityofgrahamtexas.com,Graham,TX,City,Graham,not_found,,,2026-09-01
 cityofgregorytx.com,Gregory,TX,City,Gregory,not_found,,,2026-09-01
 fritchcityhall.com,Fritch,TX,City,Fritch,not_found,,,2026-09-01
 ci.gunter.tx.us,Gunter,TX,City,Gunter,not_found,,,2026-09-01
-farmersvilletx.com,Farmersville,TX,City,Farmersville,not_found,,,2026-09-01
+farmersvilletx.com,Farmersville,TX,City,Farmersville,found,https://farmersvilletx.com/public-notices,custom,2026-11-02
 myharlingen.us,Harlingen,TX,City,Harlingen,not_found,,,2026-09-01
-hamiltontexas.com,Hamilton,TX,City,Hamilton,not_found,,,2026-09-01
+hamiltontexas.com,Hamilton,TX,City,Hamilton,found,https://hamiltontexas.com/Bids.aspx,civicplus,2026-11-02
 ciscotx.com,Cisco,TX,City,Cisco,not_found,,,2026-09-01
 cityofhalecenter.com,Hale Center,TX,City,Hale Center,not_found,,,2026-09-01
 cityofgroesbeck.com,Groesbeck,TX,City,Groesbeck,not_found,,,2026-09-01
@@ -16609,7 +16609,7 @@ ci.la-marque.tx.us,La Marque,TX,City,La Marque,not_found,,,2026-09-01
 cityoflaferia.com,La Feria,TX,City,La Feria,not_found,,,2026-09-01
 ci.leander.tx.us,Leander,TX,City,Leander,not_found,,,2026-09-01
 cityofiowacolony.com,Iowa Colony,TX,City,Iowa Colony,not_found,,,2026-09-01
-cityoflg.com,La Grange,TX,City,La Grange,not_found,,,2026-09-01
+cityoflg.com,La Grange,TX,City,La Grange,found,https://cityoflg.com/residents/press_releases_and_announcements.php,custom,2026-11-02
 eastlandtexas.com,Eastland,TX,City,Eastland,not_found,,,2026-09-01
 cityofkctx.com,Karnes City,TX,City,Karnes City,not_found,,,2026-09-01
 columbustexas.net,Columbus,TX,City,Columbus,not_found,,,2026-09-01
@@ -16629,13 +16629,13 @@ ci.la-porte.tx.us,La Porte,TX,City,La Porte,not_found,,,2026-09-01
 thecityofelsa.com,Elsa,TX,City,Elsa,not_found,,,2026-09-01
 ci.hurst.tx.us,Hurst,TX,City,Hurst,not_found,,,2026-09-01
 ci.marble-falls.tx.us,Marble Falls,TX,City,Marble Falls,not_found,,,2026-09-01
-cityofmanor.org,Manor,TX,City,Manor,not_found,,,2026-09-01
+cityofmanor.org,Manor,TX,City,Manor,found,https://www.manortx.gov/410/Public-Hearings-Notices,custom,2026-11-02
 mason.tx.citygovt.org,Mason,TX,City,Mason,not_found,,,2026-09-01
 lytletx.org,Lytle,TX,City,Lytle,not_found,,,2026-09-01
 cityofcuero.com,Cuero,TX,City,Cuero,not_found,,,2026-09-01
 cityofmarfa.com,Marfa,TX,City,Marfa,not_found,,,2026-09-01
 cityoflumberton.com,Lumberton,TX,City,Lumberton,not_found,,,2026-09-01
-littleelm.org,Little Elm,TX,City,Little Elm,not_found,,,2026-09-01
+littleelm.org,Little Elm,TX,City,Little Elm,found,https://littleelm.org/purchasing,custom,2026-11-02
 madisonvilletexas.us,Madisonville,TX,City,Madisonville,not_found,,,2026-09-01
 meadowlakestexas.org,Meadowlakes,TX,City,Meadowlakes,not_found,,,2026-09-01
 jeffersontexas.us,Jefferson,TX,City,Jefferson,not_found,,,2026-09-01
@@ -16648,7 +16648,7 @@ city-of-muleshoe.com,Muleshoe,TX,City,Muleshoe,not_found,,,2026-09-01
 lonestartx.net,Lone Star,TX,City,Lone Star,found,https://lonestartx.net/requests-for-bid,custom,2026-09-01
 ci.nederland.tx.us,Nederland,TX,City,Nederland,not_found,,,2026-09-01
 cityofonalaska.us,Onalaska,TX,City,Onalaska,not_found,,,2026-09-01
-newtontexas.org,Newton,TX,City,Newton,not_found,,,2026-09-01
+newtontexas.org,Newton,TX,City,Newton,found,https://www.newtontexas.org/procurment_documents___advertisments/index.php,custom,2026-11-02
 orangetexas.net,Orange,TX,City,Orange,not_found,,,2026-09-01
 pannamariatexas.com,Panna Maria,TX,City,Panna Maria,not_found,,,2026-09-01
 olneytexas.com,Olney,TX,City,Olney,not_found,,,2026-09-01
@@ -16658,7 +16658,7 @@ ci.perryton.tx.us,Perryton,TX,City,Perryton,not_found,,,2026-09-01
 cityofpalmhursttx.com,Palmhurst,TX,City,Palmhurst,not_found,,,2026-09-01
 cityofpflugerville.com,Pflugerville,TX,City,Pflugerville,not_found,,,2026-09-01
 murchisontx.com,Murchison,TX,City,Murchison,not_found,,,2026-09-01
-pattonvillage.us,Patton Village,TX,City,Patton Village,not_found,,,2026-09-01
+pattonvillage.us,Patton Village,TX,City,Patton Village,found,https://pattonvillage.us/bids-and-rfps,custom,2026-11-02
 pleasantontx.org,Pleasanton,TX,City,Pleasanton,not_found,,,2026-09-01
 cityofmeadowsplace.org,Meadows Place,TX,City,Meadows Place,not_found,,,2026-09-01
 mineola.com,Mineola,TX,City,Mineola,not_found,,,2026-09-01
@@ -16670,13 +16670,13 @@ presidiotx.us,Presidio,TX,City,Presidio,not_found,,,2026-09-01
 newbostontx.org,New Boston,TX,City,New Boston,not_found,,,2026-09-01
 queencitytx.org,Queen City,TX,City,Queen City,not_found,,,2026-09-01
 texasescapes.com,Q981815,TX,City,Q981815,not_found,,,2026-09-01
-cityofquinlan.net,Quinlan,TX,City,Quinlan,not_found,,,2026-09-01
+cityofquinlan.net,Quinlan,TX,City,Quinlan,found,https://cityofquinlan.net/Bids.aspx,civicplus,2026-11-02
 olmospark.org,Olmos Park,TX,City,Olmos Park,not_found,,,2026-09-01
 ozona.com,Ozona,TX,City,Ozona,not_found,,,2026-09-01
 paducahtx.com,Paducah,TX,City,Paducah,not_found,,,2026-09-01
-roanoketexas.com,Roanoke,TX,City,Roanoke,not_found,,,2026-09-01
+roanoketexas.com,Roanoke,TX,City,Roanoke,found,https://roanoketexas.com/Bids.aspx,civicplus,2026-11-02
 redoaktx.org,Red Oak,TX,City,Red Oak,not_found,,,2026-09-01
-rockdalecityhall.com,Rockdale,TX,City,Rockdale,not_found,,,2026-09-01
+rockdalecityhall.com,Rockdale,TX,City,Rockdale,found,https://rockdalecityhall.com/Bids.aspx,civicplus,2026-11-02
 rockwall.com,Rockwall,TX,City,Rockwall,not_found,,,2026-09-01
 cityofpelicanbay.com,Pelican Bay,TX,City,Pelican Bay,not_found,,,2026-09-01
 cityofrollingwood.com,Rollingwood,TX,City,Rollingwood,not_found,,,2026-09-01
@@ -16688,7 +16688,7 @@ cityofredlicktx.com,Red Lick,TX,City,Red Lick,not_found,,,2026-09-01
 cityofsandyoaks.com,Sandy Oaks,TX,City,Sandy Oaks,not_found,,,2026-09-01
 visit.sanaugustinetx.com,San Augustine,TX,City,San Augustine,not_found,,,2026-09-01
 pecanhill.com,Pecan Hill,TX,City,Pecan Hill,not_found,,,2026-09-01
-ci.overton.tx.us,Overton,TX,City,Overton,not_found,,,2026-09-01
+ci.overton.tx.us,Overton,TX,City,Overton,found,https://cityofoverton.com/bid-requirements/,custom,2026-11-02
 cityofsandiegotexas.weebly.com,San Diego,TX,City,San Diego,not_found,,,2026-09-01
 cityofsabinal.org,Sabinal,TX,City,Sabinal,not_found,,,2026-09-01
 ci.santa-fe.tx.us,Santa Fe,TX,City,Santa Fe,not_found,,,2026-09-01
@@ -16696,23 +16696,23 @@ ci.port-neches.tx.us,Port Neches,TX,City,Port Neches,not_found,,,2026-09-01
 ci.seabrook.tx.us,Seabrook,TX,City,Seabrook,not_found,,,2026-09-01
 cityofsavoy.org,Savoy,TX,City,Savoy,not_found,,,2026-09-01
 riveroakstx.com,River Oaks,TX,City,River Oaks,not_found,,,2026-09-01
-cityofrockport.com,Rockport,TX,City,Rockport,not_found,,,2026-09-01
+cityofrockport.com,Rockport,TX,City,Rockport,found,https://cityofrockport.com/Bids.aspx,civicplus,2026-11-02
 cityofseymour.org,Seymour,TX,City,Seymour,not_found,,,2026-09-01
 sansompark.org,Sansom Park,TX,City,Sansom Park,not_found,,,2026-09-01
-shavanopark.org,Shavano Park,TX,City,Shavano Park,not_found,,,2026-09-01
+shavanopark.org,Shavano Park,TX,City,Shavano Park,found,https://shavanopark.org/bids,custom,2026-11-02
 cityofshoreacres.us,Shoreacres,TX,City,Shoreacres,not_found,,,2026-09-01
 ci.socorro.tx.us,Socorro,TX,City,Socorro,not_found,,,2026-09-01
 cityofstarharbor.com,Star Harbor,TX,City,Star Harbor,not_found,,,2026-09-01
 cityofstafford.com,Stafford,TX,City,Stafford,not_found,,,2026-09-01
 ci.stephenville.tx.us,Stephenville,TX,City,Stephenville,not_found,,,2026-09-01
 shinertx.com,Shiner,TX,City,Shiner,not_found,,,2026-09-01
-cityofportaransas.org,Port Aransas,TX,City,Port Aransas,not_found,,,2026-09-01
+cityofportaransas.org,Port Aransas,TX,City,Port Aransas,found,https://cityofportaransas.org/public-notices,custom,2026-11-02
 cor.net,Richardson,TX,City,Richardson,not_found,,,2026-09-01
 rotan.org,Rotan,TX,City,Rotan,not_found,,,2026-09-01
 stockdaletx.org,Stockdale,TX,City,Stockdale,not_found,,,2026-09-01
 stratfordtx.com,Stratford,TX,City,Stratford,not_found,,,2026-09-01
 cityofsweetwatertx.com,Sweetwater,TX,City,Sweetwater,not_found,,,2026-09-01
-cityofstinnett.com,Stinnett,TX,City,Stinnett,not_found,,,2026-09-01
+cityofstinnett.com,Stinnett,TX,City,Stinnett,found,https://cityofstinnett.com/nav/public_notice.php,custom,2026-11-02
 cityoftalco.com,Talco,TX,City,Talco,not_found,,,2026-09-01
 taylorlakevillage.us,Taylor Lake Village,TX,City,Taylor Lake Village,not_found,,,2026-09-01
 ci.texarkana.tx.us,Texarkana,TX,City,Texarkana,not_found,,,2026-09-01
@@ -16726,7 +16726,7 @@ cityoftye.org,Tye,TX,City,Tye,not_found,,,2026-09-01
 throckmortontx.org,Throckmorton,TX,City,Throckmorton,not_found,,,2026-09-01
 starbase.texas.gov,Starbase,TX,City,Starbase,not_found,,,2026-09-01
 sterlingcitytexas.com,Sterling City,TX,City,Sterling City,not_found,,,2026-09-01
-universalcitytexas.com,Universal City,TX,City,Universal City,not_found,,,2026-09-01
+universalcitytexas.com,Universal City,TX,City,Universal City,found,https://universalcitytexas.com/Bids.aspx,civicplus,2026-11-02
 ci.van-alstyne.tx.us,Van Alstyne,TX,City,Van Alstyne,not_found,,,2026-09-01
 cityofpineypoint.com,Piney Point Village,TX,City,Piney Point Village,not_found,,,2026-09-01
 wallistexas.org,Wallis,TX,City,Wallis,not_found,,,2026-09-01
@@ -16743,7 +16743,7 @@ cityofwaskom.com,Waskom,TX,City,Waskom,not_found,,,2026-09-01
 quanahnet.com,Quanah,TX,City,Quanah,not_found,,,2026-09-01
 weimartexas.org,Weimar,TX,City,Weimar,not_found,,,2026-09-01
 cityoftrinity.com,Trinity,TX,City,Trinity,not_found,,,2026-09-01
-cityofwebster.com,Webster,TX,City,Webster,not_found,,,2026-09-01
+cityofwebster.com,Webster,TX,City,Webster,found,https://cityofwebster.com/Bids.aspx,civicplus,2026-11-02
 wellingtontx.com,Wellington,TX,City,Wellington,not_found,,,2026-09-01
 cityofwestorange.com,West Orange,TX,City,West Orange,not_found,,,2026-09-01
 ci.watauga.tx.us,Watauga,TX,City,Watauga,not_found,,,2026-09-01
@@ -16765,7 +16765,7 @@ bearrivercityutah.com,Bear River City,UT,City,Bear River City,not_found,,,2026-0
 ci.taylor.tx.us,Taylor,TX,City,Taylor,not_found,,,2026-09-01
 fountaingreencity.com,Fountain Green,UT,City,Fountain Green,found,https://fountaingreencity.com/Bids.aspx,civicplus,2026-09-01
 coalville.utah.gov,Coalville,UT,City,Coalville,not_found,,,2026-09-01
-ci.wylie.tx.us,Wylie,TX,City,Wylie,not_found,,,2026-09-01
+ci.wylie.tx.us,Wylie,TX,City,Wylie,found,https://ci.wylie.tx.us/departments/purchasing,agency,2026-11-02
 cityoftolar.org,Tolar,TX,City,Tolar,not_found,,,2026-09-01
 winfieldtx.com,Winfield,TX,City,Winfield,not_found,,,2026-09-01
 alpinecity.org,Alpine,UT,City,Alpine,not_found,,,2026-09-01
@@ -17335,7 +17335,7 @@ powellcounty.ky.gov,Powell County,KY,City,Powell County,not_found,,,2026-09-01
 leecounty.ky.gov,Lee County,KY,City,Lee County,not_found,,,2026-09-01
 fultoncounty.ky.gov,Fulton County,KY,City,Fulton County,not_found,,,2026-09-01
 radford.va.us,Radford,VA,City,Radford,not_found,,,2026-09-01
-hendersonky.us,Henderson County,KY,City,Henderson County,not_found,,,2026-09-01
+hendersonky.us,Henderson County,KY,City,Henderson County,found,https://hendersonky.us/Bids.aspx,civicplus,2026-11-02
 breathittcounty.ky.gov,Breathitt County,KY,City,Breathitt County,not_found,,,2026-09-01
 ballardcounty.ky.gov,Ballard County,KY,City,Ballard County,not_found,,,2026-09-01
 suffolkva.us,Suffolk,VA,City,Suffolk,not_found,,,2026-09-01
@@ -17369,13 +17369,13 @@ menifeecounty.ky.gov,Menifee County,KY,City,Menifee County,not_found,,,2026-09-0
 breckinridgecounty.net,Breckinridge County,KY,City,Breckinridge County,not_found,,,2026-09-01
 muhlenbergcounty.ky.gov,Muhlenberg County,KY,City,Muhlenberg County,not_found,,,2026-09-01
 hartcountyky.org,Hart County,KY,City,Hart County,not_found,,,2026-09-01
-kentoncounty.org,Kenton County,KY,City,Kenton County,not_found,,,2026-09-01
+kentoncounty.org,Kenton County,KY,City,Kenton County,found,https://kentoncounty.org/Bids.aspx,civicplus,2026-11-02
 dukescounty.org,Dukes County,MA,City,Dukes County,found,https://dukescounty.org/procurement,custom,2026-09-01
 grantcounty.ky.gov,Grant County,KY,City,Grant County,not_found,,,2026-09-01
 plymouthcounty-ma.gov,Plymouth County,MA,City,Plymouth County,not_found,,,2026-09-01
 bellcountychamber.com,Bell County,KY,City,Bell County,not_found,,,2026-09-01
 marioncounty.ky.gov,Marion County,KY,City,Marion County,not_found,,,2026-09-01
-campbellcountyky.org,Campbell County,KY,City,Campbell County,not_found,,,2026-09-01
+campbellcountyky.org,Campbell County,KY,City,Campbell County,found,https://campbellcountyky.org/division/blocks.php?structureid=99,custom,2026-11-02
 carolinemd.org,Caroline County,MD,City,Caroline County,found,https://carolinemd.org/Bids.aspx,civicplus,2026-09-01
 kennebeccounty.org,Kennebec County,ME,City,Kennebec County,found,https://kennebeccounty.org/rfp,custom,2026-09-01
 ohiocounty.ky.gov,Ohio County,KY,City,Ohio County,not_found,,,2026-09-01
@@ -17606,12 +17606,12 @@ telfairco.org,Telfair County,GA,City,Telfair County,not_found,,,2026-09-01
 benhillcounty.com,Ben Hill County,GA,City,Ben Hill County,not_found,,,2026-09-01
 tiftcounty.org,Tift County,GA,City,Tift County,not_found,,,2026-09-01
 kcgov.us,Kootenai County,ID,City,Kootenai County,found,https://kcgov.us/Bids.aspx,civicplus,2026-09-01
-co.steuben.in.us,Steuben County,IN,City,Steuben County,not_found,,,2026-09-01
+co.steuben.in.us,Steuben County,IN,City,Steuben County,found,https://co.steuben.in.us/bid_postings/index.php,agency,2026-11-02
 forsythco.com,Forsyth County,GA,City,Forsyth County,not_found,,,2026-09-01
 rabuncounty.ga.gov,Rabun County,GA,City,Rabun County,not_found,,,2026-09-01
 co.fremont.id.us,Fremont County,ID,City,Fremont County,found,https://co.fremont.id.us/Bids.aspx,civicplus,2026-09-01
 meriwethercountyga.us,Meriwether County,GA,City,Meriwether County,not_found,,,2026-09-01
-washingtoncounty.in.gov,Washington County,IN,City,Washington County,not_found,,,2026-09-01
+washingtoncounty.in.gov,Washington County,IN,City,Washington County,found,https://washingtoncounty.in.gov/document_center/index.php,custom,2026-11-02
 colquitt-georgia.com,Miller County,GA,City,Miller County,not_found,,,2026-09-01
 jeromecountyid.us,Jerome County,ID,City,Jerome County,found,https://jeromecountyid.us/Bids.aspx,civicplus,2026-09-01
 co.walton.fl.us,Walton County,FL,City,Walton County,not_found,,,2026-09-01
@@ -17651,13 +17651,13 @@ fountaincounty.net,Fountain County,IN,City,Fountain County,not_found,,,2026-09-0
 hancockcoingov.org,Hancock County,IN,City,Hancock County,not_found,,,2026-09-01
 co.hendricks.in.us,Hendricks County,IN,City,Hendricks County,not_found,,,2026-09-01
 co.madison.id.us,Madison County,ID,City,Madison County,found,https://co.madison.id.us/county_government/bid_postings/index.php,agency,2026-09-01
-wellscounty.org,Wells County,IN,City,Wells County,not_found,,,2026-09-01
+wellscounty.org,Wells County,IN,City,Wells County,found,https://news-banner.com/category/public-notices/,custom,2026-11-02
 henryco.net,Henry County,IN,City,Henry County,not_found,,,2026-09-01
 co.putnam.in.us,Putnam County,IN,City,Putnam County,not_found,,,2026-09-01
 nobleco.squarespace.com,Noble County,IN,City,Noble County,not_found,,,2026-09-01
 loogootee.com,Martin County,IN,City,Martin County,not_found,,,2026-09-01
 shoshonecounty.id.gov,Shoshone County,ID,City,Shoshone County,not_found,,,2026-09-01
-co.adams.in.us,Adams County,IN,City,Adams County,not_found,,,2026-09-01
+co.adams.in.us,Adams County,IN,City,Adams County,found,https://co.adams.in.us/Bids.aspx,civicplus,2026-11-02
 dawsoncounty.org,Dawson County,GA,City,Dawson County,not_found,,,2026-09-01
 co.valley.id.us,Valley County,ID,City,Valley County,not_found,,,2026-09-01
 rushcounty.in.gov,Rush County,IN,City,Rush County,found,https://rushcounty.in.gov/notice-to-bidders,agency,2026-09-01
@@ -18099,7 +18099,7 @@ golincolnms.com,Lincoln County,MS,City,Lincoln County,not_found,,,2026-09-01
 montgomerycountyms.org,Montgomery County,MS,City,Montgomery County,not_found,,,2026-09-01
 lowndescountygov.com,Lowndes County,MS,City,Lowndes County,not_found,,,2026-09-01
 co.jasper.ms.us,Jasper County,MS,City,Jasper County,not_found,,,2026-09-01
-lauderdalecounty.org,Lauderdale County,MS,City,Lauderdale County,not_found,,,2026-09-01
+lauderdalecounty.org,Lauderdale County,MS,City,Lauderdale County,found,https://lauderdalecounty.org/bids,custom,2026-11-02
 lawrencecountyms.com,Lawrence County,MS,City,Lawrence County,not_found,,,2026-09-01
 monroecountyms.org,Monroe County,MS,City,Monroe County,not_found,,,2026-09-01
 noxubeecounty.org,Noxubee County,MS,City,Noxubee County,not_found,,,2026-09-01
@@ -18121,7 +18121,7 @@ catroncounty.us,Catron County,NM,City,Catron County,found,https://catroncounty.u
 co.colfax.nm.us,Colfax County,NM,City,Colfax County,found,https://co.colfax.nm.us/business/bid_opportunities.php,agency,2026-09-01
 socorrocounty.net,Socorro County,NM,City,Socorro County,not_found,,,2026-09-01
 taoscounty.org,Taos County,NM,City,Taos County,found,https://taoscounty.org/Bids.aspx,civicplus,2026-09-01
-leakecountyms.org,Leake County,MS,City,Leake County,not_found,,,2026-09-01
+leakecountyms.org,Leake County,MS,City,Leake County,found,https://leakecountyms.org/purchasing,custom,2026-11-02
 prentisscounty.org,Prentiss County,MS,City,Prentiss County,not_found,,,2026-09-01
 co.valencia.nm.us,Valencia County,NM,City,Valencia County,found,https://co.valencia.nm.us/Bids.aspx,civicplus,2026-09-01
 bergencountynj.gov,Bergen County,NJ,City,Bergen County,found,https://bergencountynj.gov/departments/purchasing,agency,2026-09-01
@@ -18640,7 +18640,7 @@ tiptonco.com,Tipton County,TN,City,Tipton County,not_found,,,2026-09-01
 waynecountyutah.org,Wayne County,UT,City,Wayne County,not_found,,,2026-09-01
 southplainfieldnj.com,South Plainfield,NJ,City,South Plainfield,not_found,,,2026-09-01
 ocnj.us,Ocean City,NJ,City,Ocean City,found,https://ocnj.us/purchasing,custom,2026-09-01
-blounttn.org,Blount County,TN,City,Blount County,not_found,,,2026-09-01
+blounttn.org,Blount County,TN,City,Blount County,found,https://blounttn.org/Bids.aspx,civicplus,2026-11-02
 ci.carteret.nj.us,Carteret,NJ,City,Carteret,not_found,,,2026-09-01
 morgancountytn.org,Morgan County,TN,City,Morgan County,not_found,,,2026-09-01
 ventnorcity.org,Ventnor City,NJ,City,Ventnor City,found,https://ventnorcity.org/bids,custom,2026-09-01
@@ -19029,7 +19029,7 @@ cannontn.com,Cannon County,TN,City,Cannon County,not_found,,,2026-09-01
 meigstn.com,Meigs County,TN,City,Meigs County,not_found,,,2026-09-01
 scottcounty.com,Scott County,TN,City,Scott County,not_found,,,2026-09-01
 warrencountypa.net,Warren County,PA,City,Warren County,not_found,,,2026-09-01
-mcgtn.org,Montgomery County,TN,City,Montgomery County,not_found,,,2026-09-01
+mcgtn.org,Montgomery County,TN,City,Montgomery County,found,https://mcgtn.org/purchasing,custom,2026-11-02
 dorchestercounty.net,Dorchester County,SC,City,Dorchester County,not_found,,,2026-09-01
 co.grays-harbor.wa.us,Grays Harbor County,WA,City,Grays Harbor County,found,https://co.grays-harbor.wa.us/Bids.aspx,civicplus,2026-09-01
 hamblencountygovernment.us,Hamblen County,TN,City,Hamblen County,not_found,,,2026-09-01
@@ -20067,7 +20067,7 @@ locharbournj.us,Loch Arbour,NJ,City,Loch Arbour,not_found,,,2026-09-01
 malvern.org,Malvern,PA,City,Malvern,not_found,,,2026-09-01
 jermynpa.com,Jermyn,PA,City,Jermyn,not_found,,,2026-09-01
 sebastiancountyonline.com,Sebastian County,AR,City,Sebastian County,not_found,,,2026-09-01
-co.dewitt.tx.us,DeWitt County,TX,City,DeWitt County,not_found,,,2026-09-01
+co.dewitt.tx.us,DeWitt County,TX,City,DeWitt County,found,https://co.dewitt.tx.us/page/Notices,custom,2026-11-02
 co.waller.tx.us,Waller County,TX,City,Waller County,not_found,,,2026-09-01
 crittendencountyar.org,Crittenden County,AR,City,Crittenden County,not_found,,,2026-09-01
 clarkcountyarkansas.com,Clark County,AR,City,Clark County,not_found,,,2026-09-01
@@ -20099,7 +20099,7 @@ local.arkansas.gov,Calhoun County,AR,City,Calhoun County,found,https://portal.ar
 co.edwards.tx.us,Edwards County,TX,City,Edwards County,not_found,,,2026-09-01
 co.starr.tx.us,Starr County,TX,City,Starr County,found,https://co.starr.tx.us/page/BidNotice,agency,2026-09-01
 co.san-augustine.tx.us,San Augustine County,TX,City,San Augustine County,not_found,,,2026-09-01
-uvaldecounty.com,Uvalde County,TX,City,Uvalde County,not_found,,,2026-09-01
+uvaldecounty.com,Uvalde County,TX,City,Uvalde County,found,https://www.uvaldecounty.gov/uvalde-county-legal-notices,custom,2026-11-02
 co.terrell.tx.us,Terrell County,TX,City,Terrell County,not_found,,,2026-09-01
 co.sabine.tx.us,Sabine County,TX,City,Sabine County,not_found,,,2026-09-01
 co.sutton.tx.us,Sutton County,TX,City,Sutton County,not_found,,,2026-09-01
@@ -20115,7 +20115,7 @@ austincounty.com,Austin County,TX,City,Austin County,not_found,,,2026-09-01
 littlerivercounty.org,Little River County,AR,City,Little River County,not_found,,,2026-09-01
 co.archer.tx.us,Archer County,TX,City,Archer County,not_found,,,2026-09-01
 co.leon.tx.us,Leon County,TX,City,Leon County,not_found,,,2026-09-01
-co.cherokee.tx.us,Cherokee County,TX,City,Cherokee County,not_found,,,2026-09-01
+co.cherokee.tx.us,Cherokee County,TX,City,Cherokee County,found,https://co.cherokee.tx.us/Bids.aspx,civicplus,2026-11-02
 angelinacounty.net,Angelina County,TX,City,Angelina County,not_found,,,2026-09-01
 co.falls.tx.us,Falls County,TX,City,Falls County,not_found,,,2026-09-01
 deltacountytx.com,Delta County,TX,City,Delta County,not_found,,,2026-09-01
@@ -20128,9 +20128,9 @@ co.baylor.tx.us,Baylor County,TX,City,Baylor County,not_found,,,2026-09-01
 co.orange.tx.us,Orange County,TX,City,Orange County,found,https://co.orange.tx.us/departments/purchasing,agency,2026-09-01
 dallam.org,Dallam County,TX,City,Dallam County,not_found,,,2026-09-01
 co.borden.tx.us,Borden County,TX,City,Borden County,not_found,,,2026-09-01
-vctx.org,Victoria County,TX,City,Victoria County,not_found,,,2026-09-01
+vctx.org,Victoria County,TX,City,Victoria County,found,https://vctx.org/Bids.aspx,civicplus,2026-11-02
 co.camp.tx.us,Camp County,TX,City,Camp County,not_found,,,2026-09-01
-co.comanche.tx.us,Comanche County,TX,City,Comanche County,not_found,,,2026-09-01
+co.comanche.tx.us,Comanche County,TX,City,Comanche County,found,https://co.comanche.tx.us/Bids.aspx,civicplus,2026-11-02
 co.cass.tx.us,Cass County,TX,City,Cass County,not_found,,,2026-09-01
 co.blanco.tx.us,Blanco County,TX,City,Blanco County,not_found,,,2026-09-01
 co.crockett.tx.us,Crockett County,TX,City,Crockett County,not_found,,,2026-09-01
@@ -20217,7 +20217,7 @@ co.kinney.tx.us,Kinney County,TX,City,Kinney County,not_found,,,2026-09-01
 co.hill.tx.us,Hill County,TX,City,Hill County,not_found,,,2026-09-01
 co.donley.tx.us,Donley County,TX,City,Donley County,not_found,,,2026-09-01
 co.scurry.tx.us,Scurry County,TX,City,Scurry County,not_found,,,2026-09-01
-coryellcounty.org,Coryell County,TX,City,Coryell County,not_found,,,2026-09-01
+coryellcounty.org,Coryell County,TX,City,Coryell County,found,https://coryellcounty.org/page/coryell.Bids.RFQ,custom,2026-11-02
 co.fayette.tx.us,Fayette County,TX,City,Fayette County,not_found,,,2026-09-01
 co.jim-wells.tx.us,Jim Wells County,TX,City,Jim Wells County,not_found,,,2026-09-01
 huntcounty.net,Hunt County,TX,City,Hunt County,not_found,,,2026-09-01
@@ -20839,7 +20839,7 @@ hinsdalecountycolorado.us,Hinsdale County,CO,City,Hinsdale County,not_found,,,20
 woodburyct.org,Woodbury,CT,City,Woodbury,not_found,,,2026-09-01
 loganco.gov,Logan County,CO,City,Logan County,not_found,,,2026-09-01
 co.routt.co.us,Routt County,CO,City,Routt County,found,https://co.routt.co.us/Bids.aspx,civicplus,2026-09-01
-co.laplata.co.us,La Plata County,CO,City,La Plata County,not_found,,,2026-09-01
+co.laplata.co.us,La Plata County,CO,City,La Plata County,found,https://www.lpcgov.org/departments/finance___procurement/procurement.php,custom,2026-11-02
 montrosecounty.net,Montrose County,CO,City,Montrose County,found,https://montrosecounty.net/Bids.aspx,civicplus,2026-09-01
 co.arapahoe.co.us,Arapahoe County,CO,City,Arapahoe County,not_found,,,2026-09-01
 co.cheyenne.co.us,Cheyenne County,CO,City,Cheyenne County,not_found,,,2026-09-01
@@ -20866,7 +20866,7 @@ coosacountyal.com,Coosa County,AL,City,Coosa County,not_found,,,2026-09-01
 dolorescounty.org,Dolores County,CO,City,Dolores County,not_found,,,2026-09-01
 crenshawcountyalonline.com,Crenshaw County,AL,City,Crenshaw County,not_found,,,2026-09-01
 bentcounty.org,Bent County,CO,City,Bent County,not_found,,,2026-09-01
-co.summit.co.us,Summit County,CO,City,Summit County,not_found,,,2026-09-01
+co.summit.co.us,Summit County,CO,City,Summit County,found,https://www.summitcountyco.gov/how_do_i/apply_for/bid_postings.php,agency,2026-11-02
 greenecountyalabama.com,Greene County,AL,City,Greene County,found,https://greenecountyalabama.com/purchasing/bids,custom,2026-09-01
 alabamagis.com,Pike County,AL,City,Pike County,not_found,,,2026-09-01
 genevacounty.us,Geneva County,AL,City,Geneva County,found,https://genevacounty.us/purchasing/bids,custom,2026-09-01
@@ -20876,7 +20876,7 @@ dekalbcountyal.us,DeKalb County,AL,City,DeKalb County,not_found,,,2026-09-01
 dalecountyal.org,Dale County,AL,City,Dale County,not_found,,,2026-09-01
 henrycountyalabama.org,Henry County,AL,City,Henry County,not_found,,,2026-09-01
 co.washington.co.us,Washington County,CO,City,Washington County,not_found,,,2026-09-01
-montezumacounty.org,Montezuma County,CO,City,Montezuma County,not_found,,,2026-09-01
+montezumacounty.org,Montezuma County,CO,City,Montezuma County,found,https://montezumacounty.org/rfp,custom,2026-11-02
 yumacounty.net,Yuma County,CO,City,Yuma County,not_found,,,2026-09-01
 saguachecounty.net,Saguache County,CO,City,Saguache County,not_found,,,2026-09-01
 leeco.us,Lee County,AL,City,Lee County,found,https://leeco.us/departments/commission_office/bid_opportunities.php,custom,2026-09-01
@@ -21424,7 +21424,7 @@ townofmarcus.com,Marcus,WA,City,Marcus,not_found,,,2026-09-01
 townoftwisp.com,Twisp,WA,City,Twisp,not_found,,,2026-09-01
 mcintoshalabama.com,McIntosh,AL,City,McIntosh,not_found,,,2026-09-01
 erving-ma.org,Erving,MA,City,Erving,found,https://erving-ma.org/Bids.aspx,civicplus,2026-09-01
-flower-mound.com,Flower Mound,TX,City,Flower Mound,not_found,,,2026-09-01
+flower-mound.com,Flower Mound,TX,City,Flower Mound,found,https://flower-mound.com/Bids.aspx,civicplus,2026-11-02
 townofcoupeville.org,Coupeville,WA,City,Coupeville,found,https://townofcoupeville.org/rfp,custom,2026-09-01
 townofcouleedam.org,Coulee Dam,WA,City,Coulee Dam,not_found,,,2026-09-01
 townofdarrington.com,Darrington,WA,City,Darrington,not_found,,,2026-09-01
@@ -21449,7 +21449,7 @@ smithtowninfo.com,Smithtown,NY,City,Smithtown,not_found,,,2026-09-01
 pottsboro.govoffice2.com,Pottsboro,TX,City,Pottsboro,not_found,,,2026-09-01
 harvard.ma.us,Harvard,MA,City,Harvard,not_found,,,2026-09-01
 walesutah.org,Wales,UT,City,Wales,not_found,,,2026-09-01
-gueydan.org,Gueydan,LA,City,Gueydan,not_found,,,2026-09-01
+gueydan.org,Gueydan,LA,City,Gueydan,found,https://gueydan.org/public-notices,custom,2026-11-02
 almirawashington.com,Almira,WA,City,Almira,not_found,,,2026-09-01
 townofsp.com,South Prairie,WA,City,South Prairie,not_found,,,2026-09-01
 grovelandma.com,Groveland,MA,City,Groveland,not_found,,,2026-09-01
@@ -22083,7 +22083,7 @@ brimfieldma.org,Brimfield,MA,City,Brimfield,not_found,,,2026-09-01
 lynnville.org,Lynnville,TN,City,Lynnville,not_found,,,2026-09-01
 silvercliffco.com,Silver Cliff,CO,City,Silver Cliff,not_found,,,2026-09-01
 madisonct.org,Madison,CT,City,Madison,found,https://madisonct.org/Bids.aspx,civicplus,2026-09-01
-town.morrison.co.us,Morrison,CO,City,Morrison,not_found,,,2026-09-01
+town.morrison.co.us,Morrison,CO,City,Morrison,found,https://town.morrison.co.us/Bids.aspx,civicplus,2026-11-02
 townofbuchanan.com,Buchanan,VA,City,Buchanan,not_found,,,2026-09-01
 townofgrandlake.com,Grand Lake,CO,City,Grand Lake,not_found,,,2026-09-01
 townofgilbertsc.com,Gilbert,SC,City,Gilbert,not_found,,,2026-09-01
@@ -23598,7 +23598,7 @@ jths.org,Joliet,IL,School district,Joliet Township High School District 204,not_
 isdschools.org,Independence,MO,School district,Independence Public School District,not_found,,,2026-09-01
 usd497.org,Kansas,KS,School district,Lawrence USD 497,found,https://usd497.org/about-us/departments/business-and-finance/purchasing,custom,2026-09-01
 beaufortschools.net,Beaufort,SC,School district,Beaufort County School District,found,https://beaufortschools.net/about-us/departments/finance/purchasing-procurement,custom,2026-09-01
-newpal.k12.in.us,Community School Corporation of Southern Hancock,IN,School district,Community School Corporation of Southern Hancock County,not_found,,,2026-09-01
+newpal.k12.in.us,Community School Corporation of Southern Hancock,IN,School district,Community School Corporation of Southern Hancock County,found,https://newpal.k12.in.us/communityecas/legal-notices,custom,2026-11-02
 cusd80.com,Chandler,AZ,School district,Chandler Unified School District,not_found,,,2026-09-01
 bismarckschools.org,Bismarck,ND,School district,Bismarck Public Schools,found,https://bismarckschools.org/about-bps/departments/business-operations/bids-and-requests-for-proposals,custom,2026-09-01
 jeffcopublicschools.org,Jefferson County,CO,School district,Jefferson County Public Schools,not_found,,,2026-09-01
@@ -23737,7 +23737,7 @@ jackson.okcounties.org,Jackson,OK,County,Jackson County,not_found,,,2026-09-01
 co.guilford.nc.us,Guilford,NC,County,Guilford County,not_found,,,2026-09-01
 co.sauk.wi.us,Sauk,WI,County,Sauk County,not_found,,,2026-09-01
 co.butler.pa.us,Butler,PA,County,Butler County,not_found,,,2026-09-01
-dimmitcounty.org,Dimmit,TX,County,Dimmit County,not_found,,,2026-09-01
+dimmitcounty.org,Dimmit,TX,County,Dimmit County,found,https://dimmitcounty.org/government/public_notices.php,custom,2026-11-02
 hotspringcounty.org,Hot Spring,AR,County,Hot Spring County,not_found,,,2026-09-01
 co.la-salle.tx.us,La Salle,TX,County,La Salle County,found,https://co.la-salle.tx.us/index.php/commissioners-court/county-bids,agency,2026-09-01
 franklincoks.org,Franklin,KS,County,Franklin County,found,https://www.franklincoks.org/bids.aspx,civicplus,2026-09-01
