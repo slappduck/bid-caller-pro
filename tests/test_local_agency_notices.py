@@ -479,3 +479,44 @@ class KentuckyNoticeTests(_FreshCache):
         self.assertEqual(got, [
             "https://transportation.ky.gov/Construction-Procurement/Publications/2026-11-19/Notice%20to%20Contractors.pdf",
             "https://transportation.ky.gov/Construction-Procurement/Publications/2026-12-10/Notice%20to%20Contractors.pdf"])
+
+
+WI_FIXTURE = os.path.join(ROOT, "data", "recall_fixtures", "wisdot_notice_to_contractors.txt")
+
+
+def wi_rows():
+    with open(WI_FIXTURE, encoding="utf-8") as f:
+        return bid_sources.parse_wi_notice_to_contractors(f.read().split("\n", 1)[1], "WI")
+
+
+class WisconsinNoticeTests(_FreshCache):
+    def test_city_and_village_jobs_are_placed_at_the_town(self):
+        towns = {r.get("town") for r in wi_rows()}
+        self.assertIn("Madison", towns)
+        self.assertIn("Deforest", towns)
+
+    def test_abbreviated_places_are_spelled_out(self):
+        titles = [r["title"] for r in wi_rows()]
+        self.assertTrue(any(t.startswith("City of Madison") for t in titles))
+        self.assertTrue(any(t.startswith("Town of Excelsior") for t in titles))
+        self.assertFalse(any(t.startswith(("C ", "V ", "T ")) for t in titles))
+
+    def test_only_proposals_with_concrete_flatwork_are_kept(self):
+        for r in wi_rows():
+            self.assertRegex(r["scope"], r"Concrete|Curb|Sidewalk")
+        self.assertFalse(any("Tree Clearing" in r["title"] for r in wi_rows()))
+
+    def test_the_letting_date_is_the_due_date(self):
+        self.assertTrue(all(r["deadline"] == "November 10, 2026" for r in wi_rows()))
+
+    def test_the_scan_builds_pdf_addresses_from_the_schedule_page(self):
+        import datetime
+        page = ('<a href="/Pages/doing-bus/contractors/hcci/bid-let/2026/20261013.aspx">o</a>'
+                '<a href="/Pages/doing-bus/contractors/hcci/bid-let/2026/20261110.aspx">n</a>')
+        got = []
+        with patch("license_server._fetch_page", return_value=(page, "ok")), \
+             patch("license_server._fetch_document",
+                   side_effect=lambda u: (got.append(u) or (b"%PDF", "application/pdf", "ok"))), \
+             patch("license_server._pdf_all_text", return_value="x"):
+            ls._wi_letting_text(today=datetime.date(2026, 11, 2))
+        self.assertEqual(got, ["https://wisconsindot.gov/hccidocs/bid-let/2026/20261110/advertisement.pdf"])

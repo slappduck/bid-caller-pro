@@ -123,6 +123,7 @@ LOCAL_NOTICE_LABELS = {
     "IL": "IDOT's weekly bulletin of town and county lettings in Illinois",
     "OK": "ODOT's lettings, city sidewalk and street jobs included",
     "KY": "KYTC's lettings, county and city road jobs included",
+    "WI": "WisDOT's lettings, city, village and county street jobs included",
 }
 
 

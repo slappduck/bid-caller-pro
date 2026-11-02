@@ -2271,6 +2271,72 @@ def parse_ky_notice_to_contractors(text, state="KY", base_url=""):
     return rows
 
 
+# Wisconsin: each WisDOT letting's Notice to Contractors is at a fixed
+# address built from the letting date, and every proposal gives its
+# location, county and a "Work Summary" listing the items. Town, village and
+# county projects (LOC STR, CTH) are let here too. A proposal is kept only
+# when its summary names concrete flatwork, so asphalt-only bridge work and
+# tree clearing do not come back.
+_WI_PROPOSAL_RE = re.compile(r"^\s*(\d{11})\.\s*$", re.M)
+_WI_COUNTY_RE = re.compile(r"^\s*([A-Z][A-Za-z .'-]+?) County\s*$", re.M)
+_WI_FLATWORK_RE = re.compile(
+    r"Concrete (?:Pavement|Sidewalk|Driveway|Curb|Base|Barrier)|Curb and Gutter|"
+    r"Curb Ramp|Sidewalk|Concrete Masonry", re.I)
+
+
+def parse_wi_notice_to_contractors(text, state="WI", base_url=""):
+    rows = []
+    for chunk in str(text or "").split(OK_LETTING_MARK)[1:]:
+        head, _, body = chunk.partition("\n")
+        m = re.match(r"(.+?\d{4})\s+(\S+)\s*$", head.strip())
+        if not m:
+            continue
+        deadline, url = m.group(1), m.group(2)
+        parts = _WI_PROPOSAL_RE.split(body)
+        for i in range(1, len(parts) - 1, 2):
+            ident, block = parts[i], parts[i + 1]
+            block = re.sub(r"^\s*\d+\s*$", "", block, flags=re.M)      # page numbers
+            summary = re.search(r"Work Summary:\s*(.+?)\s*Work Type:", block, re.S)
+            cm = _WI_COUNTY_RE.search(block)
+            if not summary or not cm:
+                continue
+            summary = re.sub(r"\s+", " ", summary.group(1)).strip()
+            if not _WI_FLATWORK_RE.search(summary):
+                continue
+            lines = [ln.strip() for ln in block[:cm.start()].splitlines() if ln.strip()]
+            where = [ln for ln in lines if not re.match(r"^\d{4}-\d{2}-\d{2}\b", ln)]
+            title = re.sub(r"\s+", " ", " ".join(where)).strip(" ,")
+            title = re.sub(r"\bOf Of\b", "of", title)
+            # "C Madison", "V Deforest", "T Excelsior" are WisDOT's city,
+            # village and town.
+            title = re.sub(r"^C ", "City of ", title)
+            title = re.sub(r"^V ", "Village of ", title)
+            title = re.sub(r"^T ", "Town of ", title)
+            if len(title) > 130:
+                title = title[:130].rsplit(" ", 1)[0].rstrip(" ,") + "…"
+            row = {
+                "title": title or "WisDOT letting",
+                "scope": ("Proposal %s. Work: %s" % (ident, summary))[:1200],
+                "url": url,
+                "deadline": deadline,
+                "status": "Open",
+                "agency": "WisDOT letting",
+                "call": ident[-3:],
+                "state": str(state or "WI").upper(),
+                "source": "state_dot",
+                "documents": [{"name": "Notice to Contractors", "url": url},
+                              {"name": "Plans and bidding (Bid Express)",
+                               "url": "https://www.bidx.com/wi/main"}],
+            }
+            tm = re.search(r"\b(?:City|Village) of ([A-Z][A-Za-z .'-]+?),", title)
+            if tm:
+                row["town"] = tm.group(1).strip()
+            else:
+                row["county"] = cm.group(1).strip()
+            rows.append(row)
+    return rows
+
+
 # Which reader a local-notices source uses. Keyed by the kind named in
 # license_server's LOCAL_NOTICE_SOURCES.
 LOCAL_NOTICE_PARSERS = {
@@ -2280,6 +2346,7 @@ LOCAL_NOTICE_PARSERS = {
     "il_bulletin": parse_il_contractors_bulletin,
     "ok_letting": parse_ok_letting_csv,
     "ky_ntc": parse_ky_notice_to_contractors,
+    "wi_ntc": parse_wi_notice_to_contractors,
 }
 
 

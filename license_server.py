@@ -1084,6 +1084,7 @@ LOCAL_NOTICE_LABELS = {
     "IL": "IDOT's weekly bulletin of town and county lettings in Illinois",
     "OK": "ODOT's lettings, city sidewalk and street jobs included",
     "KY": "KYTC's lettings, county and city road jobs included",
+    "WI": "WisDOT's lettings, city, village and county street jobs included",
 }
 
 
@@ -7369,6 +7370,8 @@ LOCAL_NOTICE_SOURCES = {
             "ok_letting")],
     "KY": [("https://transportation.ky.gov/Construction-Procurement/Pages/default.aspx",
             "ky_ntc")],
+    "WI": [("https://wisconsindot.gov/Pages/doing-bus/contractors/hcci/bid-let.aspx",
+            "wi_ntc")],
 }
 # Oklahoma: ODOT's contracts page links one page per upcoming letting, each
 # naming the folder of its spreadsheet. odot.org has no robots.txt of its own
@@ -7429,6 +7432,39 @@ def _ky_letting_text(index_html, today=None):
     for when in sorted(dates)[:KY_LETTINGS_READ]:
         url = ("https://transportation.ky.gov/Construction-Procurement/Publications/"
                "%s/Notice%%20to%%20Contractors.pdf" % when.isoformat())
+        raw, _ctype, outcome = _fetch_document(url)
+        text = _pdf_all_text(raw) if outcome == "ok" else ""
+        if text:
+            label = "%s %d, %d" % (when.strftime("%B"), when.day, when.year)
+            parts.append("%s%s %s\n%s" % (bid_sources.OK_LETTING_MARK, label, url, text))
+    return "\n".join(parts)
+
+
+# Wisconsin: the year's advertisement schedule page links each letting by its
+# date (bid-let/2026/20261110.aspx), and the Notice to Contractors for that
+# letting sits at hccidocs/bid-let/<year>/<date>/advertisement.pdf.
+WI_LETTINGS_READ = int(os.environ.get("WI_LETTINGS_READ", "3"))
+_WI_LETTING_RE = re.compile(r"/bid-let/(\d{4})/(\d{4})(\d{2})(\d{2})\.aspx")
+
+
+def _wi_letting_text(today=None):
+    today = today or datetime.date.today()
+    dates = set()
+    for year in sorted({today.year, (today + datetime.timedelta(days=OK_LETTING_HORIZON_DAYS)).year}):
+        page, outcome = _fetch_page(
+            "https://wisconsindot.gov/Pages/doing-bus/contractors/hcci/bid-let-%d.aspx" % year,
+            timeout=STATE_SOURCE_TIMEOUT)
+        for _y, y, m, d in _WI_LETTING_RE.findall(page or ""):
+            try:
+                when = datetime.date(int(y), int(m), int(d))
+            except ValueError:
+                continue
+            if today <= when <= today + datetime.timedelta(days=OK_LETTING_HORIZON_DAYS):
+                dates.add(when)
+    parts = []
+    for when in sorted(dates)[:WI_LETTINGS_READ]:
+        url = ("https://wisconsindot.gov/hccidocs/bid-let/%d/%s/advertisement.pdf"
+               % (when.year, when.strftime("%Y%m%d")))
         raw, _ctype, outcome = _fetch_document(url)
         text = _pdf_all_text(raw) if outcome == "ok" else ""
         if text:
@@ -7748,6 +7784,9 @@ def _load_local_source(url, kind):
         return text, ("ok" if text else "unreadable")
     if kind == "ky_ntc":
         text = _ky_letting_text(page)
+        return text, ("ok" if text else "unreadable")
+    if kind == "wi_ntc":
+        text = _wi_letting_text()
         return text, ("ok" if text else "unreadable")
     return page, "ok"
 
