@@ -3007,8 +3007,9 @@ def _in_letting_text(index_html, today=None):
 IL_BULLETINS_READ = int(os.environ.get("IL_BULLETINS_READ", "4"))
 # These pages change at most daily, and Illinois alone is five downloads, so
 # each source's text is kept in memory this long instead of refetched by every
-# scan that touches the state.
-LOCAL_SOURCE_TTL_SEC = int(os.environ.get("LOCAL_SOURCE_TTL_SEC", "1800"))
+# scan that touches the state. A cold 125-mile scan from Springfield, MO spent
+# about 13 seconds more on them than a warm one.
+LOCAL_SOURCE_TTL_SEC = int(os.environ.get("LOCAL_SOURCE_TTL_SEC", "10800"))
 _local_source_cache = {}
 
 

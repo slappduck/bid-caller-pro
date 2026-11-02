@@ -795,7 +795,7 @@ themselves, and several states require that notice be posted on a state
 site. One state page then covers hundreds of towns that have no bid page of
 their own. All of these live in `LOCAL_NOTICE_SOURCES`
 (`license_server/search_sources.py`), each with a plain parser in
-`bid_sources.LOCAL_NOTICE_PARSERS`, no model calls, cached 30 minutes.
+`bid_sources.LOCAL_NOTICE_PARSERS`, no model calls, cached 3 hours in memory.
 Tests run on captured copies in `data/recall_fixtures/`.
 
 | State | Source | What it adds (live, 2026-11-02) |
