@@ -1,0 +1,51 @@
+name: Keep the landing page's open bids current in outreach towns
+
+# The landing page lists open bids near a visitor's ZIP (/bids-near), from
+# scans already run. Outreach links point at specific towns, so this scans
+# a few of them (go_locations.json) twice a week, rotating through the list,
+# so a contractor who clicks finds real work near them, not an empty box.
+#
+# Cost is six scans a run, one per call. WARM_AREAS_PER_RUN=0 on the
+# server turns it off. WARM_EXTRA_AREAS adds places by hand.
+#
+# Same two repo secrets as the other jobs: BIDCALLER_SERVER_URL and
+# CRON_SECRET. Without them the endpoint replies 403 and nothing happens.
+#
+# Run it any time: Actions tab -> this workflow -> Run workflow.
+
+on:
+  schedule:
+    # Monday and Thursday, 12:20 UTC: ahead of the Monday digest and the
+    # working day, so the list is fresh when outreach goes out.
+    - cron: "20 12 * * 1,4"
+  workflow_dispatch:
+
+jobs:
+  warm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Scan the next few outreach towns
+        env:
+          SERVER: ${{ secrets.BIDCALLER_SERVER_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$SERVER" ] || [ -z "$CRON_SECRET" ]; then
+            echo "BIDCALLER_SERVER_URL or CRON_SECRET not set — skipping."
+            exit 0
+          fi
+          # One town per call, so no request runs into the server's
+          # timeout; six calls a run. The first wakes a sleeping instance.
+          for i in 1 2 3 4 5 6; do
+            code=$(curl -sS -o /tmp/warm.json -w '%{http_code}' \
+              --max-time 280 \
+              -X POST "$SERVER/run-warm-areas" \
+              -H 'Content-Type: application/json' \
+              -H "X-Cron-Secret: $CRON_SECRET" \
+              -d '{"n": 1}')
+            echo "HTTP $code"
+            cat /tmp/warm.json
+            echo
+            [ "$code" = "200" ] || exit 1
+            # The server's WARM_AREAS_PER_RUN=0 switches the job off.
+            if grep -q '"scanned": *0' /tmp/warm.json; then break; fi
+          done

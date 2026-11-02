@@ -2163,6 +2163,7 @@ CRON_EXPECTED = {
     "purge-expired-consent": 960,  # monthly
     "bid-watch": 14,             # every 6 hours: addenda and due-tomorrow alerts
     "bid-digest": 192,           # weekly: the free bid email (digest.py)
+    "warm-areas": 108,           # twice weekly: open bids for the landing page
 }
 
 
@@ -2355,6 +2356,82 @@ def run_trial_reminders():
     result = _run_trial_reminders()
     if result.get("ok"):
         _cron_beat("trial-reminders")
+    return jsonify(result), (200 if result.get("ok") else 500)
+
+
+# ── Keeping the landing page's bid list current where outreach points ──
+#
+# /bids-near shows a visitor the open bids that scans have found near them.
+# Scans only happen where customers, digest subscribers or saved searches
+# are, so a contractor who clicks an outreach link for a town nobody has
+# scanned would see nothing but an agency count -- in exactly the place the
+# email promised real work. This scans the outreach towns (go_locations.json,
+# the same list the /go/ links fill in) a few at a time, rotating through
+# them, so each is refreshed every few weeks. WARM_EXTRA_AREAS adds places
+# by hand ("Springfield, MO;Joplin, MO"). WARM_AREAS_PER_RUN=0 turns it off.
+WARM_AREAS_PER_RUN = int(os.environ.get("WARM_AREAS_PER_RUN", "6"))
+WARM_RADIUS_MI = int(os.environ.get("WARM_RADIUS_MI", "50"))
+_WARM_POS_KEY = "bidcaller:warm_areas_pos"
+_GO_LOCATIONS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                             "curbcall_netlify_v4", "go_locations.json")
+
+
+def _warm_area_list():
+    extra = [a.strip() for a in os.environ.get("WARM_EXTRA_AREAS", "").split(";") if a.strip()]
+    try:
+        with open(_GO_LOCATIONS, encoding="utf-8") as f:
+            towns = list((json.load(f) or {}).values())
+    except Exception:
+        towns = []
+    seen, out = set(), []
+    for a in extra + towns:
+        k = str(a).strip().lower()
+        if k and k not in seen:
+            seen.add(k)
+            out.append(str(a).strip())
+    return out
+
+
+def _run_warm_areas(n=None):
+    """Scan the next n outreach towns (one per call by default, so a call
+    stays well inside the server's request timeout; the workflow loops).
+    WARM_AREAS_PER_RUN caps n, and 0 turns the job off."""
+    try:
+        n = 1 if n is None else max(0, int(n))
+    except (TypeError, ValueError):
+        n = 1
+    n = min(n, WARM_AREAS_PER_RUN)
+    areas = _warm_area_list()
+    if not n or not areas:
+        return {"ok": True, "scanned": 0, "areas": len(areas)}
+    try:
+        pos = int(kv_backend.get(_WARM_POS_KEY, 0) or 0)
+    except Exception:
+        pos = 0
+    done, kept, failed = [], 0, []
+    for i in range(min(n, len(areas))):
+        area = areas[(pos + i) % len(areas)]
+        try:
+            outcome = _perform_scan(area, WARM_RADIUS_MI)
+            done.append(area)
+            kept += int((outcome or {}).get("total_bids") or 0)
+        except Exception as ex:
+            failed.append(area)
+            print(f"[warm] scan failed for {area}: {ex}", flush=True)
+    kv_backend.set(_WARM_POS_KEY, (pos + min(n, len(areas))) % len(areas))
+    return {"ok": True, "scanned": len(done), "bids": kept, "failed": failed, "areas": len(areas)}
+
+
+@app.route("/run-warm-areas", methods=["POST"])
+def run_warm_areas():
+    """Twice weekly. Scans a few outreach towns so /bids-near has their work."""
+    data = request.get_json(force=True, silent=True) or {}
+    token = data.get("token") or request.headers.get("X-Cron-Secret", "")
+    if not CRON_SECRET or not hmac.compare_digest(token, CRON_SECRET):
+        return jsonify({"ok": False, "reason": "unauthorized"}), 403
+    result = _run_warm_areas(data.get("n"))
+    if result.get("ok"):
+        _cron_beat("warm-areas")
     return jsonify(result), (200 if result.get("ok") else 500)
 
 
