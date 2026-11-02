@@ -7321,19 +7321,39 @@ _state_sources_cache = {"at": 0.0, "rows": None}
 # Tyronza and Alma, two of which have no bid page of their own anywhere.
 # Read with a plain parser, not a model: ARDOT's robots.txt allows search and
 # reference use and says nothing either way about model input.
+#
+# Missouri's is a table on MoDOT's site that every city and county letting
+# federal-aid work is required to post to: 18 open concrete-relevant jobs the
+# day it was added. modot.org's robots.txt allows the page.
+#
+# {state: [(url, kind)]}; kind names the reader in
+# bid_sources.LOCAL_NOTICE_PARSERS.
 LOCAL_NOTICE_SOURCES = {
-    "AR": "https://ardot.gov/divisions/local-programs/currently-advertised-local-projects/",
+    "AR": [("https://ardot.gov/divisions/local-programs/currently-advertised-local-projects/",
+            "local_notices")],
+    "MO": [("https://www.modot.org/projects-be-let-others", "lpa_table")],
 }
 # Towns named on those pages, geocoded once per process.
 _LOCAL_NOTICE_GEO = {}
 
 
 def _place_local_notice(grouped, row, center, radius, city_coords=None, stats=None):
-    """Place a town's own notice from a state page at that town."""
+    """Place a town's own notice from a state page at that town.
+
+    Open-or-not is decided before any geocoding: Missouri's table keeps
+    hundreds of past notices, and looking up each of their towns would spend
+    a scan's whole budget on work nobody can bid.
+    """
     def _count(reason):
         if stats is not None:
             stats[reason] = stats.get(reason, 0) + 1
 
+    bid = {k: row[k] for k in ("title", "scope", "url", "deadline", "status",
+                               "source", "documents", "agency") if k in row}
+    _apply_deadline_status(bid)
+    if not _is_open_bid(bid):
+        _count("state_letting_already_held")
+        return None
     st = (row.get("state") or center.get("state") or "").upper()
     point, label = None, ""
     if row.get("county"):
@@ -7343,6 +7363,9 @@ def _place_local_notice(grouped, row, center, radius, city_coords=None, stats=No
         town = row["town"]
         known = bid_portals._coords().get((town, st))
         point = known or _city_coords(town, st, _LOCAL_NOTICE_GEO)
+        if not point and town.lower().endswith(" city"):
+            # "Odessa City", "St. Louis City": the place is the name before it.
+            point = _city_coords(town[:-5].strip(), st, _LOCAL_NOTICE_GEO)
         label = town if st == center.get("state") else "%s, %s" % (town, st)
     if not point:
         _count("state_row_unplaceable")
@@ -7351,13 +7374,7 @@ def _place_local_notice(grouped, row, center, radius, city_coords=None, stats=No
     if miles > radius:
         _count("out_of_radius")
         return None
-    bid = {k: row[k] for k in ("title", "scope", "url", "deadline", "status",
-                               "source", "documents", "agency") if k in row}
     bid["miles"] = int(round(miles))
-    _apply_deadline_status(bid)
-    if not _is_open_bid(bid):
-        _count("state_letting_already_held")
-        return None
     bucket = grouped.setdefault(label, [])
     key = _bid_dupe_key(bid)
     if key[0] and any(_bid_dupe_key(x) == key for x in bucket):
@@ -7579,8 +7596,8 @@ def _run_state_sources(center, radius, grouped, city_coords=None, stats=None):
     except Exception:
         states = [center.get("state", "").upper()]
     todo = [(st,) + sources[st] for st in states if st in sources]
-    todo += [(st, LOCAL_NOTICE_SOURCES[st], "local_notices")
-             for st in states if st in LOCAL_NOTICE_SOURCES]
+    todo += [(st, url, kind) for st in states
+             for url, kind in LOCAL_NOTICE_SOURCES.get(st, ())]
     if not todo:
         return 0
     kinds = {url: kind for _st, url, kind in todo}
@@ -7603,7 +7620,7 @@ def _run_state_sources(center, radius, grouped, city_coords=None, stats=None):
             page, outcome = _fetch_page(url, timeout=STATE_SOURCE_TIMEOUT)
             if outcome != "ok" or not page:
                 return st, url, None, outcome
-            if kind == "local_notices":
+            if kind in bid_sources.LOCAL_NOTICE_PARSERS:
                 return st, url, page, "ok"
             url, page = _resolve_state_listing(url, kind, page)
             return st, url, page, "ok"
@@ -7621,8 +7638,9 @@ def _run_state_sources(center, radius, grouped, city_coords=None, stats=None):
                     k = "state_fetch_%s" % outcome
                     stats[k] = stats.get(k, 0) + 1
                 continue
-            if kinds.get(url) == "local_notices":
-                rows = bid_sources.parse_local_agency_notices(page, st, url)
+            reader = bid_sources.LOCAL_NOTICE_PARSERS.get(kinds.get(url))
+            if reader:
+                rows = reader(page, st, url)
                 if stats is not None:
                     stats["state_local_rows_read"] = \
                         stats.get("state_local_rows_read", 0) + len(rows)

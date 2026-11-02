@@ -361,6 +361,8 @@ NICHE_TERMS = (
     "paving", "pavement", "ramp", "driveway", "apron", "trail", "greenway",
     "street improvement", "streetscape", "roadway", "road improvement",
     "intersection", "safe routes", "pedestrian", "walkway", "crosswalk",
+    # A shared-use path is a wide sidewalk, and most are poured concrete.
+    "shared use path", "shared-use path", "multi-use path", "multiuse path",
     "parking lot", "slab", "curb ramp", "transition plan", "cdbg",
     "public works", "infrastructure", "reconstruction", "resurfacing",
     # A street overlay programme is let with curb, gutter and ADA ramp repair
@@ -1806,6 +1808,137 @@ def parse_local_agency_notices(html, state, base_url=""):
             "documents": [{"name": "Bid notice", "url": href}],
         })
     return rows
+
+
+# Missouri's version is a table. A city or county letting federal-aid work
+# must post its bid opening on MoDOT's "Local Projects Administered by Cities
+# and Counties" page, one row per notice: status, "<District>, <Agency>,
+# <what the job is>", post date, revision date, letting date. Checked live
+# 2026-11-02 it held 18 open concrete-relevant jobs: sidewalks in Milan,
+# Bethany, Creve Coeur, Desloge, Linn Creek, trails in Ozark and Maryville.
+_LPA_ROW_RE = re.compile(r"(?s)<tr\b.*?</tr>", re.I)
+_LPA_CELL_RE = re.compile(r"(?s)<t[dh]\b[^>]*>(.*?)</t[dh]>", re.I)
+_LPA_HREF_RE = re.compile(r'href="([^"]+)"', re.I)
+_LPA_DISTRICT_RE = re.compile(r"^[A-Za-z. ]{1,20}\bDistrict$", re.I)
+_MONTHS = ("January February March April May June July August September "
+           "October November December").split()
+
+
+def _lpa_date(text):
+    m = re.match(r"\s*(\d{1,2})/(\d{1,2})/(\d{2}|\d{4})\s*$", str(text or ""))
+    if not m:
+        return ""
+    month, day, year = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    if year < 100:
+        year += 2000
+    if not (1 <= month <= 12 and 1 <= day <= 31):
+        return ""
+    return "%s %d, %d" % (_MONTHS[month - 1], day, year)
+
+
+def _lpa_agency(text):
+    """(kind, place, description) from "<District>, <Agency>, <job>"."""
+    parts = [p.strip() for p in str(text or "").split(",")]
+    if parts and _LPA_DISTRICT_RE.match(parts[0]):
+        parts = parts[1:]
+    if len(parts) >= 2 and parts[0].lower() == "st" and parts[1].lower().endswith("county"):
+        parts = ["St. " + parts[1]] + parts[2:]          # "St, Francois County"
+    if len(parts) < 2:
+        return "", "", ""
+    head, rest = parts[0], ", ".join(parts[1:]).strip()
+    head = re.sub(r"^re-?bid\s*[-:\u2013]\s*", "", head, flags=re.I)
+    m = re.match(r"(?:city|town|village) of (.+)$", head, re.I)
+    if m:
+        return "town", m.group(1).strip(), rest
+    m = re.match(r"(.+?) county$", head, re.I)
+    if m:
+        return "county", m.group(1).strip(), rest
+    # "Central District, New Bloomfield, construction of ..." names the town
+    # bare. Only a short capitalised name counts, so a job description that
+    # happens to sit first is not mistaken for a place.
+    if len(head.split()) <= 3 and head[:1].isupper() and not re.search(r"\d", head):
+        return "town", head, rest
+    return "", "", ""
+
+
+def _lpa_title(desc):
+    t = re.sub(r"\s+", " ", str(desc or "")).strip(" ,.;")
+    if t[:1].islower():
+        t = t[0].upper() + t[1:]
+    if len(t) > 110:
+        t = t[:110].rsplit(" ", 1)[0].rstrip(" ,;") + "…"
+    return t
+
+
+# A row with no letting date is kept only while its post is this fresh. The
+# table keeps old notices, and one posted in March 2025 with the letting date
+# left blank would otherwise read as open work forever.
+LPA_UNDATED_MAX_DAYS = 60
+
+
+def parse_lpa_table(html, state, base_url="", today=None):
+    """Rows from a state's table of locally administered bid notices.
+
+    Pure: text in, rows out, placed by the caller from "town" or "county".
+    An addendum row is added to the notice it amends, not shown on its own.
+    """
+    import datetime as _dt
+    today = today or _dt.date.today()
+    rows = []
+    for tr in _LPA_ROW_RE.findall(str(html or "")):
+        cells = [re.sub(r"\s+", " ", _unescape(_clean(c)).replace("\xa0", " ")).strip()
+                 for c in _LPA_CELL_RE.findall(tr)]
+        if len(cells) < 5 or cells[0].lower() == "status":
+            continue
+        status, text, letting = cells[0], cells[1], cells[4]
+        href = _LPA_HREF_RE.search(tr)
+        url = urllib.parse.urljoin(base_url, _unescape(href.group(1))) if href else base_url
+        if status.lower().startswith("addend"):
+            base = re.sub(r"\s*addendum\s*\d*\s*$", "", text, flags=re.I).strip()
+            for r in reversed(rows):
+                if r["notice"] == base:
+                    r["documents"].append({"name": status, "url": url})
+                    break
+            continue
+        kind, place, desc = _lpa_agency(text)
+        if not place or not desc:
+            continue
+        title = _lpa_title(desc)
+        if not looks_relevant(title, desc):
+            continue
+        deadline = _lpa_date(letting)
+        if not deadline:
+            posted = _lpa_date(cells[2])
+            try:
+                age = (today - _dt.datetime.strptime(posted, "%B %d, %Y").date()).days
+            except ValueError:
+                continue
+            if age > LPA_UNDATED_MAX_DAYS:
+                continue
+        rows.append({
+            "title": title,
+            "scope": desc[:1200],
+            "url": url,
+            "deadline": deadline,
+            "status": status_from_title(title) or "Open",
+            "agency": ("City of %s" % place) if kind == "town" else ("%s County" % place),
+            kind: place,
+            "state": str(state or "").upper(),
+            "source": "state_local",
+            "documents": [{"name": "Bid notice", "url": url}],
+            "notice": text,
+        })
+    for r in rows:
+        r.pop("notice", None)
+    return rows
+
+
+# Which reader a local-notices source uses. Keyed by the kind named in
+# license_server's LOCAL_NOTICE_SOURCES.
+LOCAL_NOTICE_PARSERS = {
+    "local_notices": parse_local_agency_notices,
+    "lpa_table": parse_lpa_table,
+}
 
 
 # ── Plan holders ────────────────────────────────────────────────────────────

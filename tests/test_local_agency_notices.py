@@ -17,7 +17,7 @@ import bid_sources  # noqa: E402
 import license_server as ls  # noqa: E402
 
 FIXTURE = os.path.join(ROOT, "data", "recall_fixtures", "ardot_local_projects.html")
-URL = ls.LOCAL_NOTICE_SOURCES["AR"]
+URL = ls.LOCAL_NOTICE_SOURCES["AR"][0][0]
 
 
 def page():
@@ -136,10 +136,88 @@ class ScanWiringTests(unittest.TestCase):
     def test_a_scan_elsewhere_does_not_fetch_it(self):
         with patch("license_server._state_sources", return_value={}), \
              patch("license_server._fetch_page") as f, \
-             patch("license_server.counties.states_within", return_value=["MO"]):
-            ls._run_state_sources({"lat": 38.6, "lon": -90.2, "state": "MO"}, 25, {}, {}, {})
+             patch("license_server.counties.states_within", return_value=["NE"]):
+            ls._run_state_sources({"lat": 41.25, "lon": -95.93, "state": "NE"}, 25, {}, {}, {})
         f.assert_not_called()
 
 
 if __name__ == "__main__":
     unittest.main()
+
+
+MO_FIXTURE = os.path.join(ROOT, "data", "recall_fixtures", "modot_local_projects.html")
+MO_URL = ls.LOCAL_NOTICE_SOURCES["MO"][0][0]
+
+
+def mo_rows(today=None):
+    import datetime
+    with open(MO_FIXTURE, encoding="utf-8") as f:
+        html = f.read()
+    return bid_sources.parse_lpa_table(html, "MO", MO_URL,
+                                       today=today or datetime.date(2026, 11, 2))
+
+
+class MissouriTableTests(unittest.TestCase):
+    """MoDOT's table of locally administered federal-aid bid notices."""
+
+    def by_place(self):
+        out = {}
+        for r in mo_rows():
+            out.setdefault(r.get("town") or (r.get("county") + " County"), []).append(r)
+        return out
+
+    def test_the_open_sidewalk_jobs_are_read(self):
+        got = self.by_place()
+        self.assertEqual(got["Creve Coeur"][0]["title"], "New Ballas Sidewalk Project")
+        self.assertEqual(got["Creve Coeur"][0]["deadline"], "November 19, 2026")
+        self.assertEqual(got["Desloge"][0]["title"], "Sidewalk improvements to N. Desloge Drive")
+        self.assertIn("Milan", got)
+        self.assertIn("Ozark", got)
+
+    def test_the_district_is_not_mistaken_for_the_agency(self):
+        """"NW District, City of Milan, ..." is Milan's job, not a district's."""
+        for r in mo_rows():
+            self.assertNotIn("district", (r.get("town") or r.get("county") or "").lower())
+
+    def test_a_bare_town_name_is_a_town(self):
+        """"Central District, New Bloomfield, construction of ...\""""
+        self.assertIn("New Bloomfield", self.by_place())
+
+    def test_the_split_county_name_is_rejoined(self):
+        """The table prints "St, Francois County"."""
+        self.assertIn("St. Francois County", self.by_place())
+
+    def test_addenda_join_their_notice(self):
+        nb = self.by_place()["New Bloomfield"][0]
+        self.assertEqual([d["name"] for d in nb["documents"]],
+                         ["Bid notice", "Addendum 1", "Addendum 2"])
+        self.assertFalse(any(r["title"].lower().startswith("addendum") for r in mo_rows()))
+
+    def test_a_shared_use_path_counts_as_this_trade(self):
+        self.assertIn("Kearney", self.by_place())
+
+    def test_other_trades_are_left_out(self):
+        titles = " ".join(r["title"] for r in mo_rows()).lower()
+        self.assertNotIn("flashing beacon", titles)
+
+    def test_an_old_undated_notice_is_dropped(self):
+        """Smith Park Trail was posted 3/30/25 with no letting date."""
+        self.assertFalse(any("Smith Park" in r["title"] for r in mo_rows()))
+
+    def test_entities_are_decoded(self):
+        for r in mo_rows():
+            self.assertNotIn("&amp;", r["title"])
+            self.assertNotIn("&nbsp;", r["title"])
+
+    def test_each_row_links_to_its_notice(self):
+        for r in mo_rows():
+            self.assertTrue(r["url"].startswith("https://www.modot.org/media/"), r["url"])
+
+    def test_closed_rows_are_dropped_before_any_geocoding(self):
+        """Hundreds of past notices sit in the table; geocoding each would
+        spend the scan's budget."""
+        closed = dict(mo_rows()[0], deadline="October 1, 2020")
+        with patch("license_server._city_coords") as geo:
+            ls._place_local_notice({}, closed, {"lat": 37.2, "lon": -93.3, "state": "MO"},
+                                   100, {}, {})
+        geo.assert_not_called()
