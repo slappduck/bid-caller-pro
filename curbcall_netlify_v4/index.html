@@ -739,6 +739,8 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
     function check(){
       var loc=(zip.value||"").trim();
       if(!loc){out.textContent="Enter a ZIP code or city first.";return;}
+      // Carried into the app's setup, so "Start free" doesn't ask again.
+      try{localStorage.setItem("landing_loc",JSON.stringify(loc.slice(0,60)));}catch(e){}
       var radius=document.getElementById("cov-radius").value;
       btn.disabled=true;
       // The backend sleeps on a free plan, so a cold start really can take

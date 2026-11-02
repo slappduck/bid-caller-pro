@@ -2632,6 +2632,14 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await page.waitForTimeout(1500);
     const cov = await page.textContent("#onb-cov");
     check("setup shows the open bids already found there", /23 agencies posting bids within \d+ miles · 7 open bids found there lately/.test(cov), cov);
+    // The ZIP from the landing page, or from the Monday email's link, starts setup.
+    await page.evaluate(() => { localStorage.setItem("landing_loc", JSON.stringify("64801")); document.getElementById("onb-loc").value = ""; showOnboarding(); });
+    check("setup starts from the ZIP typed on the landing page", (await page.inputValue("#onb-loc")) === "64801");
+    check("...and it survives the account check at sign-in", await page.evaluate(() => DEVICE_KEYS.has("landing_loc")));
+    await page.goto(`${BASE}/app.html?loc=65806`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => { localStorage.removeItem("landing_loc"); window.isOffline = () => false; showOnboarding(); });
+    check("...or from the bid email's link", (await page.inputValue("#onb-loc")) === "65806");
     await page.evaluate(() => showApp());
     await page.waitForTimeout(600);
     const shared = await page.evaluate(async () => {

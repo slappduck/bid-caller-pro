@@ -187,7 +187,7 @@ def digest_confirm():
                         f"sidewalk, curb and ADA ramp bids within {DIGEST_RADIUS_MI} miles of "
                         f"<b>{html_escape(rec['place'])}</b>. Each email has a one-click "
                         "unsubscribe.</p><p>Want them now, with the going rate and a target "
-                        f"price for each? <a style=\"color:#f59e0b;\" href=\"{SITE_URL}/app.html\">"
+                        f"price for each? <a style=\"color:#f59e0b;\" href=\"{SITE_URL}/app.html?loc={zip_code}\">"
                         "Try CurbCall Pro free for 7 days</a>.</p>")
 
 
@@ -226,7 +226,7 @@ def _bid_email_text(email, rec, rows):
     lines += ["",
               "Want the going rate for each one, a target price from what won, the bid form "
               "filled in, and a phone alert when an addendum drops? Try CurbCall Pro free "
-              f"for 7 days: {SITE_URL}/app.html",
+              f"for 7 days: {SITE_URL}/app.html?loc={rec.get('zip') or ''}",
               "",
               f"Concrete prices by state: {SITE_URL}/concrete-cost/index.html",
               "",

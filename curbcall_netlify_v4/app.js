@@ -179,6 +179,9 @@ const DEVICE_KEYS=new Set([
   // arriving, not the one who left, so clearing it here would throw away the
   // name they just typed.
   "pending_signup_name",
+  // The ZIP typed on the landing page moments before signing up, for
+  // setup to start from. Same reasoning: it belongs to the person arriving.
+  "landing_loc",
   // Ticked seconds ago by the person now signing in, and not yet posted to
   // the server. Clearing it here would silently lose the consent record for
   // the very account being created.
@@ -2443,6 +2446,15 @@ function showOnboarding(){
   if(sent)sent.style.display="none";
   document.getElementById("onboard-card").style.display="";
   renderOnbRadius();
+  // The place they already gave: the landing page's ZIP box, or ?loc= on a
+  // link from the Monday bid email. Asking twice loses people.
+  const loc=document.getElementById("onb-loc");
+  if(loc&&!loc.value){
+    let given="";
+    try{given=new URLSearchParams(location.search).get("loc")||"";}catch(e){}
+    given=String(given||store.get("landing_loc","")||"").trim().slice(0,60);
+    if(given){loc.value=given;onbCheckCoverage();}
+  }
   const co=document.getElementById("onb-co");
   if(co&&!co.value)co.value=companyProfile.name||"";
 }
