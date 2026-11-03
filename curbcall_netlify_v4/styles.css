@@ -436,6 +436,24 @@ body{font-family:var(--ui);background:radial-gradient(ellipse 120% 60% at 50% -1
 .pl-hist b{font-weight:700;}
 .pl-hist .h-won{color:var(--green);}
 .pl-hist .h-lost{color:var(--red);}
+.pl-yours{color:var(--text2);}
+/* Bid results, read from the agency's tabulation */
+.tab-box{border:1px solid var(--border);border-radius:var(--r-sm);padding:0.2rem 0.75rem 0.6rem;margin:0.6rem 0;}
+.tab-row{display:flex;justify-content:space-between;gap:0.75rem;padding:0.35rem 0;border-top:1px solid var(--border);font-size:var(--fs-sm);}
+.tab-row b{white-space:nowrap;}
+.tab-row.me{color:var(--amber);font-weight:700;}
+.tab-row em{font-style:normal;margin-left:0.3rem;}
+.pl-city{color:var(--text2);}
+/* Easy to miss: pay items a bid like this usually has that the lines don't */
+.miss-box{margin:0.6rem 0;border:1px solid var(--border);border-left:3px solid var(--amber);border-radius:var(--r-sm);padding:0.6rem 0.75rem;background:var(--surface);}
+.miss-h{font-size:var(--fs-sm);font-weight:700;color:var(--amber);margin-bottom:0.2rem;}
+.miss-row{display:flex;gap:0.75rem;align-items:center;justify-content:space-between;padding:0.45rem 0;border-top:1px solid var(--border);}
+.miss-h+.miss-row{border-top:0;}
+.miss-t b{display:block;font-size:var(--fs-sm);}
+.miss-t small{display:block;color:var(--text2);font-size:var(--fs-xs);margin-top:0.15rem;}
+.miss-act{display:flex;flex-direction:column;align-items:flex-end;gap:0.15rem;flex-shrink:0;}
+.miss-act .btn-ghost{min-height:44px;padding:0 1rem;}
+.miss-act .link-btn{min-height:32px;font-size:var(--fs-xs);}
 .past-bid{display:flex;justify-content:space-between;align-items:center;gap:0.6rem;padding:0.6rem 0;border-bottom:1px solid var(--border);}
 .past-bid b{color:var(--text);display:block;}
 .past-bid small{color:var(--text3);font-size:var(--fs-xs);}

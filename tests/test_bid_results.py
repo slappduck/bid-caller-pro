@@ -414,3 +414,34 @@ class CommittedResultsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CaltransTests(unittest.TestCase):
+    """Caltrans' cost data search: every bidder's unit price, by rank."""
+    ROW = ("<tr><td><input type=checkbox></td><td><a>{code}</a> - {desc}</td><td>{unit}</td><td>04</td>"
+           "<td>{qty}</td><td>${price}</td><td>$1.00</td><td>$1.00</td><td>01-07-2025</td>"
+           "<td><a>04-1Q7004</a></td><td>{rank}</td><td>M</td><td>TRO</td></tr>")
+
+    def page(self, rows):
+        return "<table>" + "".join(self.ROW.format(**r) for r in rows) + "</table>"
+
+    def test_rows_and_contracts(self):
+        rows = R.parse_ca_rows(self.page([
+            {"code": "731521", "desc": "MINOR CONCRETE (SIDEWALK)", "unit": "CY", "qty": "35", "price": "1020.00", "rank": 1},
+            {"code": "731521", "desc": "MINOR CONCRETE (SIDEWALK)", "unit": "CY", "qty": "35", "price": "1,100.00", "rank": 2},
+            {"code": "730070", "desc": "DETECTABLE WARNING SURFACE", "unit": "SQFT", "qty": "120", "price": "48.00", "rank": 1},
+            {"code": "730070", "desc": "DETECTABLE WARNING SURFACE", "unit": "SQFT", "qty": "120", "price": "52.00", "rank": 2}]))
+        self.assertEqual(rows[1], ("731521", "cu yd", "04", 35.0, 1100.0, "2025-01-07", "04-1Q7004", 2))
+        (c,) = R.ca_contracts(rows)
+        self.assertEqual(c["items"]["731521"], [35.0, [1020.0, 1100.0]])
+        # A cubic yard covers 9 sq yd at 4 in.: the per-area item cities use.
+        self.assertEqual(c["items"]["731521-SY"], [315.0, [113.33, 122.22]])
+        self.assertEqual(c["items"]["730070"], [120.0, [48.0, 52.0]])
+        self.assertEqual(len(c["bidders"]), 2)
+        self.assertEqual(R.check([c], ["2025-01-07"], totals=False), [])
+
+    def test_a_contract_missing_a_rank_is_dropped_not_guessed(self):
+        rows = [("730070", "sq ft", "04", 10.0, 40.0, "2025-01-07", "X", 1),
+                ("730070", "sq ft", "04", 10.0, 45.0, "2025-01-07", "X", 3)]
+        self.assertEqual(R.ca_contracts(rows), [])
+

@@ -1405,6 +1405,8 @@ function showApp(){
     // Push subscriptions can be rotated by the browser; re-register quietly.
     setTimeout(()=>{if("Notification"in window&&Notification.permission==="granted"&&store.get("push_on",false))subscribePush();},12000);
     setInterval(checkSavedBids,BID_WATCH_EVERY_MS/6);
+    setTimeout(checkBidResults,20000);
+    setInterval(checkBidResults,BID_WATCH_EVERY_MS/2);
   }
   // The map only ever got created inside detectLocation()'s geolocation
   // success callback — if a user denies the location prompt (extremely
@@ -3735,10 +3737,42 @@ function renderScanSummary(){
 // winning range is shown too -- the number a contractor pricing to win needs.
 const PRICE_DISTRICT_KEY="price_district";
 const RATE_THIN_BIDS=5;
-const AGENCY={MO:"MoDOT",FL:"FDOT",OR:"ODOT",MN:"MnDOT",OK:"ODOT",NC:"NCDOT",TX:"TxDOT",TN:"TDOT",IN:"INDOT",MT:"MDT",SD:"SDDOT",KY:"KYTC",KS:"KDOT",AR:"ARDOT",IA:"Iowa DOT",IL:"IDOT",NE:"NDOT"};
+const AGENCY={MO:"MoDOT",FL:"FDOT",OR:"ODOT",MN:"MnDOT",OK:"ODOT",NC:"NCDOT",TX:"TxDOT",TN:"TDOT",IN:"INDOT",MT:"MDT",SD:"SDDOT",KY:"KYTC",KS:"KDOT",AR:"ARDOT",IA:"Iowa DOT",IL:"IDOT",NE:"NDOT",CA:"Caltrans"};
 let rateIndex=null,rateIndexLoading=null;
 const rateData={},rateLoading={},rateRerenderQueued={};
-function agencyOf(d){return (d&&AGENCY[d.state])||`${(d&&d.state_name)||"State"} DOT`;}
+function agencyOf(d){return isNearby(d)?"nearby state":(d&&AGENCY[d.state])||`${(d&&d.state_name)||"State"} DOT`;}
+// A state with no prices of its own borrows what each item won for in the
+// nearest states with bid results (tools/build_nearby_rates.py). Always
+// labeled as theirs, never as this state's.
+function isNearby(d){return!!(d&&d.basis==="nearby");}
+// Items a state's own rates don't have, from its fill-in file. Each keeps
+// where it came from; the state's own items are never replaced.
+function mergeFillIns(d,nb){
+  if(!d||!nb||!nb.fill||!nb.cats)return d;
+  for(const [cat,code] of Object.entries(nb.cats)){
+    if(d.cats[cat]||!nb.items[code])continue;
+    d.cats[cat]=code;
+    d.items[code]={...nb.items[code],nearby:true,where:nb.items[code].where||nb.districts.STATEWIDE};
+    (d.jobs=d.jobs||{})[code]=(nb.jobs||{})[code]||[];
+    (d.wins=d.wins||{})[code]=(nb.wins||{})[code];
+    d.prices[code]=nb.prices[code];
+  }
+  return d;
+}
+function isFillIn(d,item){return!!(d&&d.items&&d.items[item]&&d.items[item].nearby);}
+// Prices that are winning bids, not every bid.
+function wonBasis(d){return!!(d&&(d.basis==="awarded"||d.basis==="nearby"));}
+// How new the prices are: the newest letting behind them, else the newest year.
+function pricesAsOf(d){
+  if(!d)return"";
+  const res=bidResults[d.state];
+  const last=d.through||(res&&(res.contracts||[]).reduce((m,c)=>(c.date||"")>m?c.date:m,""))||"";
+  if(last){
+    const t=new Date(last+"T12:00:00");
+    if(!isNaN(t))return`Updated monthly; newest letting ${t.toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"})}.`;
+  }
+  return d.years&&d.years.length?`Newest prices: ${ratePeriod(d,Math.max(...d.years))}.`:"";
+}
 function loadRateIndex(){
   if(rateIndex)return Promise.resolve(rateIndex);
   if(!rateIndexLoading){
@@ -3755,7 +3789,13 @@ function loadRates(st){
   if(rateData[st])return Promise.resolve(rateData[st]);
   if(!rateLoading[st]){
     rateLoading[st]=loadRateIndex()
-      .then(ix=>ix&&ix[st]?fetch(`/rates/${st.toLowerCase()}.json`).then(r=>r.ok?r.json():null):null)
+      // A state without its own rates may have its neighbors' (a 404 if not).
+      .then(ix=>fetch(ix&&ix[st]?`/rates/${st.toLowerCase()}.json`:`/rates/nearby/${st.toLowerCase()}.json`).then(r=>r.ok?r.json():null))
+      // A state's own rates may lack an item (Caltrans pays curb and gutter
+      // by the cubic yard): those come from nearby states, labeled as theirs.
+      .then(d=>d&&d.prices&&!isNearby(d)
+        ?fetch(`/rates/nearby/${st.toLowerCase()}.json`).then(r=>r.ok?r.json():null).catch(()=>null).then(nb=>mergeFillIns(d,nb))
+        :d)
       .then(d=>{if(d&&d.prices)rateData[st]=d;return rateData[st]||null;})
       // A network failure may be retried later; a state with no rates is not.
       .catch(()=>{delete rateLoading[st];return null;});
@@ -3835,8 +3875,29 @@ function quantile(sorted,q){
   const i=(sorted.length-1)*q,lo=Math.floor(i),hi=Math.ceil(i);
   return sorted[lo]+(sorted[hi]-sorted[lo])*(i-lo);
 }
+// [[value, weight]] -> the value where q of the weight lies below.
+function weightedQuantile(pairs,q){
+  const s=pairs.slice().sort((a,b)=>a[0]-b[0]);
+  const total=s.reduce((t,p)=>t+p[1],0);
+  let acc=0;
+  for(const [v,w] of s){acc+=w;if(acc>=q*total-1e-9)return v;}
+  return s.length?s[s.length-1][0]:NaN;
+}
 function winPrice(d,item,qty,district){
   if(!d||!item)return null;
+  // Borrowed prices carry every job behind them: sized like a state's own
+  // results, each source state counting the same however many jobs it let.
+  const jobs=(isNearby(d)||isFillIn(d,item))&&d.jobs&&d.jobs[item];
+  if(jobs&&jobs.length>=WIN_MIN){
+    const q=Number(qty)||0;
+    const sized=q?jobs.filter(r=>r[0]>=q/WIN_SPAN&&r[0]<=q*WIN_SPAN):[];
+    const use=sized.length>=WIN_MIN?sized:jobs;
+    const per={};use.forEach(r=>{per[r[2]]=(per[r[2]]||0)+1;});
+    const pairs=use.map(r=>[r[1],1/per[r[2]]]);
+    const where=(d.items[item]&&d.items[item].where)||d.districts.STATEWIDE;
+    return{mid:weightedQuantile(pairs,0.5),p25:weightedQuantile(pairs,0.25),p75:weightedQuantile(pairs,0.75),
+      n:use.length,basis:"won",where:`${use===sized?"similar-size ":""}state road jobs ${where}`,district:"STATEWIDE"};
+  }
   const res=bidResults[d.state];
   const dist=district&&district!=="STATEWIDE"?district:"";
   if(res&&res.contracts&&res.contracts.length){
@@ -3864,7 +3925,8 @@ function winPrice(d,item,qty,district){
   const dd=dist&&d.districts[dist]?dist:"STATEWIDE";
   const w=d.basis==="awarded"?null:latestWin(d,item,dd);
   if(w&&w.n>=3&&w.p25!=null&&w.p75!=null)
-    return{mid:(w.p25+w.p75)/2,p25:w.p25,p75:w.p75,n:w.n,basis:"won",where:`jobs, ${d.districts[dd]}`,district:dd};
+    return{mid:isNearby(d)?w.avg:(w.p25+w.p75)/2,p25:w.p25,p75:w.p75,n:w.n,basis:"won",
+      where:isNearby(d)?`state road jobs ${(d.items[item]&&d.items[item].where)||d.districts[dd]}`:`jobs, ${d.districts[dd]}`,district:dd};
   const r=latestRate(d,item,dd);
   if(r)return{mid:r.avg,p25:null,p75:null,n:r.bids,basis:d.basis==="awarded"?"won-avg":"bid-avg",where:d.districts[dd],district:dd};
   return null;
@@ -3897,11 +3959,11 @@ function rateRow(d,item,district,withTrend){
   // A state that doesn't publish how many bids lie behind a price (TN) gets
   // no count and no "few bids" flag rather than a made-up one.
   const thin=r.bids!=null&&r.bids<RATE_THIN_BIDS;
-  const win=d.basis==="awarded"?null:latestWin(d,item,district);
+  const win=wonBasis(d)?null:latestWin(d,item,district);
   const years=withTrend?Object.keys(d.prices[item][district]).sort():[];
   // An awarded-only state that prints a range (AR) prints it across winning
   // contract prices, so say so rather than let it read as every bid.
-  const awarded=d.basis==="awarded";
+  const awarded=wonBasis(d);
   const spread=r.low!=null&&r.high!=null
     ?`${awarded?"winning bids ":""}${fmtRate(r.low)}–${fmtRate(r.high)}${r.bids!=null?` · ${plural(r.bids,awarded?"contract":"bid")}`:""}`
     :`winning bids${r.bids!=null?` · ${plural(r.bids,"contract")}`:""}`;
@@ -3931,12 +3993,13 @@ function ratePeriod(d,year){
   return (d.periods&&(d.periods[String(year)]||d.periods.note))||String(year);
 }
 function rateFootnote(d,district){
+  if(isNearby(d))return`<div class="rate-note">No ${esc(d.state_name)} prices in the app yet, so these are what each item won for on state road jobs ${esc(d.districts.STATEWIDE)}, the nearest states with bid results. City jobs can run different. Use it as a benchmark, not a quote. ${esc(pricesAsOf(d))}</div>`;
   const y=Math.max(...d.years);
   const where=district==="STATEWIDE"?` across ${d.state_name}`:" in this district";
   const what=d.basis==="awarded"
     ?`Average winning prices on ${esc(agencyOf(d))} contracts${where}, ${esc(ratePeriod(d,y))}.`
     :`Averages of every bid ${esc(agencyOf(d))} received in ${y} on state highway jobs${where}.`;
-  return`<div class="rate-note">${what} City jobs can run different. Use it as a benchmark, not a quote.
+  return`<div class="rate-note">${what} City jobs can run different. Use it as a benchmark, not a quote. ${esc(pricesAsOf(d))}
     <a href="${esc(safeUrl(d.source_url)||"")}" target="_blank" rel="noopener noreferrer">Source: ${esc(d.source)}</a></div>`;
 }
 async function renderHomeRates(){
@@ -3945,10 +4008,10 @@ async function renderHomeRates(){
   const d=await loadRates(homeState());
   if(!d){card.style.display="none";return;}
   const district=priceDistrict(d);
-  card.innerHTML=`<div class="account-email hdr-ic" style="font-size:var(--fs-base);margin-bottom:0.5rem;"><svg class="icon-svg"><use href="#i-activity"/></svg>Going rates in ${esc(d.state_name)}</div>
+  card.innerHTML=`<div class="account-email hdr-ic" style="font-size:var(--fs-base);margin-bottom:0.5rem;"><svg class="icon-svg"><use href="#i-activity"/></svg>Going rates ${isNearby(d)?"near":"in"} ${esc(d.state_name)}</div>
     ${districtSelect(d,"home-rate-district")}
     ${d.headline.map(i=>rateRow(d,i,district,false)).join("")}
-    <button class="btn-ghost" id="home-rates-all" style="margin-top:0.6rem;">All ${Object.keys(d.items).length} items${d.years.length>1?` + ${d.years.length}-year trend`:""}</button>
+    <button class="btn-ghost" id="home-rates-all" style="margin-top:0.6rem;">All ${Object.keys(d.items).filter(i=>!isFillIn(d,i)).length} items${d.years.length>1?` + ${d.years.length}-year trend`:""}</button>
     ${rateFootnote(d,district)}`;
   card.style.display="";
   wireDistrictSelect(d,"home-rate-district",renderHomeRates);
@@ -3959,19 +4022,20 @@ async function openRates(st){
   const mc=document.getElementById("modal-content");
   st=st||ratesSheetState||homeState();
   const ix=await loadRateIndex();
-  if(!ix||!ix[st])st=ix?(Object.keys(ix).includes("MO")?"MO":Object.keys(ix)[0]):st;
+  // A state with only its neighbors' prices still opens on itself.
+  if((!ix||!ix[st])&&!(await loadRates(st)))st=ix?(Object.keys(ix).includes("MO")?"MO":Object.keys(ix)[0]):st;
   const d=await loadRates(st);
   if(!d){toast("Couldn't load prices right now");return;}
   ratesSheetState=d.state;
   await loadBidResults(d.state);
   const district=priceDistrict(d);
   // Most-bid items first: the ones with the most behind their number.
-  const items=Object.keys(d.items)
+  const items=Object.keys(d.items).filter(i=>!isFillIn(d,i))
     .map(i=>[i,latestRate(d,i,district)]).filter(([,r])=>r)
     .sort((a,b)=>(b[1].bids||0)-(a[1].bids||0)).map(([i])=>i);
   const states=Object.keys(ix||{}).sort();
   mc.innerHTML=`<div class="sheet-head"><h2>Going rates</h2>
-      <div class="sheet-sub"><span class="chip">${esc(agencyOf(d))} ${d.basis==="awarded"?"winning":"bid"} prices, ${
+      <div class="sheet-sub"><span class="chip">${esc(agencyOf(d))} ${wonBasis(d)?"winning":"bid"} prices, ${
         d.years.length>1?`${Math.min(...d.years)}–${Math.max(...d.years)}`:esc(ratePeriod(d,d.years[0]))}</span></div></div>
     ${states.length>1?`<select class="rate-district" id="rates-state" aria-label="State">${states.map(s=>
       `<option value="${esc(s)}"${s===d.state?" selected":""}>${esc(ix[s].name)}</option>`).join("")}</select>`:""}
@@ -4122,7 +4186,7 @@ function ballpark(b,d,district,width){
     curb:"curb",driveway:"driveway",gutter:"gutter",median:"median"})[c]||c;
   for(const q of quantities){
     const item=d.cats[q.cat],meta=item&&d.items[item];
-    const r=meta&&latestRate(d,item,district);
+    const r=meta&&(latestRate(d,item,district)||(meta.nearby?latestRate(d,item,"STATEWIDE"):null));
     if(!r){skipped.push(`${q.raw} ${meta?meta.name.toLowerCase():label(q.cat)}: no ${agencyOf(d)} price for ${meta?d.districts[district]:"that item"}`);continue;}
     const conv=toItemUnit(q,meta.unit,width);
     if(!conv){skipped.push(`${q.raw} ${meta.name.toLowerCase()}: can't convert to ${meta.unit}`);continue;}
@@ -4153,7 +4217,7 @@ function ballparkHTML(b,d,district){
   if(!est.lines.length&&!est.skipped.length)return"";
   const n=(x)=>Math.round(x).toLocaleString();
   const usesWidth=est.lines.some(l=>l.assumedWidth);
-  const avgWord=d.basis==="awarded"?"winning-bid averages":"averages";
+  const avgWord=isNearby(d)?"nearby winning prices":d.basis==="awarded"?"winning-bid averages":"averages";
   return`<div class="workspace-title" style="margin-top:1rem;">Ballpark — ${esc(d.districts[district])}, ${esc(ratePeriod(d,est.year||Math.max(...d.years)))} ${avgWord}</div>
     ${est.lines.map(l=>`<div class="rate-row">
       <div class="rate-main"><div class="rate-name">${esc(l.name)}</div>
@@ -4165,7 +4229,7 @@ function ballparkHTML(b,d,district){
     ${b.value?`<div class="rate-note">Posted value: <b>${esc(b.value)}</b></div>`:""}
     ${est.skipped.length?`<div class="rate-note">Not counted: ${est.skipped.map(esc).join("; ")}.</div>`:""}
     ${usesWidth?`<div class="rate-note est-width">Sidewalk width <input id="est-width" type="number" min="1" max="30" step="0.5" value="${esc(String(width))}" aria-label="Sidewalk width in feet"> ft</div>`:""}
-    <div class="rate-note">Only the quantities shown, at ${esc(agencyOf(d))}'s average ${d.basis==="awarded"?"winning ":""}bid. Removal, mobilization, traffic control and anything else the job needs aren't included.</div>`;
+    <div class="rate-note">Only the quantities shown, at ${isNearby(d)?`what each item won for on state road jobs ${esc(d.districts.STATEWIDE)}`:`${esc(agencyOf(d))}'s average ${d.basis==="awarded"?"winning ":""}bid`}. Removal, mobilization, traffic control and anything else the job needs aren't included.</div>`;
 }
 
 // ── Bid results: who bids this work, and what wins ──
@@ -4248,6 +4312,80 @@ function priceCheckHTML(l){
     ?`Won for ${money2(wp.mid)}/${unit} on ${wp.n} ${esc(wp.where)}${wp.p25!=null?` (most between ${money2(wp.p25)} and ${money2(wp.p75)})`:""}`
     :`${esc(agencyOf(d))} ${esc(wp.where)}: ${wp.basis==="won-avg"?"average winning bid":"average bid"} ${money2(wp.mid)}/${unit}`;
   return`${ref}${verdict?` ${verdict}`:""}`;
+}
+
+// ── Easy to miss ──
+// Pay items a bid like this usually has that these lines don't: domes on
+// curb ramps (MoDOT paid for them separately on every ramp job it let),
+// taking out the old concrete on a replacement, and anything the posting
+// names (mobilization, traffic control). A line the contractor adds
+// starts priced where the app can price it. When the lines are the
+// agency's own bid form, nothing can be added: the cost goes into the
+// other prices, and the note says so.
+const DOME_SQFT_PER_RAMP=10;   // 2 ft deep across a 5 ft ramp
+const MISS_MENTIONS=[
+  ["mobilization",/\bmobiliz/i,"Mobilization","lump sum",/mobiliz/i],
+  ["traffic",/traffic control|maintenance of traffic|\bMOT\b|work zone/i,"Traffic control","lump sum",/traffic|\bMOT\b/i],
+  ["erosion",/erosion|sediment|silt fence|inlet protection/i,"Erosion control","lump sum",/erosion|sediment|silt/i],
+  ["restoration",/\bsod(ding)?\b|seeding|turf restor|lawn restor/i,"Restoration, sod or seeding","sq yd",/sod|seed|restor/i],
+  ["testing",/\btesting\b|test cylinders|quality control testing/i,"Testing","lump sum",/test/i],
+];
+function easyToMiss(p,b,city){
+  const d=rateData[bidState(city,b)];
+  const lines=(p.lines||[]).filter(l=>(l.name||"").trim()||Number(l.qty));
+  const off=p.missOff||{},out=[];
+  const named=(re)=>lines.some(l=>re.test(l.name||""));
+  const form=!!(p.docInfo&&(p.docInfo.line_items||[]).length);
+  const rampCode=d&&d.cats.ramp,domeCode=d&&d.cats.domes;
+  const ramps=lines.filter(l=>(rampCode&&(l.item===rampCode||(l.area&&l.area.item===rampCode)))||/\bramps?\b/i.test(l.name||""));
+  const hasDomes=lines.some(l=>(domeCode&&l.item===domeCode&&domeCode!==rampCode)||/dome|detectable|warning (panel|surface)/i.test(l.name||""));
+  if(ramps.length&&!hasDomes&&!off.domes){
+    const count=ramps.filter(l=>l.unit==="each").reduce((t,l)=>t+(Number(l.qty)||0),0);
+    const meta=domeCode&&domeCode!==rampCode&&d.items[domeCode];
+    let why="Detectable warnings are required on every curb ramp, and many agencies pay for them as their own item.";
+    const res=meta&&bidResults[d.state];
+    if(res&&res.contracts){
+      const with_=res.contracts.filter(c=>c.items&&c.items[rampCode]);
+      const sep=with_.filter(c=>c.items[domeCode]).length;
+      if(with_.length>=WIN_MIN&&sep/with_.length>=0.6)why=`${agencyOf(d)} paid for them as their own item on ${sep} of ${with_.length} jobs with curb ramps.`;
+    }
+    const make=()=>{
+      if(!meta)return{name:"Detectable warning panel",unit:"each",qty:count||"",price:"",ref:null};
+      const per=meta.unit==="sq ft"?DOME_SQFT_PER_RAMP:meta.unit==="sq yd"?Math.round(DOME_SQFT_PER_RAMP/9*100)/100:1;
+      const qty=count?Math.round(count*per*10)/10:"",district=jobDistrict(d,city);
+      const wp=winPrice(d,domeCode,Number(qty)||0,district);
+      return{name:meta.name,unit:meta.unit,qty,price:startPrice(wp),ref:null,item:domeCode,st:d.state,dist:district,
+        note:count&&meta.unit!=="each"?`About ${DOME_SQFT_PER_RAMP} sq ft a ramp (2 ft deep across a 5 ft ramp). Check the plans.`:""};
+    };
+    out.push({key:"domes",name:"Truncated domes on the ramps",why,make});
+  }
+  const text=`${b.title||""} ${b.scope||""}`;
+  if(/\b(replac|reconstruct|remov|tear[- ]?out|rehab)/i.test(text)&&!named(/remov|demo|break[- ]?out|tear[- ]?out/i)&&!off.removal){
+    const sqyd=lines.reduce((t,l)=>t+(l.unit==="sq yd"?Number(l.qty)||0:l.unit==="sq ft"?(Number(l.qty)||0)/9:0),0);
+    out.push({key:"removal",name:"Taking out the old concrete",
+      why:"The posting says the work replaces what's there. Removal is often its own line.",
+      make:()=>{
+        const code=d&&d.cats.removal,meta=code&&d.items[code];
+        if(!meta||!/^sq (yd|ft)$/.test(meta.unit))return{name:"Remove existing concrete",unit:"sq yd",qty:sqyd?Math.round(sqyd*10)/10:"",price:"",ref:null,
+          note:"The app has no winning prices for removal here. Enter your own."};
+        const qty=sqyd?Math.round(sqyd*(meta.unit==="sq ft"?9:1)*10)/10:"",district=jobDistrict(d,city);
+        return{name:meta.name,unit:meta.unit,qty,price:startPrice(winPrice(d,code,Number(qty)||0,district)),ref:null,item:code,st:d.state,dist:district};
+      }});
+  }
+  MISS_MENTIONS.forEach(([key,said,name,unit,have])=>{
+    if(off[key]||!said.test(text)||named(have))return;
+    out.push({key,name,why:`The posting mentions ${name.split(",")[0].toLowerCase()}.`,make:()=>({name,unit,qty:unit==="lump sum"?1:"",price:"",ref:null})});
+  });
+  return out.map(x=>({...x,form}));
+}
+function easyToMissHTML(list){
+  if(!list.length)return"";
+  return`<div class="miss-box" id="miss-box"><div class="miss-h">Easy to miss</div>
+    ${list.map(x=>`<div class="miss-row"><div class="miss-t"><b>${esc(x.name)}</b>
+        <small>${esc(x.why)}${x.form?" It isn't on the bid form, so if it's needed, its cost goes into your other prices.":""}</small></div>
+      <div class="miss-act">${x.form?"":`<button class="btn-ghost" data-miss-add="${esc(x.key)}">Add</button>`}
+        <button class="link-btn" data-miss-off="${esc(x.key)}">${x.form?"Got it":"Not needed"}</button></div></div>`).join("")}
+  </div>`;
 }
 
 // ── Should you bid this? ──
@@ -4380,7 +4518,7 @@ function targetHTML(p,st){
     <div><span>Winning price for ${all?"these lines":`${t.n} of ${t.total} lines`}</span><b>${money0(t.low)}–${money0(t.high)}</b></div>
     ${t.mine&&!all?`<div><span>Your price on them, with markup</span><b>${money0(t.mine)}</b></div>`:""}
     ${t.mine?`<div class="target-v">You're ${verdict}.</div>`:""}
-    <div class="rate-note" style="margin-top:0.3rem;">The middle half of what each item won for on ${esc(agencyOf(t.d))} ${esc(t.wheres.join("; "))}, at your quantities. Lines without a state item aren't counted.</div>
+    <div class="rate-note" style="margin-top:0.3rem;">The middle half of what each item won for on ${isNearby(t.d)?"":`${esc(agencyOf(t.d))} `}${esc(t.wheres.join("; "))}, at your quantities. Lines without a state item aren't counted.</div>
   </div>`;
 }
 
@@ -4495,9 +4633,9 @@ function outcomeCardHTML(){
     <div class="account-email hdr-ic" style="font-size:var(--fs-base);margin-bottom:0.4rem;"><svg class="icon-svg"><use href="#i-activity"/></svg>How did these go?</div>
     <div class="account-status" style="margin-bottom:0.4rem;">Your answers build your win rate and price history.</div>
     ${ids.map(id=>{
-      const b=saved[id]||findBid(id),r=stateResultFor(b);
+      const b=saved[id]||findBid(id),r=stateResultFor(b),ts=bidPrep[id]?tabSentence(bidPrep[id]):"";
       return`<div class="outcome" data-oid="${esc(id)}">
-        <div class="outcome-t"><b>${esc(b.title||"Untitled bid")}</b><small>Due ${esc(b.deadline||"")}${r?` · MoDOT result: won by ${esc(r.bidders[0][0]||"the low bidder")} at ${money0(r.bidders[0][1])}, ${plural(r.bidders.length,"bidder")}`:""}</small></div>
+        <div class="outcome-t"><b>${esc(b.title||"Untitled bid")}</b><small>Due ${esc(b.deadline||"")}${ts?` · Results: ${esc(ts)}`:""}${r&&!ts?` · MoDOT result: won by ${esc(r.bidders[0][0]||"the low bidder")} at ${money0(r.bidders[0][1])}, ${plural(r.bidders.length,"bidder")}`:""}</small></div>
         <div class="outcome-b"><button class="btn-ghost" data-out="won">Won</button><button class="btn-ghost" data-out="lost">Lost</button><button class="btn-ghost" data-out="passed">Didn't bid</button></div>
       </div>`;}).join("")}
   </div>`;
@@ -4559,9 +4697,10 @@ function wireOutcomeCard(root){
       }
       reportOutcome(id,out,0);
       if(out==="lost"){
-        const b=saved[id]||findBid(id),r=stateResultFor(b);
+        const b=saved[id]||findBid(id),r=stateResultFor(b),tp=bidPrep[id]&&tabPlacement(bidPrep[id]);
+        const low=tp&&tp.low?tp.low.total:r?r.bidders[0][1]:0;
         row.innerHTML=`<div class="outcome-t"><b>What did the winning bid come in at?</b><small>Optional. It shows next to your price on similar jobs.</small></div>
-          <div class="outcome-b"><input class="input" data-win inputmode="decimal" placeholder="$ total" value="${r?esc(String(Math.round(r.bidders[0][1]))):""}"><button class="btn-ghost" data-save>Save</button></div>`;
+          <div class="outcome-b"><input class="input" data-win inputmode="decimal" placeholder="$ total" value="${low?esc(String(Math.round(low))):""}"><button class="btn-ghost" data-save>Save</button></div>`;
         row.querySelector("[data-save]").onclick=()=>{
           const v=Number(String(row.querySelector("[data-win]").value).replace(/[^0-9.]/g,""));
           if(v>0){const p=prepFor(id);p.result={winning_total:v,at:Date.now()};savePrep(id,(saved[id]&&saved[id]._city)||"");}
@@ -4573,6 +4712,138 @@ function wireOutcomeCard(root){
     });
   });
 }
+// ── The results, read when they're posted ──
+// Once a bid's deadline has passed, its posting is checked once a day for a
+// tabulation or award notice (server: result_docs on /bid-watch/check). When
+// one appears it's read (kind "results"): every bidder and total, and the
+// low bidder's unit prices. The contractor is told where they placed without
+// having to go look, the outcome card fills itself in, and Pricing compares
+// their lines with the winner's. The server keeps the winner's unit prices,
+// with no names, as city and county going rates for everyone (/city-prices).
+const RESULTS_KEY="results_watch",RESULTS_EVERY_MS=24*3600*1000,RESULTS_DAYS=75;
+let resultsWatch=store.get(RESULTS_KEY,{});
+let resultsRunning=false;
+function resultsCandidates(){
+  const ids=new Set([...Object.keys(saved),...Object.keys(bidPrep)]);
+  return[...ids].filter(id=>{
+    const b=saved[id]||findBid(id),url=safeUrl(b&&b.url);
+    if(!url||!/^https?:/i.test(url)||pipeline[id]==="passed")return false;
+    const dl=daysUntil(b);
+    if(dl==null||dl>=0||dl<-RESULTS_DAYS)return false;
+    const p=bidPrep[id];
+    if(p&&p.tab&&p.tab.is_results)return false;
+    return Date.now()-(resultsWatch[id]||0)>RESULTS_EVERY_MS;
+  });
+}
+function ordinal(n){const s=["th","st","nd","rd"],v=n%100;return n+(s[(v-20)%10]||s[v]||s[0]);}
+// Where the contractor placed: their company name among the bidders, else a
+// total within half a percent of the one they priced.
+function tabPlacement(p){
+  const t=p&&p.tab;
+  if(!t||!(t.bidders||[]).length)return null;
+  const priced=t.bidders.filter(x=>x.total>0);
+  if(!priced.length)return{n:t.bidders.length,low:null,rank:0};
+  const me=companyKey(companyProfile&&companyProfile.name);
+  let i=me.length>=4?priced.findIndex(x=>{const k=companyKey(x.name);return k&&(k===me||(k.length>=4&&(k.includes(me)||me.includes(k))));}):-1;
+  const mine=prepTotals(p).total;
+  if(i<0&&mine>0)i=priced.findIndex(x=>Math.abs(x.total-mine)/mine<0.005);
+  return{n:priced.length,low:priced[0],rank:i>=0?i+1:0,mine:i>=0?priced[i].total:0,
+    gap:i>0?(priced[i].total-priced[0].total)/priced[0].total:0};
+}
+function tabSentence(p){
+  const pl=tabPlacement(p);
+  if(!pl)return"";
+  if(!pl.low)return`${plural(pl.n,"bid")} received.`;
+  if(pl.rank===1)return`You were the low bidder of ${pl.n}${pl.n>1?`, ${money0(p.tab.bidders[1]&&p.tab.bidders[1].total?p.tab.bidders[1].total-pl.low.total:0)} under 2nd`:""}.`;
+  if(pl.rank>1)return`You placed ${ordinal(pl.rank)} of ${pl.n}, ${(pl.gap*100).toFixed(1)}% above ${pl.low.name} at ${money0(pl.low.total)}.`;
+  return`Low bid: ${pl.low.name} at ${money0(pl.low.total)}, of ${plural(pl.n,"bid")}.`;
+}
+async function checkBidResults(){
+  if(resultsRunning||isOffline()||!canAutoRead())return;
+  const ids=resultsCandidates().slice(0,10);
+  if(!ids.length)return;
+  resultsRunning=true;
+  try{
+    const urls=ids.map(id=>safeUrl((saved[id]||findBid(id)).url));
+    const token=await getSupabaseToken();
+    const r=await fetchRetry(SERVER+"/bid-watch/check",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,urls})},90000);
+    const d=await r.json();
+    if(!d||!d.ok)return;
+    for(let k=0;k<ids.length;k++){
+      const id=ids[k],cur=d.results&&d.results[urls[k]];
+      resultsWatch[id]=Date.now();
+      const docs=((cur&&cur.ok&&cur.result_docs)||[]).map(x=>safeUrl(x&&x.url)).filter(Boolean);
+      if(!docs.length)continue;
+      const b=saved[id]||findBid(id),city=(saved[id]&&saved[id]._city)||"";
+      const pp=placeParts(city);
+      try{
+        const rr=await fetchRetry(SERVER+"/bid-documents/read",{method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,kind:"results",
+            url:docs[0],urls:docs.slice(1,3),state:bidState(city,b),town:pp?pp.city:""})},120000);
+        const res=await rr.json();
+        if(!res||!res.ok||!res.is_results||!(res.bidders||[]).length)continue;
+        const p=prepFor(id);
+        p.tab={is_results:true,opened:res.opened||"",bidders:res.bidders,awarded_to:res.awarded_to||"",
+          items:(res.items||[]).slice(0,200),url:docs[0],at:Date.now()};
+        const pl=tabPlacement(p);
+        if(pl&&pl.low&&pipeline[id]==="lost"&&!(p.result&&p.result.winning_total))p.result={winning_total:pl.low.total,at:Date.now(),from:"tab"};
+        savePrep(id,city);
+        fireNotification(`Results are in: ${b.title||"your bid"}`,tabSentence(p));
+      }catch(e){}
+    }
+    store.set(RESULTS_KEY,resultsWatch);
+    if(document.getElementById("screen-home")&&document.getElementById("screen-home").classList.contains("active")&&typeof renderHome==="function")renderHome();
+  }catch(e){}
+  finally{resultsRunning=false;}
+}
+// The winner's unit price against the contractor's, line by line.
+function tabCompareHTML(p){
+  const t=p&&p.tab;
+  if(!t||!t.is_results)return"";
+  const pl=tabPlacement(p);
+  const rows=(t.items||[]).map(it=>{const i=lineForItem(p.lines||[],it);return i>=0?{it,l:p.lines[i]}:null;}).filter(Boolean)
+    .filter(x=>Number(x.l.price)>0);
+  const top=t.bidders.slice(0,6);
+  return`<details class="price-more tab-box" id="tab-box" open><summary>Bid results are in</summary>
+    <div class="rate-note" style="margin-top:0;">${esc(tabSentence(p))}${t.opened?` Opened ${esc(t.opened)}.`:""} <a href="${esc(t.url)}" target="_blank" rel="noopener noreferrer">The tabulation</a></div>
+    ${top.map((x,k)=>`<div class="tab-row${pl&&pl.rank===k+1?" me":""}"><span>${k+1}. ${esc(x.name)}${pl&&pl.rank===k+1?" (you)":""}</span><b>${x.total?money0(x.total):""}</b></div>`).join("")}
+    ${t.bidders.length>top.length?`<div class="rate-note">and ${t.bidders.length-top.length} more</div>`:""}
+    ${rows.length?`<div class="workspace-title" style="margin-top:0.6rem;">The winner's unit prices vs yours</div>
+      ${rows.map(({it,l})=>{const d=(Number(l.price)-it.unit_price)/it.unit_price;
+        return`<div class="tab-row"><span>${esc(splitItemNo(l.name).description||l.name)}</span><b>${money2(it.unit_price)} vs ${money2(l.price)} <em class="${d>0.02?"pc-hi":d<-0.02?"pc-lo":"pc-ok"}">${d>=0?"+":""}${(d*100).toFixed(0)}%</em></b></div>`;}).join("")}`:""}
+  </details>`;
+}
+// ── City and county going rates (server: /city-prices) ──
+const cityPrices={},cityPricesLoading={};
+function loadCityPrices(st){
+  st=String(st||"").toUpperCase();
+  if(!/^[A-Z]{2}$/.test(st))return Promise.resolve(null);
+  if(cityPrices[st])return Promise.resolve(cityPrices[st]);
+  if(!cityPricesLoading[st]){
+    cityPricesLoading[st]=fetch(`${SERVER}/city-prices?state=${st}`).then(r=>r.ok?r.json():null)
+      .then(d=>{if(d&&d.ok)cityPrices[st]=d.prices||{};return cityPrices[st]||null;})
+      .catch(()=>{delete cityPricesLoading[st];return null;});
+  }
+  return cityPricesLoading[st];
+}
+const CITY_MIN=3;
+function cityPriceLine(l,st){
+  const data=cityPrices[String(st||"").toUpperCase()];
+  if(!data||!l)return"";
+  const d=rateData[st];
+  let cat="";
+  if(d&&l.item)cat=Object.keys(d.cats||{}).find(c=>d.cats[c]===l.item)||"";
+  if(!cat)cat=nearestItem(String(l.name||""),false)||"";
+  if(/^sidewalk\d/.test(cat))cat="sidewalk";
+  const rows=(data[cat]||{})[l.unit];
+  if(!rows||rows.length<CITY_MIN)return"";
+  const q=Number(l.qty)||0;
+  const sized=q?rows.filter(r=>r[0]>=q/WIN_SPAN&&r[0]<=q*WIN_SPAN):[];
+  const use=sized.length>=CITY_MIN?sized:rows;
+  return`City and county jobs: won for ${money2(medianOf(use.map(r=>r[1])))}/${esc(l.unit)} on ${plural(use.length,use===sized?"similar-size job":"job")}`;
+}
+
 // On jobs lost with a recorded winning bid: how far above the winner you were.
 function lossGapHTML(){
   const gaps=[];
@@ -4746,6 +5017,7 @@ const STATE_CODES={alabama:"AL",alaska:"AK",arizona:"AZ",arkansas:"AR",californi
   "new jersey":"NJ","new mexico":"NM","new york":"NY","north carolina":"NC","north dakota":"ND",ohio:"OH",oklahoma:"OK",
   oregon:"OR",pennsylvania:"PA","rhode island":"RI","south carolina":"SC","south dakota":"SD",tennessee:"TN",texas:"TX",
   utah:"UT",vermont:"VT",virginia:"VA",washington:"WA","west virginia":"WV",wisconsin:"WI",wyoming:"WY"};
+const STATE_NAMES_BY_CODE=Object.fromEntries(Object.entries(STATE_CODES).map(([n,c])=>[c,n.replace(/\b\w/g,x=>x.toUpperCase())]));
 // {city, state} to search from: "Aurora, MO" is a town; "Oklahoma" from a
 // statewide search is only a state.
 function searchPlace(city,b){
@@ -4897,9 +5169,9 @@ async function openPrep(city,id,step){
   const b=findBid(id)||saved[id];
   if(!b){toast("That bid isn't available any more");return;}
   const st=bidState(city,b);
-  await Promise.all([loadRates(st),loadBidResults(st)]);
+  await Promise.all([loadRates(st),loadBidResults(st),loadCostData(),loadCityPrices(st)]);
   const p=prepFor(id);
-  if(!p.lines){p.lines=defaultPrepLines(b,city);p.linesFrom="ballpark";}
+  if(!p.lines){p.lines=withOwnPrices(defaultPrepLines(b,city),id);p.linesFrom="ballpark";}
   savePrep(id,city);
   // "checklist" is what the Steps tab was called before; a saved bid may
   // still remember it.
@@ -5077,7 +5349,7 @@ function renderAddendumReview(body,city,id,b,key){
     qc.forEach(c=>{if(c.line>=0){lines[c.line].qty=c.new_quantity;}});
     if(p.linesFrom==="ballpark")p.linesFrom="documents";
     const d=rateData[bidState(city,b)];
-    added.forEach(c=>lines.push(lineFromDocItem({...c,quantity:c.quantity},d,d&&jobDistrict(d,city))));
+    added.forEach(c=>lines.push(withOwnPrices([lineFromDocItem({...c,quantity:c.quantity},d,d&&jobDistrict(d,city))],id)[0]));
     const drop=new Set(rm.map(c=>c.line).filter(i=>i>=0));
     p.lines=lines.filter((l,i)=>!drop.has(i));
     (p.addendaApplied=p.addendaApplied||{})[key]=Date.now();
@@ -5218,7 +5490,7 @@ async function preReadBid(city,id){
     if(p.docInfo&&p.docInfo.read_at)return;
     const st=bidState(city,b);
     await Promise.all([loadRates(st),loadBidResults(st)]);
-    if(!p.lines){p.lines=defaultPrepLines(b,city);p.linesFrom="ballpark";savePrep(id,city);}
+    if(!p.lines){p.lines=withOwnPrices(defaultPrepLines(b,city),id);p.linesFrom="ballpark";savePrep(id,city);}
     await autoPrepare(id,city,b);
     // The plants near the job, found after the job site is: the concrete
     // panel opens on them instead of a 30-second map search.
@@ -5310,7 +5582,7 @@ async function autoPrepare(id,city,b){
         if(items.length&&untouched){
           const d=rateData[bidState(city,b)];
           p.autoUndo={lines:before,linesFrom:beforeFrom||"ballpark"};
-          p.lines=items.map(it=>lineFromDocItem(it,d,d&&jobDistrict(d,city)));
+          p.lines=withOwnPrices(items.map(it=>lineFromDocItem(it,d,d&&jobDistrict(d,city))),id);
           p.linesFrom="documents";
           filled.push(plural(items.length,"line item"));
         }
@@ -5762,6 +6034,36 @@ function finishDate(ntp,completion){
   else while(n>0){out.setDate(out.getDate()+1);if(out.getDay()%6)n--;}
   return out;
 }
+// ── How fast the crew really was ──
+// One question when a won job is done: how many crew days it took. The
+// days the contractor's own production rates predicted for its lines,
+// against that, says whether those rates are right, and one tap scales them
+// so the next bid is costed at the crew's real pace.
+const PACE_KEYS=["sf_day","lf_day","ea_day"];
+function jobPace(p,j){
+  const actual=Number(j&&j.days)||0;
+  if(!(actual>0))return null;
+  const predicted=(p.lines||[]).reduce((t,l)=>{const lc=lineCost(l,p);return t+(lc?lc.days:0);},0);
+  if(!(predicted>0))return null;
+  return{actual,predicted,ratio:predicted/actual};
+}
+function jobPaceHTML(p,j){
+  const pace=jobPace(p,j);
+  let verdict="";
+  if(pace){
+    const pct=Math.round(Math.abs(pace.ratio-1)*100);
+    const said=`At your production rates this job comes to ${pace.predicted.toFixed(1)} crew days; it took ${pace.actual}.`;
+    if(pace.ratio<0.33||pace.ratio>3)verdict=`<div class="rate-note">${said} That's far off, so check the days (or the job had work the lines don't show) before changing anything.</div>`;
+    else if(pct<8)verdict=`<div class="rate-note">${said} Your rates are right on.</div>`;
+    else verdict=`<div class="rate-note">${said} Your crew is about <b>${pct}% ${pace.ratio>1?"faster":"slower"}</b> than your rates say${j.paceApplied?". Rates updated.":"."}</div>
+      ${j.paceApplied?"":`<button class="btn-ghost" id="jb-pace-use">Update my production rates to match</button>`}`;
+  }
+  return`<div class="job-card"><div class="workspace-title">When the work is done</div>
+    <div class="rate-note" style="margin-top:0;">How many working days did your crew spend on it? It's checked against your production rates, so the next bid is costed at your crew's real pace.</div>
+    <div class="job-row"><span>Crew days on the job</span><input type="number" class="input" id="jb-days" min="0.5" step="0.5" inputmode="decimal" value="${esc(String(j.days||""))}"></div>
+    ${verdict}
+  </div>`;
+}
 function renderJob(body,city,id,b){
   const p=prepFor(id),j=jobFor(id),info=p.docInfo||{},i=bidInfo();
   const total=contractTotal(p);
@@ -5790,8 +6092,23 @@ function renderJob(body,city,id,b){
       ${info.completion?`<div class="rate-note">Time allowed: ${esc(info.completion)}${fin?`. <b>Finish by ${esc(fin.toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"}))}.</b>`:""}</div>`:""}
       ${info.prevailing_wage?`<div class="rate-note">Wages: ${esc(info.prevailing_wage)}</div>`:""}
       ${info.testing?`<div class="rate-note">Testing: ${esc(info.testing)}</div>`:""}
-    </div>`;
+    </div>
+    ${jobPaceHTML(p,j)}`;
   const reopen=()=>renderJob(body,city,id,b);
+  const jd=document.getElementById("jb-days");
+  if(jd)jd.onchange=()=>{const v=Number(jd.value);j.days=v>0?v:"";saveJobs();reopen();};
+  const ju=document.getElementById("jb-pace-use");
+  if(ju)ju.onclick=()=>{
+    const pace=jobPace(p,j);if(!pace)return;
+    const info={...bidInfo()},c=myCosts();
+    info.costs={...(info.costs||{})};
+    PACE_KEYS.forEach(k=>{info.costs[k]=Math.round(c[k]*pace.ratio*(k==="ea_day"?10:1))/(k==="ea_day"?10:1);});
+    companyProfile.bid_info=info;store.set("company_profile",companyProfile);
+    if(currentUser)pushCompanyProfile();
+    j.paceApplied=Date.now();saveJobs();
+    toast("Your production rates are updated. Every bid's costs use them now.");
+    reopen();
+  };
   body.querySelectorAll("[data-aw]").forEach(x=>x.onchange=()=>{(j.award.checks=j.award.checks||{})[x.dataset.aw]=x.checked;saveJobs();reopen();});
   document.getElementById("jb-ntp").onchange=(e)=>{j.award.ntp=e.target.value;saveJobs();reopen();};
 }
@@ -6135,7 +6452,7 @@ async function renderDocResult(body,city,id,b,doc,info,fresh){
   body.querySelectorAll("[data-open]").forEach(x=>x.onclick=()=>{const f=files[Number(x.dataset.open)];openBlob(f.blob,f.name);});
   const take=(replace)=>{
     const d=rateData[bidState(city,b)];
-    const lines=items.map(it=>lineFromDocItem(it,d,d&&jobDistrict(d,city)));
+    const lines=withOwnPrices(items.map(it=>lineFromDocItem(it,d,d&&jobDistrict(d,city))),id);
     p.lines=replace?lines:(p.lines||[]).filter(l=>(l.name||"").trim()||l.qty||l.price).concat(lines);
     p.linesFrom=replace?"documents":"you";
     if(!p.lines.length)p.lines.push({name:"",qty:"",unit:"",price:"",ref:null});
@@ -6171,6 +6488,11 @@ function bidTitleFor(id){
   const b=saved[id]||findBid(id);
   return (b&&b.title)||"Untitled bid";
 }
+// A price is the contractor's once they typed it, or once they stood behind
+// it: every price on a bid they submitted, won or lost. The app's starting
+// prices on a bid never sent are its guesses, not theirs, and are not learned.
+const OWN_STATUSES=["submitted","won","lost"];
+function isOwnPrice(id,l){return Number(l&&l.price)>0&&(!!l.mine||OWN_STATUSES.includes(pipeline[id]));}
 // key -> [{id, title, price, status, updated}], newest first.
 function priceHistory(excludeId){
   const h={};
@@ -6179,12 +6501,26 @@ function priceHistory(excludeId){
     const p=bidPrep[id];
     (p&&p.lines||[]).forEach(l=>{
       const price=Number(l.price),k=lineKey(l);
-      if(!k||!(price>0))return;
+      if(!k||!isOwnPrice(id,l))return;
       (h[k]=h[k]||[]).push({id,title:bidTitleFor(id),price,status:pipeline[id]||"",updated:p.updated||0});
     });
   }
   for(const k in h)h[k].sort((a,b)=>b.updated-a.updated);
   return h;
+}
+// New lines start at the contractor's latest price for the same item when
+// they have one: what they bid with beats what others won with. The line
+// says whose price it is, and the price check still compares it to winners.
+function withOwnPrices(lines,id){
+  const h=priceHistory(id);
+  (lines||[]).forEach(l=>{
+    const x=h[lineKey(l)]&&h[lineKey(l)][0];
+    if(!x)return;
+    l.price=x.price;l.yours=x.title;
+    // A ramp's note says how its price was worked out; the price is theirs now.
+    if(l.area)delete l.note;
+  });
+  return lines;
 }
 function historyHint(hist){
   if(!hist||!hist.length)return"";
@@ -6213,7 +6549,7 @@ function renderPastBidPicker(body,city,id,b){
     const src={};
     (bidPrep[btn.dataset.prices].lines||[]).forEach(l=>{const k=lineKey(l);if(k&&Number(l.price)>0)src[k]=Number(l.price);});
     let n=0;
-    (p.lines||[]).forEach(l=>{const k=lineKey(l);if(k&&src[k]!=null){l.price=src[k];n++;}});
+    (p.lines||[]).forEach(l=>{const k=lineKey(l);if(k&&src[k]!=null){l.price=src[k];l.mine=true;delete l.yours;n++;}});
     if(n)p.linesFrom="you";
     savePrep(id,city);
     toast(n?`Copied ${plural(n,"price")}`:"No lines here match that bid");
@@ -6289,7 +6625,8 @@ function lineItemSelect(l,i,d){
   const items=pickableItems(d);
   return`<select class="input pl-pick" data-pick="${i}" aria-label="Item">
       <option value=""${cur===""?" selected":""}>Choose an item…</option>
-      ${items.length?`<optgroup label="${esc(agencyOf(d))} items">${items.map(c=>opt("s:"+c,`${d.items[c].name} (${d.items[c].unit})`)).join("")}</optgroup>`:""}
+      ${items.some(c=>!isFillIn(d,c))?`<optgroup label="${esc(agencyOf(d))} items">${items.filter(c=>!isFillIn(d,c)).map(c=>opt("s:"+c,`${d.items[c].name} (${d.items[c].unit})`)).join("")}</optgroup>`:""}
+      ${items.some(c=>isFillIn(d,c))?`<optgroup label="From nearby states">${items.filter(c=>isFillIn(d,c)).map(c=>opt("s:"+c,`${d.items[c].name} (${d.items[c].unit})`)).join("")}</optgroup>`:""}
       <optgroup label="Other work">${EXTRA_LINES.map(([n,u])=>opt("x:"+n,`${n} (${u})`)).join("")}</optgroup>
       <option value="custom"${cur==="custom"?" selected":""}>Other (type it)</option>
     </select>
@@ -6303,7 +6640,8 @@ function applyLineChoice(l,v,d){
     const district=l.dist||priceDistrict(d),r=latestRate(d,code,district);
     const wp=winPrice(d,code,Number(l.qty)||0,district);
     // A price already typed is the contractor's; only an empty one is filled.
-    const fill=!Number(l.price)||l.auto||(l.ref&&Number(l.price)===Math.round(l.ref*100)/100);
+    const fill=!Number(l.price)||l.auto||l.yours||(l.ref&&Number(l.price)===Math.round(l.ref*100)/100);
+    delete l.yours;
     Object.assign(l,{name:meta.name,unit:meta.unit,item:code,st:d.state,ref:r?r.avg:null,dist:district});
     if(fill&&(wp||r))l.price=startPrice(wp)||Math.round(r.avg*100)/100;
   }else if(v.startsWith("x:")){
@@ -6331,7 +6669,36 @@ const COST_FIELDS=[["crew","Crew size","people"],["wage","Labor cost per hour, w
   ["sf_day","Sidewalk and slabs placed per day","sq ft"],["lf_day","Curb and gutter placed per day","ft"],
   ["ea_day","ADA ramps per day","each"],["mat_sf","Base, forms and rebar per sq ft","$"],["mat_lf","Forms and base per ft of curb","$"],
   ["curb_cy_ft","Concrete per ft of curb and gutter","cu yd"],["ramp_cy","Concrete per ramp","cu yd"],["overhead","Overhead","%"]];
-function myCosts(){const c=(bidInfo().costs)||{};return{...COST_DEFAULTS,...c};}
+// Local costs (tools/build_cost_data.py, refreshed monthly): cement
+// masons' median pay in each state and the national ready-mix price trend,
+// both from the Bureau of Labor Statistics. Until the contractor enters
+// their own labor cost, it starts at their state's pay plus LABOR_BURDEN for
+// payroll taxes, workers' comp and insurance.
+const LABOR_BURDEN=1.35;
+let costData=null,costDataLoading=null;
+function loadCostData(){
+  if(costData)return Promise.resolve(costData);
+  if(!costDataLoading){
+    costDataLoading=fetch("/rates/costs.json").then(r=>r.ok?r.json():null)
+      .then(d=>{costData=d&&d.labor?d:null;if(!costData)costDataLoading=null;return costData;})
+      .catch(()=>{costDataLoading=null;return null;});
+  }
+  return costDataLoading;
+}
+function localWage(st){
+  const w=costData&&costData.labor&&(costData.labor.by_state||{})[String(st||"").toUpperCase()];
+  return w&&w.median>0?{...w,st:String(st).toUpperCase(),loaded:Math.round(w.median*LABOR_BURDEN)}:null;
+}
+function readyMixTrend(){
+  const r=costData&&costData.ready_mix;
+  if(!r||typeof r.change_12m!=="number"||!r.month)return"";
+  const ch=r.change_12m;
+  return ch===0?"flat over the past year nationally":`${ch>0?"up":"down"} ${Math.abs(ch)}% over the past year nationally`;
+}
+function myCosts(){
+  const c=(bidInfo().costs)||{},lw=localWage(homeState());
+  return{...COST_DEFAULTS,...(lw?{wage:lw.loaded}:{}),...c};
+}
 function costsAreMine(){return!!(bidInfo().costs&&Object.keys(bidInfo().costs).length);}
 // The concrete price this bid is costed at: a quote logged on it, else the
 // middle of the typical range.
@@ -6371,6 +6738,8 @@ function costsEditorHTML(){
   const c=myCosts();
   return`<details class="rm-log" id="cost-edit"><summary>${costsAreMine()?"Your costs":"Set your costs (now using starting guesses)"}</summary>
     <div class="rate-note" style="margin-top:0.3rem;">Used on every bid to show what it makes you. Saved with your bid details.</div>
+    ${(()=>{const own=(bidInfo().costs||{}).wage,lw=localWage(homeState());
+      return!own&&lw?`<div class="rate-note">Labor starts at ${money0(lw.loaded)}/hr: cement masons in ${esc(STATE_NAMES_BY_CODE[lw.st]||lw.st)} earn a median ${money2(lw.median)}/hr (U.S. Bureau of Labor Statistics, ${esc(String(lw.year))}), plus about ${Math.round((LABOR_BURDEN-1)*100)}% for payroll taxes, workers' comp and insurance. Change it to your real cost.</div>`:"";})()}
     <div class="cost-grid">${COST_FIELDS.map(([k,label,u])=>`<label><span>${esc(label)}</span>
       <span class="cost-in">${u==="$"?"$":""}<input class="input" inputmode="decimal" data-cost-k="${k}" value="${esc(String(c[k]))}">${u&&u!=="$"?` ${esc(u)}`:""}</span></label>`).join("")}</div>
   </details>`;
@@ -6472,7 +6841,7 @@ function renderTakeoffReview(body,city,id,b){
   document.getElementById("to-again").onclick=()=>renderTakeoff(body,city,id,b);
   const take=(replace)=>{
     const d=rateData[bidState(city,b)];
-    const lines=t.items.map(it=>({...lineFromDocItem(it,d,d&&jobDistrict(d,city)),note:`Measured from the plans: ${it.basis}. Check it.`}));
+    const lines=withOwnPrices(t.items.map(it=>lineFromDocItem(it,d,d&&jobDistrict(d,city))),id).map((l,i)=>({...l,note:`Measured from the plans: ${t.items[i].basis}. Check it.`}));
     p.lines=replace?lines:(p.lines||[]).filter(l=>(l.name||"").trim()||l.qty||l.price).concat(lines);
     p.linesFrom=replace?"documents":"you";
     savePrep(id,city);back();
@@ -6496,15 +6865,19 @@ function renderPrepPricing(body,city,id,b){
         <button type="button" class="prep-x" data-del="${i}" aria-label="Delete line">×</button>
       </div>
       <small class="pl-ref" data-pc="${i}">${priceCheckHTML(l)}</small>
+      ${(()=>{const c=cityPriceLine(l,bidState(city,b));return c?`<small class="pl-ref pl-city">${c}</small>`:"";})()}
+      ${l.yours?`<small class="pl-ref pl-yours">Your price from ${esc(l.yours)}</small>`:""}
       ${l.note?`<small class="pl-ref rate-thin">${esc(l.note)}</small>`:""}
       ${historyHint(hist[lineKey(l)])}
     </div>`;
   const t=prepTotals(p);
   const rates=rateData[bidState(city,b)];
   const startNote=!rates?"Prices for this state aren't in the app yet. Enter your own."
-    :"Prices start at what each item won for on similar-size jobs near here. Change any number.";
+    :isNearby(rates)?`No ${esc(rates.state_name)} prices in the app yet, so prices start at what each item won for on state road jobs ${esc(rates.districts.STATEWIDE)}. Change any number to your own. ${esc(pricesAsOf(rates))}`
+    :`Prices start at what each item won for on similar-size jobs near here. Change any number. ${esc(pricesAsOf(rates))}`;
   const canRead=prepDocCandidates(b).length>0;
   const hasPast=pastPreparedBids(id).length>0;
+  const miss=easyToMiss(p,b,city);
   const wasRead=!!(p.docInfo&&p.docInfo.read_at);
   const mk=String(p.markup||0);
   const MK_CHOICES=["0","10","15","20"];
@@ -6516,10 +6889,12 @@ function renderPrepPricing(body,city,id,b){
       <div id="pt-target">${targetHTML(p,bidState(city,b))}</div>
       <div id="pt-profit">${profitSummaryHTML(p)}</div>
     </div>
+    ${tabCompareHTML(p)}
     ${wasRead?`<div class="rate-note">Lines read from ${esc(p.docInfo.source||"the bid form")}. <button class="link-btn" id="pl-read">Read again</button></div>`
       :`<button class="btn-primary" id="pl-read" style="margin:0.7rem 0 0.4rem;">${canRead?"Fill from the bid form":"Fill from a bid form you upload"}</button>`}
     <div class="rate-note" style="margin-top:0.2rem;">${startNote}</div>
     <div id="prep-lines">${p.lines.map(lineRow).join("")}</div>
+    ${easyToMissHTML(miss)}
     <div class="prep-add"><button class="btn-ghost" id="pl-add">+ Add line</button></div>
     <div class="mk-row">
       <span class="mk-label">Markup</span>
@@ -6559,12 +6934,14 @@ function renderPrepPricing(body,city,id,b){
     let v=inp.value;
     if(f==="qty"||f==="price")v=v.replace(/[^0-9.]/g,"");
     p.lines[i][f]=v;
+    if(f==="price"){p.lines[i].mine=true;delete p.lines[i].yours;}
     p.linesFrom="you";
     savePrep(id,city);refresh();
   });
   body.querySelectorAll("[data-pick]").forEach(sel=>sel.onchange=()=>{
     const i=Number(sel.dataset.pick);
     applyLineChoice(p.lines[i],sel.value,stRates);
+    if(!p.lines[i].mine)withOwnPrices([p.lines[i]],id);
     p.linesFrom="you";
     savePrep(id,city);openPrep(city,id,"pricing");
     if(sel.value==="custom")setTimeout(()=>{const inp=document.querySelector(`.prep-line[data-i="${i}"] .pl-name`);if(inp)inp.focus();},0);
@@ -6573,6 +6950,18 @@ function renderPrepPricing(body,city,id,b){
     p.lines.splice(Number(x.dataset.del),1);
     p.linesFrom="you";
     if(!p.lines.length)p.lines.push({name:"",qty:"",unit:"",price:"",ref:null});
+    savePrep(id,city);openPrep(city,id,"pricing");
+  });
+  body.querySelectorAll("[data-miss-add]").forEach(x=>x.onclick=()=>{
+    const m=miss.find(y=>y.key===x.dataset.missAdd);
+    if(!m)return;
+    const blank=(l)=>!(l.name||"").trim()&&!Number(l.qty)&&!Number(l.price);
+    p.lines=p.lines.filter(l=>!blank(l)).concat(withOwnPrices([m.make()],id));
+    p.linesFrom="you";
+    savePrep(id,city);openPrep(city,id,"pricing");
+  });
+  body.querySelectorAll("[data-miss-off]").forEach(x=>x.onclick=()=>{
+    (p.missOff=p.missOff||{})[x.dataset.missOff]=true;
     savePrep(id,city);openPrep(city,id,"pricing");
   });
   const past=document.getElementById("pl-past");
@@ -6588,8 +6977,8 @@ function renderPrepPricing(body,city,id,b){
     savePrep(id,city);openPrep(city,id,"pricing");
   };
   document.getElementById("pl-reset").onclick=()=>{
-    if(!confirm("Replace your lines with the quantities from the posting, at what they win for?"))return;
-    p.lines=defaultPrepLines(b,city);p.linesFrom="ballpark";
+    if(!confirm("Replace your lines with the quantities from the posting?"))return;
+    p.lines=withOwnPrices(defaultPrepLines(b,city),id);p.linesFrom="ballpark";
     savePrep(id,city);openPrep(city,id,"pricing");
   };
   const setMk=(v)=>{
@@ -7096,7 +7485,8 @@ function priceBases(c,quotes){
     label:`My quote (${mine.name}, ${yd(mine.price)} a yard)`});
   if(quotes&&quotes.enough)out.push({kind:"area",lo:quotes.low,hi:quotes.high,median:quotes.median,count:quotes.count,radius:quotes.radius_mi,
     label:`Local quotes (${ydRange(quotes.low,quotes.high)} a yard)`});
-  out.push({kind:"est",lo:READY_MIX.low,hi:READY_MIX.high,label:`Typical price (${ydRange(READY_MIX.low,READY_MIX.high)} a yard)`});
+  const trend=readyMixTrend();
+  out.push({kind:"est",lo:READY_MIX.low,hi:READY_MIX.high,label:`Typical price (${ydRange(READY_MIX.low,READY_MIX.high)} a yard${trend?`; ready-mix ${trend}`:""})`});
   return out;
 }
 function readyMixEstimate(yards,basis,truck){
@@ -7484,7 +7874,7 @@ async function fillDetailRates(city,b){
   box.innerHTML=`${odds}${ballparkHTML(b,d,district)}
     <div class="workspace-title" style="margin-top:1rem;">Going rates — ${esc(d.districts[district])}</div>
     ${rows}
-    <div class="rate-note">${esc(agencyOf(d))} ${d.basis==="awarded"?"average winning prices":"state highway averages"}. <a href="#" id="detail-rates-all">Change district or see all items</a></div>
+    <div class="rate-note">${isNearby(d)?`No ${esc(d.state_name)} prices yet: winning prices on state road jobs ${esc(d.districts.STATEWIDE)}`:`${esc(agencyOf(d))} ${d.basis==="awarded"?"average winning prices":"state highway averages"}`}. <a href="#" id="detail-rates-all">Change district or see all items</a></div>
     ${competitorsHTML(d,items,district)}`;
   document.getElementById("detail-rates-all").onclick=(e)=>{e.preventDefault();openRates(d.state);};
   const w=document.getElementById("est-width");

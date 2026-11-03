@@ -2838,6 +2838,318 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── Pricing learns the contractor's own prices, and flags what's easy to miss ──
+  console.log("\nPricing starts from your own prices and flags easy-to-miss items");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const host = new URL(route.request().url()).hostname;
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") {
+        return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      }
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      const sw = (price, extra) => ({ name: "Concrete sidewalk, 4 in.", item: "6086004", st: "MO", unit: "sq yd", qty: 300, price, ...extra });
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      localStorage.setItem("last_feed", JSON.stringify({ "Springfield, MO": [
+        { title: "Sidewalk Replacement Program", scope: "1,450 SY 4 in. sidewalk, 12 ADA curb ramps. Contractor provides traffic control.", deadline: "2099-01-01", status: "open", url: "https://e.gov/r1" },
+        { title: "Park Trail", scope: "Ramps per the bid form", deadline: "2099-01-01", status: "open", url: "https://e.gov/r2" }] }));
+      localStorage.setItem("saved", JSON.stringify({
+        sent: { title: "Walnut St Sidewalks", _city: "Springfield, MO" }, unsent: { title: "Never Sent", _city: "Springfield, MO" } }));
+      localStorage.setItem("pipeline", JSON.stringify({ sent: "submitted" }));
+      localStorage.setItem("bid_prep", JSON.stringify({
+        sent: { checks: {}, custom: [], markup: 0, addenda: "", updated: 1000, lines: [sw(68)] },
+        // Newer, but never sent and never typed: the app's guess, not theirs.
+        unsent: { checks: {}, custom: [], markup: 0, addenda: "", updated: 5000, lines: [sw(99)] } }));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(800);
+    const id = await page.evaluate(() => bidId("Springfield, MO", bidData["Springfield, MO"][0]));
+    await page.evaluate((i) => openPrep("Springfield, MO", i, "pricing"), id);
+    await page.waitForTimeout(500);
+    let lines = await page.evaluate((i) => bidPrep[i].lines, id);
+    const walk = lines.find((l) => l.item === "6086004");
+    check("a new bid starts at the price you submitted, not the app's guess on an unsent bid",
+          walk && walk.price === 68 && walk.yours === "Walnut St Sidewalks", JSON.stringify(walk));
+    let sheet = await page.textContent("#prep-body");
+    check("...and the line says whose price it is", /Your price from Walnut St Sidewalks/.test(sheet));
+    check("unsent app prices are not shown as your past prices", !/\$99\.00/.test(sheet));
+
+    const miss = await page.textContent("#miss-box");
+    check("easy to miss: domes on the ramps, with how often the state paid them separately",
+          /Truncated domes on the ramps/.test(miss) && /as their own item on \d+ of \d+ jobs with curb ramps/.test(miss), miss);
+    check("easy to miss: removal on a replacement job, and traffic control the posting names",
+          /Taking out the old concrete/.test(miss) && /Traffic control/.test(miss) && !/Mobilization/.test(miss), miss);
+
+    await page.click('[data-miss-add="domes"]');
+    await page.waitForTimeout(400);
+    lines = await page.evaluate((i) => bidPrep[i].lines, id);
+    const dome = lines.find((l) => l.item === "6081012");
+    check("adding domes prices them for 12 ramps at 10 sq ft each",
+          dome && dome.qty === 120 && dome.price > 0, JSON.stringify(dome));
+    check("...and domes leave the list", !/Truncated domes/.test(await page.textContent("#miss-box")));
+
+    await page.click('[data-miss-off="removal"]');
+    await page.waitForTimeout(400);
+    check("'Not needed' hides it for this bid",
+          !/Taking out the old concrete/.test(await page.textContent("#prep-body"))
+          && await page.evaluate((i) => bidPrep[i].missOff.removal === true, id));
+
+    await page.$eval('.prep-line[data-i="0"] input[data-f="price"]', (el) => { el.value = "71"; el.dispatchEvent(new Event("input")); });
+    await page.waitForTimeout(200);
+    check("typing a price makes it yours",
+          await page.evaluate((i) => bidPrep[i].lines[0].mine === true && !bidPrep[i].lines[0].yours, id));
+
+    // Lines from the agency's own bid form: nothing can be added to it.
+    const id2 = await page.evaluate(() => bidId("Springfield, MO", bidData["Springfield, MO"][1]));
+    await page.evaluate((i) => {
+      const p = prepFor(i);
+      p.lines = [{ name: "1. ADA curb ramp", qty: 4, unit: "each", price: 1500 }];
+      p.linesFrom = "documents";
+      p.docInfo = { source: "Bid form.pdf", read_at: Date.now(), line_items: [{ item_no: "1", description: "ADA curb ramp", quantity: 4, unit: "EA" }] };
+      openPrep("Springfield, MO", i, "pricing");
+    }, id2);
+    await page.waitForTimeout(400);
+    const formMiss = await page.textContent("#miss-box");
+    check("on the agency's bid form it says to price it into other lines, with no Add",
+          /isn't on the bid form/.test(formMiss) && !(await page.$("[data-miss-add]")), formMiss);
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
+  // ── A state with no prices of its own borrows its neighbors', labeled ──
+  console.log("\nEvery state starts priced: nearby states' winning prices, local labor pay");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const host = new URL(route.request().url()).hostname;
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") {
+        return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      }
+      return route.abort();
+    });
+    await page.route("**/rates/costs.json", (route) => route.fulfill({ status: 200, contentType: "application/json",
+      body: JSON.stringify({ labor: { by_state: { OH: { median: 30, year: 2024 } } }, ready_mix: { month: "2026-09", change_12m: 3.1 } }) }));
+    await page.addInitScript(() => {
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      localStorage.setItem("last_feed", JSON.stringify({ "Columbus, OH": [
+        { title: "Sidewalk Program", scope: "1,450 SY 4 in. sidewalk, 12 ADA curb ramps, 600 LF curb and gutter", deadline: "2099-01-01", status: "open", url: "https://e.gov/oh1" }] }));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(800);
+    const id = await page.evaluate(() => bidId("Columbus, OH", bidData["Columbus, OH"][0]));
+    await page.evaluate((i) => openPrep("Columbus, OH", i, "pricing"), id);
+    await page.waitForTimeout(600);
+    const sheet = await page.textContent("#prep-body");
+    check("an Ohio bid says it has no Ohio prices and names the states it borrows from",
+          /No Ohio prices in the app yet/.test(sheet) && /Kentucky/.test(sheet), sheet.slice(0, 500));
+    check("...and how new they are", /newest letting [A-Z][a-z]{2} \d{1,2}, \d{4}/.test(sheet));
+    const lines = await page.evaluate((i) => bidPrep[i].lines, id);
+    check("every line starts priced, ramps included",
+          lines.length === 3 && lines.every((l) => Number(l.price) > 0), JSON.stringify(lines));
+    check("each line's check names where its price came from",
+          /on \d+ similar-size state road jobs in Kentucky/.test(sheet) && /state road jobs in Missouri/.test(sheet));
+    check("borrowed prices are sized to the job: 1,450 sq yd of sidewalk is below the all-sizes median",
+          await page.evaluate((i) => {
+            const d = rateData.OH, l = bidPrep[i].lines[0];
+            return l.price < d.wins["N-sidewalk"].STATEWIDE[String(d.years[0])][0];
+          }, id));
+    check("labor starts at the state's cement mason pay plus 35%",
+          await page.evaluate(() => myCosts().wage === 41));
+    await page.evaluate(() => { document.getElementById("price-more").open = true; document.getElementById("cost-edit").open = true; });
+    check("...and says so in the costs",
+          /cement masons in Ohio earn a median \$30\.00\/hr/.test(await page.textContent("#cost-edit")));
+    await page.evaluate(() => {
+      companyProfile.bid_info = { ...bidInfo(), costs: { wage: 52 } };
+    });
+    check("a labor cost the contractor sets wins over the local one",
+          await page.evaluate(() => myCosts().wage === 52));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
+  // ── A finished job tells the app how fast the crew really is ──
+  console.log("\nA won job's crew days tune the production rates");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const host = new URL(route.request().url()).hostname;
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") {
+        return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      }
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      localStorage.setItem("last_feed", JSON.stringify({ "Aurora, MO": [
+        { title: "Elm St Walks", scope: "sidewalk", deadline: "2020-01-01", status: "open", url: "https://e.gov/pace" }] }));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(800);
+    const id = await page.evaluate(() => {
+      const c = "Aurora, MO", b = bidData[c][0], i = bidId(c, b);
+      pipeline[i] = "won";
+      const p = prepFor(i);
+      p.lines = [{ name: "Concrete sidewalk, 4 in.", unit: "sq yd", qty: 100, price: 70 },
+                 { name: "Curb and gutter", unit: "ft", qty: 300, price: 40 },
+                 { name: "ADA curb ramp", unit: "each", qty: 2, price: 1500 }];
+      p.linesFrom = "you";
+      openPrep(c, i, "job");
+      return i;
+    });
+    await page.waitForTimeout(400);
+    check("the Job tab asks how many crew days it took", /Crew days on the job/.test(await page.textContent("#prep-body")));
+    await page.fill("#jb-days", "2.5");
+    await page.dispatchEvent("#jb-days", "change");
+    await page.waitForTimeout(300);
+    const t = await page.textContent("#prep-body");
+    check("it compares with the days the rates predict and says the crew is faster",
+          /comes to 3\.1 crew days; it took 2\.5/.test(t) && /about 25% faster/.test(t), t.slice(0, 600));
+    await page.click("#jb-pace-use");
+    await page.waitForTimeout(300);
+    const c = await page.evaluate(() => myCosts());
+    check("one tap scales the production rates to the crew's real pace",
+          c.sf_day === 1000 && c.lf_day === 375 && c.ea_day === 2.5, JSON.stringify(c));
+    check("...and it's remembered on the job", await page.evaluate((i) => jobs[i].paceApplied > 0, id)
+          && !(await page.$("#jb-pace-use")));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
+  // ── Results read when they're posted: placement, winner's prices, city rates ──
+  console.log("\nBid results are read when posted: where you placed, the winner's prices");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    let readBody = null;
+    await page.route("**/*", (route) => {
+      const u = route.request().url(), host = new URL(u).hostname;
+      if (u.endsWith("/bid-watch/check")) {
+        const urls = JSON.parse(route.request().postData()).urls;
+        return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true,
+          results: Object.fromEntries(urls.map((x) => [x, { ok: true, docs: [], addenda: [], addendum_docs: [],
+            result_docs: [{ name: "Bid Tabulation", url: "https://e.gov/tab.pdf" }] }])) }) });
+      }
+      if (u.endsWith("/bid-documents/read")) {
+        readBody = JSON.parse(route.request().postData());
+        return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, is_results: true,
+          opened: "Oct 20, 2026", awarded_to: "",
+          bidders: [{ name: "Ozark Flatwork LLC", total: 150000 }, { name: "Test Concrete, LLC", total: 153300 }, { name: "Third Co", total: 170000 }],
+          items: [{ item_no: "1", description: "Concrete sidewalk, 4 in.", quantity: 1450, unit: "SY", unit_price: 70 }] }) });
+      }
+      if (u.includes("/city-prices")) {
+        return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true,
+          prices: { sidewalk: { "sq yd": [[1200, 68, "2026-09-01"], [1500, 72, "2026-08-01"], [1600, 75, "2026-05-01"]] } } }) });
+      }
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") {
+        return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      }
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      const past = new Date(Date.now() - 10 * 864e5).toISOString().slice(0, 10);
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      localStorage.setItem("license_key", JSON.stringify("k"));
+      localStorage.setItem("company_profile", JSON.stringify({ name: "Test Concrete LLC" }));
+      localStorage.setItem("saved", JSON.stringify({ r1: { title: "Elm St Walks", url: "https://e.gov/elm", deadline: past, _city: "Springfield, MO" } }));
+      localStorage.setItem("bid_prep", JSON.stringify({ r1: { checks: {}, custom: [], markup: 0, addenda: "", updated: 1,
+        linesFrom: "you", lines: [{ name: "Concrete sidewalk, 4 in.", item: "6086004", st: "MO", unit: "sq yd", qty: 1450, price: 74 }] } }));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(800);
+    await page.evaluate(() => checkBidResults());
+    await page.waitForTimeout(800);
+    check("a bid past its deadline gets its tabulation read, with its state and town",
+          readBody && readBody.kind === "results" && readBody.url === "https://e.gov/tab.pdf" && readBody.state === "MO"
+          && readBody.town === "Springfield", JSON.stringify(readBody));
+    const sent = await page.evaluate(() => tabSentence(bidPrep.r1));
+    check("it finds the contractor by company name and says where they placed",
+          sent === "You placed 2nd of 3, 2.2% above Ozark Flatwork LLC at $150,000.", sent);
+    check("it isn't read again once it's in", await page.evaluate(() => !resultsCandidates().includes("r1")));
+    await page.evaluate(() => renderHome());
+    await page.waitForTimeout(300);
+    const home = await page.textContent("#home-outcomes");
+    check("the 'how did it go' card shows the result", /Results: You placed 2nd of 3/.test(home), home);
+    await page.click('#home-outcomes [data-out="lost"]');
+    await page.waitForTimeout(200);
+    check("...and a loss starts with the winning total filled in",
+          await page.$eval("#home-outcomes [data-win]", (el) => el.value) === "150000");
+    await page.evaluate(() => openPrep("Springfield, MO", "r1", "pricing"));
+    await page.waitForTimeout(600);
+    const pricing = await page.textContent("#prep-body");
+    check("Pricing compares the winner's unit prices with yours",
+          /Bid results are in/.test(pricing) && /\$70\.00 vs \$74\.00\s*\+6%/.test(pricing), pricing.slice(0, 700));
+    check("each line shows what city and county jobs won for",
+          /City and county jobs: won for \$72\.00\/sq yd on 3 similar-size jobs/.test(pricing));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
+  // ── California: Caltrans' own prices, with what it lacks from Oregon ──
+  console.log("\nA state's own prices, with the items it lacks filled in from nearby");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const host = new URL(route.request().url()).hostname;
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") {
+        return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      }
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      localStorage.setItem("last_feed", JSON.stringify({ "Fresno, CA": [
+        { title: "Sidewalk Program", scope: "1,450 SY 4 in. sidewalk, 600 LF curb and gutter", deadline: "2099-01-01", status: "open", url: "https://e.gov/ca1" }] }));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(800);
+    const id = await page.evaluate(() => bidId("Fresno, CA", bidData["Fresno, CA"][0]));
+    await page.evaluate((i) => openPrep("Fresno, CA", i, "pricing"), id);
+    await page.waitForTimeout(700);
+    const lines = await page.evaluate((i) => bidPrep[i].lines, id);
+    const sheet = await page.textContent("#prep-body");
+    check("sidewalk is priced from Caltrans' own results, in Fresno's district",
+          lines[0].item === "731521-SY" && lines[0].price > 0 && lines[0].dist === "06", JSON.stringify(lines[0]));
+    check("curb and gutter, which Caltrans pays by the cubic yard, comes from Oregon, labeled",
+          lines[1] && lines[1].unit === "ft" && lines[1].price > 0 && /state road jobs in Oregon/.test(sheet), JSON.stringify(lines[1]));
+    await page.evaluate(() => { closeModal(); openRates("CA"); });
+    await page.waitForTimeout(500);
+    check("the going-rates sheet lists only Caltrans' own items",
+          !/Concrete curb and gutter/.test(await page.textContent("#modal-content")));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   // ── A statewide bid is placed by its own name ──
   console.log("\nA bid from a statewide search is placed by the site its name gives");
   {
