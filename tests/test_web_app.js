@@ -2838,6 +2838,92 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── Pricing learns the contractor's own prices, and flags what's easy to miss ──
+  console.log("\nPricing starts from your own prices and flags easy-to-miss items");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const host = new URL(route.request().url()).hostname;
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") {
+        return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      }
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      const sw = (price, extra) => ({ name: "Concrete sidewalk, 4 in.", item: "6086004", st: "MO", unit: "sq yd", qty: 300, price, ...extra });
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      localStorage.setItem("last_feed", JSON.stringify({ "Springfield, MO": [
+        { title: "Sidewalk Replacement Program", scope: "1,450 SY 4 in. sidewalk, 12 ADA curb ramps. Contractor provides traffic control.", deadline: "2099-01-01", status: "open", url: "https://e.gov/r1" },
+        { title: "Park Trail", scope: "Ramps per the bid form", deadline: "2099-01-01", status: "open", url: "https://e.gov/r2" }] }));
+      localStorage.setItem("saved", JSON.stringify({
+        sent: { title: "Walnut St Sidewalks", _city: "Springfield, MO" }, unsent: { title: "Never Sent", _city: "Springfield, MO" } }));
+      localStorage.setItem("pipeline", JSON.stringify({ sent: "submitted" }));
+      localStorage.setItem("bid_prep", JSON.stringify({
+        sent: { checks: {}, custom: [], markup: 0, addenda: "", updated: 1000, lines: [sw(68)] },
+        // Newer, but never sent and never typed: the app's guess, not theirs.
+        unsent: { checks: {}, custom: [], markup: 0, addenda: "", updated: 5000, lines: [sw(99)] } }));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(800);
+    const id = await page.evaluate(() => bidId("Springfield, MO", bidData["Springfield, MO"][0]));
+    await page.evaluate((i) => openPrep("Springfield, MO", i, "pricing"), id);
+    await page.waitForTimeout(500);
+    let lines = await page.evaluate((i) => bidPrep[i].lines, id);
+    const walk = lines.find((l) => l.item === "6086004");
+    check("a new bid starts at the price you submitted, not the app's guess on an unsent bid",
+          walk && walk.price === 68 && walk.yours === "Walnut St Sidewalks", JSON.stringify(walk));
+    let sheet = await page.textContent("#prep-body");
+    check("...and the line says whose price it is", /Your price from Walnut St Sidewalks/.test(sheet));
+    check("unsent app prices are not shown as your past prices", !/\$99\.00/.test(sheet));
+
+    const miss = await page.textContent("#miss-box");
+    check("easy to miss: domes on the ramps, with how often the state paid them separately",
+          /Truncated domes on the ramps/.test(miss) && /as their own item on \d+ of \d+ jobs with curb ramps/.test(miss), miss);
+    check("easy to miss: removal on a replacement job, and traffic control the posting names",
+          /Taking out the old concrete/.test(miss) && /Traffic control/.test(miss) && !/Mobilization/.test(miss), miss);
+
+    await page.click('[data-miss-add="domes"]');
+    await page.waitForTimeout(400);
+    lines = await page.evaluate((i) => bidPrep[i].lines, id);
+    const dome = lines.find((l) => l.item === "6081012");
+    check("adding domes prices them for 12 ramps at 10 sq ft each",
+          dome && dome.qty === 120 && dome.price > 0, JSON.stringify(dome));
+    check("...and domes leave the list", !/Truncated domes/.test(await page.textContent("#miss-box")));
+
+    await page.click('[data-miss-off="removal"]');
+    await page.waitForTimeout(400);
+    check("'Not needed' hides it for this bid",
+          !/Taking out the old concrete/.test(await page.textContent("#prep-body"))
+          && await page.evaluate((i) => bidPrep[i].missOff.removal === true, id));
+
+    await page.$eval('.prep-line[data-i="0"] input[data-f="price"]', (el) => { el.value = "71"; el.dispatchEvent(new Event("input")); });
+    await page.waitForTimeout(200);
+    check("typing a price makes it yours",
+          await page.evaluate((i) => bidPrep[i].lines[0].mine === true && !bidPrep[i].lines[0].yours, id));
+
+    // Lines from the agency's own bid form: nothing can be added to it.
+    const id2 = await page.evaluate(() => bidId("Springfield, MO", bidData["Springfield, MO"][1]));
+    await page.evaluate((i) => {
+      const p = prepFor(i);
+      p.lines = [{ name: "1. ADA curb ramp", qty: 4, unit: "each", price: 1500 }];
+      p.linesFrom = "documents";
+      p.docInfo = { source: "Bid form.pdf", read_at: Date.now(), line_items: [{ item_no: "1", description: "ADA curb ramp", quantity: 4, unit: "EA" }] };
+      openPrep("Springfield, MO", i, "pricing");
+    }, id2);
+    await page.waitForTimeout(400);
+    const formMiss = await page.textContent("#miss-box");
+    check("on the agency's bid form it says to price it into other lines, with no Add",
+          /isn't on the bid form/.test(formMiss) && !(await page.$("[data-miss-add]")), formMiss);
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   // ── A statewide bid is placed by its own name ──
   console.log("\nA bid from a statewide search is placed by the site its name gives");
   {

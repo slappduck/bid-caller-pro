@@ -4250,6 +4250,75 @@ function priceCheckHTML(l){
   return`${ref}${verdict?` ${verdict}`:""}`;
 }
 
+// ── Easy to miss ──
+// Pay items a bid like this usually has that these lines don't: domes on
+// curb ramps (MoDOT paid for them separately on every ramp job it let),
+// taking out the old concrete on a replacement, and anything the posting
+// names (mobilization, traffic control). A line the contractor adds
+// starts priced where the app can price it. When the lines are the
+// agency's own bid form, nothing can be added: the cost goes into the
+// other prices, and the note says so.
+const DOME_SQFT_PER_RAMP=10;   // 2 ft deep across a 5 ft ramp
+const MISS_MENTIONS=[
+  ["mobilization",/\bmobiliz/i,"Mobilization","lump sum",/mobiliz/i],
+  ["traffic",/traffic control|maintenance of traffic|\bMOT\b|work zone/i,"Traffic control","lump sum",/traffic|\bMOT\b/i],
+  ["erosion",/erosion|sediment|silt fence|inlet protection/i,"Erosion control","lump sum",/erosion|sediment|silt/i],
+  ["restoration",/\bsod(ding)?\b|seeding|turf restor|lawn restor/i,"Restoration, sod or seeding","sq yd",/sod|seed|restor/i],
+  ["testing",/\btesting\b|test cylinders|quality control testing/i,"Testing","lump sum",/test/i],
+];
+function easyToMiss(p,b,city){
+  const d=rateData[bidState(city,b)];
+  const lines=(p.lines||[]).filter(l=>(l.name||"").trim()||Number(l.qty));
+  const off=p.missOff||{},out=[];
+  const named=(re)=>lines.some(l=>re.test(l.name||""));
+  const form=!!(p.docInfo&&(p.docInfo.line_items||[]).length);
+  const rampCode=d&&d.cats.ramp,domeCode=d&&d.cats.domes;
+  const ramps=lines.filter(l=>(rampCode&&(l.item===rampCode||(l.area&&l.area.item===rampCode)))||/\bramps?\b/i.test(l.name||""));
+  const hasDomes=lines.some(l=>(domeCode&&l.item===domeCode&&domeCode!==rampCode)||/dome|detectable|warning (panel|surface)/i.test(l.name||""));
+  if(ramps.length&&!hasDomes&&!off.domes){
+    const count=ramps.filter(l=>l.unit==="each").reduce((t,l)=>t+(Number(l.qty)||0),0);
+    const meta=domeCode&&domeCode!==rampCode&&d.items[domeCode];
+    let why="Detectable warnings are required on every curb ramp, and many agencies pay for them as their own item.";
+    const res=meta&&bidResults[d.state];
+    if(res&&res.contracts){
+      const with_=res.contracts.filter(c=>c.items&&c.items[rampCode]);
+      const sep=with_.filter(c=>c.items[domeCode]).length;
+      if(with_.length>=WIN_MIN&&sep/with_.length>=0.6)why=`${agencyOf(d)} paid for them as their own item on ${sep} of ${with_.length} jobs with curb ramps.`;
+    }
+    const make=()=>{
+      if(!meta)return{name:"Detectable warning panel",unit:"each",qty:count||"",price:"",ref:null};
+      const per=meta.unit==="sq ft"?DOME_SQFT_PER_RAMP:meta.unit==="sq yd"?Math.round(DOME_SQFT_PER_RAMP/9*100)/100:1;
+      const qty=count?Math.round(count*per*10)/10:"",district=jobDistrict(d,city);
+      const wp=winPrice(d,domeCode,Number(qty)||0,district);
+      return{name:meta.name,unit:meta.unit,qty,price:startPrice(wp),ref:null,item:domeCode,st:d.state,dist:district,
+        note:count&&meta.unit!=="each"?`About ${DOME_SQFT_PER_RAMP} sq ft a ramp (2 ft deep across a 5 ft ramp). Check the plans.`:""};
+    };
+    out.push({key:"domes",name:"Truncated domes on the ramps",why,make});
+  }
+  const text=`${b.title||""} ${b.scope||""}`;
+  if(/\b(replac|reconstruct|remov|tear[- ]?out|rehab)/i.test(text)&&!named(/remov|demo|break[- ]?out|tear[- ]?out/i)&&!off.removal){
+    const sqyd=lines.reduce((t,l)=>t+(l.unit==="sq yd"?Number(l.qty)||0:l.unit==="sq ft"?(Number(l.qty)||0)/9:0),0);
+    out.push({key:"removal",name:"Taking out the old concrete",
+      why:"The posting says the work replaces what's there. Removal is often its own line.",
+      make:()=>({name:"Remove existing concrete",unit:"sq yd",qty:sqyd?Math.round(sqyd*10)/10:"",price:"",ref:null,
+        note:"The app has no winning prices for removal. Enter your own."})});
+  }
+  MISS_MENTIONS.forEach(([key,said,name,unit,have])=>{
+    if(off[key]||!said.test(text)||named(have))return;
+    out.push({key,name,why:`The posting mentions ${name.split(",")[0].toLowerCase()}.`,make:()=>({name,unit,qty:unit==="lump sum"?1:"",price:"",ref:null})});
+  });
+  return out.map(x=>({...x,form}));
+}
+function easyToMissHTML(list){
+  if(!list.length)return"";
+  return`<div class="miss-box" id="miss-box"><div class="miss-h">Easy to miss</div>
+    ${list.map(x=>`<div class="miss-row"><div class="miss-t"><b>${esc(x.name)}</b>
+        <small>${esc(x.why)}${x.form?" It isn't on the bid form, so if it's needed, its cost goes into your other prices.":""}</small></div>
+      <div class="miss-act">${x.form?"":`<button class="btn-ghost" data-miss-add="${esc(x.key)}">Add</button>`}
+        <button class="link-btn" data-miss-off="${esc(x.key)}">${x.form?"Got it":"Not needed"}</button></div></div>`).join("")}
+  </div>`;
+}
+
 // ── Should you bid this? ──
 // From the state's bid results: how many contractors usually bid this kind
 // of work in the district, how close second place usually comes, who keeps
@@ -4899,7 +4968,7 @@ async function openPrep(city,id,step){
   const st=bidState(city,b);
   await Promise.all([loadRates(st),loadBidResults(st)]);
   const p=prepFor(id);
-  if(!p.lines){p.lines=defaultPrepLines(b,city);p.linesFrom="ballpark";}
+  if(!p.lines){p.lines=withOwnPrices(defaultPrepLines(b,city),id);p.linesFrom="ballpark";}
   savePrep(id,city);
   // "checklist" is what the Steps tab was called before; a saved bid may
   // still remember it.
@@ -5077,7 +5146,7 @@ function renderAddendumReview(body,city,id,b,key){
     qc.forEach(c=>{if(c.line>=0){lines[c.line].qty=c.new_quantity;}});
     if(p.linesFrom==="ballpark")p.linesFrom="documents";
     const d=rateData[bidState(city,b)];
-    added.forEach(c=>lines.push(lineFromDocItem({...c,quantity:c.quantity},d,d&&jobDistrict(d,city))));
+    added.forEach(c=>lines.push(withOwnPrices([lineFromDocItem({...c,quantity:c.quantity},d,d&&jobDistrict(d,city))],id)[0]));
     const drop=new Set(rm.map(c=>c.line).filter(i=>i>=0));
     p.lines=lines.filter((l,i)=>!drop.has(i));
     (p.addendaApplied=p.addendaApplied||{})[key]=Date.now();
@@ -5218,7 +5287,7 @@ async function preReadBid(city,id){
     if(p.docInfo&&p.docInfo.read_at)return;
     const st=bidState(city,b);
     await Promise.all([loadRates(st),loadBidResults(st)]);
-    if(!p.lines){p.lines=defaultPrepLines(b,city);p.linesFrom="ballpark";savePrep(id,city);}
+    if(!p.lines){p.lines=withOwnPrices(defaultPrepLines(b,city),id);p.linesFrom="ballpark";savePrep(id,city);}
     await autoPrepare(id,city,b);
     // The plants near the job, found after the job site is: the concrete
     // panel opens on them instead of a 30-second map search.
@@ -5310,7 +5379,7 @@ async function autoPrepare(id,city,b){
         if(items.length&&untouched){
           const d=rateData[bidState(city,b)];
           p.autoUndo={lines:before,linesFrom:beforeFrom||"ballpark"};
-          p.lines=items.map(it=>lineFromDocItem(it,d,d&&jobDistrict(d,city)));
+          p.lines=withOwnPrices(items.map(it=>lineFromDocItem(it,d,d&&jobDistrict(d,city))),id);
           p.linesFrom="documents";
           filled.push(plural(items.length,"line item"));
         }
@@ -6135,7 +6204,7 @@ async function renderDocResult(body,city,id,b,doc,info,fresh){
   body.querySelectorAll("[data-open]").forEach(x=>x.onclick=()=>{const f=files[Number(x.dataset.open)];openBlob(f.blob,f.name);});
   const take=(replace)=>{
     const d=rateData[bidState(city,b)];
-    const lines=items.map(it=>lineFromDocItem(it,d,d&&jobDistrict(d,city)));
+    const lines=withOwnPrices(items.map(it=>lineFromDocItem(it,d,d&&jobDistrict(d,city))),id);
     p.lines=replace?lines:(p.lines||[]).filter(l=>(l.name||"").trim()||l.qty||l.price).concat(lines);
     p.linesFrom=replace?"documents":"you";
     if(!p.lines.length)p.lines.push({name:"",qty:"",unit:"",price:"",ref:null});
@@ -6171,6 +6240,11 @@ function bidTitleFor(id){
   const b=saved[id]||findBid(id);
   return (b&&b.title)||"Untitled bid";
 }
+// A price is the contractor's once they typed it, or once they stood behind
+// it: every price on a bid they submitted, won or lost. The app's starting
+// prices on a bid never sent are its guesses, not theirs, and are not learned.
+const OWN_STATUSES=["submitted","won","lost"];
+function isOwnPrice(id,l){return Number(l&&l.price)>0&&(!!l.mine||OWN_STATUSES.includes(pipeline[id]));}
 // key -> [{id, title, price, status, updated}], newest first.
 function priceHistory(excludeId){
   const h={};
@@ -6179,12 +6253,26 @@ function priceHistory(excludeId){
     const p=bidPrep[id];
     (p&&p.lines||[]).forEach(l=>{
       const price=Number(l.price),k=lineKey(l);
-      if(!k||!(price>0))return;
+      if(!k||!isOwnPrice(id,l))return;
       (h[k]=h[k]||[]).push({id,title:bidTitleFor(id),price,status:pipeline[id]||"",updated:p.updated||0});
     });
   }
   for(const k in h)h[k].sort((a,b)=>b.updated-a.updated);
   return h;
+}
+// New lines start at the contractor's latest price for the same item when
+// they have one: what they bid with beats what others won with. The line
+// says whose price it is, and the price check still compares it to winners.
+function withOwnPrices(lines,id){
+  const h=priceHistory(id);
+  (lines||[]).forEach(l=>{
+    const x=h[lineKey(l)]&&h[lineKey(l)][0];
+    if(!x)return;
+    l.price=x.price;l.yours=x.title;
+    // A ramp's note says how its price was worked out; the price is theirs now.
+    if(l.area)delete l.note;
+  });
+  return lines;
 }
 function historyHint(hist){
   if(!hist||!hist.length)return"";
@@ -6213,7 +6301,7 @@ function renderPastBidPicker(body,city,id,b){
     const src={};
     (bidPrep[btn.dataset.prices].lines||[]).forEach(l=>{const k=lineKey(l);if(k&&Number(l.price)>0)src[k]=Number(l.price);});
     let n=0;
-    (p.lines||[]).forEach(l=>{const k=lineKey(l);if(k&&src[k]!=null){l.price=src[k];n++;}});
+    (p.lines||[]).forEach(l=>{const k=lineKey(l);if(k&&src[k]!=null){l.price=src[k];l.mine=true;delete l.yours;n++;}});
     if(n)p.linesFrom="you";
     savePrep(id,city);
     toast(n?`Copied ${plural(n,"price")}`:"No lines here match that bid");
@@ -6303,7 +6391,8 @@ function applyLineChoice(l,v,d){
     const district=l.dist||priceDistrict(d),r=latestRate(d,code,district);
     const wp=winPrice(d,code,Number(l.qty)||0,district);
     // A price already typed is the contractor's; only an empty one is filled.
-    const fill=!Number(l.price)||l.auto||(l.ref&&Number(l.price)===Math.round(l.ref*100)/100);
+    const fill=!Number(l.price)||l.auto||l.yours||(l.ref&&Number(l.price)===Math.round(l.ref*100)/100);
+    delete l.yours;
     Object.assign(l,{name:meta.name,unit:meta.unit,item:code,st:d.state,ref:r?r.avg:null,dist:district});
     if(fill&&(wp||r))l.price=startPrice(wp)||Math.round(r.avg*100)/100;
   }else if(v.startsWith("x:")){
@@ -6472,7 +6561,7 @@ function renderTakeoffReview(body,city,id,b){
   document.getElementById("to-again").onclick=()=>renderTakeoff(body,city,id,b);
   const take=(replace)=>{
     const d=rateData[bidState(city,b)];
-    const lines=t.items.map(it=>({...lineFromDocItem(it,d,d&&jobDistrict(d,city)),note:`Measured from the plans: ${it.basis}. Check it.`}));
+    const lines=withOwnPrices(t.items.map(it=>lineFromDocItem(it,d,d&&jobDistrict(d,city))),id).map((l,i)=>({...l,note:`Measured from the plans: ${t.items[i].basis}. Check it.`}));
     p.lines=replace?lines:(p.lines||[]).filter(l=>(l.name||"").trim()||l.qty||l.price).concat(lines);
     p.linesFrom=replace?"documents":"you";
     savePrep(id,city);back();
@@ -6496,6 +6585,7 @@ function renderPrepPricing(body,city,id,b){
         <button type="button" class="prep-x" data-del="${i}" aria-label="Delete line">×</button>
       </div>
       <small class="pl-ref" data-pc="${i}">${priceCheckHTML(l)}</small>
+      ${l.yours?`<small class="pl-ref pl-yours">Your price from ${esc(l.yours)}</small>`:""}
       ${l.note?`<small class="pl-ref rate-thin">${esc(l.note)}</small>`:""}
       ${historyHint(hist[lineKey(l)])}
     </div>`;
@@ -6505,6 +6595,7 @@ function renderPrepPricing(body,city,id,b){
     :"Prices start at what each item won for on similar-size jobs near here. Change any number.";
   const canRead=prepDocCandidates(b).length>0;
   const hasPast=pastPreparedBids(id).length>0;
+  const miss=easyToMiss(p,b,city);
   const wasRead=!!(p.docInfo&&p.docInfo.read_at);
   const mk=String(p.markup||0);
   const MK_CHOICES=["0","10","15","20"];
@@ -6520,6 +6611,7 @@ function renderPrepPricing(body,city,id,b){
       :`<button class="btn-primary" id="pl-read" style="margin:0.7rem 0 0.4rem;">${canRead?"Fill from the bid form":"Fill from a bid form you upload"}</button>`}
     <div class="rate-note" style="margin-top:0.2rem;">${startNote}</div>
     <div id="prep-lines">${p.lines.map(lineRow).join("")}</div>
+    ${easyToMissHTML(miss)}
     <div class="prep-add"><button class="btn-ghost" id="pl-add">+ Add line</button></div>
     <div class="mk-row">
       <span class="mk-label">Markup</span>
@@ -6559,12 +6651,14 @@ function renderPrepPricing(body,city,id,b){
     let v=inp.value;
     if(f==="qty"||f==="price")v=v.replace(/[^0-9.]/g,"");
     p.lines[i][f]=v;
+    if(f==="price"){p.lines[i].mine=true;delete p.lines[i].yours;}
     p.linesFrom="you";
     savePrep(id,city);refresh();
   });
   body.querySelectorAll("[data-pick]").forEach(sel=>sel.onchange=()=>{
     const i=Number(sel.dataset.pick);
     applyLineChoice(p.lines[i],sel.value,stRates);
+    if(!p.lines[i].mine)withOwnPrices([p.lines[i]],id);
     p.linesFrom="you";
     savePrep(id,city);openPrep(city,id,"pricing");
     if(sel.value==="custom")setTimeout(()=>{const inp=document.querySelector(`.prep-line[data-i="${i}"] .pl-name`);if(inp)inp.focus();},0);
@@ -6573,6 +6667,18 @@ function renderPrepPricing(body,city,id,b){
     p.lines.splice(Number(x.dataset.del),1);
     p.linesFrom="you";
     if(!p.lines.length)p.lines.push({name:"",qty:"",unit:"",price:"",ref:null});
+    savePrep(id,city);openPrep(city,id,"pricing");
+  });
+  body.querySelectorAll("[data-miss-add]").forEach(x=>x.onclick=()=>{
+    const m=miss.find(y=>y.key===x.dataset.missAdd);
+    if(!m)return;
+    const blank=(l)=>!(l.name||"").trim()&&!Number(l.qty)&&!Number(l.price);
+    p.lines=p.lines.filter(l=>!blank(l)).concat(withOwnPrices([m.make()],id));
+    p.linesFrom="you";
+    savePrep(id,city);openPrep(city,id,"pricing");
+  });
+  body.querySelectorAll("[data-miss-off]").forEach(x=>x.onclick=()=>{
+    (p.missOff=p.missOff||{})[x.dataset.missOff]=true;
     savePrep(id,city);openPrep(city,id,"pricing");
   });
   const past=document.getElementById("pl-past");
@@ -6588,8 +6694,8 @@ function renderPrepPricing(body,city,id,b){
     savePrep(id,city);openPrep(city,id,"pricing");
   };
   document.getElementById("pl-reset").onclick=()=>{
-    if(!confirm("Replace your lines with the quantities from the posting, at what they win for?"))return;
-    p.lines=defaultPrepLines(b,city);p.linesFrom="ballpark";
+    if(!confirm("Replace your lines with the quantities from the posting?"))return;
+    p.lines=withOwnPrices(defaultPrepLines(b,city),id);p.linesFrom="ballpark";
     savePrep(id,city);openPrep(city,id,"pricing");
   };
   const setMk=(v)=>{
