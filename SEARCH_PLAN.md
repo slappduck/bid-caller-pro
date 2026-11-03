@@ -840,13 +840,13 @@ Tests run on captured copies in `data/recall_fixtures/`.
   and demotes those that load and fail these checks. A page that fails to
   load is kept: unreachable proves nothing.
 
-### Open decision: expired certificates
+### Decided: expired certificates stay unread (2026-11-03)
 
 Small towns let their HTTPS certificate expire (Greene County, MO and
-Chatham, IL did). The scanner treats that as unreachable, so those towns'
-bids are never read. Falling back to plain http for a public listing would
-recover them, but it is a security trade-off and was left for the owner to
-decide.
+Chatham, IL did), and the scanner treats that as unreachable. Falling back
+to plain http for those pages was considered and declined by the owner:
+certificate checking stays on everywhere, and such a town is read again
+once it renews.
 
 ### School districts (2026-11-02)
 
