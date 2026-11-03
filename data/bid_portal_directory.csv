@@ -412,7 +412,7 @@ miamiaz.gov,Miami,AZ,City,Town of Miami,found,https://miamiaz.gov/bids-and-rfps,
 prescott-az.gov,Prescott,AZ,City,City of Prescott,not_found,,,2026-08-11
 prescottwaterandlightark.gov,Prescott,AR,City,Prescott Water and Light Office,not_found,,,2026-08-11
 chandleraz.gov,Chandler,AZ,City,City of Chandler,found,https://chandleraz.gov/purchasing,agency,2026-08-11
-somertonaz.gov,Somerton,AZ,City,City of Somerton,not_found,,,2026-08-11
+somertonaz.gov,Somerton,AZ,City,City of Somerton,found,https://somertonaz.gov/government/boards_and_commissions/procurement_policy_committee.php,agency,2026-11-03
 cityofavalon.gov,Avalon,CA,City,City of Avalon,found,https://cityofavalon.gov/Bids.aspx,civicplus,2026-08-11
 springdalear.gov,Springdale,AR,City,City of Springdale,not_found,,,2026-08-11
 cavecityarkansas.gov,Cave City,AR,City,City of Cave City,not_found,,,2026-08-11
@@ -426,7 +426,7 @@ holbrookaz.gov,Holbrook,AZ,City,"Holbrook, City of",found,https://holbrookaz.gov
 cityofwynne.gov,Wynne,AR,City,City of Wynne,not_found,,,2026-08-11
 antiochca.gov,Antioch,CA,City,City of Antioch,found,https://antiochca.gov/Bids.aspx,civicplus,2026-08-11
 mountainburg.gov,Mountainburg,AR,City,City of Mountainburg,not_found,,,2026-08-11
-fountainhillsaz.gov,Fountain Hills,AZ,City,Town of Fountain Hills,not_found,,,2026-08-11
+fountainhillsaz.gov,Fountain Hills,AZ,City,Town of Fountain Hills,found,https://fountainhillsaz.gov/procurement,agency,2026-11-03
 westforkar.gov,West Fork,AR,City,City of West Fork,not_found,,,2026-08-11
 yellvillear.gov,Yellville,AR,City,City of Yellville,not_found,,,2026-08-11
 banningca.gov,Banning,CA,City,City of Banning,found,https://banningca.gov/Bids.aspx,civicplus,2026-08-11
@@ -576,7 +576,7 @@ belmont.gov,Belmont,CA,City,City of Belmont,not_found,,,2026-08-11
 tucsonaz.gov,Tucson,AZ,City,City of Tucson,found,https://www.tucsonaz.gov/Departments/Business-Services-Department/Procurement,agency,2026-08-11
 dospalos.gov,Dos Palos,CA,City,City of Dos Palos,not_found,,,2026-08-11
 plainviewar.gov,Plainview,AR,City,City of Plainview,not_found,,,2026-08-11
-williamsaz.gov,Williams,AZ,City,City of Williams,not_found,,,2026-08-11
+williamsaz.gov,Williams,AZ,City,City of Williams,found,https://williamsaz.gov/doing_business/bid_documents,agency,2026-11-03
 carpinteriaca.gov,Carpinteria,CA,City,City of Carpinteria,found,https://carpinteriaca.gov/rfp,agency,2026-08-11
 hpca.gov,Huntington Park,CA,City,City Of Huntington Park,found,https://hpca.gov/Bids.aspx,civicplus,2026-08-11
 gardenaca.gov,Gardena,CA,City,City of Gardena,found,https://gardenaca.gov/rfps,agency,2026-11-03
@@ -9076,7 +9076,7 @@ wauwatosawi.gov,Wauwatosa,WI,City,City of Wauwatosa,not_found,,,2026-08-11
 casperwy.gov,Casper,WY,City,City of Casper,found,https://casperwy.gov/business/bids/index.php,agency,2026-08-11
 mescalj6fd.gov,Benson,AZ,County,Mescal J6 Fire District,not_found,,,2026-08-11
 fresnosheriff.gov,Fresno,CA,County,Fresno County Sheriff,not_found,,,2026-08-11
-gilacountyaz.gov,Globe,AZ,County,Gila County,not_found,,,2026-08-11
+gilacountyaz.gov,Globe,AZ,County,Gila County,found,https://www.gilacountyaz.gov/government/finance/procurement/index.php,agency,2026-11-03
 stansheriff.gov,Modesto,CA,County,Stanislaus County Sheriff's Office,not_found,,,2026-08-11
 acwdca.gov,Fremont,CA,County,Alameda County Water District - ACWD,not_found,,,2026-08-11
 stancountylibrary.gov,Modesto,CA,County,Stanislaus County Library,not_found,,,2026-08-11
