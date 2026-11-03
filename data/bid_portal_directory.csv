@@ -2736,7 +2736,7 @@ buxtonmepd.gov,Buxton,ME,City,Buxton Police Department,not_found,,,2026-08-11
 hampsteadmd.gov,Hampstead,MD,City,Town of Hampstead,not_found,,,2026-08-11
 tallulah-la.gov,Tallulah,LA,City,City Of Tallulah,not_found,,,2026-08-11
 binghammaine.gov,Bingham,ME,City,Town of Bingham,not_found,,,2026-08-11
-camdenmaine.gov,Camden,ME,City,Town of Camden,not_found,,,2026-08-11
+camdenmaine.gov,Camden,ME,City,Town of Camden,found,http://www.camdenmaine.gov/select_board/bids.php,agency,2026-11-03
 carrabassettvalley.gov,Carrabassett Valley,ME,City,Town of Carrabassett Valley,found,https://carrabassettvalley.gov/rfp,agency,2026-08-11
 washingtongrovemd.gov,Washington Grove,MD,City,Washington Grove,not_found,,,2026-08-11
 uppermarlboromd.gov,Upper Marlboro,MD,City,Town of Upper Marlboro,not_found,,,2026-08-11
@@ -2751,7 +2751,7 @@ waterboro-me.gov,East Waterboro,ME,City,"Town of Waterboro, Maine",not_found,,,2
 kennebunkportme.gov,Kennebunkport,ME,City,Town of Kennebunkport,found,https://kennebunkportme.gov/bids,agency,2026-08-11
 livermoreme.gov,Livermore,ME,City,Town of LIvermore,not_found,,,2026-08-11
 mapletonmaine.gov,Mapleton,ME,City,"Towns of Mapleton, Castle Hill, and Chapman",found,https://mapletonmaine.gov/bids,agency,2026-08-11
-ellsworthmaine.gov,Ellsworth,ME,City,"City of Ellsworth, Maine",not_found,,,2026-08-11
+ellsworthmaine.gov,Ellsworth,ME,City,"City of Ellsworth, Maine",found,https://www.ellsworthmaine.gov/rfps/,agency,2026-11-03
 auburnmaine.gov,Auburn,ME,City,"City of Auburn, Maine",found,https://auburnmaine.gov/departments/finance/bids/index.php,agency,2026-08-11
 baltimorecity.gov,Baltimore,MD,City,Baltimore City Office of Information and Technology,found,https://baltimorecity.gov/mwbd/our-work/bidding-contracting-opportunities,agency,2026-08-11
 baringplantation.gov,Baring PLT,ME,City,Baring Plantation  Maine,not_found,,,2026-08-11
@@ -2794,7 +2794,7 @@ battlecreekmi.gov,Battle Creek,MI,City,City of Battle Creek,found,https://battle
 thomastonmaine.gov,Thomaston,ME,City,Town of Thomaston,found,https://thomastonmaine.gov/bids,agency,2026-08-11
 portlandmaine.gov,Portland,ME,City,"City of Portland, Maine",not_found,,,2026-08-11
 ceciltonmd.gov,Cecilton,MD,City,Town of Cecilton,not_found,,,2026-08-11
-monmouthmaine.gov,Monmouth,ME,City,Town of Monmouth,not_found,,,2026-08-11
+monmouthmaine.gov,Monmouth,ME,City,Town of Monmouth,found,http://monmouthmaine.gov/index.asp?SEC=EDD07003-AB38-43EE-B132-9995578F2A52&DE=ED868F91-E995-43FA-AC1C-CE05F615D0CE,custom,2026-11-03
 drummondmd.gov,Chevy Chase,MD,City,Village of Drummond,not_found,,,2026-08-11
 lyman-me.gov,Lyman,ME,City,Town of Lyman,not_found,,,2026-08-11
 bradfordme.gov,Bradford,ME,City,Town of Bradford Maine 04401,not_found,,,2026-08-11
@@ -20616,7 +20616,7 @@ co.shawano.wi.us,Shawano County,WI,City,Shawano County,not_found,,,2026-09-01
 townofrowley.net,Rowley,MA,City,Rowley,not_found,,,2026-09-01
 townofbourne.com,Bourne,MA,City,Bourne,found,https://townofbourne.com/Bids.aspx,civicplus,2026-11-03
 easthaddam.org,East Haddam,CT,City,East Haddam,found,https://easthaddam.org/bids,custom,2026-09-01
-kittery.org,Kittery,ME,City,Kittery,not_found,,,2026-09-01
+kittery.org,Kittery,ME,City,Kittery,found,https://www.kitteryme.gov/Bids.aspx,civicplus,2026-11-03
 newhavenvt.com,New Haven,VT,City,New Haven,not_found,,,2026-09-01
 chelseavt.org,Chelsea,VT,City,Chelsea,found,https://chelseavt.org/rfp,custom,2026-09-01
 castletonvermont.org,Castleton,VT,City,Castleton,not_found,,,2026-09-01
@@ -20748,7 +20748,7 @@ egoshen.net,Goshen,MA,City,Goshen,not_found,,,2026-09-01
 fairhavenvt.org,Fair Haven,VT,City,Fair Haven,not_found,,,2026-09-01
 oxfordmaine.org,Oxford,ME,City,Oxford,not_found,,,2026-09-01
 henniker.org,Henniker,NH,City,Henniker,not_found,,,2026-09-01
-brunswickme.org,Brunswick,ME,City,Brunswick,not_found,,,2026-09-01
+brunswickme.org,Brunswick,ME,City,Brunswick,found,https://brunswickme.org/Bids.aspx,civicplus,2026-11-03
 manchester.ma.us,Manchester-by-the-Sea,MA,City,Manchester-by-the-Sea,found,https://manchester.ma.us/Bids.aspx,civicplus,2026-09-01
 ci.mashpee.ma.us,Mashpee,MA,City,Mashpee,not_found,,,2026-09-01
 townofnelson.com,Nelson,NH,City,Nelson,not_found,,,2026-09-01
@@ -20776,7 +20776,7 @@ lymannh.org,Lyman,NH,City,Lyman,not_found,,,2026-09-01
 nahant.org,Nahant,MA,City,Nahant,not_found,,,2026-09-01
 fairfieldct.org,Fairfield,CT,City,Fairfield,found,https://fairfieldct.org/purchasing,custom,2026-09-01
 chiltoncounty.org,Chilton County,AL,City,Chilton County,found,https://chiltoncounty.org/bids,custom,2026-09-01
-topshammaine.com,Topsham,ME,City,Topsham,not_found,,,2026-09-01
+topshammaine.com,Topsham,ME,City,Topsham,found,https://topshammaine.com/index.asp?SEC=AEABE1FD-A389-4C97-ABFB-917A77481871&DE=9933AF62-55A3-489B-BB40-B4672EB9BC5B,custom,2026-11-03
 sudbury.ma.us,Sudbury,MA,City,Sudbury,found,https://sudbury.ma.us/bids,agency,2026-11-03
 townofmilton.org,Milton,MA,City,Milton,not_found,,,2026-09-01
 bradfordnh.org,Bradford,NH,City,Bradford,not_found,,,2026-09-01
@@ -21073,7 +21073,7 @@ roberts.sdcounties.org,Roberts County,SD,City,Roberts County,not_found,,,2026-09
 warrenvt.org,Warren,VT,City,Warren,not_found,,,2026-09-01
 whitinghamvt.org,Whitingham,VT,City,Whitingham,not_found,,,2026-09-01
 chelseamaine.org,Chelsea,ME,City,Chelsea,found,https://chelseamaine.org/help-wanted/,custom,2026-09-01
-waldoboromaine.org,Waldoboro,ME,City,Waldoboro,not_found,,,2026-09-01
+waldoboromaine.org,Waldoboro,ME,City,Waldoboro,found,https://waldoboromaine.org/bids-and-rfps,custom,2026-11-03
 pawlet.com,Pawlet,VT,City,Pawlet,not_found,,,2026-09-01
 co.norman.mn.us,Norman County,MN,City,Norman County,not_found,,,2026-09-01
 middlesexvermont.org,Middlesex,VT,City,Middlesex,not_found,,,2026-09-01
@@ -21750,7 +21750,7 @@ townofchamplain.com,Champlain,NY,City,Champlain,not_found,,,2026-09-01
 ci.highland-beach.fl.us,Highland Beach,FL,City,Highland Beach,not_found,,,2026-09-01
 townofninetysixsc.com,Ninety Six,SC,City,Ninety Six,not_found,,,2026-09-01
 townofjohnstown.com,Johnstown,CO,City,Johnstown,not_found,,,2026-09-01
-newcastlemaine.us,Newcastle,ME,City,Newcastle,not_found,,,2026-09-01
+newcastlemaine.us,Newcastle,ME,City,Newcastle,found,https://newcastlemaine.us/departments/town_managers_office/rfp_bids.php,custom,2026-11-03
 townofzolfo.com,Zolfo Springs,FL,City,Zolfo Springs,not_found,,,2026-09-01
 townofreddingct.org,Redding,CT,City,Redding,not_found,,,2026-09-01
 townofclay.org,Clay,NY,City,Clay,not_found,,,2026-09-01
@@ -22640,7 +22640,7 @@ townofbluffton.sc.gov,Bluffton,SC,City,Bluffton,found,https://townofbluffton.sc.
 fairportharbor.org,Fairport Harbor,OH,City,Fairport Harbor,found,https://fairportharbor.org/bids,custom,2026-09-01
 townofspringcitytn.com,Spring City,TN,City,Spring City,not_found,,,2026-09-01
 villageofamanda.com,Amanda,OH,City,Amanda,not_found,,,2026-09-01
-town.lincolnville.me.us,Lincolnville,ME,City,Lincolnville,not_found,,,2026-09-01
+town.lincolnville.me.us,Lincolnville,ME,City,Lincolnville,found,https://town.lincolnville.me.us/index.asp?Type=B_JOB&SEC={F9580542-C902-453D-B024-D56625ABFA81},custom,2026-11-03
 bradfordoh.com,Bradford,OH,City,Bradford,found,https://bradfordoh.com/809-2/,custom,2026-09-01
 madisonmaine.com,Madison,ME,City,Madison,not_found,,,2026-09-01
 caledonia-village.com,Caledonia,OH,City,Caledonia,not_found,,,2026-09-01
@@ -22658,7 +22658,7 @@ clarksburgma.us,Clarksburg,MA,City,Clarksburg,not_found,,,2026-09-01
 ashvilleohio.net,Ashville,OH,City,Ashville,not_found,,,2026-09-01
 bellecenterohio.com,Belle Center,OH,City,Belle Center,not_found,,,2026-09-01
 alna.maine.gov,Alna,ME,City,Alna,not_found,,,2026-09-01
-farmingdalemaine.org,Farmingdale,ME,City,Farmingdale,not_found,,,2026-09-01
+farmingdalemaine.org,Farmingdale,ME,City,Farmingdale,found,https://www.farmingdalemaine.org/index.asp?SEC=105DA99D-754A-4D01-B123-7DA13662CA69,custom,2026-11-03
 brooklynhts.org,Brooklyn Heights,OH,City,Brooklyn Heights,not_found,,,2026-09-01
 sebringohio.net,Sebring,OH,City,Sebring,not_found,,,2026-09-01
 chestertonin.org,Chesterton,IN,City,Chesterton,found,https://chestertonin.org/Bids.aspx,civicplus,2026-09-01
@@ -22869,7 +22869,7 @@ stparisohio.org,St. Paris,OH,City,St. Paris,not_found,,,2026-09-01
 versaillesohio.cc,Versailles,OH,City,Versailles,not_found,,,2026-09-01
 fredericktownohio.net,Fredericktown,OH,City,Fredericktown,not_found,,,2026-09-01
 villageofburbankohio.com,Burbank,OH,City,Burbank,not_found,,,2026-09-01
-monmouthme.govoffice2.com,Monmouth,ME,City,Monmouth,not_found,,,2026-09-01
+monmouthme.govoffice2.com,Monmouth,ME,City,Monmouth,found,http://monmouthmaine.gov/index.asp?SEC=EDD07003-AB38-43EE-B132-9995578F2A52&DE=ED868F91-E995-43FA-AC1C-CE05F615D0CE,custom,2026-11-03
 rockfordohio.org,Rockford,OH,City,Rockford,not_found,,,2026-09-01
 villageofsugarcreek.com,Sugarcreek,OH,City,Sugarcreek,not_found,,,2026-09-01
 vil.morrow.oh.us,Morrow,OH,City,Morrow,not_found,,,2026-09-01
