@@ -1069,3 +1069,34 @@ body{font-family:var(--ui);background:radial-gradient(ellipse 120% 60% at 50% -1
 .plan-banner.ended{border-color:var(--red);background:rgba(239,68,68,0.07);}
 .trial-recap{margin-top:0.7rem;padding-top:0.6rem;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:0.2rem;font-size:var(--fs-sm);color:var(--text2);}
 .trial-recap b{color:var(--text);}
+
+/* Pricing: what the bid comes to stays in view while the lines are edited. */
+.price-head{position:sticky;top:-1px;z-index:3;background:var(--surface,var(--bg));border:1px solid var(--border);border-radius:var(--r);padding:0.6rem 0.75rem;margin-bottom:0.3rem;box-shadow:0 6px 14px -10px rgba(0,0,0,0.6);}
+.price-head .ph-total{display:flex;justify-content:space-between;align-items:baseline;gap:0.6rem;}
+.price-head .ph-total span{color:var(--text2);font-size:var(--fs-sm);}
+.price-head .ph-total b{font-size:var(--fs-2xl,1.6rem);color:var(--text);}
+.price-head .target-box{border:0;padding:0;margin-top:0.3rem;background:none;}
+.price-head .target-box .rate-note{display:none;}
+.mk-row{display:flex;flex-wrap:wrap;align-items:center;gap:0.4rem;margin-top:0.9rem;}
+.mk-label{color:var(--text2);font-size:var(--fs-sm);margin-right:0.2rem;}
+.mk-chips{display:flex;gap:0.35rem;flex-wrap:wrap;}
+.mk-chip{min-width:44px;min-height:40px;padding:0 0.6rem;border-radius:999px;border:1px solid var(--border);background:var(--bg);color:var(--text);font:inherit;font-size:var(--fs-sm);cursor:pointer;}
+.mk-chip.on{border-color:var(--accent);color:var(--accent);font-weight:700;}
+.mk-own{display:flex;align-items:center;gap:0.2rem;color:var(--text2);font-size:var(--fs-sm);}
+.mk-own .pt-mk{width:4.2rem;}
+.price-more{margin-top:0.9rem;border-top:1px solid var(--border);padding-top:0.5rem;}
+.price-more summary{cursor:pointer;color:var(--text2);font-size:var(--fs-sm);padding:0.4rem 0;min-height:44px;display:flex;align-items:center;}
+.price-more .btn-ghost{margin:0.35rem 0;}
+.link-btn{background:none;border:0;padding:0;color:var(--accent);font:inherit;text-decoration:underline;cursor:pointer;}
+.price-head .target-box > div:not(.rate-note){padding:0.05rem 0;}
+.price-head .target-v{font-size:var(--fs-sm);color:var(--text2);}
+.price-head .profit-box{margin:0.35rem 0 0;padding:0;border:0;background:none;}
+.price-head .profit-box small{display:none;}
+.price-head .profit-box.loss b{color:var(--red);}
+.profit-box em.est{font-style:normal;color:var(--text3);font-size:var(--fs-xs);}
+.mk-row{flex-wrap:nowrap;}
+.mk-chips{flex-wrap:nowrap;}
+.mk-chip{min-width:42px;padding:0 0.45rem;}
+.mk-own .pt-mk{width:3.6rem;padding-left:0.45rem;padding-right:0.3rem;}
+.prep-totals div{font-size:var(--fs-sm);color:var(--text2);}
+.prep-totals b{font-size:var(--fs-base);}

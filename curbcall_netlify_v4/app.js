@@ -3812,6 +3812,79 @@ function latestWin(d,item,district){
   const [avg,low,high,n,p25,p75]=byYear[year];
   return{year,avg,low,high,n,p25:p25??low,p75:p75??high};
 }
+// ── What an item wins for, at this job's size, nearby, lately ──
+// Every starting price, every line's check and the "winning price for these
+// lines" range come from here, so they can never disagree.
+//
+// It used to be the plain average of every winning price statewide. Small
+// jobs win at far higher unit prices, so that average sat well above what a
+// normal job wins for: MoDOT 4 in. sidewalk averaged $97.82/sq yd across
+// 97 wins, while the 34 wins on jobs near 1,450 sq yd had a median of
+// $72.41. A contractor pricing from the average would have lost the job.
+//
+// So: winning unit prices from the state's own results (the low bidder's
+// price on each item), from the last WIN_YEARS years, on jobs from 1/WIN_SPAN
+// to WIN_SPAN times this quantity. The job's district first if it has
+// WIN_MIN such wins, else statewide at this size, else statewide at any size.
+// The median is the starting price and the middle half (25th-75th
+// percentile) is the range a price is checked against. A state without
+// item-level results falls back to its rates file.
+const WIN_YEARS=4,WIN_SPAN=2.5,WIN_MIN=5;
+function quantile(sorted,q){
+  if(!sorted.length)return NaN;
+  const i=(sorted.length-1)*q,lo=Math.floor(i),hi=Math.ceil(i);
+  return sorted[lo]+(sorted[hi]-sorted[lo])*(i-lo);
+}
+function winPrice(d,item,qty,district){
+  if(!d||!item)return null;
+  const res=bidResults[d.state];
+  const dist=district&&district!=="STATEWIDE"?district:"";
+  if(res&&res.contracts&&res.contracts.length){
+    const since=new Date(Date.now()-WIN_YEARS*365.25*864e5).toISOString().slice(0,10);
+    const rows=[];
+    for(const c of res.contracts){
+      const it=c.items&&c.items[item];
+      if(!it||!Array.isArray(it[1])||!(Number(it[1][0])>0)||(c.date||"")<since)continue;
+      rows.push({q:Number(it[0])||0,w:Number(it[1][0]),dist:String(c.district||"")});
+    }
+    const q=Number(qty)||0;
+    const sized=r=>!q||(r.q>=q/WIN_SPAN&&r.q<=q*WIN_SPAN);
+    const place=dist?(d.districts[dist]||dist):"";
+    const tiers=[
+      dist&&[rows.filter(r=>r.dist===dist&&sized(r)),q?`similar-size jobs, ${place}`:`jobs, ${place}`,dist],
+      [rows.filter(sized),q?"similar-size jobs statewide":"jobs statewide","STATEWIDE"],
+      q&&[rows,"jobs of all sizes statewide","STATEWIDE"]];
+    for(const t of tiers){
+      if(!t||t[0].length<WIN_MIN)continue;
+      const w=t[0].map(r=>r.w).sort((a,b)=>a-b);
+      return{mid:quantile(w,0.5),p25:quantile(w,0.25),p75:quantile(w,0.75),n:w.length,
+        basis:"won",where:t[1],district:t[2]};
+    }
+  }
+  const dd=dist&&d.districts[dist]?dist:"STATEWIDE";
+  const w=d.basis==="awarded"?null:latestWin(d,item,dd);
+  if(w&&w.n>=3&&w.p25!=null&&w.p75!=null)
+    return{mid:(w.p25+w.p75)/2,p25:w.p25,p75:w.p75,n:w.n,basis:"won",where:`jobs, ${d.districts[dd]}`,district:dd};
+  const r=latestRate(d,item,dd);
+  if(r)return{mid:r.avg,p25:null,p75:null,n:r.bids,basis:d.basis==="awarded"?"won-avg":"bid-avg",where:d.districts[dd],district:dd};
+  return null;
+}
+// The price district for a job: its town named in a district's label
+// ("Southwest (Springfield, Joplin)"), else the one the contractor chose,
+// else statewide.
+function jobDistrict(d,city){
+  const town=String(city||"").split(",")[0].trim().toLowerCase();
+  if(d&&town&&d.districts){
+    for(const [k,label] of Object.entries(d.districts)){
+      if(k==="STATEWIDE")continue;
+      const names=String(label).toLowerCase().replace(/[()]/g,",").split(/,|\band\b|:/).map(x=>x.trim());
+      if(names.includes(town)||String(k).toLowerCase()===town)return k;
+    }
+  }
+  return priceDistrict(d);
+}
+function startPrice(wp){return wp?Math.round(wp.mid*100)/100:"";}
+
 function fmtRate(n){
   return "$"+(n>=1000?Math.round(n).toLocaleString():n.toFixed(2));
 }
@@ -4148,28 +4221,32 @@ function competitorsHTML(d,items,district){
 // records of winning bids; where only an average winning price exists the
 // comparison is against that, and says so.
 function priceCheckHTML(l){
+  if(l&&!l.item&&l.area){
+    const d=rateData[l.area.st],meta=d&&d.items[l.area.item];
+    const wp=meta&&winPrice(d,l.area.item,(Number(l.qty)||0)*l.area.per,l.area.dist);
+    if(!wp||wp.p25==null)return"";
+    const each=Number(l.price)/l.area.per;
+    const v=!(each>0)?"":each>wp.p75*1.0001?`<b class="pc pc-hi">Higher than most winning bids</b>`
+      :each<wp.p25*0.9999?`<b class="pc pc-lo">Lower than most winning bids</b>`:`<b class="pc pc-ok">In line with winning bids</b>`;
+    return`About ${money0(wp.p25*l.area.per)}–${money0(wp.p75*l.area.per)} a ramp at what ramps won for${v?` ${v}`:""}`;
+  }
   const d=l&&l.item&&rateData[l.st||"MO"];
   if(!d||!d.items[l.item])return"";
-  const district=priceDistrict(d),r=latestRate(d,l.item,district);
-  if(!r)return"";
-  const w=d.basis==="awarded"?null:latestWin(d,l.item,district);
-  const unit=esc(d.items[l.item].unit);
-  const price=Number(l.price);
+  const wp=winPrice(d,l.item,Number(l.qty)||0,l.dist||priceDistrict(d));
+  if(!wp)return"";
+  const unit=esc(d.items[l.item].unit),price=Number(l.price);
   let verdict="";
-  if(price>0){
-    if(w&&w.n>=2){
-      verdict=price>w.high?`<b class="pc pc-hi">Above every winning bid</b>`
-        :price<w.low?`<b class="pc pc-lo">Below every winning bid</b>`:`<b class="pc pc-ok">Inside the winning range</b>`;
-    }else if(d.basis==="awarded"||w){
-      const avg=w?w.avg:r.avg,ratio=price/avg;
-      verdict=ratio>1.25?`<b class="pc pc-hi">Over 25% above the average winning price</b>`
-        :ratio<0.75?`<b class="pc pc-lo">Over 25% below the average winning price</b>`:`<b class="pc pc-ok">Near the average winning price</b>`;
-    }
+  if(price>0&&wp.p25!=null){
+    verdict=price>wp.p75*1.0001?`<b class="pc pc-hi">Higher than most winning bids</b>`
+      :price<wp.p25*0.9999?`<b class="pc pc-lo">Lower than most winning bids</b>`:`<b class="pc pc-ok">In line with winning bids</b>`;
+  }else if(price>0){
+    const ratio=price/wp.mid;
+    verdict=ratio>1.25?`<b class="pc pc-hi">Over 25% above the average</b>`
+      :ratio<0.75?`<b class="pc pc-lo">Over 25% below the average</b>`:`<b class="pc pc-ok">Near the average</b>`;
   }
-  const ref=d.basis==="awarded"
-    ?`${esc(agencyOf(d))} ${esc(d.districts[district])}: average winning bid ${money2(r.avg)}/${unit}`
-    :`${esc(agencyOf(d))} ${esc(d.districts[district])}: average bid ${money2(r.avg)}/${unit}${
-      w?` · winning bids ${w.n>1?`${money2(w.low)}–${money2(w.high)}`:money2(w.avg)} (${plural(w.n,"job")})`:""}`;
+  const ref=wp.basis==="won"
+    ?`Won for ${money2(wp.mid)}/${unit} on ${wp.n} ${esc(wp.where)}${wp.p25!=null?` (most between ${money2(wp.p25)} and ${money2(wp.p75)})`:""}`
+    :`${esc(agencyOf(d))} ${esc(wp.where)}: ${wp.basis==="won-avg"?"average winning bid":"average bid"} ${money2(wp.mid)}/${unit}`;
   return`${ref}${verdict?` ${verdict}`:""}`;
 }
 
@@ -4277,27 +4354,33 @@ function oddsHTML(city,b,d,items,district){
 function targetRange(p,st){
   const d=rateData[st];
   if(!d||d.basis==="awarded")return null;
-  const district=priceDistrict(d);
   let low=0,high=0,mine=0,n=0;
+  const wheres=new Set();
   (p.lines||[]).forEach(l=>{
     const qty=Number(l.qty)||0;
-    if(!l.item||(l.st||"MO")!==d.state||!qty)return;
-    const w=latestWin(d,l.item,district);
-    if(!w||w.n<3)return;
-    low+=qty*w.p25;high+=qty*w.p75;mine+=qty*(Number(l.price)||0);n++;
+    // A ramp counted "each" is checked by its area: qty ramps × per sq yd.
+    const a=!l.item&&l.area&&l.area.st===d.state?l.area:null;
+    if((!l.item&&!a)||(!a&&(l.st||"MO")!==d.state)||!qty)return;
+    const per=a?a.per:1;
+    const w=winPrice(d,a?a.item:l.item,qty*per,(a?a.dist:l.dist)||priceDistrict(d));
+    if(!w||w.basis!=="won"||w.p25==null)return;
+    low+=qty*per*w.p25;high+=qty*per*w.p75;mine+=qty*(Number(l.price)||0);n++;
+    wheres.add(w.where);
   });
   if(!n)return null;
-  return{low,high,mine:mine*(1+(Number(p.markup)||0)/100),n,total:(p.lines||[]).filter(l=>Number(l.qty)).length,d,district};
+  return{low,high,mine:mine*(1+(Number(p.markup)||0)/100),n,total:(p.lines||[]).filter(l=>Number(l.qty)).length,d,wheres:[...wheres]};
 }
 function targetHTML(p,st){
   const t=targetRange(p,st);
   if(!t)return"";
   const verdict=!t.mine?"":t.mine>t.high?`<b class="pc pc-hi">above that range</b>`
     :t.mine<t.low?`<b class="pc pc-lo">below that range</b>`:`<b class="pc pc-ok">inside that range</b>`;
+  const all=t.n===t.total;
   return`<div class="target-box">
-    <div><span>Winning price for ${t.n===t.total?"these lines":`${t.n} of ${t.total} lines`}</span><b>${money0(t.low)}–${money0(t.high)}</b></div>
-    ${t.mine?`<div><span>Your price on them, with markup</span><b>${money0(t.mine)}</b></div><div class="target-v">You're ${verdict}.</div>`:""}
-    <div class="rate-note" style="margin-top:0.3rem;">The middle half of winning bids on ${esc(agencyOf(t.d))} jobs (${esc(t.d.districts[t.district])}), at your quantities. Lines without a state item, and items with fewer than 3 winning bids, aren't counted.</div>
+    <div><span>Winning price for ${all?"these lines":`${t.n} of ${t.total} lines`}</span><b>${money0(t.low)}–${money0(t.high)}</b></div>
+    ${t.mine&&!all?`<div><span>Your price on them, with markup</span><b>${money0(t.mine)}</b></div>`:""}
+    ${t.mine?`<div class="target-v">You're ${verdict}.</div>`:""}
+    <div class="rate-note" style="margin-top:0.3rem;">The middle half of what each item won for on ${esc(agencyOf(t.d))} ${esc(t.wheres.join("; "))}, at your quantities. Lines without a state item aren't counted.</div>
   </div>`;
 }
 
@@ -4616,7 +4699,10 @@ function prepAuto(b,p,id){
   // nothing about the bid, so it doesn't count as having the documents.
   if(p.docInfo&&p.docInfo.read_at&&!SITEWIDE_DOC_RE.test(p.docInfo.source||""))out.docs="Read in the app";
   const lines=(p.lines||[]).filter(l=>Number(l.qty)>0);
-  if(lines.length&&lines.every(l=>Number(l.price)>0))out.price="Every line priced";
+  // The app fills every starting price itself, so a full set of prices is
+  // not the contractor having priced it: it counts once they have changed a
+  // line (or they tick the step).
+  if(p.linesFrom==="you"&&lines.length&&lines.every(l=>Number(l.price)>0))out.price="Every line priced";
   const c=p.concrete&&p.concrete.plants;
   if(c&&Object.values(c).some(x=>x&&x.status==="Quoted"))out.concrete="Quote saved";
   if(p.formFilledAt)out.forms="Filled in "+shortDate(new Date(p.formFilledAt));
@@ -4757,22 +4843,41 @@ function stepDue(item,b,p){
 }
 // Starting lines: the ballpark's priced quantities, then anything it could
 // read but not price (ramp counts), then one blank line to fill in.
+// Ramps counted "each" in a state that pays them by area (MoDOT pays by the
+// square yard) used to start at $0. Priced as a typical ramp's area, said on
+// the line so the contractor changes it if their plans differ.
+const RAMP_SQYD=8;
+function rampEachLine(d,n,district){
+  const code=d&&d.cats&&d.cats.ramp,meta=code&&d.items[code];
+  const line={name:"ADA curb ramp",qty:n,unit:"each",price:"",ref:null};
+  if(!meta)return line;
+  if(meta.unit==="each"){
+    const wp=winPrice(d,code,n,district);
+    return Object.assign(line,{price:startPrice(wp),item:code,st:d.state,dist:district});
+  }
+  const per=meta.unit==="sq ft"?RAMP_SQYD*9:meta.unit==="sq yd"?RAMP_SQYD:0;
+  const wp=per&&winPrice(d,code,n*per,district);
+  if(!wp)return line;
+  line.price=Math.round(wp.mid*per*100)/100;
+  line.area={item:code,per,st:d.state,dist:district};
+  line.note=`Priced as about ${RAMP_SQYD} sq yd a ramp (ramp, landing and flares) at ${money2(wp.mid)}/${meta.unit}. Change it if your plans differ.`;
+  return line;
+}
 function defaultPrepLines(b,city){
   const lines=[];
   const d=rateData[bidState(city,b)];
   if(d){
-    const district=priceDistrict(d);
+    const district=jobDistrict(d,city);
     const est=ballpark(b,d,district,sidewalkWidth());
-    // Start at what wins, where the state's records say: pricing down from
-    // an all-bids average starts above most winning bids.
-    const start=l=>{const w=latestWin(d,l.item,district);return w?w.avg:l.rate.avg;};
-    est.lines.forEach(l=>lines.push({name:l.name,qty:Math.round(l.qty*10)/10,unit:l.unit,
-      price:Math.round(start(l)*100)/100,ref:l.rate.avg,item:l.item,st:d.state,
-      // The assumption travels with the number it produced.
-      note:l.assumedWidth?`From ${l.stated.raw} at ${l.assumedWidth} ft wide (assumed). Check the plans.`:""}));
+    est.lines.forEach(l=>{
+      const qty=Math.round(l.qty*10)/10,wp=winPrice(d,l.item,qty,district);
+      lines.push({name:l.name,qty,unit:l.unit,price:startPrice(wp)||Math.round(l.rate.avg*100)/100,
+        ref:l.rate.avg,item:l.item,st:d.state,dist:district,
+        // The assumption travels with the number it produced.
+        note:l.assumedWidth?`From ${l.stated.raw} at ${l.assumedWidth} ft wide (assumed). Check the plans.`:""});
+    });
     if(!est.lines.some(l=>l.unit==="each"&&l.item===d.cats.ramp))
-      extractQuantities(`${b.title||""}\n${b.scope||""}`).rampCounts.forEach(n=>
-        lines.push({name:"ADA curb ramp",qty:n,unit:"each",price:"",ref:null}));
+      extractQuantities(`${b.title||""}\n${b.scope||""}`).rampCounts.forEach(n=>lines.push(rampEachLine(d,n,district)));
   }
   if(!lines.length)lines.push({name:"",qty:"",unit:"",price:"",ref:null});
   return lines;
@@ -4972,7 +5077,7 @@ function renderAddendumReview(body,city,id,b,key){
     qc.forEach(c=>{if(c.line>=0){lines[c.line].qty=c.new_quantity;}});
     if(p.linesFrom==="ballpark")p.linesFrom="documents";
     const d=rateData[bidState(city,b)];
-    added.forEach(c=>lines.push(lineFromDocItem({...c,quantity:c.quantity},d)));
+    added.forEach(c=>lines.push(lineFromDocItem({...c,quantity:c.quantity},d,d&&jobDistrict(d,city))));
     const drop=new Set(rm.map(c=>c.line).filter(i=>i>=0));
     p.lines=lines.filter((l,i)=>!drop.has(i));
     (p.addendaApplied=p.addendaApplied||{})[key]=Date.now();
@@ -5205,7 +5310,7 @@ async function autoPrepare(id,city,b){
         if(items.length&&untouched){
           const d=rateData[bidState(city,b)];
           p.autoUndo={lines:before,linesFrom:beforeFrom||"ballpark"};
-          p.lines=items.map(it=>lineFromDocItem(it,d));
+          p.lines=items.map(it=>lineFromDocItem(it,d,d&&jobDistrict(d,city)));
           p.linesFrom="documents";
           filled.push(plural(items.length,"line item"));
         }
@@ -5538,14 +5643,15 @@ function docUnit(u){
 // A schedule row as a pricing line. The state's average is filled in only
 // when the description names a flatwork item AND the units agree -- "4 in.
 // sidewalk, SY" gets the sidewalk rate; "sidewalk, LS" gets nothing.
-function lineFromDocItem(it,d){
+function lineFromDocItem(it,d,docDistrict){
   const unit=docUnit(it.unit);
   const line={name:`${it.item_no?it.item_no+". ":""}${it.description}`,qty:it.quantity??"",unit,price:"",ref:null};
   const cat=nearestItem(it.description||"",false);
   const code=cat&&d&&d.cats[cat];
   if(code&&d.items[code]&&d.items[code].unit===unit){
-    const district=priceDistrict(d),r=latestRate(d,code,district),w=r&&latestWin(d,code,district);
-    if(r){line.ref=r.avg;line.price=Math.round((w?w.avg:r.avg)*100)/100;line.item=code;line.st=d.state;}
+    const district=docDistrict||priceDistrict(d),r=latestRate(d,code,district)||latestRate(d,code,"STATEWIDE");
+    const wp=winPrice(d,code,Number(it.quantity)||0,district);
+    if(r||wp){line.ref=r?r.avg:null;line.price=startPrice(wp)||Math.round(r.avg*100)/100;line.item=code;line.st=d.state;line.dist=district;}
   }
   return line;
 }
@@ -6029,7 +6135,7 @@ async function renderDocResult(body,city,id,b,doc,info,fresh){
   body.querySelectorAll("[data-open]").forEach(x=>x.onclick=()=>{const f=files[Number(x.dataset.open)];openBlob(f.blob,f.name);});
   const take=(replace)=>{
     const d=rateData[bidState(city,b)];
-    const lines=items.map(it=>lineFromDocItem(it,d));
+    const lines=items.map(it=>lineFromDocItem(it,d,d&&jobDistrict(d,city)));
     p.lines=replace?lines:(p.lines||[]).filter(l=>(l.name||"").trim()||l.qty||l.price).concat(lines);
     p.linesFrom=replace?"documents":"you";
     if(!p.lines.length)p.lines.push({name:"",qty:"",unit:"",price:"",ref:null});
@@ -6194,11 +6300,12 @@ function applyLineChoice(l,v,d){
   if(v.startsWith("s:")&&d){
     const code=v.slice(2),meta=d.items[code];
     if(!meta)return;
-    const district=priceDistrict(d),r=latestRate(d,code,district),w=r&&latestWin(d,code,district);
+    const district=l.dist||priceDistrict(d),r=latestRate(d,code,district);
+    const wp=winPrice(d,code,Number(l.qty)||0,district);
     // A price already typed is the contractor's; only an empty one is filled.
-    const fill=!Number(l.price)||(l.ref&&Number(l.price)===Math.round(l.ref*100)/100);
-    Object.assign(l,{name:meta.name,unit:meta.unit,item:code,st:d.state,ref:r?r.avg:null});
-    if(fill&&r)l.price=Math.round((w?w.avg:r.avg)*100)/100;
+    const fill=!Number(l.price)||l.auto||(l.ref&&Number(l.price)===Math.round(l.ref*100)/100);
+    Object.assign(l,{name:meta.name,unit:meta.unit,item:code,st:d.state,ref:r?r.avg:null,dist:district});
+    if(fill&&(wp||r))l.price=startPrice(wp)||Math.round(r.avg*100)/100;
   }else if(v.startsWith("x:")){
     const x=EXTRA_LINES.find(([n])=>n===v.slice(2));
     delete l.item;delete l.st;l.ref=null;
@@ -6257,7 +6364,7 @@ function profitSummaryHTML(p){
   (p.lines||[]).forEach(l=>{const lc=lineCost(l,p);if(!lc)return;n++;cost+=lc.cost;rev+=(Number(l.qty)||0)*(Number(l.price)||0)*k;});
   if(!n)return"";
   const profit=rev-cost,pct=rev>0?Math.round(profit/rev*100):0;
-  return`<div class="profit-box${profit<0?" loss":""}"><div><span>${profit<0?"You'd lose about":"You'd make about"}</span><b>${money0(Math.abs(profit))} (${pct}%)</b></div>
+  return`<div class="profit-box${profit<0?" loss":""}"><div><span>${profit<0?"You'd lose about":"You'd make about"}${costsAreMine()?"":` <em class="est">(estimate)</em>`}</span><b>${money0(Math.abs(profit))} (${pct}%)</b></div>
     <small>${costsAreMine()?"From your costs":"From starting guesses until you set your costs"}, on the lines it can size.</small></div>`;
 }
 function costsEditorHTML(){
@@ -6365,7 +6472,7 @@ function renderTakeoffReview(body,city,id,b){
   document.getElementById("to-again").onclick=()=>renderTakeoff(body,city,id,b);
   const take=(replace)=>{
     const d=rateData[bidState(city,b)];
-    const lines=t.items.map(it=>({...lineFromDocItem(it,d),note:`Measured from the plans: ${it.basis}. Check it.`}));
+    const lines=t.items.map(it=>({...lineFromDocItem(it,d,d&&jobDistrict(d,city)),note:`Measured from the plans: ${it.basis}. Check it.`}));
     p.lines=replace?lines:(p.lines||[]).filter(l=>(l.name||"").trim()||l.qty||l.price).concat(lines);
     p.linesFrom=replace?"documents":"you";
     savePrep(id,city);back();
@@ -6394,28 +6501,44 @@ function renderPrepPricing(body,city,id,b){
     </div>`;
   const t=prepTotals(p);
   const rates=rateData[bidState(city,b)];
-  const startNote=!rates?"Prices for this state aren't in the app yet."
-    :`Starts from the quantities in the posting at ${esc(agencyOf(rates))}'s ${
-      rates.basis==="awarded"?"average winning bid":(rates.wins||bidResults[rates.state])?"average winning bid where it's known, else its average bid":"average bid"}.`;
+  const startNote=!rates?"Prices for this state aren't in the app yet. Enter your own."
+    :"Prices start at what each item won for on similar-size jobs near here. Change any number.";
   const canRead=prepDocCandidates(b).length>0;
   const hasPast=pastPreparedBids(id).length>0;
-  body.innerHTML=`<button class="btn-primary" id="pl-read" style="margin-bottom:0.6rem;">${canRead?"Read quantities from the bid form":"Read quantities from a bid form you upload"}</button>
-    ${p.docInfo&&p.docInfo.read_at?`<button class="btn-ghost" id="pl-docinfo" style="margin:0 0 0.6rem;">See what was read from ${esc(p.docInfo.source||"the documents")}</button>`:""}
-    ${hasPast?`<button class="btn-ghost" id="pl-past" style="margin:0 0 0.6rem;">Use a past bid</button>`:""}
-    <button class="btn-ghost" id="pl-takeoff" style="margin:0 0 0.6rem;">${p.takeoff?"See what was measured from the plans":"No item list? Measure from the plans"}</button>
-    <div class="rate-note" style="margin-top:0;">${p.docInfo&&p.docInfo.source?`Bid documents read: ${esc(p.docInfo.source)}. `:""}${startNote} Change anything to your own numbers.</div>
-    <div id="prep-lines">${p.lines.map(lineRow).join("")}</div>
-    <div class="prep-add"><button class="btn-ghost" id="pl-add">+ Add line</button><button class="btn-ghost" id="pl-reset">Start over from ballpark</button></div>
-    <div id="pt-target">${targetHTML(p,bidState(city,b))}</div>
-    <div class="prep-totals">
-      <div><span>Subtotal</span><b id="pt-sub">${money0(t.sub)}</b></div>
-      <div><span>Markup <input class="input pt-mk" id="pt-mk" inputmode="decimal" value="${esc(String(p.markup||0))}" aria-label="Markup percent">%</span><b id="pt-mkv">${money0(t.markup)}</b></div>
-      <div class="pt-grand"><span>Your bid</span><b id="pt-total">${money0(t.total)}</b></div>
+  const wasRead=!!(p.docInfo&&p.docInfo.read_at);
+  const mk=String(p.markup||0);
+  const MK_CHOICES=["0","10","15","20"];
+  // One screen, top to bottom: what the bid comes to and whether it wins,
+  // one button to fill the lines from the bid form, the lines, the markup.
+  // Everything else is folded under "More ways to price".
+  body.innerHTML=`<div class="price-head" id="price-head">
+      <div class="ph-total"><span>Your bid</span><b id="pt-total">${money0(t.total)}</b></div>
+      <div id="pt-target">${targetHTML(p,bidState(city,b))}</div>
+      <div id="pt-profit">${profitSummaryHTML(p)}</div>
     </div>
-    <div id="pt-profit">${profitSummaryHTML(p)}</div>
-    ${costsEditorHTML()}
+    ${wasRead?`<div class="rate-note">Lines read from ${esc(p.docInfo.source||"the bid form")}. <button class="link-btn" id="pl-read">Read again</button></div>`
+      :`<button class="btn-primary" id="pl-read" style="margin:0.7rem 0 0.4rem;">${canRead?"Fill from the bid form":"Fill from a bid form you upload"}</button>`}
+    <div class="rate-note" style="margin-top:0.2rem;">${startNote}</div>
+    <div id="prep-lines">${p.lines.map(lineRow).join("")}</div>
+    <div class="prep-add"><button class="btn-ghost" id="pl-add">+ Add line</button></div>
+    <div class="mk-row">
+      <span class="mk-label">Markup</span>
+      <span class="mk-chips">${MK_CHOICES.map(v=>`<button type="button" class="mk-chip${v===mk?" on":""}" data-mk="${v}">${v}%</button>`).join("")}</span>
+      <span class="mk-own"><input class="input pt-mk" id="pt-mk" inputmode="decimal" value="${esc(mk)}" aria-label="Markup percent">%</span>
+    </div>
+    <div class="prep-totals">
+      <div><span>Lines</span><b id="pt-sub">${money0(t.sub)}</b></div>
+      <div><span>Markup</span><b id="pt-mkv">${money0(t.markup)}</b></div>
+    </div>
     ${b.value?`<div class="rate-note">Posted value: <b>${esc(b.value)}</b></div>`:""}
-    <div class="rate-note">Add lines the posting doesn't list: removal, mobilization, traffic control, testing.</div>`;
+    <details class="price-more" id="price-more"><summary>More ways to price</summary>
+      ${wasRead?`<button class="btn-ghost" id="pl-docinfo">See what was read from ${esc(p.docInfo.source||"the documents")}</button>`:""}
+      <button class="btn-ghost" id="pl-takeoff">${p.takeoff?"See what was measured from the plans":"No item list? Measure from the plans"}</button>
+      ${hasPast?`<button class="btn-ghost" id="pl-past">Use a past bid</button>`:""}
+      <button class="btn-ghost" id="pl-reset">Start over from the posting</button>
+      ${costsEditorHTML()}
+      <div class="rate-note">Add lines the posting doesn't list: removal, mobilization, traffic control, testing.</div>
+    </details>`;
   const refresh=()=>{
     const tt=prepTotals(p);
     p.lines.forEach((l,i)=>{
@@ -6465,14 +6588,17 @@ function renderPrepPricing(body,city,id,b){
     savePrep(id,city);openPrep(city,id,"pricing");
   };
   document.getElementById("pl-reset").onclick=()=>{
-    if(!confirm("Replace your lines with the ballpark from the posting?"))return;
+    if(!confirm("Replace your lines with the quantities from the posting, at what they win for?"))return;
     p.lines=defaultPrepLines(b,city);p.linesFrom="ballpark";
     savePrep(id,city);openPrep(city,id,"pricing");
   };
-  document.getElementById("pt-mk").oninput=(e)=>{
-    p.markup=e.target.value.replace(/[^0-9.]/g,"");
+  const setMk=(v)=>{
+    p.markup=String(v).replace(/[^0-9.]/g,"");
+    body.querySelectorAll(".mk-chip").forEach(c=>c.classList.toggle("on",c.dataset.mk===String(Number(p.markup)||0)));
     savePrep(id,city);refresh();
   };
+  document.getElementById("pt-mk").oninput=(e)=>setMk(e.target.value);
+  body.querySelectorAll(".mk-chip").forEach(c=>c.onclick=()=>{document.getElementById("pt-mk").value=c.dataset.mk;setMk(c.dataset.mk);});
   wireCostsEditor(body,refresh);
 }
 

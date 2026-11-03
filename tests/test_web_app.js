@@ -1473,14 +1473,14 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await page.evaluate((i) => openPrep("Salem, OR", i, "pricing"), id);
     await page.waitForTimeout(500);
     const line = await page.evaluate((i) => bidPrep[i].lines[0], id);
-    check("Oregon pricing starts at the average winning bid",
-          line && line.st === "OR" && line.price === Math.round(orWin[0] * 100) / 100, JSON.stringify(line));
+    check("Oregon pricing starts at what that size of walk won for in Oregon",
+          line && line.st === "OR" && line.price === startPriceFor("or", line.item, "STATEWIDE", 2000), JSON.stringify(line));
     const sheet = await page.textContent("#prep-body");
     check("the line says where that price sits", /Inside the winning range|winning/.test(sheet), sheet.slice(0, 300));
     await page.fill('.prep-line[data-i="0"] input[data-f="price"]', String(Math.ceil(orWin[2] + 5)));
     await page.waitForTimeout(300);
-    check("a price over every winning bid is called out as it's typed",
-          /Above every winning bid/.test(await page.textContent('[data-pc="0"]')));
+    check("a price above most winning bids is called out as it's typed",
+          /Higher than most winning bids/.test(await page.textContent('[data-pc="0"]')));
 
     const moId = await page.evaluate(() => { closeModal(); return bidId("Springfield, MO", bidData["Springfield, MO"][0]); });
     await page.evaluate(() => openDetail("Springfield, MO", bidData["Springfield, MO"][0]));
@@ -1501,19 +1501,36 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
 
   // Where a pricing line starts: the average winning bid where the state's
   // records give one, else the average bid. Read from the committed files.
-  const startPrice = (item, district) => {
-    const rates = JSON.parse(fs.readFileSync(path.join(ROOT, "rates", "mo.json"), "utf8"));
-    const resPath = path.join(ROOT, "results", "mo.json");
-    const res = fs.existsSync(resPath) ? JSON.parse(fs.readFileSync(resPath, "utf8")) : {};
+  // What the app should start a line at: the median winning unit price on
+  // similar-size jobs (1/2.5 to 2.5 times the quantity) from the last four
+  // years, in the job's district when it has 5 such wins, else statewide at
+  // that size, else statewide at any size. Worked out here from the raw
+  // results file, independently of the app.
+  function startPriceFor(st, item, district, qty) {
+    const resPath = path.join(ROOT, "results", st + ".json");
+    const rates = JSON.parse(fs.readFileSync(path.join(ROOT, "rates", st + ".json"), "utf8"));
+    const res = fs.existsSync(resPath) ? JSON.parse(fs.readFileSync(resPath, "utf8")) : { contracts: [] };
+    const since = new Date(Date.now() - 4 * 365.25 * 864e5).toISOString().slice(0, 10);
+    const rows = (res.contracts || []).filter((c) => c.items && c.items[item] && Array.isArray(c.items[item][1])
+        && c.items[item][1][0] > 0 && (c.date || "") >= since)
+      .map((c) => ({ q: Number(c.items[item][0]) || 0, w: Number(c.items[item][1][0]), d: String(c.district || "") }));
+    const sized = (r) => !qty || (r.q >= qty / 2.5 && r.q <= qty * 2.5);
+    const tiers = [district && district !== "STATEWIDE" ? rows.filter((r) => r.d === district && sized(r)) : [],
+      rows.filter(sized), qty ? rows : []];
+    for (const t of tiers) {
+      if (t.length < 5) continue;
+      const w = t.map((r) => r.w).sort((a, b) => a - b), i = (w.length - 1) / 2;
+      return Math.round(((w[Math.floor(i)] + w[Math.ceil(i)]) / 2) * 100) / 100;
+    }
     const last = (by) => by && by[Object.keys(by).sort().pop()];
-    const w = last(((res.wins || {})[item] || {})[district]);
-    return Math.round((w ? w[0] : last(rates.prices[item][district])[0]) * 100) / 100;
-  };
+    return Math.round(last(rates.prices[item][district] || rates.prices[item].STATEWIDE)[0] * 100) / 100;
+  }
+  function startPrice(item, district, qty) { return startPriceFor("mo", item, district, qty); }
 
   // ── Prepare bid: steps, pricing, summary ──
   console.log("\nPrepare bid keeps the whole bid in the app");
   {
-    const swAvg = startPrice("6086004", "SW");
+    const swAvg = startPrice("6086004", "SW", 666.7);
     const ctx = await browser.newContext(MOBILE_VIEWPORT);
     const page = await ctx.newPage();
     const pageErrors = [];
@@ -1577,10 +1594,14 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     const lines = await page.evaluate((i) => bidPrep[i].lines, id);
     const swLine = lines.find((l) => /sidewalk/i.test(l.name));
     const rampLine = lines.find((l) => /ramp/i.test(l.name));
-    check("pricing starts from the ballpark: sidewalk at the SW winning (else average) bid",
+    check("pricing starts from the posting's quantities, at what that size of sidewalk won for in the SW",
           swLine && Math.abs(swLine.qty - 666.7) < 0.1 && swLine.price === swAvg, JSON.stringify(swLine));
-    check("the ramp count becomes a line for you to price, not a guess",
-          rampLine && rampLine.qty === 4 && rampLine.unit === "each" && rampLine.price === "", JSON.stringify(rampLine));
+    // MoDOT pays ramps by the square yard; a ramp counted "each" is priced as
+    // a typical ramp's area, and the line says so.
+    const rampSy = startPrice("6081010", "SW", 4 * 8);
+    check("the ramp count becomes a line priced as a typical ramp's area, and says so",
+          rampLine && rampLine.qty === 4 && rampLine.unit === "each" && rampLine.price === Math.round(rampSy * 8 * 100) / 100
+          && /about 8 sq yd a ramp/.test(rampLine.note), JSON.stringify(rampLine));
     // The item is a dropdown: the state's items, other common work, or typed.
     const pick = await page.$$eval('.prep-line[data-i="0"] .pl-pick option', (os) => os.map((o) => o.textContent));
     check("the item is a dropdown of the state's items and other work",
@@ -1594,7 +1615,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await page.waitForTimeout(300);
     const picked = await page.evaluate(([i, n]) => bidPrep[i].lines[n], [id, newIdx]);
     check("picking a state item fills its unit and going price",
-          picked.name === "Curb and gutter, type B" && picked.unit === "ft" && picked.item === "6091052" && picked.price === startPrice("6091052", "SW"),
+          picked.name === "Curb and gutter, type B" && picked.unit === "ft" && picked.item === "6091052" && picked.price === startPrice("6091052", "SW", 0),
           JSON.stringify(picked));
     await page.selectOption(`.prep-line[data-i="${newIdx}"] .pl-pick`, "custom");
     await page.waitForTimeout(300);
@@ -1645,7 +1666,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
   // ── Phase 2: read the bid form's schedule of items ──
   console.log("\nThe bid form's own items fill the pricing sheet, after review");
   {
-    const swAvg = startPrice("6086004", "SW");
+    const swAvg = startPrice("6086004", "SW", 1250);
     const ctx = await browser.newContext(MOBILE_VIEWPORT);
     const page = await ctx.newPage();
     const pageErrors = [];
@@ -1745,7 +1766,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await page.waitForTimeout(400);
     const lines = await page.evaluate((i) => bidPrep[i].lines, id);
     const sy = lines.find((l) => /^2\./.test(l.name)), ls = lines.find((l) => /^3\./.test(l.name));
-    check("a sidewalk item in SY gets the SW sidewalk average",
+    check("a sidewalk item in SY gets what sidewalks that size won for in the SW",
           sy && sy.qty === 1250 && sy.unit === "sq yd" && sy.price === swAvg, JSON.stringify(sy));
     check("the same words in a lump-sum unit get no MoDOT price", ls && ls.unit === "lump sum" && ls.price === "", JSON.stringify(ls));
     check("mobilization comes through to be priced", lines.some((l) => /Mobilization/.test(l.name) && l.unit === "lump sum"));
@@ -2121,9 +2142,11 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await page.waitForTimeout(400);
     const pricing = await page.textContent("#prep-body");
     check("the bid shows one line of what it makes, from starting guesses until costs are set",
-          /You'd (?:make|lose) about\s*\$\d/.test(pricing) && /starting guesses/.test(pricing) && !/Your cost about/.test(pricing),
+          /You'd (?:make|lose) about[^$]*\$\d/.test(pricing) && /starting guesses/.test(pricing) && !/Your cost about/.test(pricing),
           pricing.slice(-700));
     const before = await page.evaluate((i) => lineCost(prepFor(i).lines[0], prepFor(i)).perUnit, id);
+    await page.evaluate(() => { const d = document.getElementById("price-more"); if (d) d.open = true; });
+
     await page.click("#cost-edit summary");
     await page.fill('[data-cost-k="sf_day"]', "1600");
     await page.waitForTimeout(300);
@@ -2156,6 +2179,8 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     // Measuring from the plans.
     await page.evaluate((i) => openPrep("Aurora, MO", i, "pricing"), id);
     await page.waitForTimeout(400);
+    await page.evaluate(() => { const d = document.getElementById("price-more"); if (d) d.open = true; });
+
     await page.click("#pl-takeoff");
     await page.waitForTimeout(300);
     await page.click('[data-tl="0"]');
@@ -2354,6 +2379,8 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     // Measuring from every plan file at once, through a server restart.
     await page.evaluate((i) => openPrep("Aurora, MO", i, "pricing"), a);
     await page.waitForTimeout(400);
+    await page.evaluate(() => { const d = document.getElementById("price-more"); if (d) d.open = true; });
+
     await page.click("#pl-takeoff");
     await page.waitForTimeout(300);
     await page.click("#to-all");
@@ -2929,6 +2956,9 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
           /Your past prices: \$75\.00 lost · \$60\.00 won/.test(sheet), sheet.slice(0, 400));
     check("the ramp line shows your past ramp price", /\$1,800\.00 won/.test(sheet));
 
+    await page.evaluate(() => { const d = document.getElementById("price-more"); if (d) d.open = true; });
+
+
     await page.click("#pl-past");
     await page.waitForTimeout(200);
     check("past bids are listed by name", /Oak St Ramps/.test(await page.textContent("#prep-body")));
@@ -2939,6 +2969,8 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
           lines.find((l) => l.item === "6086004").price === 60 && lines.find((l) => /ramp/i.test(l.name)).price === 1800, JSON.stringify(lines));
     const qtyBefore = lines.find((l) => l.item === "6086004").qty;
     check("...without touching this job's quantities", Math.abs(qtyBefore - 666.7) < 0.1);
+    await page.evaluate(() => { const d = document.getElementById("price-more"); if (d) d.open = true; });
+
     await page.click("#pl-past");
     await page.waitForTimeout(200);
     await page.click('[data-lines="pastlost"]');
