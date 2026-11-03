@@ -121,7 +121,8 @@ def load(path):
 
 
 def source_prices(since):
-    """{state: {cat: [winning unit prices]}} and the newest letting date used."""
+    """{state: {cat: [(quantity, winning unit price)]}}, in ITEMS units, and
+    the newest letting date used."""
     out, newest = {}, ""
     for name in sorted(os.listdir(RESULTS)):
         m = re.fullmatch(r"([a-z]{2})\.json", name)
@@ -141,12 +142,13 @@ def source_prices(since):
                     continue
                 it = dict(c.get("items") or []).get(code)
                 try:
-                    won = float(it[1][0])
+                    won, qty = float(it[1][0]), float(it[0] or 0)
                 except (TypeError, ValueError, IndexError):
                     continue
                 v = convert(won, meta.get("unit"), ITEMS[cat][1])
                 if v and v > 0:
-                    vals.append(v)
+                    # A price per sq yd is 9x one per sq ft; the quantity is 1/9.
+                    vals.append((round(qty * won / v, 1) if qty > 0 else 0, v))
                     newest = max(newest, c.get("date") or "")
             if vals:
                 cats[cat] = vals
@@ -178,11 +180,11 @@ def build():
             continue
         within = sorted((s for s in sources if miles(st, s) <= MAX_MILES), key=lambda s: miles(st, s))
         near = within[:NEAREST]
-        items, prices, wins, cats, used = {}, {}, {}, {}, set()
+        items, prices, wins, cats, used, jobs, job_from = {}, {}, {}, {}, set(), {}, {}
         year = (newest or anchor)[:4]
         for cat, (label, unit) in ITEMS.items():
             from_ = [s for s in near if cat in sources[s]]
-            pairs = [(v, 1.0 / len(sources[s][cat])) for s in from_ for v in sources[s][cat]]
+            pairs = [(v, 1.0 / len(sources[s][cat])) for s in from_ for _, v in sources[s][cat]]
             own_where = None
             if len(pairs) < MIN_JOBS:
                 # None of the nearest prices it (Kentucky has no ramp item):
@@ -191,7 +193,7 @@ def build():
                 if not alt:
                     continue
                 from_, own_where = [alt], f"in {NAMES[alt]}"
-                pairs = [(v, 1.0) for v in sources[alt][cat]]
+                pairs = [(v, 1.0) for _, v in sources[alt][cat]]
             vals = [v for v, _ in pairs]
             mid, p25, p75 = (round(weighted_quantile(pairs, q), 2) for q in (0.5, 0.25, 0.75))
             code = "N-" + cat
@@ -200,6 +202,11 @@ def build():
                 items[code]["where"] = own_where
             wins[code] = {"STATEWIDE": {year: [mid, round(min(vals), 2), round(max(vals), 2), len(vals), p25, p75]}}
             prices[code] = {"STATEWIDE": {year: [mid, round(min(vals), 2), round(max(vals), 2), len(vals), None]}}
+            # Every job behind it, [quantity, unit price, source], so the app
+            # can price at the job's size the way it does with a state's own
+            # results: small jobs win at higher unit prices.
+            jobs[code] = [[q, round(v, 2), from_.index(s)] for s in from_ for q, v in sources[s][cat]]
+            job_from[code] = from_
             used.update(from_)
         if not items:
             continue
@@ -213,6 +220,7 @@ def build():
             "fields": ["avg", "low", "high", "n", "avg_qty"],
             "districts": {"STATEWIDE": f"in {listed}"},
             "cats": cats, "items": items, "prices": prices, "wins": wins,
+            "jobs": jobs, "job_from": job_from,
             "headline": [cats[c] for c in HEADLINE if c in cats],
         }
     return files

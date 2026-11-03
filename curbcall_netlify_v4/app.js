@@ -3853,8 +3853,29 @@ function quantile(sorted,q){
   const i=(sorted.length-1)*q,lo=Math.floor(i),hi=Math.ceil(i);
   return sorted[lo]+(sorted[hi]-sorted[lo])*(i-lo);
 }
+// [[value, weight]] -> the value where q of the weight lies below.
+function weightedQuantile(pairs,q){
+  const s=pairs.slice().sort((a,b)=>a[0]-b[0]);
+  const total=s.reduce((t,p)=>t+p[1],0);
+  let acc=0;
+  for(const [v,w] of s){acc+=w;if(acc>=q*total-1e-9)return v;}
+  return s.length?s[s.length-1][0]:NaN;
+}
 function winPrice(d,item,qty,district){
   if(!d||!item)return null;
+  // Borrowed prices carry every job behind them: sized like a state's own
+  // results, each source state counting the same however many jobs it let.
+  const jobs=isNearby(d)&&d.jobs&&d.jobs[item];
+  if(jobs&&jobs.length>=WIN_MIN){
+    const q=Number(qty)||0;
+    const sized=q?jobs.filter(r=>r[0]>=q/WIN_SPAN&&r[0]<=q*WIN_SPAN):[];
+    const use=sized.length>=WIN_MIN?sized:jobs;
+    const per={};use.forEach(r=>{per[r[2]]=(per[r[2]]||0)+1;});
+    const pairs=use.map(r=>[r[1],1/per[r[2]]]);
+    const where=(d.items[item]&&d.items[item].where)||d.districts.STATEWIDE;
+    return{mid:weightedQuantile(pairs,0.5),p25:weightedQuantile(pairs,0.25),p75:weightedQuantile(pairs,0.75),
+      n:use.length,basis:"won",where:`${use===sized?"similar-size ":""}state road jobs ${where}`,district:"STATEWIDE"};
+  }
   const res=bidResults[d.state];
   const dist=district&&district!=="STATEWIDE"?district:"";
   if(res&&res.contracts&&res.contracts.length){

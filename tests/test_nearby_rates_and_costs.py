@@ -74,6 +74,15 @@ class NearbyRatesTests(unittest.TestCase):
                 self.assertGreaterEqual(n, bn.MIN_JOBS)
                 self.assertEqual(d["prices"][code]["STATEWIDE"][y][0], mid)
 
+    def test_every_job_behind_a_price_ships_with_it(self):
+        """So the app can price at the job's size."""
+        for st, d in self.files.items():
+            for code, rows in d["jobs"].items():
+                self.assertEqual(len(rows), d["wins"][code]["STATEWIDE"][str(d["years"][0])][3], (st, code))
+                srcs = d["job_from"][code]
+                self.assertTrue(set(srcs) <= set(d["from"]))
+                self.assertTrue(all(0 <= r[2] < len(srcs) and r[1] > 0 and r[0] >= 0 for r in rows))
+
     def test_ohio_sidewalk_is_a_sane_price_per_square_yard(self):
         d = self.files["OH"]
         mid = d["wins"]["N-sidewalk"]["STATEWIDE"][str(d["years"][0])][0]

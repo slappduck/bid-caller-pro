@@ -2961,7 +2961,12 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     check("every line starts priced, ramps included",
           lines.length === 3 && lines.every((l) => Number(l.price) > 0), JSON.stringify(lines));
     check("each line's check names where its price came from",
-          /on \d+ state road jobs in Kentucky/.test(sheet) && /state road jobs in Missouri/.test(sheet));
+          /on \d+ similar-size state road jobs in Kentucky/.test(sheet) && /state road jobs in Missouri/.test(sheet));
+    check("borrowed prices are sized to the job: 1,450 sq yd of sidewalk is below the all-sizes median",
+          await page.evaluate((i) => {
+            const d = rateData.OH, l = bidPrep[i].lines[0];
+            return l.price < d.wins["N-sidewalk"].STATEWIDE[String(d.years[0])][0];
+          }, id));
     check("labor starts at the state's cement mason pay plus 35%",
           await page.evaluate(() => myCosts().wage === 41));
     await page.evaluate(() => { document.getElementById("price-more").open = true; document.getElementById("cost-edit").open = true; });
