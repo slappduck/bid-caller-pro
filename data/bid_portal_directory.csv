@@ -4014,7 +4014,7 @@ edennc.gov,Eden,NC,City,City of Eden,not_found,,,2026-08-11
 faithnc.gov,Faith,NC,City,Town of Faith,not_found,,,2026-08-11
 lawsonmo.gov,Lawson,MO,City,"City of Lawson, MO",not_found,,,2026-08-11
 fremontnc.gov,Fremont,NC,City,Fremont town,not_found,,,2026-08-11
-billingsmtpublicworks.gov,Billings,MT,City,City of Billings Public Works Department,not_found,,,2026-08-11
+billingsmtpublicworks.gov,Billings,MT,City,City of Billings Public Works Department,found,https://billingsmtpublicworks.gov/Bids.aspx,civicplus,2026-11-03
 cooleemee.gov,Cooleemee,NC,City,Town of Cooleemee,not_found,,,2026-08-11
 connellysprings.gov,Connelly Springs,NC,City,Town of Connelly Springs,not_found,,,2026-08-11
 highpointnc.gov,High Point,NC,City,City of High Point,found,https://highpointnc.gov/Bids.aspx,civicplus,2026-08-11
@@ -4068,8 +4068,8 @@ maidennc.gov,Maiden,NC,City,Town of Maiden,not_found,,,2026-08-11
 albemarlenc.gov,Albemarle,NC,City,City of Albemarle,not_found,,,2026-08-11
 townofkelfordnc.gov,Kelford,NC,City,Town of Kelford,not_found,,,2026-08-11
 cofieldnc.gov,COFIELD,NC,City,Town of Cofield,not_found,,,2026-08-11
-hardinmontana.gov,Hardin,MT,City,City of Hardin,not_found,,,2026-08-11
-eureka-mt.gov,Eureka,MT,City,Town of Eureka,not_found,,,2026-08-11
+hardinmontana.gov,Hardin,MT,City,City of Hardin,found,https://hardinmontana.gov/departments/public_works/public_notices.php,custom,2026-11-03
+eureka-mt.gov,Eureka,MT,City,Town of Eureka,found,https://eureka-mt.gov/invitation-to-bid,agency,2026-11-03
 summitms.gov,Summit,MS,City,Town of Summit,not_found,,,2026-08-11
 ozarkmissouri.gov,Ozark,MO,City,City of Ozark,not_found,,,2026-08-11
 pinevillenc.gov,Pineville,NC,City,Town of Pineville,found,https://pinevillenc.gov/bids,agency,2026-08-11
@@ -4093,7 +4093,7 @@ carync.gov,Cary,NC,City,Town of Cary,not_found,,,2026-08-11
 townofsawmillsnc.gov,Granite Falls,NC,City,Town of Sawmills,not_found,,,2026-08-11
 surfcitync.gov,Surf City,NC,City,Town of Surf City,found,https://surfcitync.gov/Bids.aspx,civicplus,2026-08-11
 townofnashvillenc.gov,Nashville,NC,City,Town of Nashville,not_found,,,2026-08-11
-townofdrummondmt.gov,Drummond,MT,City,Town of Drummond,not_found,,,2026-08-11
+townofdrummondmt.gov,Drummond,MT,City,Town of Drummond,found,https://townofdrummondmt.gov/public-notices,custom,2026-11-03
 proctorvillenc.gov,Proctorville,NC,City,Town of Proctorville,not_found,,,2026-08-11
 hollyspringsnc.gov,Holly Springs,NC,City,Town of Holly Springs,found,https://hollyspringsnc.gov/Bids.aspx,civicplus,2026-11-02
 lowellnc.gov,Lowell,NC,City,City of Lowell,found,https://lowellnc.gov/bid-documents/,agency,2026-08-11
@@ -10230,7 +10230,7 @@ waynecountyms.gov,Waynesboro,MS,County,Wayne County Board of Supervisors,not_fou
 prcomt.gov,Broadus,MT,County,Powder River County,not_found,,,2026-08-11
 chickasawcountyms.gov,Houston,MS,County,Chickasaw County,not_found,,,2026-08-11
 warrencountyms.gov,Vicksburg,MS,County,Warren County MS Board of Supervisors,found,https://warrencountyms.gov/government/purchasing,agency,2026-11-02
-bsbmt.gov,Butte,MT,County,City-County of Butte-Silver Bow,not_found,,,2026-08-11
+bsbmt.gov,Butte,MT,County,City-County of Butte-Silver Bow,found,https://bsbmt.gov/Bids.aspx,civicplus,2026-11-03
 stanlycountync.gov,Albemarle,NC,County,County of Stanly,found,https://stanlycountync.gov/Bids.aspx,civicplus,2026-08-11
 jocomoema.gov,Warrensburg,MO,County,Johnson County Missouri Emergency Managment Agency,not_found,,,2026-08-11
 harrisoncountyms.gov,Gulfport,MS,County,Harrison County Board of Supervisors,found,https://harrisoncountyms.gov/departments/purchasing/vendor_information.php,agency,2026-08-11
@@ -10255,7 +10255,7 @@ phillipscountymt.gov,Malta,MT,County,Phillips County,not_found,,,2026-08-11
 pendercountync.gov,Burgaw,NC,County,Pender County Government,found,https://pendercountync.gov/Bids.aspx,civicplus,2026-08-11
 franklinmo.gov,Union,MO,County,"Franklin County, MO",found,https://franklinmo.gov/Bids.aspx,civicplus,2026-11-02
 rosebudcountysheriffmt.gov,Forsyth,MT,County,Rosebud County Sheriff's Office,not_found,,,2026-08-11
-sgcountymt.gov,BIG TIMBER,MT,County,Sweet Grass County,not_found,,,2026-08-11
+sgcountymt.gov,BIG TIMBER,MT,County,Sweet Grass County,found,https://sgcountymt.gov/clerk-recorder/invitation-to-bid-on-annex-cleaning-contract/,agency,2026-11-03
 camdencountync.gov,Camden,NC,County,Camden County,found,https://camdencountync.gov/Bids.aspx,civicplus,2026-08-11
 valleycountymt.gov,Glasgow,MT,County,Valley County Courthouse,not_found,,,2026-08-11
 carteretcountync.gov,Beaufort,NC,County,County of Carteret,found,https://carteretcountync.gov/Bids.aspx,civicplus,2026-08-11
@@ -10296,7 +10296,7 @@ readybrunswickcountync.gov,Bolivia,NC,County,Brunswick County Government,not_fou
 wheatlandcomt.gov,Harlowton,MT,County,Wheatland County,not_found,,,2026-08-11
 franklincountyms.gov,Meadville,MS,County,Franklin County Board of Supervisors,found,https://franklincountyms.gov/purchasing,agency,2026-11-02
 wataugacounty.gov,Boone,NC,County,Watauga County,not_found,,,2026-08-11
-broadwatercountymt.gov,Townsend,MT,County,Broadwater County,not_found,,,2026-08-11
+broadwatercountymt.gov,Townsend,MT,County,Broadwater County,found,https://broadwatercountymt.gov/citizen_resources/public_notices.php,custom,2026-11-03
 mitchellcountync.gov,Bakersville,NC,County,Mitchell County,not_found,,,2026-08-11
 beaverheadcountymt.gov,Dillon,MT,County,Beaverhead County,found,https://beaverheadcountymt.gov/bids-and-rfps,agency,2026-08-26
 brunswickncsheriff.gov,Bolivia,NC,County,Brunswick County NC,not_found,,,2026-08-11
@@ -10348,7 +10348,7 @@ stevenscountymn.gov,Morris,MN,County,Stevens County Minnesota,not_found,,,2026-0
 perquimanscountync.gov,Hertford,NC,County,Perquimans County,found,https://perquimanscountync.gov/bids-and-rfps,agency,2026-08-26
 claycountync.gov,Hayesville,NC,County,Clay County North Carolina,not_found,,,2026-08-11
 cumberlandsheriffnc.gov,Fayetteville,NC,County,Cumberland County Sheriff's Office,not_found,,,2026-08-11
-libertycountymt.gov,Chester,MT,County,Liberty County,not_found,,,2026-08-11
+libertycountymt.gov,Chester,MT,County,Liberty County,found,https://libertycountymt.gov/public-notices,custom,2026-11-03
 traillcountynd.gov,Hillsboro,ND,County,Traill County,found,https://traillcountynd.gov/Bids.aspx,civicplus,2026-08-11
 robesoncountysonc.gov,Lumberton,NC,County,Robeson County Sheriff's Office,not_found,,,2026-08-11
 currituckcountync.gov,Currituck,NC,County,County of Currituck,found,https://currituckcountync.gov/bids-rfp/,agency,2026-08-11
@@ -15621,14 +15621,14 @@ newtonms.org,Newton,MS,City,Newton,not_found,,,2026-09-01
 livingstonmontana.org,Livingston,MT,City,Livingston,not_found,,,2026-09-01
 bakermt.com,Baker,MT,City,Baker,not_found,,,2026-09-01
 cityofpearl.com,Pearl,MS,City,Pearl,not_found,,,2026-09-01
-cityofpolson.com,Polson,MT,City,Polson,not_found,,,2026-09-01
+cityofpolson.com,Polson,MT,City,Polson,found,https://cityofpolson.com/Bids.aspx,civicplus,2026-11-03
 praymontana.net,Pray,MT,City,Pray,not_found,,,2026-09-01
 viburnum.net,Viburnum,MO,City,Viburnum,not_found,,,2026-09-01
 cityoflewistown.com,Lewistown,MT,City,Lewistown,not_found,,,2026-09-01
 laurel.mt.gov,Laurel,MT,City,Laurel,not_found,,,2026-09-01
 milescitychamber.com,Miles City,MT,City,Miles City,not_found,,,2026-09-01
 bozeman.net,Bozeman,MT,City,Bozeman,not_found,,,2026-09-01
-cityofredlodge.net,Red Lodge,MT,City,Red Lodge,not_found,,,2026-09-01
+cityofredlodge.net,Red Lodge,MT,City,Red Lodge,found,https://cityofredlodge.net/Bids.aspx,civicplus,2026-11-03
 choteaumt.org,Choteau,MT,City,Choteau,not_found,,,2026-09-01
 cityofcolstrip.com,Colstrip,MT,City,Colstrip,not_found,,,2026-09-01
 cityofglasgowmt.com,Glasgow,MT,City,Glasgow,not_found,,,2026-09-01
@@ -17929,7 +17929,7 @@ cppj.net,Calcasieu Parish,LA,City,Calcasieu Parish,not_found,,,2026-09-01
 rrppj.org,Red River Parish,LA,City,Red River Parish,not_found,,,2026-09-01
 co.butler.ne.us,Butler County,NE,City,Butler County,found,https://co.butler.ne.us/Bids.aspx,civicplus,2026-09-01
 sites.rootsweb.com,Winn Parish,LA,City,Winn Parish,not_found,,,2026-09-01
-lincolncountymt.us,Lincoln County,MT,City,Lincoln County,not_found,,,2026-09-01
+lincolncountymt.us,Lincoln County,MT,City,Lincoln County,found,https://lincolncountymt.us/public-notices,custom,2026-11-03
 stfrancisville.com,West Feliciana Parish,LA,City,West Feliciana Parish,not_found,,,2026-09-01
 avoypj.org,Avoyelles Parish,LA,City,Avoyelles Parish,not_found,,,2026-09-01
 jeffdavis.org,Jefferson Davis Parish,LA,City,Jefferson Davis Parish,not_found,,,2026-09-01
