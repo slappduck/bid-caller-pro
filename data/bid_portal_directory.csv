@@ -985,11 +985,11 @@ greenwichct.gov,Greenwich,CT,City,Town of Greenwich,found,https://greenwichct.go
 harwinton.gov,Harwinton,CT,City,Town Of Harwinton,found,https://harwinton.gov/Bids.aspx,civicplus,2026-08-11
 cityofcreede.gov,Creede,CO,City,"City of Creede, A Colorado TOwn",not_found,,,2026-08-11
 bloomfield-ct.gov,Bloomfield,CT,City,Town of Bloomfield CT,not_found,,,2026-08-11
-ansoniahousing.gov,Ansonia,CT,City,Housing Authority of the City of Ansonia,not_found,,,2026-08-11
+ansoniahousing.gov,Ansonia,CT,City,Housing Authority of the City of Ansonia,found,https://ansoniahousing.gov/links.aspx,custom,2026-11-03
 santacruzca.gov,Santa Cruz,CA,City,City of Santa Cruz,found,https://www.santacruzca.gov/Business-Development/Bidding-Information,agency,2026-08-11
 colchesterct.gov,Colchester,CT,City,Town of Colchester,found,https://colchesterct.gov/bids,agency,2026-08-11
 clintonct.gov,Clinton,CT,City,Town of Clinton,not_found,,,2026-08-11
-cornwallct.gov,Cornwall,CT,City,Town of Cornwall,not_found,,,2026-08-11
+cornwallct.gov,Cornwall,CT,City,Town of Cornwall,found,https://cornwallct.gov/Bids.aspx,civicplus,2026-11-03
 branford-ct.gov,Branford,CT,City,Town of Branford CT,not_found,,,2026-08-11
 hebronct.gov,Hebron,CT,City,Town of Hebron,found,https://hebronct.gov/Bids.aspx,civicplus,2026-08-11
 groton-ct.gov,Groton,CT,City,Town of Groton,found,https://groton-ct.gov/bids,agency,2026-08-11
@@ -1076,11 +1076,11 @@ torringtonct.gov,Torrington,CT,City,City of Torrington,found,https://torringtonc
 naugatuckpd.gov,Naugatuck,CT,City,Naugatuck Police Department,not_found,,,2026-08-11
 plainville-ct.gov,Plainville,CT,City,City of Plainville,not_found,,,2026-08-11
 newtown-ct.gov,Newtown,CT,City,"Town of Newtown, CT",not_found,,,2026-08-11
-northhaven-ct.gov,North Haven,CT,City,Town of North Haven,not_found,,,2026-08-11
-columbiact.gov,Columbia,CT,City,Town of Columbia,not_found,,,2026-08-11
+northhaven-ct.gov,North Haven,CT,City,Town of North Haven,found,https://northhaven-ct.gov/business/bids_and_proposals.php,agency,2026-11-03
+columbiact.gov,Columbia,CT,City,Town of Columbia,found,https://columbiact.gov/rfps,agency,2026-11-03
 northbranfordpdct.gov,North Branford,CT,City,Town of North Branford,not_found,,,2026-08-11
 newhartfordct.gov,New Hartford,CT,City,Town of New Hartford,not_found,,,2026-08-11
-northstoningtonct.gov,North Stonington,CT,City,Town of North Stonington,not_found,,,2026-08-11
+northstoningtonct.gov,North Stonington,CT,City,Town of North Stonington,found,https://northstoningtonct.gov/Bids.aspx,civicplus,2026-11-03
 windhamct.gov,Willimantic,CT,City,Town of Windham,found,https://windhamct.gov/Bids.aspx,civicplus,2026-08-11
 torranceca.gov,Torrance,CA,City,City Of Torrance,not_found,,,2026-08-11
 berlinct.gov,Berlin,CT,City,Town of Berlin,found,https://www.berlinct.gov/category/?categoryid=18,custom,2026-08-11
@@ -1099,7 +1099,7 @@ southpasadenaca.gov,South Pasadena,CA,City,City of South Pasadena,not_found,,,20
 wilmingtondewater.gov,Wilmington,DE,City,City of Wilmington,found,https://wilmingtondewater.gov/Bids.aspx,civicplus,2026-08-11
 wigginsco.gov,Wiggins,CO,City,Town of Wiggins,found,https://wigginsco.gov/bidsandrfps,agency,2026-08-11
 manchesterct.gov,Manchester,CT,City,Town of Manchester,found,https://manchesterct.gov/purchasing,agency,2026-08-11
-griswoldct.gov,Griswold,CT,City,Town of Griswold,not_found,,,2026-08-11
+griswoldct.gov,Griswold,CT,City,Town of Griswold,found,https://griswoldct.gov/Bids.aspx,civicplus,2026-11-03
 apopka.gov,Apopka,FL,City,City of Apopka,found,https://apopka.gov/Bids.aspx,civicplus,2026-08-11
 walnutca.gov,Walnut,CA,City,City of Walnut,found,https://www.walnutca.gov/For-Residents/Community-Relations/Public-Notices-Bids-and-RFPs,agency,2026-08-11
 lakewoodco.gov,Lakewood,CO,City,City of Lakewood,found,https://www.lakewoodco.gov/Local-Government/Public-Notices,custom,2026-11-02
@@ -1107,7 +1107,7 @@ ridgefieldct.gov,Ridgefield,CT,City,Town of Ridgefield,found,https://ridgefieldc
 bayharborislands-fl.gov,Bay Harbor Islands,FL,City,Town of Bay Harbor Islands,found,https://bayharborislands-fl.gov/Bids.aspx,civicplus,2026-08-11
 ledyardct.gov,"Ledyard, CT",CT,City,Town of Ledyard,not_found,,,2026-08-11
 atlantisfl.gov,Atlantis,FL,City,City of Atlantis,found,https://atlantisfl.gov/Bids.aspx,civicplus,2026-08-11
-oldsaybrookct.gov,Old Saybrook,CT,City,Town of Old Saybrook,not_found,,,2026-08-11
+oldsaybrookct.gov,Old Saybrook,CT,City,Town of Old Saybrook,found,https://oldsaybrookct.gov/Bids.aspx,civicplus,2026-11-03
 tollandct.gov,Tolland,CT,City,Town of Tolland,not_found,,,2026-08-11
 woodburyct.gov,Woodbury,CT,City,Town of Woodbury Connecticut,not_found,,,2026-08-11
 northcanaan.gov,North Canaan,CT,City,Town of North Canaan,not_found,,,2026-08-11
@@ -1119,12 +1119,12 @@ glastonburyct.gov,Glastonbury,CT,City,Town of Glastonbury,not_found,,,2026-08-11
 westhaven-ct.gov,West Haven,CT,City,City of West Haven,not_found,,,2026-08-11
 townofdeweybeach.gov,Dewey Beach,DE,City,Town of Dewey Beach,found,https://townofdeweybeach.gov/bids,agency,2026-08-11
 oxford-ct.gov,Oxford,CT,City,Town of Oxford Website Committee,found,https://oxford-ct.gov/1224/Purchasing,agency,2026-08-11
-somersct.gov,Somers,CT,City,Town of Somers,not_found,,,2026-08-11
+somersct.gov,Somers,CT,City,Town of Somers,found,https://somersct.gov/departments/public_works/engineering.php,custom,2026-11-03
 boroughofnewtownct.gov,Newtown,CT,City,Borough of Newtown,not_found,,,2026-08-11
 westhartfordct.gov,West Hartford,CT,City,Town of West Hartford,found,https://westhartfordct.gov/bids,agency,2026-08-11
 plymouthct.gov,Terryville,CT,City,Town of Plymouth,found,https://plymouthct.gov/bids,agency,2026-08-11
 cityoftorranceca.gov,Torrance,CA,City,City Of Torrance,not_found,,,2026-08-11
-salemct.gov,Salem,CT,City,Town of Salem,not_found,,,2026-08-11
+salemct.gov,Salem,CT,City,Town of Salem,found,https://salemct.gov/Bids.aspx,civicplus,2026-11-03
 clewiston-fl.gov,Clewiston,FL,City,City of Clewiston,found,https://clewiston-fl.gov/Bids.aspx,civicplus,2026-08-11
 cocoafl.gov,cocoa,FL,City,City of Cocoa,found,https://cocoafl.gov/Bids.aspx,civicplus,2026-08-11
 woodstockct.gov,Woodstock,CT,City,Town of Woodstock,not_found,,,2026-08-11
@@ -1187,7 +1187,7 @@ goshenct.gov,Goshen,CT,City,Town of Goshen,found,https://goshenct.gov/bids-rfps,
 bowmar.gov,Bow Mar,CO,City,Town of Bow Mar,not_found,,,2026-08-11
 capecanaveral.gov,Cape Canaveral,FL,City,City of Cape Canaveral: CAPE Center,found,https://capecanaveral.gov/commerce/bids_rfps___rfqs.php,agency,2026-08-11
 arcadia-fl.gov,Arcadia,FL,City,City of Arcadia,found,https://arcadia-fl.gov/purchasing,agency,2026-08-11
-newcanaanalerts.gov,New Canaan,CT,City,Town of New Canaan Office of Emergency Management,not_found,,,2026-08-11
+newcanaanalerts.gov,New Canaan,CT,City,Town of New Canaan Office of Emergency Management,found,https://www.newcanaan.info/online_services/bid_notices_(request_for_proposal).php,custom,2026-11-03
 ansoniact.gov,Ansonia,CT,City,City of Ansonia,not_found,,,2026-08-11
 chattahoocheefl.gov,Chattahoochee,FL,City,City of Chattahoochee,not_found,,,2026-08-11
 stratfordct.gov,Stratford,CT,City,Town of Stratford,not_found,,,2026-08-11
@@ -1291,7 +1291,7 @@ templeterrace.gov,Temple Terrace,FL,City,City of Temple Terrace,found,https://te
 minneola.gov,MINNEOLA,FL,City,City of Minneola,not_found,,,2026-08-11
 nbfl.gov,Neptune Beach,FL,City,City of Neptune Beach,not_found,,,2026-08-11
 flpd.gov,Fort Lauderdale,FL,City,City of Fort Lauderdale,not_found,,,2026-08-11
-willingtonct.gov,Willington,CT,City,Town of Willington,not_found,,,2026-08-11
+willingtonct.gov,Willington,CT,City,Town of Willington,found,https://willingtonct.gov/Bids.aspx,civicplus,2026-11-03
 northportpdfl.gov,North Port,FL,City,North Port Police Department,not_found,,,2026-08-11
 sanibel.gov,Sanibel,FL,City,City of Sanibel,not_found,,,2026-08-11
 oceanridge.gov,Ocean Ridge,FL,City,Town of Ocean Ridge,found,https://pbcfllegalnotices.com/160/Ocean-Ridge,custom,2026-11-02
@@ -1314,7 +1314,7 @@ oakhillfl.gov,OAK HILL,FL,City,CITY OF OAK HILL,not_found,,,2026-08-11
 cityofportrichey.gov,Port Richey,FL,City,City of Port Richey,not_found,,,2026-08-11
 cityofpensacola.gov,Pensacola,FL,City,City of Pensacola,not_found,,,2026-08-11
 developnorthportfl.gov,North Port,FL,City,City of North Port Economic Development Division,not_found,,,2026-08-11
-warrenct.gov,Warren,CT,City,Town of Warren,not_found,,,2026-08-11
+warrenct.gov,Warren,CT,City,Town of Warren,found,https://warrenct.gov/departments/purchasing,agency,2026-11-03
 stpetersburg.gov,Saint Petersburg,FL,City,City of Saint Petersburg,found,https://stpetersburg.gov/Bids.aspx,civicplus,2026-11-02
 pslpd.gov,city of port saint lucie,FL,City,Port Saint Lucie Police Department,not_found,,,2026-08-11
 eaglelakefl.gov,EAGLE LAKE,FL,City,City of Eagle Lake,found,https://eaglelakefl.gov/rfps,agency,2026-08-11
@@ -1353,7 +1353,7 @@ winterspringsfl.gov,Winter Springs,FL,City,City of Winter Springs,not_found,,,20
 newcanaanct.gov,New Canaan,CT,City,Town of New Canaan,not_found,,,2026-08-11
 ocalafl.gov,Ocala,FL,City,City of Ocala,not_found,,,2026-08-11
 blairsville-ga.gov,Blairsville,GA,City,City of Blairsville,not_found,,,2026-08-11
-hartfordct.gov,Hartford,CT,City,Metro Hartford Innovation Services,not_found,,,2026-08-11
+hartfordct.gov,Hartford,CT,City,Metro Hartford Innovation Services,found,https://hartfordct.gov/procurement,agency,2026-11-03
 tampa.gov,Tampa,FL,City,City of Tampa,found,https://tampa.gov/purchasing,agency,2026-08-11
 somifl.gov,South Miami,FL,City,City of South Miami,found,https://somifl.gov/Bids.aspx,civicplus,2026-11-02
 townofbishop.gov,Bishop,GA,City,"Town of Bishop, GA",not_found,,,2026-08-11
@@ -11788,7 +11788,7 @@ vcpa.gov,DeLand,FL,Special district,Volusia County Property Appraiser,not_found,
 pdsdc.gov,Washington,DC,Special district,The Public Defender Service for the District of Columbia,not_found,,,2026-08-11
 southplatterenewco.gov,Englewood,CO,Special district,South Platte Renew,not_found,,,2026-08-11
 deltamvcd.gov,Visalia,CA,Special district,Delta Mosquito and Vector Control District,not_found,,,2026-08-11
-regionalrefusedistrict1ct.gov,Barkhamsted,CT,Special district,Regional Refuse Disposal District # 1,not_found,,,2026-08-11
+regionalrefusedistrict1ct.gov,Barkhamsted,CT,Special district,Regional Refuse Disposal District # 1,found,https://regionalrefusedistrict1ct.gov/842-2/,custom,2026-11-03
 svlh.gov,Longmont,CO,Special district,St. Vrain and Left Hand Water Conservancy District,not_found,,,2026-08-11
 lacsd.gov,Whittier,CA,Special district,Los Angeles County Sanitation Districts,not_found,,,2026-08-11
 vauxmontmd.gov,Arvada,CO,Special district,Vauxmont Metropolitan District,not_found,,,2026-08-11
@@ -13682,7 +13682,7 @@ woodbrookdelaware.org,Woodbrook,DE,City,Woodbrook,not_found,,,2026-09-01
 cityofannamaria.com,Anna Maria,FL,City,Anna Maria,not_found,,,2026-09-01
 rockyfordcolo.com,Rocky Ford,CO,City,Rocky Ford,not_found,,,2026-09-01
 hotsulphurspringsco.com,Hot Sulphur Springs,CO,City,Hot Sulphur Springs,not_found,,,2026-09-01
-preston-ct.org,Preston,CT,City,Preston,not_found,,,2026-09-01
+preston-ct.org,Preston,CT,City,Preston,found,https://preston-ct.org/Bids.aspx,civicplus,2026-11-03
 ci.wheatridge.co.us,Wheat Ridge,CO,City,Wheat Ridge,not_found,,,2026-09-01
 fountaincolorado.org,Fountain,CO,City,Fountain,not_found,,,2026-09-01
 cityofaventura.com,Aventura,FL,City,Aventura,not_found,,,2026-09-01
@@ -20796,7 +20796,7 @@ jeffconline.jccal.org,Jefferson County,AL,City,Jefferson County,not_found,,,2026
 bullockcountyal.com,Bullock County,AL,City,Bullock County,not_found,,,2026-09-01
 townofnewipswich.org,New Ipswich,NH,City,New Ipswich,not_found,,,2026-09-01
 co.clear-creek.co.us,Clear Creek County,CO,City,Clear Creek County,found,https://co.clear-creek.co.us/Bids.aspx,civicplus,2026-09-01
-newcanaan.info,New Canaan,CT,City,New Canaan,not_found,,,2026-09-01
+newcanaan.info,New Canaan,CT,City,New Canaan,found,https://www.newcanaan.info/online_services/bid_notices_(request_for_proposal).php,custom,2026-11-03
 chamberscounty.com,Chambers County,AL,City,Chambers County,not_found,,,2026-09-01
 bouldercounty.org,Boulder County,CO,City,Boulder County,found,https://bouldercounty.org/bids,custom,2026-09-01
 hopkinton.org,Hopkinton,MA,City,Hopkinton,not_found,,,2026-09-01
@@ -20836,7 +20836,7 @@ kiowacountycolo.com,Kiowa County,CO,City,Kiowa County,not_found,,,2026-11-02
 bibbal.com,Bibb County,AL,City,Bibb County,found,https://bibbal.com/public-notices/,custom,2026-11-02
 kitcarsoncounty.org,Kit Carson County,CO,City,Kit Carson County,not_found,,,2026-09-01
 hinsdalecountycolorado.us,Hinsdale County,CO,City,Hinsdale County,not_found,,,2026-09-01
-woodburyct.org,Woodbury,CT,City,Woodbury,not_found,,,2026-09-01
+woodburyct.org,Woodbury,CT,City,Woodbury,found,https://woodburyct.org/bids,custom,2026-11-03
 loganco.gov,Logan County,CO,City,Logan County,not_found,,,2026-09-01
 co.routt.co.us,Routt County,CO,City,Routt County,found,https://co.routt.co.us/Bids.aspx,civicplus,2026-09-01
 co.laplata.co.us,La Plata County,CO,City,La Plata County,found,https://www.lpcgov.org/departments/finance___procurement/procurement.php,custom,2026-11-02
@@ -21155,7 +21155,7 @@ ci.guilford.ct.us,Guilford,CT,City,Guilford,found,https://ci.guilford.ct.us/town
 lhills.sailorsite.net,Landover Hills,MD,City,Landover Hills,not_found,,,2026-09-01
 twnlyme.org,Lyme,CT,City,Lyme,not_found,,,2026-09-01
 portdeposit.org,Port Deposit,MD,City,Port Deposit,not_found,,,2026-09-01
-town.north-haven.ct.us,North Haven,CT,City,North Haven,not_found,,,2026-09-01
+town.north-haven.ct.us,North Haven,CT,City,North Haven,found,https://town.north-haven.ct.us/business/bids_and_proposals.php,agency,2026-11-03
 oysterbaytown.com,Oyster Bay,NY,City,Oyster Bay,found,https://oysterbaytown.com/notice-to-bidders,custom,2026-09-01
 townofmagnoliasprings.org,Magnolia Springs,AL,City,Magnolia Springs,not_found,,,2026-09-01
 co.pennington.sd.us,Pennington County,SD,City,Pennington County,not_found,,,2026-09-01
@@ -21258,7 +21258,7 @@ townofduson.com,Duson,LA,City,Duson,not_found,,,2026-09-01
 townofrutland.org,Rutland,MA,City,Rutland,found,https://townofrutland.org/Bids.aspx,civicplus,2026-09-01
 wagenersc.com,Wagener,SC,City,Wagener,not_found,,,2026-09-01
 oceanviewde.com,Ocean View,DE,City,Ocean View,not_found,,,2026-09-01
-cheshirect.org,Cheshire,CT,City,Cheshire,not_found,,,2026-09-01
+cheshirect.org,Cheshire,CT,City,Cheshire,found,https://cheshirect.org/bids.aspx,civicplus,2026-11-03
 ohiony.us,Ohio,NY,City,Ohio,not_found,,,2026-09-01
 cityofavery.com,Avery,TX,City,Avery,not_found,,,2026-09-01
 tishomingo.ms,Tishomingo,MS,City,Tishomingo,not_found,,,2026-09-01
@@ -21360,7 +21360,7 @@ richmondma.org,Richmond,MA,City,Richmond,not_found,,,2026-09-01
 osgoodindiana.org,Osgood,IN,City,Osgood,not_found,,,2026-09-01
 springfieldnh.net,Springfield,NH,City,Springfield,not_found,,,2026-09-01
 langdonnh.org,Langdon,NH,City,Langdon,not_found,,,2026-09-01
-cromwellct.com,Cromwell,CT,City,Cromwell,not_found,,,2026-09-01
+cromwellct.com,Cromwell,CT,City,Cromwell,found,https://cromwellct.com/Bids.aspx,civicplus,2026-11-03
 westport-ma.com,Westport,MA,City,Westport,found,https://westport-ma.com/where_do_i_go_for/apply_for_/bid_opportunities/index.php,custom,2026-09-01
 townofeclectic.com,Eclectic,AL,City,Eclectic,not_found,,,2026-09-01
 summerdalealabama.com,Summerdale,AL,City,Summerdale,not_found,,,2026-09-01
@@ -21642,7 +21642,7 @@ town.halifax.ma.us,Halifax,MA,City,Halifax,not_found,,,2026-09-01
 fairmount-in.us,Fairmount,IN,City,Fairmount,not_found,,,2026-09-01
 vevayin.com,Vevay,IN,City,Vevay,not_found,,,2026-09-01
 mtpleasantny.com,Mount Pleasant,NY,City,Mount Pleasant,found,https://mtpleasantny.com/Bids.aspx,civicplus,2026-11-03
-oldsaybrookct.org,Old Saybrook,CT,City,Old Saybrook,not_found,,,2026-09-01
+oldsaybrookct.org,Old Saybrook,CT,City,Old Saybrook,found,https://oldsaybrookct.org/Bids.aspx,civicplus,2026-11-03
 fortgibson.com,Fort Gibson,OK,City,Fort Gibson,not_found,,,2026-09-01
 townofmalabar.org,Malabar,FL,City,Malabar,found,https://townofmalabar.org/264/Public-Notices,custom,2026-11-02
 shorteralabama.com,Shorter,AL,City,Shorter,not_found,,,2026-09-01
@@ -21739,7 +21739,7 @@ cmca.gen.co.us,Collbran,CO,City,Collbran,not_found,,,2026-09-01
 tosv.com,Snowmass Village,CO,City,Snowmass Village,found,https://tosv.com/Bids.aspx,civicplus,2026-09-01
 townofmontgomery.com,Montgomery,NY,City,Montgomery,not_found,,,2026-09-01
 weston-ct.com,Weston,CT,City,Weston,not_found,,,2026-09-01
-waterfordct.org,Waterford,CT,City,Waterford,not_found,,,2026-09-01
+waterfordct.org,Waterford,CT,City,Waterford,found,https://waterfordct.org/Bids.aspx,civicplus,2026-11-03
 estillspringstn.com,Estill Springs,TN,City,Estill Springs,not_found,,,2026-09-01
 townofsaluda.com,Saluda,SC,City,Saluda,not_found,,,2026-09-01
 inolaok.com,Inola,OK,City,Inola,found,https://inolaok.com/Bids.aspx,civicplus,2026-09-01
@@ -22109,7 +22109,7 @@ fortmillsc.org,Fort Mill,SC,City,Fort Mill,not_found,,,2026-09-01
 cityofarabi.com,Arabi,GA,City,Arabi,not_found,,,2026-09-01
 sunrisetownship.com,Sunrise Township,MN,City,Sunrise Township,not_found,,,2026-09-01
 townoffrisco.com,Frisco,CO,City,Frisco,not_found,,,2026-09-01
-griswold-ct.org,Griswold,CT,City,Griswold,not_found,,,2026-09-01
+griswold-ct.org,Griswold,CT,City,Griswold,found,https://griswold-ct.org/how_do_i/apply_for_obtain/rfps_rfqs.php,custom,2026-11-03
 spicelandtown.com,Spiceland,IN,City,Spiceland,not_found,,,2026-09-01
 townofpawleysisland.com,Pawleys Island,SC,City,Pawleys Island,found,https://townofpawleysisland.com/rfp,custom,2026-09-01
 sibleyla.com,Sibley,LA,City,Sibley,not_found,,,2026-09-01
@@ -22187,7 +22187,7 @@ graftonny.org,Grafton,NY,City,Grafton,found,https://graftonny.org/bids-and-rfps,
 townofchili.org,Chili,NY,City,Chili,found,https://townofchili.org/Bids.aspx,civicplus,2026-09-01
 cornishnh.net,Cornish,NH,City,Cornish,not_found,,,2026-09-01
 townofmarionny.com,Marion,NY,City,Marion,not_found,,,2026-09-01
-staffordct.org,Stafford,CT,City,Stafford,not_found,,,2026-09-01
+staffordct.org,Stafford,CT,City,Stafford,found,https://www.staffordct.gov/business/bid_opportunities.php,agency,2026-11-03
 kingstonnh.org,Kingston,NH,City,Kingston,not_found,,,2026-09-01
 clermontny.org,Clermont,NY,City,Clermont,not_found,,,2026-09-01
 croydonnh.us,Croydon,NH,City,Croydon,not_found,,,2026-09-01
@@ -22455,7 +22455,7 @@ new-shoreham.com,New Shoreham,RI,City,New Shoreham,not_found,,,2026-09-01
 little-compton.com,Little Compton,RI,City,Little Compton,not_found,,,2026-09-01
 townofplainfieldny.org,Plainfield,NY,City,Plainfield,not_found,,,2026-09-01
 townofheidelberg.com,Heidelberg,MS,City,Heidelberg,not_found,,,2026-09-01
-brooklynct.org,Brooklyn,CT,City,Brooklyn,not_found,,,2026-09-01
+brooklynct.org,Brooklyn,CT,City,Brooklyn,found,https://brooklynct.org/Bids.aspx,civicplus,2026-11-03
 trimbletennessee.com,Trimble,TN,City,Trimble,not_found,,,2026-09-01
 colebrooktownhall.org,Colebrook,CT,City,Colebrook,not_found,,,2026-09-01
 ontariotown.org,Ontario,NY,City,Ontario,not_found,,,2026-09-01
