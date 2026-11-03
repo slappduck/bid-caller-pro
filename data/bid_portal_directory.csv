@@ -2361,7 +2361,7 @@ townofberkleyma.gov,Berkley,MA,City,Town of Berkley,not_found,,,2026-08-11
 chicopeema.gov,Chicopee,MA,City,City of Chicopee,found,https://chicopeema.gov/Bids.aspx,civicplus,2026-08-11
 dartmouthma.gov,Dartmouth,MA,City,Town of Dartmouth,found,https://dartmouthma.gov/Bids.aspx,civicplus,2026-08-11
 douglas-ma.gov,Douglas,MA,City,Town of Douglas,found,https://douglas-ma.gov/Bids.aspx,civicplus,2026-08-11
-amesburyma.gov,Amesbury,MA,City,City of Amesbury,not_found,,,2026-08-11
+amesburyma.gov,Amesbury,MA,City,City of Amesbury,found,https://amesburyma.gov/Bids.aspx,civicplus,2026-11-03
 nolaipm.gov,New Orleans,LA,City,Office of the Independent Police Monitor,not_found,,,2026-08-11
 dracutma.gov,Dracut,MA,City,Town of Dracut,found,https://dracutma.gov/Bids.aspx,civicplus,2026-08-11
 doverma.gov,Dover,MA,City,Town of Dover,found,https://doverma.gov/Bids.aspx,civicplus,2026-08-11
@@ -2370,7 +2370,7 @@ danversma.gov,Danvers,MA,City,Town of Danvers,found,https://danversma.gov/Bids.a
 eastbridgewaterma.gov,East Bridgewater,MA,City,Town of East Bridgewater,found,https://eastbridgewaterma.gov/Bids.aspx,civicplus,2026-08-11
 easthamptonma.gov,Easthampton,MA,City,City of Easthampton,found,https://easthamptonma.gov/Bids.aspx,civicplus,2026-08-11
 eastlongmeadowma.gov,East Longmeadow,MA,City,Town of East Longmeadow,found,https://eastlongmeadowma.gov/Bids.aspx,civicplus,2026-08-11
-brewster-ma.gov,Brewster,MA,City,Town of Brewster,not_found,,,2026-08-11
+brewster-ma.gov,Brewster,MA,City,Town of Brewster,found,https://brewster-ma.gov/Bids.aspx,civicplus,2026-11-03
 blackstonemapolice.gov,Blackstone,MA,City,Blackstone Police Department,not_found,,,2026-08-11
 cityofpattersonla.gov,Patterson,LA,City,City of Patterson,not_found,,,2026-08-11
 fitchburgma.gov,Fitchburg,MA,City,City of Fitchburg,found,https://fitchburgma.gov/Bids.aspx,civicplus,2026-08-11
@@ -2396,12 +2396,12 @@ harahanla.gov,Harahan,LA,City,City of Harahan,not_found,,,2026-08-11
 falmouthma.gov,Falmouth,MA,City,Town of Falmouth,found,https://falmouthma.gov/Bids.aspx,civicplus,2026-08-11
 berkleymapolice.gov,Berkley,MA,City,Berkley Police Department,not_found,,,2026-08-11
 townofgoldenmeadow-la.gov,Golden Meadow,LA,City,Town of Golden Meadow,not_found,,,2026-08-11
-athol-ma.gov,Athol,MA,City,Town of Athol,not_found,,,2026-08-11
+athol-ma.gov,Athol,MA,City,Town of Athol,found,https://athol-ma.gov/Bids.aspx,civicplus,2026-11-03
 chelmsfordpd.gov,Chelmsford,MA,City,Chelmsford Police Department,not_found,,,2026-08-11
 blackstonema.gov,Blackstone,MA,City,Town of Blackstone,not_found,,,2026-08-11
 central-la.gov,Central,LA,City,City of Central,not_found,,,2026-08-11
 bogalusa.gov,Bogalusa,LA,City,City of Bogalusa,not_found,,,2026-08-11
-chilmarkma.gov,Chilmark,MA,City,Town of Chilmark,not_found,,,2026-08-11
+chilmarkma.gov,Chilmark,MA,City,Town of Chilmark,found,https://chilmarkma.gov/1907/Vendors,custom,2026-11-03
 townofgbma.gov,Great Barrington,MA,City,Town of Great Barrington,found,https://townofgbma.gov/Bids.aspx,civicplus,2026-08-11
 hampdenma.gov,Hampden,MA,City,Town of Hampden,found,https://hampdenma.gov/Bids.aspx,civicplus,2026-08-11
 stantonky.gov,Stanton,KY,City,City of Stanton,not_found,,,2026-08-11
@@ -2426,7 +2426,7 @@ falmouthpublicsafetyma.gov,Falmouth,MA,City,Falmouth Emergency Communications,no
 carverma.gov,Carver,MA,City,Town of Carver,not_found,,,2026-08-11
 leominster-ma.gov,Leominster,MA,City,City Of Leominster,found,https://leominster-ma.gov/Bids.aspx,civicplus,2026-08-11
 chelseama.gov,Chelsea,MA,City,City of Chelsea,not_found,,,2026-08-11
-avon-ma.gov,Avon,MA,City,Town of Avon,not_found,,,2026-08-11
+avon-ma.gov,Avon,MA,City,Town of Avon,found,https://avon-ma.gov/Bids.aspx,civicplus,2026-11-03
 lunenburgma.gov,Lunenburg,MA,City,Town of Lunenburg,found,https://lunenburgma.gov/Bids.aspx,civicplus,2026-08-11
 portvincent-la.gov,Port Vincent,LA,City,Village of Port Vincent,not_found,,,2026-08-11
 boston.gov,Boston,MA,City,City of Boston,found,https://boston.gov/bids,agency,2026-08-11
@@ -2461,7 +2461,7 @@ cummington-ma.gov,Cummington,MA,City,Town of Cummington,found,https://cummington
 morgantownky.gov,Morgantown,KY,City,City of Morgantown,not_found,,,2026-08-11
 monson-ma.gov,Monson,MA,City,Town of Monson,found,https://monson-ma.gov/Bids.aspx,civicplus,2026-08-11
 nantucket-ma.gov,Nantucket,MA,City,Town of Nantucket,found,https://nantucket-ma.gov/Bids.aspx,civicplus,2026-08-11
-ashbyma.gov,Ashby,MA,City,Town of Ashby,not_found,,,2026-08-11
+ashbyma.gov,Ashby,MA,City,Town of Ashby,found,https://ashbyma.gov/invitation-to-bid,agency,2026-11-03
 lynnfieldma.gov,Lynnfield,MA,City,Town of Lynnfield,found,https://lynnfieldma.gov/Bids.aspx,civicplus,2026-08-11
 middleboroughma.gov,Middleborough,MA,City,Town of Middleborough,found,https://middleboroughma.gov/Bids.aspx,civicplus,2026-08-11
 northamptonma.gov,Northampton,MA,City,City of Northampton,found,https://northamptonma.gov/Bids.aspx,civicplus,2026-08-11
@@ -2479,7 +2479,7 @@ lincolnma.gov,Lincoln,MA,City,Town of Lincoln Massachusetts,not_found,,,2026-08-
 arlingtonma.gov,Arlington,MA,City,Town of Arlington,not_found,,,2026-08-11
 barnstablepolice.gov,Hyannis,MA,City,Barnstable Police Department,not_found,,,2026-08-11
 lafayettela.gov,Lafayette,LA,City,Lafayette City-Parish Consolidated Government,found,https://lafayettela.gov/business-development/bids-and-purchasing/vendor-information/vendor-registration-information/,agency,2026-08-11
-acushnet.gov,Acushnet,MA,City,Town of Acushnet,not_found,,,2026-08-11
+acushnet.gov,Acushnet,MA,City,Town of Acushnet,found,https://acushnet.gov/Bids.aspx,civicplus,2026-11-03
 lincolnmapd.gov,Lincoln,MA,City,Lincoln Massachusetts Police Department,not_found,,,2026-08-11
 chathamla.gov,Chatham,LA,City,"VILLAGE OF CHATHAM, LA",not_found,,,2026-08-11
 plainvillema.gov,Plainville,MA,City,Town of Plainville,found,https://plainvillema.gov/Bids.aspx,civicplus,2026-08-11
@@ -2487,7 +2487,7 @@ lancasterma.gov,Lancaster,MA,City,Town of Lancaster Massachusetts,not_found,,,20
 perryvilleky.gov,Perryvile,KY,City,City of Perryville,not_found,,,2026-08-11
 brockton.gov,Brockton,MA,City,City of Brockton,found,https://brockton.gov/city-departments/procurement/,agency,2026-08-11
 hanson-ma.gov,Hanson,MA,City,Town of Hanson,not_found,,,2026-08-11
-harvard-ma.gov,Harvard,MA,City,Town of Harvard,not_found,,,2026-08-11
+harvard-ma.gov,Harvard,MA,City,Town of Harvard,found,https://harvard-ma.gov/Bids.aspx,civicplus,2026-11-03
 georgetownma.gov,Georgetown,MA,City,Town of Georgetown,found,https://georgetownma.gov/departments/town_administrator/bid_opportunities.php,agency,2026-08-11
 hanover-ma.gov,Hanover,MA,City,Town of Hanover,not_found,,,2026-08-11
 medwayma.gov,Medway,MA,City,Town of Medway,found,https://medwayma.gov/purchasing,agency,2026-08-11
@@ -2515,7 +2515,7 @@ newburyportma.gov,Newburyport,MA,City,City of Newburyport,not_found,,,2026-08-11
 mattapoisettpolice.gov,MATTAPOISETT,MA,City,Mattapoisett Police Department,not_found,,,2026-08-11
 hansonfirema.gov,Hanson,MA,City,Hanson Fire Department,not_found,,,2026-08-11
 bardstownky.gov,Bardstown,KY,City,City Of Bardstown,not_found,,,2026-08-11
-dalton-ma.gov,Dalton,MA,City,Town of Dalton,not_found,,,2026-08-11
+dalton-ma.gov,Dalton,MA,City,Town of Dalton,found,https://dalton-ma.gov/invitation-to-bid,agency,2026-11-03
 springhilllouisiana.gov,Springhill,LA,City,City of Springhill,not_found,,,2026-08-11
 newbedford-ma.gov,New Bedford,MA,City,City of New Bedford,not_found,,,2026-08-11
 fallriverma.gov,Fall River,MA,City,City of Fall River,found,https://fallriverma.gov/departments/city_administration/purchasing/bids_and_contracts/index.php,agency,2026-08-11
@@ -2540,13 +2540,13 @@ southwickma.gov,Southwick,MA,City,"Town of Southwick, Massachusetts",found,https
 suttonma.gov,Sutton,MA,City,Town of Sutton,found,https://suttonma.gov/Bids.aspx,civicplus,2026-08-11
 middlefield-ma.gov,MIDDLEFIELD,MA,City,"Town of Middlefield, MA",not_found,,,2026-08-11
 dedham-ma.gov,Dedham,MA,City,Town of Dedham,not_found,,,2026-08-11
-nortonma.gov,Norton,MA,City,Town of Norton,not_found,,,2026-08-11
-northfieldma.gov,Northfield,MA,City,Town of Northfield,not_found,,,2026-08-11
+nortonma.gov,Norton,MA,City,Town of Norton,found,https://nortonma.gov/Bids.aspx,civicplus,2026-11-03
+northfieldma.gov,Northfield,MA,City,Town of Northfield,found,https://northfieldma.gov/Bids.aspx,civicplus,2026-11-03
 montgomeryma.gov,Montgomery,MA,City,Town of Montgomery,not_found,,,2026-08-11
 taunton-ma.gov,Taunton,MA,City,City of Taunton,found,https://taunton-ma.gov/Bids.aspx,civicplus,2026-08-11
 swampscottma.gov,Swampscott,MA,City,Town of Swampscott,found,https://swampscottma.gov/Bids.aspx,civicplus,2026-08-11
 dunstable-ma.gov,Dunstable,MA,City,Town of Dunstable,not_found,,,2026-08-11
-orleansma.gov,Orleans,MA,City,Town of Orleans,not_found,,,2026-08-11
+orleansma.gov,Orleans,MA,City,Town of Orleans,found,https://orleansma.gov/Bids.aspx,civicplus,2026-11-03
 townofprincetonma.gov,Princeton,MA,City,Town of Princeton,not_found,,,2026-08-11
 truro-ma.gov,Truro,MA,City,Town of Truro,found,https://truro-ma.gov/Bids.aspx,civicplus,2026-08-11
 tisburyma.gov,Tisbury,MA,City,Town of Tisbury,found,https://tisburyma.gov/Bids.aspx,civicplus,2026-08-11
@@ -2560,11 +2560,11 @@ townofpetersham.gov,Petersham,MA,City,Town of Petersham,not_found,,,2026-08-11
 granville-ma.gov,Granville,MA,City,Town of Granville,not_found,,,2026-08-11
 uptonma.gov,Upton,MA,City,Town of Upton,found,https://uptonma.gov/Bids.aspx,civicplus,2026-08-11
 uxbridge-ma.gov,Uxbridge,MA,City,"Uxbridge, Town of",found,https://uxbridge-ma.gov/Bids.aspx,civicplus,2026-08-11
-pembroke-ma.gov,Pembroke,MA,City,Town of Pembroke,not_found,,,2026-08-11
+pembroke-ma.gov,Pembroke,MA,City,Town of Pembroke,found,https://pembroke-ma.gov/Bids.aspx,civicplus,2026-11-03
 otisma.gov,Otis,MA,City,Town of Otis,found,https://otisma.gov/transparency/bid_information.php,agency,2026-08-11
 wareham.gov,Wareham,MA,City,Town of Wareham,found,https://wareham.gov/Bids.aspx,civicplus,2026-08-11
 paxtonma.gov,Paxton,MA,City,Town of Paxton,not_found,,,2026-08-11
-northadams-ma.gov,North Adams,MA,City,City of North Adams,not_found,,,2026-08-11
+northadams-ma.gov,North Adams,MA,City,City of North Adams,found,https://northadams-ma.gov/Bids.aspx,civicplus,2026-11-03
 oakham-ma.gov,Oakham,MA,City,Town of Oakham,not_found,,,2026-08-11
 newmarlboroughma.gov,Mill River,MA,City,Town of New Marlborough,found,https://newmarlboroughma.gov/1271/Bids-RFPs,agency,2026-08-11
 wellesleyma.gov,Wellesley,MA,City,Town of Wellesley,found,https://wellesleyma.gov/Bids.aspx,civicplus,2026-08-11
@@ -2587,7 +2587,7 @@ somervillema.gov,Somerville,MA,City,City of Somerville,found,https://somervillem
 westfordma.gov,Westford,MA,City,"Town of Westford, MA",found,https://westfordma.gov/Bids.aspx,civicplus,2026-08-11
 westboroughma.gov,Westborough,MA,City,Town of Westborough,found,https://westboroughma.gov/Bids.aspx,civicplus,2026-08-11
 mamrba.gov,Salisbury,MA,City,"Merrimack River Beach Alliance of Town of Salisbury, Newburyport, and Newbury",not_found,,,2026-08-11
-quincyma.gov,Quincy,MA,City,City of Quincy,not_found,,,2026-08-11
+quincyma.gov,Quincy,MA,City,City of Quincy,found,https://quincyma.gov/departments/purchasing,agency,2026-11-03
 stockbridge-ma.gov,Stockbridge,MA,City,Town of Stockbridge,not_found,,,2026-08-11
 southbridgefire.gov,SOUTHBRIDGE,MA,City,Southbridge Fire Dept.,not_found,,,2026-08-11
 wrentham.gov,Wrentham,MA,City,Town of Wrentham,found,https://wrentham.gov/Bids.aspx,civicplus,2026-08-11
@@ -2606,12 +2606,12 @@ louisville.gov,Louisville,KY,City,Louisville Metro Government (City of Louisvill
 southhadleyma.gov,South Hadley,MA,City,Town of South Hadley,not_found,,,2026-08-11
 sharonma.gov,Sharon,MA,City,Town of Sharon,not_found,,,2026-08-11
 cheverly-md.gov,Cheverly,MD,City,Town of Cheverly,found,https://cheverly-md.gov/Bids.aspx,civicplus,2026-08-11
-hamiltonma.gov,So. Hamilton,MA,City,Town of Hamilton,not_found,,,2026-08-11
+hamiltonma.gov,So. Hamilton,MA,City,Town of Hamilton,found,https://hamiltonma.gov/Bids.aspx,civicplus,2026-11-03
 brentwoodmd.gov,Brentwood,MD,City,Town of Brentwood,found,https://brentwoodmd.gov/Bids.aspx,civicplus,2026-08-11
 capitolheightsmd.gov,Capitol Heights,MD,City,Town of Capitol Heights Maryland,found,https://capitolheightsmd.gov/Bids.aspx,civicplus,2026-08-11
 provincetown-ma.gov,Provincetown,MA,City,Town of Provincetown,found,https://provincetown-ma.gov/37/Procurement,agency,2026-08-11
 tauntonpdma.gov,Taunton,MA,City,Taunton Police Dept,not_found,,,2026-08-11
-saugus-ma.gov,Saugus,MA,City,Town of Saugus,not_found,,,2026-08-11
+saugus-ma.gov,Saugus,MA,City,Town of Saugus,found,https://saugus-ma.gov/Bids.aspx,civicplus,2026-11-03
 princetonma.gov,Princeton,MA,City,Town or Princeton,found,https://princetonma.gov/open-bids-rfps-and-rfqs/,agency,2026-08-11
 watertown-ma.gov,Watertown,MA,City,City of Watertown,found,https://watertown-ma.gov/bids-and-rfps,agency,2026-08-11
 granby-ma.gov,Granby,MA,City,Town of Granby,found,https://granby-ma.gov/bidsandrfps,agency,2026-08-11
@@ -2619,18 +2619,18 @@ randolphmapd.gov,Randolph,MA,City,Randolph Police Department,not_found,,,2026-08
 cityofbowiemd.gov,Bowie,MD,City,City of Bowie,found,https://cityofbowiemd.gov/Bids.aspx,civicplus,2026-08-11
 eastonmd.gov,Easton,MD,City,Town of Easton,found,https://eastonmd.gov/Bids.aspx,civicplus,2026-08-11
 websterpolice-ma.gov,Webster,MA,City,Town of Webster Police Department,not_found,,,2026-08-11
-stow-ma.gov,Stow,MA,City,"Town of Stow, Massachusetts",not_found,,,2026-08-11
+stow-ma.gov,Stow,MA,City,"Town of Stow, Massachusetts",found,https://stow-ma.gov/Bids.aspx,civicplus,2026-11-03
 warehampolice.gov,Wareham,MA,City,Town of Wareham,not_found,,,2026-08-11
 winchendon-ma.gov,Winchendon,MA,City,Town of Winchendon MA,not_found,,,2026-08-11
 sterling-ma.gov,Sterling,MA,City,Town of Sterling,found,https://sterling-ma.gov/715/2851/Bid-Documents,agency,2026-08-11
 annapolis.gov,Annapolis,MD,City,City of Annapolis,found,https://annapolis.gov/Bids.aspx,civicplus,2026-08-11
-tyringham-ma.gov,Tyringham,MA,City,Town of Tyringham,not_found,,,2026-08-11
+tyringham-ma.gov,Tyringham,MA,City,Town of Tyringham,found,https://tyringham-ma.gov/Bids.aspx,civicplus,2026-11-03
 grotonma.gov,Groton,MA,City,Town of Groton,found,https://grotonma.gov/rfp,agency,2026-08-11
 forestheightsmd.gov,Forest Heights,MD,City,Town of Forest Heights,found,https://forestheightsmd.gov/Bids.aspx,civicplus,2026-08-11
 fairmountheightsmd.gov,Fairmount Heights,MD,City,Town of Fairmount Heights,found,https://fairmountheightsmd.gov/Bids.aspx,civicplus,2026-08-11
 westport-ma.gov,Westport,MA,City,"Town Of Westport, MA",not_found,,,2026-08-11
-swanseama.gov,Swansea,MA,City,Town of Swansea,not_found,,,2026-08-11
-sturbridge.gov,Sturbridge,MA,City,Town of Sturbridge,not_found,,,2026-08-11
+swanseama.gov,Swansea,MA,City,Town of Swansea,found,https://www.swanseama.gov/government/board_of_selectmen/procurement_purchasing_and_bidding_opportunities.php,agency,2026-11-03
+sturbridge.gov,Sturbridge,MA,City,Town of Sturbridge,found,https://sturbridge.gov/Bids.aspx,civicplus,2026-11-03
 washington-ma.gov,Washington,MA,City,Town of Washington,not_found,,,2026-08-11
 marshfield-ma.gov,Marshfield,MA,City,Town of Marshfield,found,https://marshfield-ma.gov/government/select_board/rfp_rfq_information.php,agency,2026-08-11
 westhamptonma.gov,West,MA,City,Town of Westhampton,not_found,,,2026-08-11
@@ -4320,7 +4320,7 @@ moultonboroughnh.gov,Moultonborough,NH,City,Town of Moultonborough,found,https:/
 andover-nh.gov,Andover,NH,City,TOWN OF ANDOVER,not_found,,,2026-08-11
 bartlettnhpolice.gov,Intervale,NH,City,Bartlett Police Department,not_found,,,2026-08-11
 gorhamnhpd.gov,Gorham,NH,City,Town of Gorham Police Department,not_found,,,2026-08-11
-brooklinenh.gov,Brookline,NH,City,Town of Brookline,not_found,,,2026-08-11
+brooklinenh.gov,Brookline,NH,City,Town of Brookline,found,https://www.brooklinenh.gov/business/rfps___bids/index.php,agency,2026-11-03
 villageofmullen.gov,Mullen,NE,City,Village of Mullen,not_found,,,2026-08-11
 hancocknhpd.gov,Hancock,NH,City,Town of Hancock Police,not_found,,,2026-08-11
 laconiapdnh.gov,Laconia,NH,City,Laconia Police Department,not_found,,,2026-08-11
@@ -4368,7 +4368,7 @@ lincolnnh.gov,Lincoln,NH,City,"Town of Lincoln, NH",not_found,,,2026-08-11
 northhampton-nh-pd.gov,North Hampton,NH,City,Town of North Hampton,not_found,,,2026-08-11
 woodstocknh.gov,North Woodstock,NH,City,TOWN OF WOODSTOCK,not_found,,,2026-08-11
 newdurhamnh.gov,New Durham,NH,City,Town of New Durham,not_found,,,2026-08-11
-derrynh.gov,Derry,NH,City,Town of Derry New Hampshire,not_found,,,2026-08-11
+derrynh.gov,Derry,NH,City,Town of Derry New Hampshire,found,https://derrynh.gov/Bids.aspx,civicplus,2026-11-03
 gilfordpd.gov,Gilford,NH,City,Gilford Police Department,not_found,,,2026-08-11
 conwaypdnh.gov,Center Conway,NH,City,Conway Police Department,not_found,,,2026-08-11
 eastonnh.gov,Easton,NH,City,Easton,not_found,,,2026-08-11
@@ -4382,10 +4382,10 @@ villageofpalisade.gov,Palisade,NE,City,Village of Palisade,not_found,,,2026-11-0
 scribner-ne.gov,Scribner,NE,City,City of Scribner,not_found,,,2026-08-11
 windhamnh.gov,Windham,NH,City,Town of Windham,found,https://windhamnh.gov/Bids.aspx,civicplus,2026-08-11
 peterboroughpd.gov,Peterborough,NH,City,Peterborough (NH) Police Department,not_found,,,2026-08-11
-plainfieldnh.gov,Plainfield,NH,City,"Town of Plainfield, NH",not_found,,,2026-08-11
+plainfieldnh.gov,Plainfield,NH,City,"Town of Plainfield, NH",found,https://plainfieldnh.gov/Bids.aspx,civicplus,2026-11-03
 northfieldnh.gov,Northfield,NH,City,Northfield,not_found,,,2026-08-11
 marlboroughnh.gov,Marlborough,NH,City,Town of Marlborough,not_found,,,2026-08-11
-franklinnh.gov,Franklin,NH,City,City of Franklin,not_found,,,2026-08-11
+franklinnh.gov,Franklin,NH,City,City of Franklin,found,https://franklinnh.gov/Bids.aspx,civicplus,2026-11-03
 northwilkesboronc.gov,North Wilkesboro,NC,City,Town of North Wilkesboro,not_found,,,2026-08-11
 portsmouthnhpd.gov,Portsmouth,NH,City,Portsmouth Police Department,not_found,,,2026-08-11
 villageofstaplehurst.gov,Staplehurst,NE,City,Village of Staplehurst,not_found,,,2026-08-11
@@ -4413,7 +4413,7 @@ pittsfieldnh.gov,Pittsfield,NH,City,Town of Pittsfield,not_found,,,2026-08-11
 watervillevalleynh.gov,Waterville Valley,NH,City,Town of Waterville Valley,not_found,,,2026-08-11
 plymouthpdnh.gov,Plymouth,NH,City,"Town of Plymouth, NH Police Department",not_found,,,2026-08-11
 gorhamnh.gov,Gorham,NH,City,Town of Gorham,not_found,,,2026-08-11
-gilfordnh.gov,Gilford,NH,City,"Town of Gilford, NH",not_found,,,2026-08-11
+gilfordnh.gov,Gilford,NH,City,"Town of Gilford, NH",found,https://www.gilfordnh.gov/resources/Town-Information-31?f=Request-for-Proposals&categoryID=74,custom,2026-11-03
 chnj.gov,Cherry Hill,NJ,City,Township of Cherry Hill,found,https://chnj.gov/Bids.aspx,civicplus,2026-08-11
 wolfeboropolice.gov,Wolfeboro,NH,City,Wolfeboro Police Department,not_found,,,2026-08-11
 tuftonboronh.gov,Tuftonboro,NH,City,Town of Tuftonboro,not_found,,,2026-08-11
@@ -4421,14 +4421,14 @@ starknh.gov,Stark,NH,City,Town Of Stark NH,not_found,,,2026-08-11
 asburypark.gov,ASBURY PARK,NJ,City,CITY OF ASBURY PARK,not_found,,,2026-08-11
 kingstonnh.gov,Kingston,NH,City,Town of Kingston,not_found,,,2026-08-11
 newingtonnhpolice.gov,NEWINGTON,NH,City,NEWINGTON POLICE DEPARTMENT,not_found,,,2026-08-11
-thorntonnh.gov,Thornton,NH,City,Town of Thornton Administration,not_found,,,2026-08-11
+thorntonnh.gov,Thornton,NH,City,Town of Thornton Administration,found,https://thorntonnh.gov/Bids.aspx,civicplus,2026-11-03
 lincolnnhpd.gov,Lincoln,NH,City,Lincoln Police Department,not_found,,,2026-08-11
 warnernh.gov,Warner,NH,City,Town of Warner,not_found,,,2026-08-11
 eastorange-nj.gov,East ORange,NJ,City,City Of East ORange,found,https://eastorange-nj.gov/Bids.aspx,civicplus,2026-08-11
 eatonnh.gov,Eaton,NH,City,Town of Eaton,not_found,,,2026-08-11
 bergenfieldnj.gov,Bergenfield,NJ,City,Borough of Bergenfield,found,https://bergenfieldnj.gov/bids,agency,2026-08-11
 fairfieldtownshipnj.gov,Fairfield,NJ,City,Fairfield Township,found,https://fairfieldtownshipnj.gov/Bids.aspx,civicplus,2026-08-11
-swanzeynh.gov,Swanzey,NH,City,Town of Swanzey,not_found,,,2026-08-11
+swanzeynh.gov,Swanzey,NH,City,Town of Swanzey,found,https://swanzeynh.gov/Bids.aspx,civicplus,2026-11-03
 bogotanj.gov,Bogota,NJ,City,Borough of Bogota,not_found,,,2026-08-11
 kensingtonpdnh.gov,Kensington,NH,City,Town of Kensington Police Department,not_found,,,2026-08-11
 ewingnj.gov,Ewing,NJ,City,Township of Ewing,found,https://ewingnj.gov/Bids.aspx,civicplus,2026-08-11
@@ -8045,7 +8045,7 @@ nnva.gov,Newport News,VA,City,City of Newport News,found,https://nnva.gov/purcha
 lakestevens.gov,Lake Stevens,WA,City,City of Lake Stevens,not_found,,,2026-08-11
 mukilteowa.gov,Mukilteo,WA,City,City of Mukilteo,found,https://mukilteowa.gov/Bids.aspx,civicplus,2026-08-11
 mendonvt.gov,Mendon,VT,City,Town of Mendon,not_found,,,2026-08-11
-cleelum.gov,Cle Elum,WA,City,City of Cle Elum,not_found,,,2026-08-11
+cleelum.gov,Cle Elum,WA,City,City of Cle Elum,found,https://cleelum.gov/public-notices,custom,2026-11-03
 stowevt.gov,Stowe,VT,City,Town of Stowe,found,https://stowevt.gov/bids,agency,2026-08-11
 cityofgigharborwa.gov,Gig Harbor city,WA,City,City of Gig Harbor,not_found,,,2026-08-11
 berlinvt.gov,Berlin,VT,City,Town of Berlin,found,https://berlinvt.gov/rfps-rfqs,agency,2026-08-11
@@ -8054,7 +8054,7 @@ issaquahwa.gov,Issaquah,WA,City,City of Issaquah,found,https://issaquahwa.gov/bi
 jerichovt.gov,Jericho,VT,City,Town of Jericho,not_found,,,2026-08-11
 northfield-vt.gov,Northfield,VT,City,"Municipality of Northfield, Vermont",not_found,,,2026-08-11
 cityofkittitas.gov,Kittitas,WA,City,City of Kittitas,not_found,,,2026-08-11
-langleywa.gov,Langley,WA,City,City of Langley,not_found,,,2026-08-11
+langleywa.gov,Langley,WA,City,City of Langley,found,https://langleywa.gov/departments/community_planning_building/bids.php,agency,2026-11-03
 mercerislandwa.gov,Mercer Island,WA,City,City of Mercer Island,not_found,,,2026-08-11
 almirawa.gov,Almira,WA,City,Town of Almira,not_found,,,2026-08-11
 kingwoodwv.gov,Kingwood,WA,City,City of Kingwood,not_found,,,2026-08-11
@@ -8062,7 +8062,7 @@ selahwa.gov,Selah,WA,City,City of Selah,found,https://selahwa.gov/Bids.aspx,civi
 puyallupwa.gov,Puyallup,WA,City,City of Puyallup,found,https://puyallupwa.gov/Bids.aspx,civicplus,2026-08-11
 portorchardwa.gov,Port Orchard,WA,City,City of Port Orchard,found,https://portorchardwa.gov/Bids.aspx,civicplus,2026-08-11
 lakewoodwa.gov,Lakewood,WA,City,City of Lakewood,not_found,,,2026-08-11
-laceywa.gov,Lacey,WA,City,City of Lacey,not_found,,,2026-08-11
+laceywa.gov,Lacey,WA,City,City of Lacey,found,https://laceywa.gov/bids,agency,2026-11-03
 algonawa.gov,Algona,WA,City,City Of Algona,found,https://algonawa.gov/government/bids_rfps.php,agency,2026-08-11
 sequimwa.gov,SEQUIM,WA,City,City of Sequim,found,https://sequimwa.gov/Bids.aspx,civicplus,2026-08-11
 newcastlewa.gov,Newcastle,WA,City,City of Newcastle,found,https://newcastlewa.gov/bids,agency,2026-08-11
@@ -8124,20 +8124,20 @@ metalinefalls.gov,Metaline Falls,WA,City,Town of Metaline Falls,not_found,,,2026
 villageofalbanywi.gov,Albany,WI,City,Village of Albany,not_found,,,2026-08-11
 pacificwa.gov,Pacific,WA,City,City of Pacific,found,https://pacificwa.gov/services/public_works/projects_bidding.php,agency,2026-08-11
 cityoftieton.gov,Tieton,WA,City,City of Tieton,not_found,,,2026-08-11
-tonasketwa.gov,Tonasket,WA,City,City of Tonasket,not_found,,,2026-08-11
+tonasketwa.gov,Tonasket,WA,City,City of Tonasket,found,https://tonasketwa.gov/Bids.aspx,civicplus,2026-11-03
 vancouver.gov,Vancouver,WA,City,City of Vancouver,not_found,,,2026-08-11
-sumnerwa.gov,Sumner,WA,City,City of Sumner,not_found,,,2026-08-11
+sumnerwa.gov,Sumner,WA,City,City of Sumner,found,https://sumnerwa.gov/bids,agency,2026-11-03
 cityofadams-wi.gov,Adams,WI,City,City of Adams,not_found,,,2026-08-11
 spokane.gov,Spokane,WA,City,City of Spokane,not_found,,,2026-08-11
-whitesalmonwa.gov,White Salmon,WA,City,City of White Salmon,not_found,,,2026-08-11
-desmoineswa.gov,Des Moines,WA,City,City of Des Moines,not_found,,,2026-08-11
+whitesalmonwa.gov,White Salmon,WA,City,City of White Salmon,found,https://whitesalmonwa.gov/Bids.aspx,civicplus,2026-11-03
+desmoineswa.gov,Des Moines,WA,City,City of Des Moines,found,https://desmoineswa.gov/Bids.aspx,civicplus,2026-11-03
 southbend-wa.gov,South Bend,WA,City,City of South Bend WA,not_found,,,2026-08-11
 cosmopoliswa.gov,Cosmopolis,WA,City,City of Cosmopolis,not_found,,,2026-08-11
 sheltonwa.gov,Shelton,WA,City,"City of Shelton, Washington",found,https://sheltonwa.gov/business/rfp_and_bid_opportunities.php,agency,2026-08-11
 shermanshebcowi.gov,Adell,WI,City,Town of Sherman,not_found,,,2026-08-11
 altoona-wi.gov,Altoona,WI,City,City Of Altoona Emergency Services,not_found,,,2026-08-11
-westportwa.gov,Westport,WA,City,City of Westport,not_found,,,2026-08-11
-stevensonwa.gov,Stevenson,WA,City,City of Stevenson,not_found,,,2026-08-11
+westportwa.gov,Westport,WA,City,City of Westport,found,https://westportwa.gov/bids-and-rfps,agency,2026-11-03
+stevensonwa.gov,Stevenson,WA,City,City of Stevenson,found,https://stevensonwa.gov/Bids.aspx,civicplus,2026-11-03
 townofscottsheboyganwi.gov,Adell,WI,City,TOWN OF SCOTT,not_found,,,2026-08-11
 fallschurchcityva.gov,Falls Church,VA,City,City of Falls Church,not_found,,,2026-08-11
 kentwa.gov,Kent,WA,City,City of Kent,not_found,,,2026-08-11
@@ -8148,7 +8148,7 @@ fridayharbor.gov,Friday Harbor,WA,City,Friday Harbor,found,https://fridayharbor.
 snohomishwa.gov,Snohomish,WA,City,City of Snohomish,found,https://snohomishwa.gov/105/bids-rfps-rfqs,agency,2026-08-11
 townofadamsgreencountywi.gov,Argyle,WI,City,Town of Adams,not_found,,,2026-08-11
 townofjohnsonwi.gov,Athens,WI,City,Town of Johnson,not_found,,,2026-08-11
-granitefallswa.gov,Granite Falls,WA,City,City of Granite Falls,not_found,,,2026-08-11
+granitefallswa.gov,Granite Falls,WA,City,City of Granite Falls,found,https://www.ci.granite-falls.wa.us/departments/public_works/projects__rfp_s.php,agency,2026-11-03
 seattle.gov,Seattle,WA,City,City of Seattle,not_found,,,2026-08-11
 townofharrisonmcwi.gov,ANIWA,WI,City,Town of Harrison,not_found,,,2026-08-11
 cityofabbotsfordwi.gov,Abbotsford,WI,City,City of Abbotsford,not_found,,,2026-08-11
@@ -8160,7 +8160,7 @@ poulsbo.gov,Poulsbo,WA,City,City of Poulsbo,not_found,,,2026-08-11
 addisonwi.gov,Allenton,WI,City,Town of Addison,not_found,,,2026-08-11
 burienwa.gov,BURIEN,WA,City,City of Burien,found,https://burienwa.gov/city_hall/working_with_us/bids_rfp_rfq,agency,2026-08-11
 kenmorewa.gov,Kenmore,WA,City,City of Kenmore,not_found,,,2026-08-11
-seatacwa.gov,SeaTac,WA,City,City of SeaTac,not_found,,,2026-08-11
+seatacwa.gov,SeaTac,WA,City,City of SeaTac,found,https://seatacwa.gov/public-notices,custom,2026-11-03
 clydewi.gov,Avoca,WI,City,Town of Clyde,not_found,,,2026-08-11
 cityofpacificwa.gov,Pacific,WA,City,City of Pacific,not_found,,,2026-08-11
 townofkeystonewi.gov,Ashland,WI,City,Town of Keystone,not_found,,,2026-08-11
@@ -8189,7 +8189,7 @@ balsamlakecenturiapd.gov,Balsam Lake,WI,City,Balsam Lake/Centuria Police Departm
 portsmouthvirginia.gov,Portsmouth,VA,City,"City of Portsmouth, VA",not_found,,,2026-08-11
 townofrussellwi.gov,Bayfield,WI,City,Town of Russell,not_found,,,2026-08-11
 soaplakewa.gov,Soap Lake,WA,City,City of Soap Lake,not_found,,,2026-08-11
-pullman-wa.gov,Pullman,WA,City,City of Pullman,not_found,,,2026-08-11
+pullman-wa.gov,Pullman,WA,City,City of Pullman,found,"http://www.publicpurchase.com/gems/pullman,wa/buyer/public/home",publicpurchase,2026-11-03
 altoonawi.gov,Altoona,WI,City,"City of Altoona, Wisconsin",found,https://altoonawi.gov/business/bids_rfps.php,agency,2026-08-11
 rushriverwi.gov,Baldwin,WI,City,Town of Rush River,not_found,,,2026-08-11
 burlington-wi.gov,Burlington,WI,City,City of Burlington,found,https://burlington-wi.gov/Bids.aspx,civicplus,2026-08-11
@@ -8260,7 +8260,7 @@ cityofbrodheadwi.gov,Brodhead,WI,City,City of Brodhead,not_found,,,2026-08-11
 butlerwi.gov,Butler,WI,City,Village of Butler,not_found,,,2026-08-11
 blanchardvillewi.gov,Blanchardville,WI,City,Village of Blanchardville,not_found,,,2026-08-11
 townofgrantshawanowi.gov,Caroline,WI,City,Town of Grant,not_found,,,2026-08-11
-auburnwa.gov,Auburn,WA,City,City of Auburn,not_found,,,2026-08-11
+auburnwa.gov,Auburn,WA,City,City of Auburn,found,https://auburnwa.gov/bids,agency,2026-11-03
 townofstanley-wi.gov,Cameron,WI,City,Town of Stanley,not_found,,,2026-08-11
 townofbrookfieldwi.gov,Brookfield,WI,City,Town of Brookfield,not_found,,,2026-08-11
 townofcassianwi.gov,Cassian,WI,City,Town Of Cassian,not_found,,,2026-08-11
@@ -8282,13 +8282,13 @@ townofburlingtonwi.gov,Burlington,WI,City,Town of Burlington,found,https://towno
 townofbelgiumwi.gov,Belgium,WI,City,Town of Belgium,not_found,,,2026-08-11
 cityofcrandonwi.gov,Crandon,WI,City,City of Crandon,not_found,,,2026-08-11
 clearlake-wi.gov,Clear Lake,WI,City,Village of Clear Lake,not_found,,,2026-08-11
-tukwilawa.gov,Tukwila,WA,City,City of Tukwila,not_found,,,2026-08-11
+tukwilawa.gov,Tukwila,WA,City,City of Tukwila,found,https://www.tukwilawa.gov/departments/community-development/planning-initiatives-and-public-notice/,custom,2026-11-03
 townofgrantdunnwi.gov,"Colfax,  WI",WI,City,Town of Grant,not_found,,,2026-08-11
 townofspringprairiewi.gov,Burlington,WI,City,Town of Spring Prairie,not_found,,,2026-08-11
 townofclearlakewi.gov,Clayton,WI,City,Town of Clear Lake,not_found,,,2026-08-11
 villageofcobb.gov,Cobb,WI,City,Village of Cobb,not_found,,,2026-08-11
 edmondswa.gov,Edmonds,WA,City,City of Edmonds,found,https://edmondswa.gov/doing_business/bids_rfp_s_and_rfq_s,agency,2026-08-11
-cityofauburnwa.gov,Auburn,WA,City,City of Auburn,not_found,,,2026-08-11
+cityofauburnwa.gov,Auburn,WA,City,City of Auburn,found,https://cityofauburnwa.gov/bids,agency,2026-11-03
 bentonwi.gov,Benton,WI,City,Village of Benton,not_found,,,2026-08-11
 villageofclymanwi.gov,Clyman,WI,City,Village of Clyman,not_found,,,2026-08-11
 villageofcottagegrove.gov,Cottage Grove,WI,City,Village of Cottage Grove,not_found,,,2026-08-11
@@ -11342,7 +11342,7 @@ floydcova.gov,Floyd,VA,County,Floyd County Government,not_found,,,2026-08-11
 whitmancountyem.gov,Colfax,WA,County,Whitman County Emergency Communications,not_found,,,2026-08-11
 saltlakehealth.gov,SLC,UT,County,Salt Lake County,not_found,,,2026-08-11
 washingtoncountysheriffvt.gov,Montpelier,VT,County,Washington County Sheriffs Department,not_found,,,2026-08-11
-skagitcountywa.gov,Mount Vernon,WA,County,Skagit County Government,not_found,,,2026-08-11
+skagitcountywa.gov,Mount Vernon,WA,County,Skagit County Government,found,https://skagitcountywa.gov/rfp,agency,2026-11-03
 chippewacountywi.gov,Chippewa Falls,WI,County,Chippewa County,found,https://chippewacountywi.gov/Bids.aspx,civicplus,2026-08-11
 bedfordcountyva.gov,Bedford,VA,County,Bedford County Government,not_found,,,2026-08-11
 fairfaxcounty.gov,Fairfax,VA,County,Fairfax County Government,found,https://fairfaxcounty.gov/purchasing,agency,2026-08-11
@@ -12110,7 +12110,7 @@ albionjointfdny.gov,Albion,NY,Special district,Albion Joint Fire District,found,
 lawrencecountymo911.gov,Mt. Vernon,MO,Special district,Lawrence County Emergency Services Board 9-1-1,not_found,,,2026-08-11
 westvalleyfiremt.gov,Helena,MT,Special district,West Valley Fire Rescue,not_found,,,2026-08-11
 rhanc.gov,Raleigh,NC,Special district,Raleigh Housing Authority,found,https://rhanc.gov/rfp,agency,2026-08-11
-communitypowernh.gov,Concord,NH,Special district,Community Power Coalition of New Hampshire (CPCNH),not_found,,,2026-08-11
+communitypowernh.gov,Concord,NH,Special district,Community Power Coalition of New Hampshire (CPCNH),found,https://communitypowernh.gov/solicitations,agency,2026-11-03
 hamiltonmtruralfire.gov,"Hamilton,",MT,Special district,Hamilton Rural Fire District,not_found,,,2026-08-11
 greenportfiredistrictny.gov,hudson,NY,Special district,Greenport Fire District,not_found,,,2026-08-11
 adairguthrieia-ema.gov,Guthrie Center,IA,Special district,Adair & Guthrie County Emergency Management Agency,not_found,,,2026-08-11
@@ -12566,7 +12566,7 @@ sesdofutah.gov,Payson,UT,Special district,South Utah Valley Electric Service Dis
 saltlakecountyem.gov,Salt Lake City,UT,Special district,Salt Lake County Emergency Management,not_found,,,2026-08-11
 sbwrd-ut.gov,Park City,UT,Special district,Snyderville Basin Water Reclamation District,not_found,,,2026-08-11
 graysharborpud.gov,Aberdeen,WA,Special district,Grays Harbor County Public Utility District No. 1,not_found,,,2026-08-11
-ghcwd2.gov,Aberdeen,WA,Special district,Grays Harbor County Water District #2,not_found,,,2026-08-11
+ghcwd2.gov,Aberdeen,WA,Special district,Grays Harbor County Water District #2,found,https://ghcwd2.gov/about_district_2/current_projects.php,custom,2026-11-03
 lyonswisd2.gov,Lyons,WI,Special district,Town Sanitary District No.2 of the Town of Lyons,not_found,,,2026-08-11
 jordanrivercommission.gov,Salt Lake City,UT,Special district,Jordan River Commission,not_found,,,2026-08-11
 mtnregionalwaterutah.gov,Park City,UT,Special district,Mountain Regional Water Special Service District,found,https://mtnregionalwaterutah.gov/procurement,agency,2026-08-11
@@ -12933,7 +12933,7 @@ irondistrict.org,Cedar City,UT,School district,Iron County School District,not_f
 judsonisd.org,San Antonio,TX,School district,Judson Independent School District,not_found,,,2026-08-31
 farmersville.k12.ca.us,Farmersville,CA,School district,Farmersville Unified School District,not_found,,,2026-08-31
 hcbe.net,Perry,GA,School district,Houston County Schools,found,https://hcbe.net/purchasing,custom,2026-11-02
-issaquah.wednet.edu,Issaquah,WA,School district,Issaquah School District,not_found,,,2026-08-31
+issaquah.wednet.edu,Issaquah,WA,School district,Issaquah School District,found,https://issaquah.wednet.edu/about-us/legal-notices,custom,2026-11-03
 aberdeen58.org,Aberdeen,ID,School district,Aberdeen School District,not_found,,,2026-08-31
 alamogordoschools.org,Alamogordo,NM,School district,Alamogordo Public Schools,not_found,,,2026-08-31
 adrianmaples.org,Adrian,MI,School district,Adrian Public Schools,not_found,,,2026-08-31
@@ -12970,7 +12970,7 @@ elps.k12.mi.us,East Lansing,MI,School district,East Lansing Public Schools,not_f
 kcsd.k12.or.us,Klamath Falls,OR,School district,Klamath County School District,not_found,,,2026-08-31
 cps-k12.org,Cincinnati,OH,School district,Cincinnati Public Schools,found,https://cps-k12.org/our-community/doing-business-with-cps/current-bids-and-legal-notices,custom,2026-08-31
 saranac.org,Dannemora,NY,School district,Saranac Central School District,not_found,,,2026-08-31
-asd5.org,Aberdeen,WA,School district,Aberdeen School District,not_found,,,2026-08-31
+asd5.org,Aberdeen,WA,School district,Aberdeen School District,found,https://asd5.org/departments/business-office/purchasing-procurement/open-rfps-and-rfqs,custom,2026-11-03
 bostonpublicschools.org,Roxbury,MA,School district,Boston Public Schools,not_found,,,2026-08-31
 smcsd.org,Marin City,CA,School district,Sausalito Marin City School District,not_found,,,2026-08-31
 saultschools.org,Sault Sainte Marie,MI,School district,Sault Ste. Marie Area Public Schools,not_found,,,2026-08-31
@@ -13001,7 +13001,7 @@ atkinspublic.schoolinsites.com,Atkins,AR,School district,Atkins School District,
 epd86.org,East Peoria,IL,School district,East Peoria School District 86,not_found,,,2026-08-31
 garycsc.k12.in.us,Gary,IN,School district,Gary Community School Corporation,not_found,,,2026-08-31
 everettsd.org,Everett,WA,School district,Everett Public Schools,not_found,,,2026-08-31
-lwsd.org,Redmond,WA,School district,Lake Washington School District,not_found,,,2026-08-31
+lwsd.org,Redmond,WA,School district,Lake Washington School District,found,https://lwsd.org/about/legal-notices,custom,2026-11-03
 cfisd.net,Houston,TX,School district,Cypress-Fairbanks Independent School District,found,https://cfisd.net/bids,custom,2026-08-31
 smcps.org,Leonardtown,MD,School district,St. Mary's County Public Schools,found,https://smcps.org/offices/fiscal-services/purchasing/bid-board,custom,2026-08-31
 huntsvillecityschools.org,Huntsville,AL,School district,Huntsville City Schools,not_found,,,2026-08-31
@@ -14904,7 +14904,7 @@ easthampton.org,Easthampton,MA,City,Easthampton,not_found,,,2026-09-01
 franklinma.virtualtownhall.net,Franklin,MA,City,Franklin,not_found,,,2026-09-01
 cityofwinnfield.com,Winnfield,LA,City,Winnfield,not_found,,,2026-09-01
 portfourchon.com,Port Fourchon,LA,City,Port Fourchon,found,https://portfourchon.com/news-events/public-notices,custom,2026-11-02
-fallriverma.org,Fall River,MA,City,Fall River,not_found,,,2026-09-01
+fallriverma.org,Fall River,MA,City,Fall River,found,https://fallriverma.org/departments/purchasing,custom,2026-11-03
 ci.lynn.ma.us,Lynn,MA,City,Lynn,not_found,,,2026-09-01
 cityofscott.org,Scott,LA,City,Scott,not_found,,,2026-09-01
 cityofvidaliala.com,Vidalia,LA,City,Vidalia,not_found,,,2026-09-01
@@ -14914,7 +14914,7 @@ stfrancisville.net,St. Francisville,LA,City,St. Francisville,not_found,,,2026-09
 townofgreenfield.org,Greenfield,MA,City,Greenfield,not_found,,,2026-09-01
 rayne.org,Rayne,LA,City,Rayne,found,https://www.rayne.org/public-bid-notice,custom,2026-09-01
 leitchfield.org,Leitchfield,KY,City,Leitchfield,not_found,,,2026-09-01
-town.dartmouth.ma.us,Dartmouth,MA,City,Dartmouth,not_found,,,2026-09-01
+town.dartmouth.ma.us,Dartmouth,MA,City,Dartmouth,found,https://town.dartmouth.ma.us/Bids.aspx,civicplus,2026-11-03
 ci.methuen.ma.us,Methuen,MA,City,Methuen,not_found,,,2026-09-01
 north-attleboro.ma.us,North Attleborough,MA,City,North Attleborough,not_found,,,2026-09-01
 madisonvillegov.com,Madisonville,KY,City,Madisonville,not_found,,,2026-09-01
@@ -15878,7 +15878,7 @@ citywaverly.com,Waverly,NE,City,Waverly,not_found,,,2026-09-01
 schuylernebraska.net,Schuyler,NE,City,Schuyler,not_found,,,2026-09-01
 southsiouxcity.org,South Sioux City,NE,City,South Sioux City,not_found,,,2026-09-01
 ci.wisner.ne.us,Wisner,NE,City,Wisner,not_found,,,2026-09-01
-franklinnh.org,Franklin,NH,City,Franklin,not_found,,,2026-09-01
+franklinnh.org,Franklin,NH,City,Franklin,found,https://www.franklinnh.gov/bids.aspx,civicplus,2026-11-03
 ci.keene.nh.us,Keene,NH,City,Keene,not_found,,,2026-09-01
 cityofsutton.org,Sutton,NE,City,Sutton,not_found,,,2026-09-01
 cityofyork.net,York,NE,City,York,not_found,,,2026-09-01
@@ -16920,7 +16920,7 @@ virginia.org,Bristow,VA,City,Bristow,not_found,,,2026-09-01
 davenportwa.us,Davenport,WA,City,Davenport,not_found,,,2026-09-01
 gunnisoncity.org,Gunnison,UT,City,Gunnison,not_found,,,2026-09-01
 cityofedgewood.org,Edgewood,WA,City,Edgewood,not_found,,,2026-09-01
-cityoffircrest.net,Fircrest,WA,City,Fircrest,not_found,,,2026-09-01
+cityoffircrest.net,Fircrest,WA,City,Fircrest,found,http://www.cityoffircrest.net/category/public-notice/,custom,2026-11-03
 visitloudoun.org,Ashburn,VA,City,Ashburn,not_found,,,2026-09-01
 cityofgigharbor.net,Gig Harbor,WA,City,Gig Harbor,not_found,,,2026-09-01
 cityofdeerparkwa.com,Deer Park,WA,City,Deer Park,not_found,,,2026-09-01
@@ -16936,7 +16936,7 @@ kettle-falls.com,Kettle Falls,WA,City,Kettle Falls,not_found,,,2026-09-01
 cityofmabton.com,Mabton,WA,City,Mabton,not_found,,,2026-09-01
 cityofkittitas.com,Kittitas,WA,City,Kittitas,not_found,,,2026-09-01
 daytonwa.com,Dayton,WA,City,Dayton,not_found,,,2026-09-01
-cityofcleelum.com,Cle Elum,WA,City,Cle Elum,not_found,,,2026-09-01
+cityofcleelum.com,Cle Elum,WA,City,Cle Elum,found,https://cityofcleelum.com/public-notices,custom,2026-11-03
 ci.everson.wa.us,Everson,WA,City,Everson,not_found,,,2026-09-01
 cityofcashmere.org,Cashmere,WA,City,Cashmere,not_found,,,2026-09-01
 ci.lacenter.wa.us,La Center,WA,City,La Center,not_found,,,2026-09-01
@@ -16946,7 +16946,7 @@ ci.monroe.wa.us,Monroe,WA,City,Monroe,not_found,,,2026-09-01
 cityofmccleary.com,McCleary,WA,City,McCleary,not_found,,,2026-09-01
 cityoflakewood.us,Lakewood,WA,City,Lakewood,found,https://cityoflakewood.us/category/rfp-rfq-bids/,custom,2026-09-01
 ci.mukilteo.wa.us,Mukilteo,WA,City,Mukilteo,not_found,,,2026-09-01
-cityofnapavine.com,Napavine,WA,City,Napavine,not_found,,,2026-09-01
+cityofnapavine.com,Napavine,WA,City,Napavine,found,https://cityofnapavine.com/Bids.aspx,civicplus,2026-11-03
 cityofmontesano.com,Montesano,WA,City,Montesano,not_found,,,2026-09-01
 ephrata.org,Ephrata,WA,City,Ephrata,not_found,,,2026-09-01
 oakvillecityhall.com,Oakville,WA,City,Oakville,not_found,,,2026-09-01
@@ -16955,15 +16955,15 @@ cityofnooksack.com,Nooksack,WA,City,Nooksack,not_found,,,2026-09-01
 grangerwashington.org,Granger,WA,City,Granger,not_found,,,2026-09-01
 omakcity.com,Omak,WA,City,Omak,not_found,,,2026-09-01
 cityofhoquiam.com,Hoquiam,WA,City,Hoquiam,not_found,,,2026-09-01
-osgov.com,Ocean Shores,WA,City,Ocean Shores,not_found,,,2026-09-01
+osgov.com,Ocean Shores,WA,City,Ocean Shores,found,https://www.osgov.com/departments/finance_department/purchasing_department.php,custom,2026-11-03
 westbountiful.utah.gov,West Bountiful,UT,City,West Bountiful,not_found,,,2026-09-01
 cityofkalama.com,Kalama,WA,City,Kalama,not_found,,,2026-09-01
 perrycity.org,Perry,UT,City,Perry,not_found,,,2026-09-01
 oroville-wa.com,Oroville,WA,City,Oroville,not_found,,,2026-09-01
 ci.richland.wa.us,Richland,WA,City,Richland,not_found,,,2026-09-01
-grandview.wa.us,Grandview,WA,City,Grandview,not_found,,,2026-09-01
+grandview.wa.us,Grandview,WA,City,Grandview,found,https://grandview.wa.us/public-notices,custom,2026-11-03
 cityofrainierwa.org,Rainier,WA,City,Rainier,not_found,,,2026-09-01
-cityofpuyallup.org,Puyallup,WA,City,Puyallup,not_found,,,2026-09-01
+cityofpuyallup.org,Puyallup,WA,City,Puyallup,found,https://cityofpuyallup.org/bids,civicplus,2026-11-03
 cityofkenmore.com,Kenmore,WA,City,Kenmore,not_found,,,2026-09-01
 rockislandwa.org,Rock Island,WA,City,Rock Island,not_found,,,2026-09-01
 ci.roslyn.wa.us,Roslyn,WA,City,Roslyn,not_found,,,2026-09-01
@@ -16977,7 +16977,7 @@ spokanecity.org,Spokane,WA,City,Spokane,not_found,,,2026-09-01
 sprague-wa.us,Sprague,WA,City,Sprague,not_found,,,2026-09-01
 soaplakecity.org,Soap Lake,WA,City,Soap Lake,not_found,,,2026-09-01
 cityofmossyrock.com,Mossyrock,WA,City,Mossyrock,not_found,,,2026-09-01
-spokanevalley.org,Spokane Valley,WA,City,Spokane Valley,not_found,,,2026-09-01
+spokanevalley.org,Spokane Valley,WA,City,Spokane Valley,found,https://spokanevalley.org/Bids.aspx,civicplus,2026-11-03
 southsaltlakecity.com,South Salt Lake,UT,City,South Salt Lake,not_found,,,2026-09-01
 visitpalouse.com,Palouse,WA,City,Palouse,not_found,,,2026-09-01
 ci.sammamish.wa.us,Sammamish,WA,City,Sammamish,not_found,,,2026-09-01
@@ -16985,7 +16985,7 @@ okanogancity.com,Okanogan,WA,City,Okanogan,found,https://okanogancity.com/how_do
 cityoftieton.com,Tieton,WA,City,Tieton,not_found,,,2026-09-01
 mtrainierguestservices.com,Paradise Inn,WA,City,Paradise Inn,not_found,,,2026-09-01
 cityoforting.org,Orting,WA,City,Orting,not_found,,,2026-09-01
-ci.sultan.wa.us,Sultan,WA,City,Sultan,not_found,,,2026-09-01
+ci.sultan.wa.us,Sultan,WA,City,Sultan,found,https://ci.sultan.wa.us/Bids.aspx,civicplus,2026-11-03
 rockfordwa.com,Rockford,WA,City,Rockford,not_found,,,2026-09-01
 ci.sumner.wa.us,Sumner,WA,City,Sumner,not_found,,,2026-09-01
 cityofritzville.com,Ritzville,WA,City,Ritzville,not_found,,,2026-09-01
@@ -16999,8 +16999,8 @@ ci.yakima.wa.us,Yakima,WA,City,Yakima,not_found,,,2026-09-01
 cityofstevenson.com,Stevenson,WA,City,Stevenson,not_found,,,2026-09-01
 pomeroy-wa.com,Pomeroy,WA,City,Pomeroy,not_found,,,2026-09-01
 ci.woodland.wa.us,Woodland,WA,City,Woodland,not_found,,,2026-09-01
-ci.westport.wa.us,Westport,WA,City,Westport,not_found,,,2026-09-01
-townofwoodway.com,Woodway,WA,City,Woodway,not_found,,,2026-09-01
+ci.westport.wa.us,Westport,WA,City,Westport,found,https://ci.westport.wa.us/bids-and-rfps,agency,2026-11-03
+townofwoodway.com,Woodway,WA,City,Woodway,found,"https://townofwoodway.com/bids,_rfp_s,_and_rfq_s/index.php",custom,2026-11-03
 pointrobertschamberofcommerce.com,Point Roberts,WA,City,Point Roberts,not_found,,,2026-09-01
 cityofalmawi.com,Alma,WI,City,Alma,not_found,,,2026-09-01
 cityofaugusta.org,Augusta,WI,City,Augusta,not_found,,,2026-09-01
@@ -18111,7 +18111,7 @@ oktibbehacountyms.org,Oktibbeha County,MS,City,Oktibbeha County,not_found,,,2026
 sharkeycounty.net,Sharkey County,MS,City,Sharkey County,found,https://sharkeycounty.net/purchasing,custom,2026-09-01
 hillsboroughcountynh.org,Hillsborough County,NH,City,Hillsborough County,found,https://hillsboroughcountynh.org/bids-and-rfps,custom,2026-09-01
 hindscountyms.com,Hinds County,MS,City,Hinds County,found,https://hindscountyms.com/departments/purchasing,custom,2026-09-01
-co.rockingham.nh.us,Rockingham County,NH,City,Rockingham County,not_found,,,2026-09-01
+co.rockingham.nh.us,Rockingham County,NH,City,Rockingham County,found,https://rockinghamcountynh.org/rfpbidding/,custom,2026-11-03
 storeycounty.org,Storey County,NV,City,Storey County,found,https://storeycounty.org/Bids.aspx,civicplus,2026-09-01
 carrollcountynh.net,Carroll County,NH,City,Carroll County,not_found,,,2026-09-01
 accessesmeralda.com,Esmeralda County,NV,City,Esmeralda County,found,https://accessesmeralda.com/bids-and-rfps,custom,2026-09-01
@@ -19052,10 +19052,10 @@ co.benton.wa.us,Benton County,WA,City,Benton County,found,https://co.benton.wa.u
 mecklenburgva.com,Mecklenburg County,VA,City,Mecklenburg County,found,https://mecklenburgva.com/Bids.aspx,civicplus,2026-09-01
 monroecountywv.net,Monroe County,WV,City,Monroe County,not_found,,,2026-09-01
 boonecountywv.org,Boone County,WV,City,Boone County,not_found,,,2026-09-01
-whitmancounty.org,Whitman County,WA,City,Whitman County,not_found,,,2026-09-01
+whitmancounty.org,Whitman County,WA,City,Whitman County,found,https://whitmancounty.org/Bids.aspx,civicplus,2026-11-03
 shenandoahcountyva.us,Shenandoah County,VA,City,Shenandoah County,found,https://shenandoahcountyva.us/Bids.aspx,civicplus,2026-09-01
 pendletoncounty.wv.gov,Pendleton County,WV,City,Pendleton County,not_found,,,2026-09-01
-co.asotin.wa.us,Asotin County,WA,City,Asotin County,not_found,,,2026-09-01
+co.asotin.wa.us,Asotin County,WA,City,Asotin County,found,https://co.asotin.wa.us/Bids.aspx,civicplus,2026-11-03
 hampshirecounty.wv.gov,Hampshire County,WV,City,Hampshire County,not_found,,,2026-09-01
 doddridgecounty.wv.gov,Doddridge County,WV,City,Doddridge County,not_found,,,2026-09-01
 jeffersoncountywv.org,Jefferson County,WV,City,Jefferson County,not_found,,,2026-09-01
@@ -19095,7 +19095,7 @@ greenbriercounty.net,Greenbrier County,WV,City,Greenbrier County,not_found,,,202
 carbondale-pa.gov,Carbondale,PA,City,Carbondale,not_found,,,2026-09-01
 chestercity.com,Chester,PA,City,Chester,not_found,,,2026-09-01
 cortland.org,Cortland,NY,City,Cortland,found,https://cortland.org/Bids.aspx,civicplus,2026-09-01
-klickitatcounty.org,Klickitat County,WA,City,Klickitat County,not_found,,,2026-09-01
+klickitatcounty.org,Klickitat County,WA,City,Klickitat County,found,https://klickitatcounty.org/Bids.aspx,civicplus,2026-11-03
 nottoway.org,Nottoway County,VA,City,Nottoway County,found,https://nottoway.org/departments/finance_department/procurements.php,custom,2026-09-01
 cityofstmarys.com,St. Marys,PA,City,St. Marys,not_found,,,2026-09-01
 galion.city,Galion,OH,City,Galion,found,https://galion.city/Bids.aspx,civicplus,2026-09-01
@@ -20614,7 +20614,7 @@ townofgb.org,Great Barrington,MA,City,Great Barrington,found,https://townofgb.or
 elmorevt.org,Elmore,VT,City,Elmore,not_found,,,2026-09-01
 co.shawano.wi.us,Shawano County,WI,City,Shawano County,not_found,,,2026-09-01
 townofrowley.net,Rowley,MA,City,Rowley,not_found,,,2026-09-01
-townofbourne.com,Bourne,MA,City,Bourne,not_found,,,2026-09-01
+townofbourne.com,Bourne,MA,City,Bourne,found,https://townofbourne.com/Bids.aspx,civicplus,2026-11-03
 easthaddam.org,East Haddam,CT,City,East Haddam,found,https://easthaddam.org/bids,custom,2026-09-01
 kittery.org,Kittery,ME,City,Kittery,not_found,,,2026-09-01
 newhavenvt.com,New Haven,VT,City,New Haven,not_found,,,2026-09-01
@@ -20623,7 +20623,7 @@ castletonvermont.org,Castleton,VT,City,Castleton,not_found,,,2026-09-01
 scarboroughmaine.org,Scarborough,ME,City,Scarborough,found,https://scarboroughmaine.org/departments/purchasing,custom,2026-09-01
 townofmadawaska.com,Madawaska,ME,City,Madawaska,found,https://townofmadawaska.com/resources___links/bids___rfps.php,custom,2026-09-01
 townofgeorgia.com,Georgia,VT,City,Georgia,not_found,,,2026-09-01
-townofsalemnh.org,Salem,NH,City,Salem,not_found,,,2026-09-01
+townofsalemnh.org,Salem,NH,City,Salem,found,https://www.salemnh.gov/bids.aspx,civicplus,2026-11-03
 townofsalisbury.org,Salisbury,VT,City,Salisbury,not_found,,,2026-09-01
 halifaxvt.com,Halifax,VT,City,Halifax,found,https://halifaxvt.com/bids,custom,2026-09-01
 doververmont.com,Dover,VT,City,Dover,not_found,,,2026-09-01
@@ -20755,7 +20755,7 @@ townofnelson.com,Nelson,NH,City,Nelson,not_found,,,2026-09-01
 windsornh.org,Windsor,NH,City,Windsor,not_found,,,2026-09-01
 lincolntown.org,Lincoln,MA,City,Lincoln,found,https://lincolntown.org/Bids.aspx,civicplus,2026-09-01
 hebronnh.org,Hebron,NH,City,Hebron,not_found,,,2026-09-01
-wolfeboronh.us,Wolfeboro,NH,City,Wolfeboro,not_found,,,2026-09-01
+wolfeboronh.us,Wolfeboro,NH,City,Wolfeboro,found,https://wolfeboronh.us/Bids.aspx,civicplus,2026-11-03
 franklinct.com,Franklin,CT,City,Franklin,not_found,,,2026-09-01
 cantonmaine.org,Canton,ME,City,Canton,not_found,,,2026-09-01
 pembroke-nh.com,Pembroke,NH,City,Pembroke,not_found,,,2026-09-01
@@ -20777,7 +20777,7 @@ nahant.org,Nahant,MA,City,Nahant,not_found,,,2026-09-01
 fairfieldct.org,Fairfield,CT,City,Fairfield,found,https://fairfieldct.org/purchasing,custom,2026-09-01
 chiltoncounty.org,Chilton County,AL,City,Chilton County,found,https://chiltoncounty.org/bids,custom,2026-09-01
 topshammaine.com,Topsham,ME,City,Topsham,not_found,,,2026-09-01
-sudbury.ma.us,Sudbury,MA,City,Sudbury,not_found,,,2026-09-01
+sudbury.ma.us,Sudbury,MA,City,Sudbury,found,https://sudbury.ma.us/bids,agency,2026-11-03
 townofmilton.org,Milton,MA,City,Milton,not_found,,,2026-09-01
 bradfordnh.org,Bradford,NH,City,Bradford,not_found,,,2026-09-01
 hampden.org,Hampden,MA,City,Hampden,not_found,,,2026-09-01
@@ -21199,7 +21199,7 @@ graham.az.gov,Graham County,AZ,City,Graham County,not_found,,,2026-09-01
 windsorlocksct.org,Windsor Locks,CT,City,Windsor Locks,found,https://windsorlocksct.org/rfp,custom,2026-09-01
 ripley-ny.com,Ripley,NY,City,Ripley,not_found,,,2026-09-01
 meggettsc.com,Meggett,SC,City,Meggett,not_found,,,2026-09-01
-mattapoisett.net,Mattapoisett,MA,City,Mattapoisett,not_found,,,2026-09-01
+mattapoisett.net,Mattapoisett,MA,City,Mattapoisett,found,https://mattapoisett.net/Bids.aspx,civicplus,2026-11-03
 myersvillemd.govoffice2.com,Myersville,MD,City,Myersville,not_found,,,2026-09-01
 townofwalls.com,Walls,MS,City,Walls,not_found,,,2026-09-01
 taneytown.org,Taneytown,MD,City,Taneytown,not_found,,,2026-09-01
@@ -21447,12 +21447,12 @@ polandmaine.org,Poland,ME,City,Poland,not_found,,,2026-09-01
 stflorianalabama.com,St. Florian,AL,City,St. Florian,not_found,,,2026-09-01
 smithtowninfo.com,Smithtown,NY,City,Smithtown,not_found,,,2026-09-01
 pottsboro.govoffice2.com,Pottsboro,TX,City,Pottsboro,not_found,,,2026-09-01
-harvard.ma.us,Harvard,MA,City,Harvard,not_found,,,2026-09-01
+harvard.ma.us,Harvard,MA,City,Harvard,found,https://harvard.ma.us/Bids.aspx,civicplus,2026-11-03
 walesutah.org,Wales,UT,City,Wales,not_found,,,2026-09-01
 gueydan.org,Gueydan,LA,City,Gueydan,found,https://gueydan.org/public-notices,custom,2026-11-02
 almirawashington.com,Almira,WA,City,Almira,not_found,,,2026-09-01
 townofsp.com,South Prairie,WA,City,South Prairie,not_found,,,2026-09-01
-grovelandma.com,Groveland,MA,City,Groveland,not_found,,,2026-09-01
+grovelandma.com,Groveland,MA,City,Groveland,found,https://www.grovelandma.com/services/bids.php,custom,2026-11-03
 minersvilletown.com,Minersville,UT,City,Minersville,not_found,,,2026-09-01
 levantown.org,Levan,UT,City,Levan,not_found,,,2026-09-01
 uniontown.us,Uniontown,WA,City,Uniontown,not_found,,,2026-09-01
@@ -21689,7 +21689,7 @@ diamondvillewyo.com,Diamondville,WY,City,Diamondville,not_found,,,2026-09-01
 townofgalena.com,Galena,MD,City,Galena,not_found,,,2026-09-01
 myindianshores.com,Indian Shores,FL,City,Indian Shores,not_found,,,2026-09-01
 juno-beach.fl.us,Juno Beach,FL,City,Juno Beach,found,https://juno-beach.fl.us/Bids.aspx,civicplus,2026-09-01
-townofholliston.us,Holliston,MA,City,Holliston,not_found,,,2026-09-01
+townofholliston.us,Holliston,MA,City,Holliston,found,https://townofholliston.us/Bids.aspx,civicplus,2026-11-03
 arcadialakes.net,Arcadia Lakes,SC,City,Arcadia Lakes,not_found,,,2026-09-01
 townofeagle.org,Eagle,CO,City,Eagle,found,https://townofeagle.org/bids,custom,2026-09-01
 townofchautauqua.com,Chautauqua,NY,City,Chautauqua,not_found,,,2026-09-01
@@ -21819,7 +21819,7 @@ townoflusk.org,Lusk,WY,City,Lusk,not_found,,,2026-09-01
 townofhillsborobeach.com,Hillsboro Beach,FL,City,Hillsboro Beach,found,https://townofhillsborobeach.com/Bids.aspx,civicplus,2026-09-01
 lakeplacidfl.net,Lake Placid,FL,City,Lake Placid,not_found,,,2026-09-01
 avon.org,Avon,CO,City,Avon,found,https://avon.org/Bids.aspx,civicplus,2026-09-01
-town.orleans.ma.us,Orleans,MA,City,Orleans,not_found,,,2026-09-01
+town.orleans.ma.us,Orleans,MA,City,Orleans,found,https://town.orleans.ma.us/bids,civicplus,2026-11-03
 sunnyvale.ca.gov,Sunnyvale,CA,City,Sunnyvale,not_found,,,2026-09-01
 youtube.com,Plainfield,IN,City,Plainfield,not_found,,,2026-09-01
 limestonemaine.org,Limestone,ME,City,Limestone,not_found,,,2026-09-01
@@ -22009,7 +22009,7 @@ wausauflorida.net,Wausau,FL,City,Wausau,not_found,,,2026-09-01
 mayesvillesc.com,Mayesville,SC,City,Mayesville,not_found,,,2026-09-01
 summitms.org,Summit,MS,City,Summit,not_found,,,2026-09-01
 whitesprings.org,White Springs,FL,City,White Springs,not_found,,,2026-09-01
-wentworth-nh.org,Wentworth,NH,City,Wentworth,not_found,,,2026-09-01
+wentworth-nh.org,Wentworth,NH,City,Wentworth,found,https://wentworth-nh.org/news-and-notices/north-dorchester-culvert-construction-phase-is-open-for-bids,custom,2026-11-03
 roundhillva.org,Round Hill,VA,City,Round Hill,found,https://roundhillva.org/1412/Bid-and-Contract-Opportunities,custom,2026-09-01
 woodstocknh.org,Woodstock,NH,City,Woodstock,not_found,,,2026-09-01
 townofbronson.com,Bronson,FL,City,Bronson,not_found,,,2026-09-01
@@ -22094,11 +22094,11 @@ bathnh.info,Bath,NH,City,Bath,not_found,,,2026-09-01
 albion-in.org,Albion,IN,City,Albion,found,https://albion-in.org/news_detail_T6_R116.php,custom,2026-09-01
 townofkeysville.com,Keysville,VA,City,Keysville,not_found,,,2026-09-01
 ci.wilton.nh.us,Wilton,NH,City,Wilton,not_found,,,2026-09-01
-alsteadnh.org,Alstead,NH,City,Alstead,not_found,,,2026-09-01
+alsteadnh.org,Alstead,NH,City,Alstead,found,https://alsteadnh.org/departments/purchasing,custom,2026-11-03
 coffeevillems.com,Coffeeville,MS,City,Coffeeville,not_found,,,2026-09-01
 essexma.org,Essex,MA,City,Essex,not_found,,,2026-09-01
 cloversc.org,Clover,SC,City,Clover,found,https://cloversc.org/Bids.aspx,civicplus,2026-09-01
-nortonma.org,Norton,MA,City,Norton,not_found,,,2026-09-01
+nortonma.org,Norton,MA,City,Norton,found,https://nortonma.org/Bids.aspx,civicplus,2026-11-03
 cityofcentral.org,Central,SC,City,Central,not_found,,,2026-09-01
 townofportbarre.com,Port Barre,LA,City,Port Barre,not_found,,,2026-09-01
 parrottsvilletn.com,Parrottsville,TN,City,Parrottsville,not_found,,,2026-09-01
@@ -22212,7 +22212,7 @@ mountkisco.org,Mount Kisco,NY,City,Mount Kisco,not_found,,,2026-09-01
 town.ridgway.co.us,Ridgway,CO,City,Ridgway,not_found,,,2026-09-01
 townofchesterfieldma.com,Chesterfield,MA,City,Chesterfield,not_found,,,2026-09-01
 rollinsford.nh.us,Rollinsford,NH,City,Rollinsford,found,https://rollinsford.nh.us/bids,agency,2026-09-01
-town.hull.ma.us,Hull,MA,City,Hull,not_found,,,2026-09-01
+town.hull.ma.us,Hull,MA,City,Hull,found,https://town.hull.ma.us/Bids.aspx,civicplus,2026-11-03
 sunset.govoffice2.com,Sunset,LA,City,Sunset,not_found,,,2026-09-01
 townofcentrevillems.org,Centreville,MS,City,Centreville,not_found,,,2026-09-01
 stratfordnh.org,Stratford,NH,City,Stratford,not_found,,,2026-09-01
@@ -22221,7 +22221,7 @@ hennesseyok.org,Hennessey,OK,City,Hennessey,not_found,,,2026-09-01
 burgy.org,Williamsburg,MA,City,Williamsburg,not_found,,,2026-09-01
 nunncolorado.com,Nunn,CO,City,Nunn,not_found,,,2026-09-01
 townoflakeluzerne.com,Lake Luzerne,NY,City,Lake Luzerne,not_found,,,2026-09-01
-belchertown.org,Belchertown,MA,City,Belchertown,not_found,,,2026-09-01
+belchertown.org,Belchertown,MA,City,Belchertown,found,https://belchertown.org/Bids.aspx,civicplus,2026-11-03
 townofware.com,Ware,MA,City,Ware,found,https://townofware.com/bids___procurements/index.php,custom,2026-09-01
 townofsouthport.com,Southport,NY,City,Southport,not_found,,,2026-09-01
 debeque.org,De Beque,CO,City,De Beque,not_found,,,2026-09-01
@@ -22235,7 +22235,7 @@ unitynh.gov,Unity,NH,City,Unity,not_found,,,2026-09-01
 virtualnorfolk.org,Norfolk,MA,City,Norfolk,not_found,,,2026-09-01
 shutesbury.org,Shutesbury,MA,City,Shutesbury,not_found,,,2026-09-01
 townofconway.com,Conway,MA,City,Conway,not_found,,,2026-09-01
-longmeadow.org,Longmeadow,MA,City,Longmeadow,not_found,,,2026-09-01
+longmeadow.org,Longmeadow,MA,City,Longmeadow,found,https://longmeadow.org/Bids.aspx,civicplus,2026-11-03
 leenh.org,Lee,NH,City,Lee,not_found,,,2026-09-01
 lefh.net,Madbury,NH,City,Madbury,not_found,,,2026-09-01
 town.kensington.nh.us,Kensington,NH,City,Kensington,not_found,,,2026-09-01
@@ -22252,7 +22252,7 @@ town.holland.ma.us,Holland,MA,City,Holland,not_found,,,2026-09-01
 canterbury-nh.org,Canterbury,NH,City,Canterbury,not_found,,,2026-09-01
 somersny.com,Somers,NY,City,Somers,found,https://somersny.com/postings,custom,2026-09-01
 town.orange.nh.us,Orange,NH,City,Orange,not_found,,,2026-09-01
-townofthornton.org,Thornton,NH,City,Thornton,not_found,,,2026-09-01
+townofthornton.org,Thornton,NH,City,Thornton,found,https://townofthornton.org/Bids.aspx,civicplus,2026-11-03
 newburynh.org,Newbury,NH,City,Newbury,not_found,,,2026-09-01
 wendellmass.us,Wendell,MA,City,Wendell,not_found,,,2026-09-01
 hamptonfalls.org,Hampton Falls,NH,City,Hampton Falls,not_found,,,2026-09-01
@@ -22294,7 +22294,7 @@ norwaymaine.com,Norway,ME,City,Norway,not_found,,,2026-09-01
 jacksboro.org,Jacksboro,TN,City,Jacksboro,not_found,,,2026-09-01
 virgilny.com,Virgil,NY,City,Virgil,not_found,,,2026-09-01
 rockvilleindiana.org,Rockville,IN,City,Rockville,not_found,,,2026-09-01
-nl-nh.com,New London,NH,City,New London,not_found,,,2026-09-01
+nl-nh.com,New London,NH,City,New London,found,https://nl-nh.com/bids,custom,2026-11-03
 merrimac01860.info,Merrimac,MA,City,Merrimac,not_found,,,2026-09-01
 grand-island.ny.us,Grand Island,NY,City,Grand Island,found,https://grand-island.ny.us/Bids.aspx,civicplus,2026-09-01
 bow-nh.com,Bow,NH,City,Bow,not_found,,,2026-09-01
@@ -22501,7 +22501,7 @@ eastbrookfieldma.us,East Brookfield,MA,City,East Brookfield,not_found,,,2026-09-
 marylandny.org,Maryland,NY,City,Maryland,not_found,,,2026-09-01
 eutawvillesc.org,Eutawville,SC,City,Eutawville,not_found,,,2026-09-01
 townofdeerfield.org,Deerfield,NY,City,Deerfield,not_found,,,2026-09-01
-townofpembrokemass.org,Pembroke,MA,City,Pembroke,not_found,,,2026-09-01
+townofpembrokemass.org,Pembroke,MA,City,Pembroke,found,https://townofpembrokemass.org/Bids.aspx,civicplus,2026-11-03
 huntingtonma.us,Huntington,MA,City,Huntington,not_found,,,2026-09-01
 worthington-ma.us,Worthington,MA,City,Worthington,found,https://worthington-ma.us/rfp,custom,2026-09-01
 townofpelham.org,Pelham,MA,City,Pelham,not_found,,,2026-09-01
@@ -22920,7 +22920,7 @@ somersetohio.us,Somerset,OH,City,Somerset,not_found,,,2026-09-01
 mexicomaine.net,Mexico,ME,City,Mexico,not_found,,,2026-09-01
 jeromesville.org,Jeromesville,OH,City,Jeromesville,not_found,,,2026-09-01
 walexpreb.org,West Alexandria,OH,City,West Alexandria,not_found,,,2026-09-01
-town.sturbridge.ma.us,Sturbridge,MA,City,Sturbridge,not_found,,,2026-09-01
+town.sturbridge.ma.us,Sturbridge,MA,City,Sturbridge,found,https://town.sturbridge.ma.us/Bids.aspx,civicplus,2026-11-03
 algonquin.org,Algonquin,IL,City,Algonquin,found,https://algonquin.org/Bids.aspx,civicplus,2026-09-01
 villageofmarshallville.org,Marshallville,OH,City,Marshallville,not_found,,,2026-09-01
 evergreenpark-ill.com,Evergreen Park,IL,City,Evergreen Park,found,https://evergreenpark-ill.com/Bids.aspx,civicplus,2026-09-01
@@ -24986,3 +24986,87 @@ mifflinburg.org,Mifflinburg,PA,School district,Mifflinburg Area SD,found,https:/
 wyomingarea.org,Exeter,PA,School district,Wyoming Area SD,found,https://wyomingarea.org/sys/content/newspost/a38a3de6be0d4c99a72e5908ed8e3dbb,custom,2026-11-03
 wilmington.k12.pa.us,New Wilmington,PA,School district,Wilmington Area SD,found,https://www.wasd.school/district/requests-for-proposals-bids-quotations/,custom,2026-11-03
 yssd.org,York,PA,School district,York Suburban SD,found,https://yssd.org/departments/business/rfp-bids,custom,2026-11-03
+mvyps.org,Vineyard Haven,MA,School district,Up-Island Regional,found,https://mvyps.org/procurement,custom,2026-11-03
+schools.amesburyma.gov,Amesbury,MA,School district,Amesbury,found,https://schools.amesburyma.gov/aps-district/business-finance/bids-procurement,agency,2026-11-03
+bpsma.org,Brockton,MA,School district,Brockton,found,https://bpsma.org/purchasing,custom,2026-11-03
+concordpublicschools.net,Concord,MA,School district,Concord,found,https://concordpublicschools.net/open-bids,custom,2026-11-03
+bbrsd.org,Boylston,MA,School district,Berlin-Boylston,found,https://bbrsd.org/administration/director-of-facilities/rfpsinvitation-to-bid,custom,2026-11-03
+monomoy.edu,Chatham,MA,School district,Monomoy Regional School District,found,https://monomoy.edu/finance/procurement/open-bids-proposals,custom,2026-11-03
+carver.org,Carver,MA,School district,Carver,found,https://carver.org/carver-home/administration/operations-and-finance/budget/open-bids/,custom,2026-11-03
+gardnerk12.org,Gardner,MA,School district,Gardner,found,https://gardnerk12.org/Bids.aspx,civicplus,2026-11-03
+bptech.org,Taunton,MA,School district,Bristol-Plymouth Regional Vocational Technical,found,https://bptech.org/about/msba/request-for-qualifications-rfq,custom,2026-11-03
+concordps.org,Concord,MA,School district,Concord-Carlisle,found,https://concordps.org/administration/finance-and-operations/open-bids-and-solicitations,custom,2026-11-03
+falmouth.k12.ma.us,East Falmouth,MA,School district,Falmouth,found,https://falmouth.k12.ma.us/departments/finance_and_operations/procurement,agency,2026-11-03
+dcrsd.org,Dudley,MA,School district,Dudley-Charlton Reg,found,https://dcrsd.org/about-dcrsd/budget-and-finance/procurement,custom,2026-11-03
+fcts.us,Turners Falls,MA,School district,Franklin County Regional Vocational Technical,found,https://municibid.com/Browse?CategoryID=9&Zip=01376&Miles=25&StatusFilter=active_only,custom,2026-11-03
+middleboro.k12.ma.us,Middleborough,MA,School district,Middleborough,found,https://middleboro.k12.ma.us/bids,agency,2026-11-03
+hopkinton.k12.ma.us,Hopkinton,MA,School district,Hopkinton,found,https://hopkinton.k12.ma.us/district-departments/finance/project-bid-notices,agency,2026-11-03
+minuteman.org,Lexington,MA,School district,Minuteman Regional Vocational Technical,found,https://minuteman.org/finance/purchasing,custom,2026-11-03
+millburyschools.org,Millbury,MA,School district,Millbury,found,https://millburyschools.org/94366_3,custom,2026-11-03
+needham.k12.ma.us,Needham,MA,School district,Needham,found,https://needham.k12.ma.us/departments/business__operations/business_office/purchasing/procurement_information,agency,2026-11-03
+methuen.k12.ma.us,Methuen,MA,School district,Methuen,found,https://methuen.k12.ma.us/departments/procurement,agency,2026-11-03
+oxps.org,Oxford,MA,School district,Oxford,found,https://oxps.org/departments/purchasing,custom,2026-11-03
+nmrsd.org,Townsend,MA,School district,North Middlesex,found,https://nmrsd.org/departments/business-office/public-bids,custom,2026-11-03
+north-reading.k12.ma.us,North Reading,MA,School district,North Reading,found,https://north-reading.k12.ma.us/departments/finance-operations/bids-and-contracts,agency,2026-11-03
+plainville.k12.ma.us,Plainville,MA,School district,Plainville,found,https://plainville.k12.ma.us/administration/business-office/bids-proposals,agency,2026-11-03
+pembrokek12.org,Pembroke,MA,School district,Pembroke,found,https://pembrokek12.org/district/bids,custom,2026-11-03
+winchesterps.org,Winchester,MA,School district,Winchester,found,https://winchesterps.org/bids,custom,2026-11-03
+wareps.org,Ware,MA,School district,Ware,found,https://wareps.org/news/whats_new/transportation_services_bid_2026-2029,custom,2026-11-03
+frrsd.org,Otis,MA,School district,Farmington River Reg,found,https://frrsd.org/district-information/invitation-for-bids/,custom,2026-11-03
+westportschools.org,Westport,MA,School district,Westport,found,https://westportschools.org/about/westport-school-committee/policies-and-regulations,custom,2026-11-03
+wrentham.k12.ma.us,Wrentham,MA,School district,Wrentham,found,https://wrentham.k12.ma.us/Our-District/Bids-and-Proposals/index.html,agency,2026-11-03
+bsd44.org,Belgrade,MT,School district,Belgrade Elem,found,https://bsd44.org/departments/purchasing,custom,2026-11-03
+gfps.k12.mt.us,Great Falls,MT,School district,Great Falls Elem,found,https://gfps.k12.mt.us/community/facility-action/rfqrfp-bids,agency,2026-11-03
+greatneck.k12.ny.us,Great Neck,NY,School district,GREAT NECK UNION FREE SCHOOL DISTRICT,found,https://greatneck.k12.ny.us/administration/business-services/office-of-business-services/purchasing-accounts-payable,agency,2026-11-03
+ichabodcrane.org,Valatie,NY,School district,KINDERHOOK CENTRAL SCHOOL DISTRICT,found,https://ichabodcrane.org/rfp,custom,2026-11-03
+herricks.org,New Hyde Park,NY,School district,HERRICKS UNION FREE SCHOOL DISTRICT,found,https://herricks.org/district-administration/business-office/bidsrequests-for-proposals,custom,2026-11-03
+lakelandschools.org,Shrub Oak,NY,School district,LAKELAND CENTRAL SCHOOL DISTRICT,found,https://lakelandschools.org/community/bids_and_rfp.php,custom,2026-11-03
+lakeshorecsd.org,Angola,NY,School district,EVANS-BRANT CENTRAL SCHOOL DISTRICT (LAKE SHORE),found,https://lakeshorecsd.org/current-district-bid-documents,custom,2026-11-03
+hpcsd.org,Hyde Park,NY,School district,HYDE PARK CENTRAL SCHOOL DISTRICT,found,https://hpcsd.org/departments/business-office/purchasing/vendor-page,custom,2026-11-03
+ips.k12.ny.us,Island Park,NY,School district,ISLAND PARK UNION FREE SCHOOL DISTRICT,found,https://ips.k12.ny.us/apps/pages/index.jsp?uREC_ID=4464793&type=d&pREC_ID=2737858,custom,2026-11-03
+irvingtonschools.org,Irvington,NY,School district,IRVINGTON UNION FREE SCHOOL DISTRICT,found,https://irvingtonschools.org/departments/business-operations/bids,custom,2026-11-03
+lynbrookschools.org,Lynbrook,NY,School district,LYNBROOK UNION FREE SCHOOL DISTRICT,found,https://lynbrookschools.org/district-bids-requests-proposals,custom,2026-11-03
+msd.k12.ny.us,Massapequa,NY,School district,MASSAPEQUA UNION FREE SCHOOL DISTRICT,found,https://msd.k12.ny.us/bids,agency,2026-11-03
+lyndonvillecsd.org,Lyndonville,NY,School district,LYNDONVILLE CENTRAL SCHOOL DISTRICT,found,https://lyndonvillecsd.org/purchasing-bids-and-rfps,custom,2026-11-03
+lansingburgh.org,Troy,NY,School district,LANSINGBURGH CENTRAL SCHOOL DISTRICT,found,https://lansingburgh.org/programs-departments/business-and-finance/purchasing,custom,2026-11-03
+letchworth.k12.ny.us,Gainesville,NY,School district,LETCHWORTH CENTRAL SCHOOL DISTRICT,found,https://letchworth.k12.ny.us/depts/business-office/current-bids-rfps,agency,2026-11-03
+manhassetschools.org,Manhasset,NY,School district,MANHASSET UNION FREE SCHOOL DISTRICT,found,https://manhassetschools.org/district-info/bids-requests-for-proposals,custom,2026-11-03
+moriahk12.org,Port Henry,NY,School district,MORIAH CENTRAL SCHOOL DISTRICT,found,https://moriahk12.org/notice-to-bidders,custom,2026-11-03
+longwood.k12.ny.us,Middle Island,NY,School district,LONGWOOD CENTRAL SCHOOL DISTRICT,found,https://longwood.k12.ny.us/departments/business-office/purchasing,agency,2026-11-03
+niskyschools.org,Schenectady,NY,School district,NISKAYUNA CENTRAL SCHOOL DISTRICT,found,https://niskyschools.org/purchasing,custom,2026-11-03
+newburghschools.org,Newburgh,NY,School district,NEWBURGH CITY SCHOOL DISTRICT,found,https://newburghschools.org/page.php?page=12,custom,2026-11-03
+bcsdny.org,Bedford,NY,School district,BEDFORD CENTRAL SCHOOL DISTRICT,found,https://bcsdny.org/departments/business/bidsrfps-forms,custom,2026-11-03
+northsalemschools.org,North Salem,NY,School district,NORTH SALEM CENTRAL SCHOOL DISTRICT,found,https://northsalemschools.org/our-district/business-office/purchasing-procedures/purchasing-groups-and-commonly-used-vendors,custom,2026-11-03
+ntschools.org,North Tonawanda,NY,School district,NORTH TONAWANDA CITY SCHOOL DISTRICT,found,https://ntschools.org/departments/business-office/purchasing,custom,2026-11-03
+opschools.org,West Seneca,NY,School district,ORCHARD PARK CENTRAL SCHOOL DISTRICT,found,https://opschools.org/parent-and-student-resources/universal-pre-k/rfp-application,custom,2026-11-03
+oriskanycsd.org,Oriskany,NY,School district,ORISKANY CENTRAL SCHOOL DISTRICT,found,https://oriskanycsd.org/our-district/business-office/universal-pre-k-rfp,custom,2026-11-03
+poughkeepsieschools.org,Poughkeepsie,NY,School district,POUGHKEEPSIE CITY SCHOOL DISTRICT,found,https://poughkeepsieschools.org/requests-for-proposalsbids-2,custom,2026-11-03
+rcsdk12.org,Rochester,NY,School district,ROCHESTER CITY SCHOOL DISTRICT,found,https://rcsdk12.org/purchasing,custom,2026-11-03
+pvcsd.org,Putnam Valley,NY,School district,PUTNAM VALLEY CENTRAL SCHOOL DISTRICT,found,https://pvcsd.org/index.php/district/district-info/bids-rfp/,custom,2026-11-03
+floridaufsd.org,Florida,NY,School district,FLORIDA UNION FREE SCHOOL DISTRICT,found,https://floridaufsd.org/submitting-bids,custom,2026-11-03
+schroonschool.org,Schroon Lake,NY,School district,SCHROON LAKE CENTRAL SCHOOL DISTRICT,found,https://schroonschool.org/notice-to-bidders,custom,2026-11-03
+royhart.org,Middleport,NY,School district,ROYALTON-HARTLAND CENTRAL SCHOOL DISTRICT,found,https://royhart.org/57917_2,custom,2026-11-03
+blindbrook.org,Rye Brook,NY,School district,BLIND BROOK-RYE UNION FREE SCHOOL DISTRICT,found,https://blindbrook.org/departments/finance-facilities-transportation/district-purchasing,custom,2026-11-03
+romuluscsd.org,Romulus,NY,School district,ROMULUS CENTRAL SCHOOL DISTRICT,found,https://romuluscsd.org/district/school-budget/rfp,custom,2026-11-03
+southcolonieschools.org,Albany,NY,School district,SOUTH COLONIE CENTRAL SCHOOL DISTRICT,found,https://southcolonieschools.org/purchasing,custom,2026-11-03
+shufsd.org,Huntington Station,NY,School district,SOUTH HUNTINGTON UNION FREE SCHOOL DISTRICT,found,https://shufsd.org/82693_1,custom,2026-11-03
+saugerties.k12.ny.us,Saugerties,NY,School district,SAUGERTIES CENTRAL SCHOOL DISTRICT,found,https://saugerties.k12.ny.us/departments/business-office/bid-opportunities,agency,2026-11-03
+syracusecityschools.com,Syracuse,NY,School district,SYRACUSE CITY SCHOOL DISTRICT,found,https://syracusecityschools.com/rfp,custom,2026-11-03
+seaford.k12.ny.us,Seaford,NY,School district,SEAFORD UNION FREE SCHOOL DISTRICT,found,https://seaford.k12.ny.us/departments/business-operations/purchasing,agency,2026-11-03
+ercsd.org,Spring Valley,NY,School district,EAST RAMAPO CENTRAL SCHOOL DISTRICT (SPRING VALLEY),found,https://ercsd.org/departments/purchasing,custom,2026-11-03
+troycsd.org,Troy,NY,School district,TROY CITY SCHOOL DISTRICT,found,https://troycsd.org/purchasing,custom,2026-11-03
+socsd.org,Blauvelt,NY,School district,SOUTH ORANGETOWN CENTRAL SCHOOL DISTRICT,found,https://socsd.org/about/bids-rfps,custom,2026-11-03
+wappingersschools.org,Hopewell Junction,NY,School district,WAPPINGERS CENTRAL SCHOOL DISTRICT,found,https://wappingersschools.org/bids,custom,2026-11-03
+wcsd.org,Warrensburg,NY,School district,WARRENSBURG CENTRAL SCHOOL DISTRICT,found,https://wcsd.org/departments/purchasing,custom,2026-11-03
+valleystream30.com,Valley Stream,NY,School district,VALLEY STREAM 30 UNION FREE SCHOOL DISTRICT,found,https://valleystream30.com/business/bids,custom,2026-11-03
+waynecsd.org,Ontario Center,NY,School district,WAYNE CENTRAL SCHOOL DISTRICT,found,https://waynecsd.org/bid-opportunities,custom,2026-11-03
+sweethomeschools.org,Amherst,NY,School district,SWEET HOME CENTRAL SCHOOL DISTRICT,found,https://sweethomeschools.org/departments/business-office/bid-and-rfp-information,custom,2026-11-03
+webutuckschools.org,Amenia,NY,School district,NORTHEAST CENTRAL SCHOOL DISTRICT,found,https://webutuckschools.org/rfp,custom,2026-11-03
+tufsd.org,Sleepy Hollow,NY,School district,UNION FREE SCHOOL DISTRICT OF THE TARRYTOWNS,found,https://tufsd.org/departments/business-office/purchasing,custom,2026-11-03
+wi.k12.ny.us,West Islip,NY,School district,WEST ISLIP UNION FREE SCHOOL DISTRICT,found,https://wi.k12.ny.us/91147_3,custom,2026-11-03
+wcsdk12.org,Washingtonville,NY,School district,WASHINGTONVILLE CENTRAL SCHOOL DISTRICT,found,https://wcsdk12.org/departments/business-office/bids,custom,2026-11-03
+williamsvillek12.org,East Amherst,NY,School district,WILLIAMSVILLE CENTRAL SCHOOL DISTRICT,found,https://williamsvillek12.org/purchasing,custom,2026-11-03
+wynantskillufsd.org,Troy,NY,School district,WYNANTSKILL UNION FREE SCHOOL DISTRICT,found,https://wynantskillufsd.org/bids,custom,2026-11-03
+watervillecsd.org,Waterville,NY,School district,WATERVILLE CENTRAL SCHOOL DISTRICT,found,https://www.oneida-boces.org/support-services/media-services/supplemental-information-for-third-party-vendors,custom,2026-11-03
+whiteplainspublicschools.org,White Plains,NY,School district,WHITE PLAINS CITY SCHOOL DISTRICT,found,https://whiteplainspublicschools.org/district-offices/purchasing,custom,2026-11-03
+hewlett-woodmere.net,Woodmere,NY,School district,HEWLETT-WOODMERE UNION FREE SCHOOL DISTRICT,found,https://hewlett-woodmere.net/district/business-office/purchasing,custom,2026-11-03
