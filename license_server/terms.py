@@ -78,7 +78,7 @@ def _supabase_delete_user(user_id):
 # constants must match the dates published on terms.html and privacy.html,
 # and a test fails if they drift.
 TERMS_VERSION = os.environ.get("TERMS_VERSION", "2026-11-02")
-PRIVACY_VERSION = os.environ.get("PRIVACY_VERSION", "2026-10-21")
+PRIVACY_VERSION = os.environ.get("PRIVACY_VERSION", "2026-11-03")
 # "reaccept" is an existing user agreeing to a version published after
 # they signed up. Recorded distinctly so the record shows which
 # acceptances were made at signup and which on a re-prompt.
@@ -392,6 +392,10 @@ def account_delete():
         for k in [k for k, v in rows.items() if v == email or k == email]:
             rows.pop(k, None)
     _save_db(db)
+    try:
+        _forget_outcomes(email)
+    except Exception:
+        pass
     # Deliberately not logged. The one action whose entire purpose is to
     # remove someone should not write their address into a log line on the
     # way out.

@@ -2753,6 +2753,64 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── A reported win reaches the server; the landing page says so only when there is enough ──
+  console.log("\nWins are reported, and the landing page totals them only when there are enough");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    const outcomes = [];
+    let proof = { ok: true, show: false };
+    await page.route("**/*", (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      const json = (o) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(o) });
+      if (u.endsWith("/outcome")) { outcomes.push(JSON.parse(route.request().postData() || "{}")); return json({ ok: true }); }
+      if (u.endsWith("/proof")) return json(proof);
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      if (u.includes("onrender.com")) return json({ ok: true });
+      return route.abort();
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => {
+      currentUser = { id: "u1", email: "w@example.com" }; window.getSupabaseToken = async () => "tok";
+      // The test's stand-in database lacks a few calls Home makes.
+      const q = { select: () => q, eq: () => q, order: () => q, limit: () => q, maybeSingle: async () => ({ data: null, error: null }),
+                  upsert: async () => ({}), insert: async () => ({}), then: (r) => r({ data: [], error: null }) };
+      sb.from = () => q;
+      store.set("referral_code", "AB12CD34"); store.set("license_plan", "annual");
+      const d = new Date(Date.now() - 10 * 86400e3);
+      saved.w1 = { title: "Elm St Sidewalk", deadline: d.toISOString().slice(0, 10), _city: "Aurora, MO" };
+      resultAsked = {}; showApp(); switchScreen("home");
+    });
+    await page.waitForTimeout(500);
+    await page.click('.outcome[data-oid="w1"] [data-out="won"]');
+    await page.fill(".outcome [data-won]", "$41,250");
+    await page.click(".outcome [data-save]");
+    await page.waitForTimeout(500);
+    check("the win and its amount are sent with the account's token",
+          outcomes.length === 1 && outcomes[0].result === "won" && outcomes[0].amount === 41250
+          && outcomes[0].bid_id === "w1" && outcomes[0].supabase_token === "tok" && outcomes[0].state === "MO", JSON.stringify(outcomes));
+    const next = await page.textContent("#home-outcomes");
+    check("after a win: the referral link, and no annual pitch to an annual customer",
+          /Share my link/.test(next) && !/Go annual/.test(next), next);
+    await page.goto(`${BASE}/index.html`, { waitUntil: "load" });
+    await page.waitForTimeout(500);
+    check("the landing page says nothing until there is enough to say",
+          await page.evaluate(() => document.getElementById("proof-line").hidden));
+    proof = { ok: true, show: true, wins: 7, won_total: 1284000 };
+    await page.goto(`${BASE}/index.html`, { waitUntil: "load" });
+    await page.waitForTimeout(500);
+    const line = await page.evaluate(() => { const e = document.getElementById("proof-line"); return e.hidden ? "" : e.textContent; });
+    check("...then shows the total, rounded down, as reported by customers",
+          /\$1\.2 million of public work won/.test(line) && /reported by CurbCall customers, 7 jobs/.test(line), line);
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   // ── A statewide bid is placed by its own name ──
   console.log("\nA bid from a statewide search is placed by the site its name gives");
   {
@@ -3394,8 +3452,13 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     check("a loss records the winning bid", await page.evaluate(() => pipeline.oldjob === "lost" && bidPrep.oldjob.result.winning_total === 13500));
     await page.click('.outcome[data-oid="wonjob"] [data-out="won"]');
     await page.waitForTimeout(200);
-    check("a win is recorded and asks for a review", await page.evaluate(() => pipeline.wonjob === "won")
+    check("a win asks what the job was worth", /What was the job worth/.test(await page.textContent("#home-outcomes")));
+    await page.fill(".outcome [data-won]", "52000");
+    await page.click(".outcome [data-save]");
+    await page.waitForTimeout(300);
+    check("a win is recorded with its amount and asks for a review", await page.evaluate(() => pipeline.wonjob === "won" && bidPrep.wonjob.won_total === 52000)
           && /Leave a review/.test(await page.textContent("#home-outcomes")));
+    check("...and offers the annual plan to someone not on it", /Go annual/.test(await page.textContent("#home-outcomes")));
     await page.evaluate(() => openRates("OR"));
     await page.waitForTimeout(500);
     check("the rates sheet says how far above the winner you were", /you were a median 11\.1% above the winner/.test(await page.textContent("#modal-content")));

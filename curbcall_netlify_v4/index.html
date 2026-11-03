@@ -431,6 +431,8 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
            visibly older product is worse than offering one fewer way in.
            Restore this row once parity is back. -->
       <div class="trust"><b><span class="dot"></span>Free 14-day trial</b><span>· no card required</span><span>· works on phone or desktop</span></div>
+      <!-- Filled from /proof once customers have reported enough wins; hidden until then. -->
+      <div class="trust" id="proof-line" hidden></div>
     </div>
 
     <div class="mapwrap" id="mapwrap" aria-hidden="true">
@@ -732,6 +734,19 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
   // cheap (a cached geocode plus arithmetic — no search credits, no AI).
   (function coverageChecker(){
     var SERVER="https://bid-caller-pro.onrender.com";
+    // What customers have reported winning, once there is enough of it to
+    // say (the server holds it back until then). Self-reported, said so.
+    (function proofLine(){
+      var el=document.getElementById("proof-line");
+      if(!el||!window.fetch)return;
+      fetch(SERVER+"/proof").then(function(r){return r.json();}).then(function(d){
+        if(!d||!d.show||!(d.won_total>0))return;
+        var t=d.won_total>=1e6?"$"+(Math.floor(d.won_total/1e5)/10)+" million"
+              :"$"+Math.floor(d.won_total/1e3).toLocaleString()+"k";
+        el.innerHTML='<b><span class="dot"></span>'+t+' of public work won</b><span>· reported by CurbCall customers, '+d.wins+' jobs</span>';
+        el.hidden=false;
+      }).catch(function(){});
+    })();
     var btn=document.getElementById("cov-go");
     var out=document.getElementById("cov-out");
     var zip=document.getElementById("cov-zip");

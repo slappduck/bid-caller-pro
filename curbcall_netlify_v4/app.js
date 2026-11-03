@@ -4419,6 +4419,41 @@ function outcomeCardHTML(){
       </div>`;}).join("")}
   </div>`;
 }
+// The answer goes to the server too, so "customers have won $X of work" can
+// be said on the landing page (see /proof). Best effort: a failed report
+// never gets in the way of the contractor's own record.
+async function reportOutcome(id,result,amount){
+  if(!currentUser)return;
+  try{
+    const b=saved[id]||findBid(id)||{};
+    const city=String((saved[id]&&saved[id]._city)||"");
+    const st=(city.match(/,\s*([A-Z]{2})\b/)||[])[1]||String(store.get(HOME_LOC_KEY,"")).match(/,\s*([A-Z]{2})\b/)?.[1]||"";
+    await fetch(SERVER+"/outcome",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({supabase_token:await getSupabaseToken(),bid_id:id,result,
+        amount:amount>0?Math.round(amount):null,state:st})});
+  }catch(e){}
+}
+// After a win: what it was worth, then the two things a win is the moment
+// for -- a year at the annual price, and a contractor they know.
+function wonNextStepsHTML(){
+  const code=store.get("referral_code","");
+  const annual=store.get("license_plan","")==="annual";
+  return`<div class="outcome-t"><b>Nice work.</b><small>The Job tab has the award paperwork, with the bond and insurance emails written.${code?" Know another concrete contractor? Your link gives them two extra weeks free, and you a free month when they subscribe.":""}${annual?"":" A win is a good time to lock in a year: $399, about four months free."}</small></div>
+    <div class="outcome-b"><button class="btn-primary" data-job="1" style="margin-top:0;">Open the job</button>${code?'<button class="btn-ghost" data-ref="1">Share my link</button>':""}${annual?"":'<button class="btn-ghost" data-annual="1">Go annual</button>'}<button class="btn-ghost" data-review="1">Leave a review</button></div>`;
+}
+function wireWonNextSteps(row,id){
+  row.innerHTML=wonNextStepsHTML();
+  row.querySelector("[data-job]").onclick=()=>openPrep((saved[id]&&saved[id]._city)||"",id,"job");
+  row.querySelector("[data-review]").onclick=()=>{switchScreen("account");setTimeout(()=>{const c=document.getElementById("review-card");if(c)c.scrollIntoView({behavior:"smooth"});},300);};
+  const ref=row.querySelector("[data-ref]");
+  if(ref)ref.onclick=async()=>{
+    const url=`https://curbcallpro.com/?ref=${encodeURIComponent(store.get("referral_code",""))}`;
+    const text=`I've been finding city and county concrete bids with CurbCall Pro. Two extra weeks free with my link: ${url}`;
+    try{if(navigator.share)await navigator.share({title:"CurbCall Pro",text});else{await navigator.clipboard.writeText(text);toast("Link copied");}}catch(e){}
+  };
+  const ann=row.querySelector("[data-annual]");
+  if(ann)ann.onclick=()=>{switchScreen("account");setTimeout(()=>{const u=document.getElementById("upgrade-section");if(u)u.scrollIntoView({behavior:"smooth"});},300);};
+}
 function wireOutcomeCard(root){
   root.querySelectorAll(".outcome").forEach(row=>{
     const id=row.dataset.oid;
@@ -4427,11 +4462,20 @@ function wireOutcomeCard(root){
       setPipelineStatus(id,out);
       resultAsked[id]=true;store.set(RESULT_ASKED_KEY,resultAsked);
       if(out==="won"){
-        row.innerHTML=`<div class="outcome-t"><b>Nice work.</b><small>The Job tab has the award paperwork, with the bond and insurance emails written. And would you tell other contractors how CurbCall helped? It takes a minute.</small></div>
-          <div class="outcome-b"><button class="btn-primary" data-job="1" style="margin-top:0;">Open the job</button><button class="btn-ghost" data-review="1">Leave a review</button></div>`;
-        row.querySelector("[data-job]").onclick=()=>openPrep((saved[id]&&saved[id]._city)||"",id,"job");
-        row.querySelector("[data-review]").onclick=()=>{switchScreen("account");setTimeout(()=>{const c=document.getElementById("review-card");if(c)c.scrollIntoView({behavior:"smooth"});},300);};
-      }else if(out==="lost"){
+        const mine=bidPrep[id]?Math.round(prepTotals(bidPrep[id]).total||0):0;
+        row.innerHTML=`<div class="outcome-t"><b>Congratulations. What was the job worth?</b><small>Your winning bid, roughly. It adds to your won-work total.</small></div>
+          <div class="outcome-b"><input class="input" data-won inputmode="decimal" placeholder="$ total" value="${mine>0?esc(String(mine)):""}"><button class="btn-primary" data-save style="margin-top:0;">Save</button><button class="btn-ghost" data-skip>Skip</button></div>`;
+        const finish=(amt)=>{
+          if(amt>0){const p=prepFor(id);p.won_total=amt;savePrep(id,(saved[id]&&saved[id]._city)||"");}
+          reportOutcome(id,"won",amt);
+          wireWonNextSteps(row,id);
+        };
+        row.querySelector("[data-save]").onclick=()=>finish(Number(String(row.querySelector("[data-won]").value).replace(/[^0-9.]/g,""))||0);
+        row.querySelector("[data-skip]").onclick=()=>finish(0);
+        return;
+      }
+      reportOutcome(id,out,0);
+      if(out==="lost"){
         const b=saved[id]||findBid(id),r=stateResultFor(b);
         row.innerHTML=`<div class="outcome-t"><b>What did the winning bid come in at?</b><small>Optional. It shows next to your price on similar jobs.</small></div>
           <div class="outcome-b"><input class="input" data-win inputmode="decimal" placeholder="$ total" value="${r?esc(String(Math.round(r.bidders[0][1]))):""}"><button class="btn-ghost" data-save>Save</button></div>`;
@@ -8960,6 +9004,7 @@ async function loadAccountStatus(){
     try{
       const r=await fetchWithTimeout(SERVER+"/validate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({key,device_id:deviceId()})},60000);
       const d=await r.json();
+      if(d.valid)store.set("license_plan",String(d.plan||"").toLowerCase());
       if(d.valid){html=`<div class="plan-name">Active subscription</div><div class="plan-price" style="font-size:var(--fs-2xl);">${esc(d.plan||"Pro")}</div><p style="color:var(--text2);font-size:var(--fs-base);margin-top:0.4rem;">Expires ${esc(d.expires||"")}</p>`;featured=true;activePaid=true;}
     }catch{}
   }

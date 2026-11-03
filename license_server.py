@@ -577,6 +577,104 @@ def _source_summary():
     return out
 
 
+# ── Bid outcomes: did the work CurbCall found turn into jobs? ──
+#
+# The app asks "how did it go?" once a saved bid's due date passes. The
+# answer used to stay on the phone, so the one fact that sells this product,
+# that customers win work from it, could not be stated anywhere. A won job
+# with its amount is recorded here, by account, and /proof totals them for
+# the landing page. Self-reported, and the page says so. Bounded: one row
+# per account and bid, at most OUTCOMES_PER_ACCOUNT rows per account, and
+# an amount above OUTCOME_AMOUNT_MAX is kept as a win without the amount,
+# so one typo cannot make the public total absurd.
+_OUTCOMES_KEY = "bidcaller:outcomes"
+_outcome_lock = threading.Lock()
+OUTCOMES_PER_ACCOUNT = 100
+OUTCOME_AMOUNT_MAX = 2_000_000
+PROOF_MIN_WINS = int(os.environ.get("PROOF_MIN_WINS", "3"))
+
+
+def _record_outcome(email, bid_id, result, amount=None, state=""):
+    email = (email or "").strip().lower()
+    bid_id = str(bid_id or "").strip()[:120]
+    if not email or not bid_id or result not in ("won", "lost", "passed"):
+        return False
+    try:
+        amount = float(amount) if amount not in (None, "") else None
+    except (TypeError, ValueError):
+        amount = None
+    if amount is not None and not (0 < amount <= OUTCOME_AMOUNT_MAX):
+        amount = None
+    with _outcome_lock:
+        store = kv_backend.get(_OUTCOMES_KEY, None)
+        store = store if isinstance(store, dict) else {}
+        key = "%s|%s" % (email, bid_id)
+        if key not in store and sum(1 for k in store if k.startswith(email + "|")) >= OUTCOMES_PER_ACCOUNT:
+            return False
+        store[key] = {"result": result, "amount": amount,
+                      "state": str(state or "")[:2].upper(),
+                      "at": datetime.datetime.now().isoformat(timespec="seconds")}
+        kv_backend.set(_OUTCOMES_KEY, store)
+    return True
+
+
+def _forget_outcomes(email):
+    """Account deletion: remove every outcome this account reported."""
+    email = (email or "").strip().lower()
+    if not email:
+        return
+    with _outcome_lock:
+        store = kv_backend.get(_OUTCOMES_KEY, None)
+        if not isinstance(store, dict):
+            return
+        for k in [k for k in store if k.startswith(email + "|")]:
+            store.pop(k, None)
+        kv_backend.set(_OUTCOMES_KEY, store)
+
+
+def _outcome_summary():
+    """Wins, losses and passes reported, and the total of won work."""
+    try:
+        store = kv_backend.get(_OUTCOMES_KEY, None) or {}
+    except Exception:
+        store = {}
+    out = {"won": 0, "lost": 0, "passed": 0, "won_total": 0, "accounts_with_a_win": 0}
+    winners = set()
+    for key, row in (store.items() if isinstance(store, dict) else []):
+        r = (row or {}).get("result")
+        if r in out:
+            out[r] += 1
+        if r == "won":
+            winners.add(key.split("|", 1)[0])
+            out["won_total"] += int(row.get("amount") or 0)
+    out["accounts_with_a_win"] = len(winners)
+    return out
+
+
+@app.route("/outcome", methods=["POST"])
+def report_outcome():
+    """The signed-in user's answer to "how did it go?" for one saved bid."""
+    data = request.get_json(force=True, silent=True) or {}
+    email = _verify_supabase_token(data.get("supabase_token", ""))
+    if not email:
+        return jsonify({"ok": False, "reason": "signin_required"}), 401
+    ok = _record_outcome(email, data.get("bid_id"), data.get("result"),
+                         data.get("amount"), data.get("state", ""))
+    return jsonify({"ok": ok})
+
+
+@app.route("/proof", methods=["GET"])
+def proof():
+    """What customers have reported winning, for the landing page.
+
+    Public. Only totals, and nothing until PROOF_MIN_WINS wins from at least
+    two accounts are in, so one person's answers are never the claim."""
+    s = _outcome_summary()
+    if s["won"] < PROOF_MIN_WINS or s["accounts_with_a_win"] < 2 or s["won_total"] <= 0:
+        return jsonify({"ok": True, "show": False})
+    return jsonify({"ok": True, "show": True, "wins": s["won"], "won_total": s["won_total"]})
+
+
 @app.route("/visit", methods=["POST"])
 def visit():
     """Count one visit to the marketing site, by day.
@@ -1758,7 +1856,7 @@ def _supabase_delete_user(user_id):
 # constants must match the dates published on terms.html and privacy.html,
 # and a test fails if they drift.
 TERMS_VERSION = os.environ.get("TERMS_VERSION", "2026-11-02")
-PRIVACY_VERSION = os.environ.get("PRIVACY_VERSION", "2026-10-21")
+PRIVACY_VERSION = os.environ.get("PRIVACY_VERSION", "2026-11-03")
 # "reaccept" is an existing user agreeing to a version published after
 # they signed up. Recorded distinctly so the record shows which
 # acceptances were made at signup and which on a re-prompt.
@@ -2072,6 +2170,10 @@ def account_delete():
         for k in [k for k, v in rows.items() if v == email or k == email]:
             rows.pop(k, None)
     _save_db(db)
+    try:
+        _forget_outcomes(email)
+    except Exception:
+        pass
     # Deliberately not logged. The one action whose entire purpose is to
     # remove someone should not write their address into a log line on the
     # way out.
@@ -2419,12 +2521,131 @@ def _send_trial_ending(email, days_left, ends_on):
         % (when, ends_on, APP_URL, MAILING_ADDRESS or ""))
 
 
+# ── Telling a trial what it has found, while there is time to use it ──
+#
+# Most trials are lost to forgetting, not to a decision: the app finds work
+# on day two and nobody opens it until the "your trial ends" email, by which
+# point there is no time to bid any of it. So on day TRIAL_VALUE_NOTICE_DAY,
+# one email lists the open jobs scans have found in their area (the same
+# store /bids-near reads; no scan is run for it). Sent once, only when there
+# is something to show; a trial with nothing found yet is tried again the
+# next day, up to TRIAL_VALUE_LAST_DAY, and otherwise gets nothing.
+TRIAL_VALUE_NOTICE_DAY = float(os.environ.get("TRIAL_VALUE_NOTICE_DAY", "4"))
+TRIAL_VALUE_LAST_DAY = float(os.environ.get("TRIAL_VALUE_LAST_DAY", "9"))
+TRIAL_VALUE_SHOWN = 5
+
+
+def _trial_areas():
+    """{email: (location, radius)} from saved searches, first one each."""
+    out, emails = {}, {}
+    if not (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY):
+        return out
+    for srch in _fetch_all_saved_searches():
+        uid, loc = srch.get("user_id"), (srch.get("location") or "").strip()
+        if not (uid and loc):
+            continue
+        if uid not in emails:
+            emails[uid] = (_get_user_email(uid) or "").strip().lower()
+        if emails[uid] and emails[uid] not in out:
+            try:
+                radius = float(srch.get("radius") or 50)
+            except (TypeError, ValueError):
+                radius = 50.0
+            out[emails[uid]] = (loc, radius)
+    return out
+
+
+def _open_bids_near(location, radius, today=None):
+    """(place label, [(due, miles, row)]) from bids scans have found."""
+    center = _resolve_center(location)
+    if not center:
+        return "", []
+    rows = _prune_open_bids(_open_bid_rows(), today or datetime.date.today())
+    near = []
+    for r in rows.values():
+        mi = _miles_between(center["lat"], center["lon"], r["lat"], r["lon"])
+        if mi <= radius:
+            near.append((r.get("due") or "9999", mi, r))
+    near.sort(key=lambda x: (x[0], x[1]))
+    return "%s, %s" % (center["city"], center["state"]), near
+
+
+def _due_words(iso):
+    try:
+        d = datetime.date.fromisoformat(iso)
+        return "due %s %d" % (d.strftime("%b"), d.day)
+    except (TypeError, ValueError):
+        return "due date on the posting"
+
+
+def _send_trial_value(email, place, radius, near, days_left):
+    n = len(near)
+    lines = ["%s %s found within %d miles of %s so far:" % (
+        n, "open job" if n == 1 else "open jobs", int(radius), place), ""]
+    for due, mi, r in near[:TRIAL_VALUE_SHOWN]:
+        lines.append("- %s, %s, %s (%d mi)" % (r.get("title") or "Untitled",
+                                               r.get("town") or "", _due_words(due), round(mi)))
+    if n > TRIAL_VALUE_SHOWN:
+        lines.append("...and %d more in the app." % (n - TRIAL_VALUE_SHOWN))
+    _send_email(
+        email,
+        "%d open %s near %s" % (n, "job" if n == 1 else "jobs", place.split(",")[0]),
+        "\n".join(lines) + "\n\n"
+        "Each one is in the app with its documents. Open a job marked "
+        "\"items ready\" and the bid form's line items are already filled "
+        "in, with what the same work went for nearby.\n\n"
+        "Your free trial has %d days left:\n\n    %s\n\n"
+        "Joshua Hukel\nCurbCall Pro\n%s" % (days_left, APP_URL, MAILING_ADDRESS or ""))
+
+
+def _run_trial_value_notices(db, now):
+    """Day-4 "here is what we found you" emails. Returns how many went."""
+    trials = db.get("trials") or {}
+    due = []
+    for rec in trials.values():
+        email = (rec.get("email") or "").strip().lower()
+        if not email or rec.get("value_notice_at"):
+            continue
+        try:
+            started = datetime.datetime.fromisoformat(rec["started"])
+        except Exception:
+            continue
+        age = (now - started).total_seconds() / 86400.0
+        left = TRIAL_DAYS - age
+        if TRIAL_VALUE_NOTICE_DAY <= age <= TRIAL_VALUE_LAST_DAY and left > TRIAL_NOTICE_DAYS_OUT:
+            due.append((email, rec, left))
+    if not due:
+        return 0
+    areas = _trial_areas()
+    sent = 0
+    for email, rec, left in due:
+        if email not in areas or _has_paid_licence(db, email):
+            continue
+        place, near = _open_bids_near(*areas[email], today=now.date())
+        if not near:
+            continue
+        try:
+            _send_trial_value(email, place, areas[email][1], near, max(1, int(left)))
+        except Exception as ex:
+            print(f"[trial] value notice failed for {email}: {ex}", flush=True)
+            continue
+        rec["value_notice_at"] = now.isoformat()
+        sent += 1
+    return sent
+
+
 def _run_trial_reminders(now=None):
-    """One notice per trial, TRIAL_NOTICE_DAYS_OUT before it lapses."""
+    """One notice per trial, TRIAL_NOTICE_DAYS_OUT before it lapses, and
+    on day TRIAL_VALUE_NOTICE_DAY one listing what it has found."""
     now = now or datetime.datetime.now()
     db = _db()
     trials = db.get("trials") or {}
-    sent, skipped, changed = [], 0, False
+    try:
+        value_sent = _run_trial_value_notices(db, now)
+    except Exception as ex:
+        print(f"[trial] value notices skipped: {ex}", flush=True)
+        value_sent = 0
+    sent, skipped, changed = [], 0, bool(value_sent)
     for rec in trials.values():
         email = (rec.get("email") or "").strip()
         if not email or rec.get("ending_notice_at"):
@@ -2456,7 +2677,7 @@ def _run_trial_reminders(now=None):
         sent.append(email)
     if changed:
         _save_db(db)
-    return {"ok": True, "sent": len(sent), "skipped": skipped}
+    return {"ok": True, "sent": len(sent), "skipped": skipped, "value_sent": value_sent}
 
 
 @app.route("/run-trial-reminders", methods=["POST"])
@@ -2567,7 +2788,8 @@ def _digest_sections():
                         ("Lifecycle", _bi_summary),
                         ("Engagement", _engagement),
                         ("Outcomes", _wins_summary),
-                        ("Sources", _source_summary)):
+                        ("Sources", _source_summary),
+                        ("Won work (reported)", _outcome_summary)):
         try:
             data = fn()
         except Exception as ex:

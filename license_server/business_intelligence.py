@@ -168,6 +168,104 @@ def _source_summary():
     return out
 
 
+# ── Bid outcomes: did the work CurbCall found turn into jobs? ──
+#
+# The app asks "how did it go?" once a saved bid's due date passes. The
+# answer used to stay on the phone, so the one fact that sells this product,
+# that customers win work from it, could not be stated anywhere. A won job
+# with its amount is recorded here, by account, and /proof totals them for
+# the landing page. Self-reported, and the page says so. Bounded: one row
+# per account and bid, at most OUTCOMES_PER_ACCOUNT rows per account, and
+# an amount above OUTCOME_AMOUNT_MAX is kept as a win without the amount,
+# so one typo cannot make the public total absurd.
+_OUTCOMES_KEY = "bidcaller:outcomes"
+_outcome_lock = threading.Lock()
+OUTCOMES_PER_ACCOUNT = 100
+OUTCOME_AMOUNT_MAX = 2_000_000
+PROOF_MIN_WINS = int(os.environ.get("PROOF_MIN_WINS", "3"))
+
+
+def _record_outcome(email, bid_id, result, amount=None, state=""):
+    email = (email or "").strip().lower()
+    bid_id = str(bid_id or "").strip()[:120]
+    if not email or not bid_id or result not in ("won", "lost", "passed"):
+        return False
+    try:
+        amount = float(amount) if amount not in (None, "") else None
+    except (TypeError, ValueError):
+        amount = None
+    if amount is not None and not (0 < amount <= OUTCOME_AMOUNT_MAX):
+        amount = None
+    with _outcome_lock:
+        store = kv_backend.get(_OUTCOMES_KEY, None)
+        store = store if isinstance(store, dict) else {}
+        key = "%s|%s" % (email, bid_id)
+        if key not in store and sum(1 for k in store if k.startswith(email + "|")) >= OUTCOMES_PER_ACCOUNT:
+            return False
+        store[key] = {"result": result, "amount": amount,
+                      "state": str(state or "")[:2].upper(),
+                      "at": datetime.datetime.now().isoformat(timespec="seconds")}
+        kv_backend.set(_OUTCOMES_KEY, store)
+    return True
+
+
+def _forget_outcomes(email):
+    """Account deletion: remove every outcome this account reported."""
+    email = (email or "").strip().lower()
+    if not email:
+        return
+    with _outcome_lock:
+        store = kv_backend.get(_OUTCOMES_KEY, None)
+        if not isinstance(store, dict):
+            return
+        for k in [k for k in store if k.startswith(email + "|")]:
+            store.pop(k, None)
+        kv_backend.set(_OUTCOMES_KEY, store)
+
+
+def _outcome_summary():
+    """Wins, losses and passes reported, and the total of won work."""
+    try:
+        store = kv_backend.get(_OUTCOMES_KEY, None) or {}
+    except Exception:
+        store = {}
+    out = {"won": 0, "lost": 0, "passed": 0, "won_total": 0, "accounts_with_a_win": 0}
+    winners = set()
+    for key, row in (store.items() if isinstance(store, dict) else []):
+        r = (row or {}).get("result")
+        if r in out:
+            out[r] += 1
+        if r == "won":
+            winners.add(key.split("|", 1)[0])
+            out["won_total"] += int(row.get("amount") or 0)
+    out["accounts_with_a_win"] = len(winners)
+    return out
+
+
+@app.route("/outcome", methods=["POST"])
+def report_outcome():
+    """The signed-in user's answer to "how did it go?" for one saved bid."""
+    data = request.get_json(force=True, silent=True) or {}
+    email = _verify_supabase_token(data.get("supabase_token", ""))
+    if not email:
+        return jsonify({"ok": False, "reason": "signin_required"}), 401
+    ok = _record_outcome(email, data.get("bid_id"), data.get("result"),
+                         data.get("amount"), data.get("state", ""))
+    return jsonify({"ok": ok})
+
+
+@app.route("/proof", methods=["GET"])
+def proof():
+    """What customers have reported winning, for the landing page.
+
+    Public. Only totals, and nothing until PROOF_MIN_WINS wins from at least
+    two accounts are in, so one person's answers are never the claim."""
+    s = _outcome_summary()
+    if s["won"] < PROOF_MIN_WINS or s["accounts_with_a_win"] < 2 or s["won_total"] <= 0:
+        return jsonify({"ok": True, "show": False})
+    return jsonify({"ok": True, "show": True, "wins": s["won"], "won_total": s["won_total"]})
+
+
 @app.route("/visit", methods=["POST"])
 def visit():
     """Count one visit to the marketing site, by day.
