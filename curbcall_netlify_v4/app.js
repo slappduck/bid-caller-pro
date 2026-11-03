@@ -1405,6 +1405,8 @@ function showApp(){
     // Push subscriptions can be rotated by the browser; re-register quietly.
     setTimeout(()=>{if("Notification"in window&&Notification.permission==="granted"&&store.get("push_on",false))subscribePush();},12000);
     setInterval(checkSavedBids,BID_WATCH_EVERY_MS/6);
+    setTimeout(checkBidResults,20000);
+    setInterval(checkBidResults,BID_WATCH_EVERY_MS/2);
   }
   // The map only ever got created inside detectLocation()'s geolocation
   // success callback — if a user denies the location prompt (extremely
@@ -4611,9 +4613,9 @@ function outcomeCardHTML(){
     <div class="account-email hdr-ic" style="font-size:var(--fs-base);margin-bottom:0.4rem;"><svg class="icon-svg"><use href="#i-activity"/></svg>How did these go?</div>
     <div class="account-status" style="margin-bottom:0.4rem;">Your answers build your win rate and price history.</div>
     ${ids.map(id=>{
-      const b=saved[id]||findBid(id),r=stateResultFor(b);
+      const b=saved[id]||findBid(id),r=stateResultFor(b),ts=bidPrep[id]?tabSentence(bidPrep[id]):"";
       return`<div class="outcome" data-oid="${esc(id)}">
-        <div class="outcome-t"><b>${esc(b.title||"Untitled bid")}</b><small>Due ${esc(b.deadline||"")}${r?` · MoDOT result: won by ${esc(r.bidders[0][0]||"the low bidder")} at ${money0(r.bidders[0][1])}, ${plural(r.bidders.length,"bidder")}`:""}</small></div>
+        <div class="outcome-t"><b>${esc(b.title||"Untitled bid")}</b><small>Due ${esc(b.deadline||"")}${ts?` · Results: ${esc(ts)}`:""}${r&&!ts?` · MoDOT result: won by ${esc(r.bidders[0][0]||"the low bidder")} at ${money0(r.bidders[0][1])}, ${plural(r.bidders.length,"bidder")}`:""}</small></div>
         <div class="outcome-b"><button class="btn-ghost" data-out="won">Won</button><button class="btn-ghost" data-out="lost">Lost</button><button class="btn-ghost" data-out="passed">Didn't bid</button></div>
       </div>`;}).join("")}
   </div>`;
@@ -4675,9 +4677,10 @@ function wireOutcomeCard(root){
       }
       reportOutcome(id,out,0);
       if(out==="lost"){
-        const b=saved[id]||findBid(id),r=stateResultFor(b);
+        const b=saved[id]||findBid(id),r=stateResultFor(b),tp=bidPrep[id]&&tabPlacement(bidPrep[id]);
+        const low=tp&&tp.low?tp.low.total:r?r.bidders[0][1]:0;
         row.innerHTML=`<div class="outcome-t"><b>What did the winning bid come in at?</b><small>Optional. It shows next to your price on similar jobs.</small></div>
-          <div class="outcome-b"><input class="input" data-win inputmode="decimal" placeholder="$ total" value="${r?esc(String(Math.round(r.bidders[0][1]))):""}"><button class="btn-ghost" data-save>Save</button></div>`;
+          <div class="outcome-b"><input class="input" data-win inputmode="decimal" placeholder="$ total" value="${low?esc(String(Math.round(low))):""}"><button class="btn-ghost" data-save>Save</button></div>`;
         row.querySelector("[data-save]").onclick=()=>{
           const v=Number(String(row.querySelector("[data-win]").value).replace(/[^0-9.]/g,""));
           if(v>0){const p=prepFor(id);p.result={winning_total:v,at:Date.now()};savePrep(id,(saved[id]&&saved[id]._city)||"");}
@@ -4689,6 +4692,138 @@ function wireOutcomeCard(root){
     });
   });
 }
+// ── The results, read when they're posted ──
+// Once a bid's deadline has passed, its posting is checked once a day for a
+// tabulation or award notice (server: result_docs on /bid-watch/check). When
+// one appears it's read (kind "results"): every bidder and total, and the
+// low bidder's unit prices. The contractor is told where they placed without
+// having to go look, the outcome card fills itself in, and Pricing compares
+// their lines with the winner's. The server keeps the winner's unit prices,
+// with no names, as city and county going rates for everyone (/city-prices).
+const RESULTS_KEY="results_watch",RESULTS_EVERY_MS=24*3600*1000,RESULTS_DAYS=75;
+let resultsWatch=store.get(RESULTS_KEY,{});
+let resultsRunning=false;
+function resultsCandidates(){
+  const ids=new Set([...Object.keys(saved),...Object.keys(bidPrep)]);
+  return[...ids].filter(id=>{
+    const b=saved[id]||findBid(id),url=safeUrl(b&&b.url);
+    if(!url||!/^https?:/i.test(url)||pipeline[id]==="passed")return false;
+    const dl=daysUntil(b);
+    if(dl==null||dl>=0||dl<-RESULTS_DAYS)return false;
+    const p=bidPrep[id];
+    if(p&&p.tab&&p.tab.is_results)return false;
+    return Date.now()-(resultsWatch[id]||0)>RESULTS_EVERY_MS;
+  });
+}
+function ordinal(n){const s=["th","st","nd","rd"],v=n%100;return n+(s[(v-20)%10]||s[v]||s[0]);}
+// Where the contractor placed: their company name among the bidders, else a
+// total within half a percent of the one they priced.
+function tabPlacement(p){
+  const t=p&&p.tab;
+  if(!t||!(t.bidders||[]).length)return null;
+  const priced=t.bidders.filter(x=>x.total>0);
+  if(!priced.length)return{n:t.bidders.length,low:null,rank:0};
+  const me=companyKey(companyProfile&&companyProfile.name);
+  let i=me.length>=4?priced.findIndex(x=>{const k=companyKey(x.name);return k&&(k===me||(k.length>=4&&(k.includes(me)||me.includes(k))));}):-1;
+  const mine=prepTotals(p).total;
+  if(i<0&&mine>0)i=priced.findIndex(x=>Math.abs(x.total-mine)/mine<0.005);
+  return{n:priced.length,low:priced[0],rank:i>=0?i+1:0,mine:i>=0?priced[i].total:0,
+    gap:i>0?(priced[i].total-priced[0].total)/priced[0].total:0};
+}
+function tabSentence(p){
+  const pl=tabPlacement(p);
+  if(!pl)return"";
+  if(!pl.low)return`${plural(pl.n,"bid")} received.`;
+  if(pl.rank===1)return`You were the low bidder of ${pl.n}${pl.n>1?`, ${money0(p.tab.bidders[1]&&p.tab.bidders[1].total?p.tab.bidders[1].total-pl.low.total:0)} under 2nd`:""}.`;
+  if(pl.rank>1)return`You placed ${ordinal(pl.rank)} of ${pl.n}, ${(pl.gap*100).toFixed(1)}% above ${pl.low.name} at ${money0(pl.low.total)}.`;
+  return`Low bid: ${pl.low.name} at ${money0(pl.low.total)}, of ${plural(pl.n,"bid")}.`;
+}
+async function checkBidResults(){
+  if(resultsRunning||isOffline()||!canAutoRead())return;
+  const ids=resultsCandidates().slice(0,10);
+  if(!ids.length)return;
+  resultsRunning=true;
+  try{
+    const urls=ids.map(id=>safeUrl((saved[id]||findBid(id)).url));
+    const token=await getSupabaseToken();
+    const r=await fetchRetry(SERVER+"/bid-watch/check",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,urls})},90000);
+    const d=await r.json();
+    if(!d||!d.ok)return;
+    for(let k=0;k<ids.length;k++){
+      const id=ids[k],cur=d.results&&d.results[urls[k]];
+      resultsWatch[id]=Date.now();
+      const docs=((cur&&cur.ok&&cur.result_docs)||[]).map(x=>safeUrl(x&&x.url)).filter(Boolean);
+      if(!docs.length)continue;
+      const b=saved[id]||findBid(id),city=(saved[id]&&saved[id]._city)||"";
+      const pp=placeParts(city);
+      try{
+        const rr=await fetchRetry(SERVER+"/bid-documents/read",{method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({key:licenseKey(),device_id:deviceId(),supabase_token:token,kind:"results",
+            url:docs[0],urls:docs.slice(1,3),state:bidState(city,b),town:pp?pp.city:""})},120000);
+        const res=await rr.json();
+        if(!res||!res.ok||!res.is_results||!(res.bidders||[]).length)continue;
+        const p=prepFor(id);
+        p.tab={is_results:true,opened:res.opened||"",bidders:res.bidders,awarded_to:res.awarded_to||"",
+          items:(res.items||[]).slice(0,200),url:docs[0],at:Date.now()};
+        const pl=tabPlacement(p);
+        if(pl&&pl.low&&pipeline[id]==="lost"&&!(p.result&&p.result.winning_total))p.result={winning_total:pl.low.total,at:Date.now(),from:"tab"};
+        savePrep(id,city);
+        fireNotification(`Results are in: ${b.title||"your bid"}`,tabSentence(p));
+      }catch(e){}
+    }
+    store.set(RESULTS_KEY,resultsWatch);
+    if(document.getElementById("screen-home")&&document.getElementById("screen-home").classList.contains("active")&&typeof renderHome==="function")renderHome();
+  }catch(e){}
+  finally{resultsRunning=false;}
+}
+// The winner's unit price against the contractor's, line by line.
+function tabCompareHTML(p){
+  const t=p&&p.tab;
+  if(!t||!t.is_results)return"";
+  const pl=tabPlacement(p);
+  const rows=(t.items||[]).map(it=>{const i=lineForItem(p.lines||[],it);return i>=0?{it,l:p.lines[i]}:null;}).filter(Boolean)
+    .filter(x=>Number(x.l.price)>0);
+  const top=t.bidders.slice(0,6);
+  return`<details class="price-more tab-box" id="tab-box" open><summary>Bid results are in</summary>
+    <div class="rate-note" style="margin-top:0;">${esc(tabSentence(p))}${t.opened?` Opened ${esc(t.opened)}.`:""} <a href="${esc(t.url)}" target="_blank" rel="noopener noreferrer">The tabulation</a></div>
+    ${top.map((x,k)=>`<div class="tab-row${pl&&pl.rank===k+1?" me":""}"><span>${k+1}. ${esc(x.name)}${pl&&pl.rank===k+1?" (you)":""}</span><b>${x.total?money0(x.total):""}</b></div>`).join("")}
+    ${t.bidders.length>top.length?`<div class="rate-note">and ${t.bidders.length-top.length} more</div>`:""}
+    ${rows.length?`<div class="workspace-title" style="margin-top:0.6rem;">The winner's unit prices vs yours</div>
+      ${rows.map(({it,l})=>{const d=(Number(l.price)-it.unit_price)/it.unit_price;
+        return`<div class="tab-row"><span>${esc(splitItemNo(l.name).description||l.name)}</span><b>${money2(it.unit_price)} vs ${money2(l.price)} <em class="${d>0.02?"pc-hi":d<-0.02?"pc-lo":"pc-ok"}">${d>=0?"+":""}${(d*100).toFixed(0)}%</em></b></div>`;}).join("")}`:""}
+  </details>`;
+}
+// ── City and county going rates (server: /city-prices) ──
+const cityPrices={},cityPricesLoading={};
+function loadCityPrices(st){
+  st=String(st||"").toUpperCase();
+  if(!/^[A-Z]{2}$/.test(st))return Promise.resolve(null);
+  if(cityPrices[st])return Promise.resolve(cityPrices[st]);
+  if(!cityPricesLoading[st]){
+    cityPricesLoading[st]=fetch(`${SERVER}/city-prices?state=${st}`).then(r=>r.ok?r.json():null)
+      .then(d=>{if(d&&d.ok)cityPrices[st]=d.prices||{};return cityPrices[st]||null;})
+      .catch(()=>{delete cityPricesLoading[st];return null;});
+  }
+  return cityPricesLoading[st];
+}
+const CITY_MIN=3;
+function cityPriceLine(l,st){
+  const data=cityPrices[String(st||"").toUpperCase()];
+  if(!data||!l)return"";
+  const d=rateData[st];
+  let cat="";
+  if(d&&l.item)cat=Object.keys(d.cats||{}).find(c=>d.cats[c]===l.item)||"";
+  if(!cat)cat=nearestItem(String(l.name||""),false)||"";
+  if(/^sidewalk\d/.test(cat))cat="sidewalk";
+  const rows=(data[cat]||{})[l.unit];
+  if(!rows||rows.length<CITY_MIN)return"";
+  const q=Number(l.qty)||0;
+  const sized=q?rows.filter(r=>r[0]>=q/WIN_SPAN&&r[0]<=q*WIN_SPAN):[];
+  const use=sized.length>=CITY_MIN?sized:rows;
+  return`City and county jobs: won for ${money2(medianOf(use.map(r=>r[1])))}/${esc(l.unit)} on ${plural(use.length,use===sized?"similar-size job":"job")}`;
+}
+
 // On jobs lost with a recorded winning bid: how far above the winner you were.
 function lossGapHTML(){
   const gaps=[];
@@ -5014,7 +5149,7 @@ async function openPrep(city,id,step){
   const b=findBid(id)||saved[id];
   if(!b){toast("That bid isn't available any more");return;}
   const st=bidState(city,b);
-  await Promise.all([loadRates(st),loadBidResults(st),loadCostData()]);
+  await Promise.all([loadRates(st),loadBidResults(st),loadCostData(),loadCityPrices(st)]);
   const p=prepFor(id);
   if(!p.lines){p.lines=withOwnPrices(defaultPrepLines(b,city),id);p.linesFrom="ballpark";}
   savePrep(id,city);
@@ -6709,6 +6844,7 @@ function renderPrepPricing(body,city,id,b){
         <button type="button" class="prep-x" data-del="${i}" aria-label="Delete line">×</button>
       </div>
       <small class="pl-ref" data-pc="${i}">${priceCheckHTML(l)}</small>
+      ${(()=>{const c=cityPriceLine(l,bidState(city,b));return c?`<small class="pl-ref pl-city">${c}</small>`:"";})()}
       ${l.yours?`<small class="pl-ref pl-yours">Your price from ${esc(l.yours)}</small>`:""}
       ${l.note?`<small class="pl-ref rate-thin">${esc(l.note)}</small>`:""}
       ${historyHint(hist[lineKey(l)])}
@@ -6732,6 +6868,7 @@ function renderPrepPricing(body,city,id,b){
       <div id="pt-target">${targetHTML(p,bidState(city,b))}</div>
       <div id="pt-profit">${profitSummaryHTML(p)}</div>
     </div>
+    ${tabCompareHTML(p)}
     ${wasRead?`<div class="rate-note">Lines read from ${esc(p.docInfo.source||"the bid form")}. <button class="link-btn" id="pl-read">Read again</button></div>`
       :`<button class="btn-primary" id="pl-read" style="margin:0.7rem 0 0.4rem;">${canRead?"Fill from the bid form":"Fill from a bid form you upload"}</button>`}
     <div class="rate-note" style="margin-top:0.2rem;">${startNote}</div>

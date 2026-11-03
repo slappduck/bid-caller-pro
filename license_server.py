@@ -9960,6 +9960,8 @@ def _doc_rank(name, kind="doc"):
         if re.search(r"plan|drawing|sheets?\b|\bdwg|civil|construction\s*set", name, re.I):
             return 0
         return 3 if re.search(r"addend", name, re.I) else 2
+    if kind == "results":
+        return 0 if _RESULTS_DOC_RE.search(name) else 3
     for rx, rank in _DOC_RANK:
         if rx.search(name):
             return rank
@@ -10395,12 +10397,147 @@ def _clean_takeoff_result(raw):
     return {"line_items": items, "notes": re.sub(r"\s+", " ", notes).strip()[:600] if isinstance(notes, str) else ""}
 
 
+# ── Reading the results ──
+# After bids open, most agencies post a tabulation: every bidder, their total,
+# and often every unit price. The contractor learns where they placed and how
+# far off the winner they were, line by line, and the winner's unit prices
+# become city and county going rates (below) that no state DOT publishes.
+BID_RESULTS_READER_VERSION = 1
+_RESULTS_DOC_RE = re.compile(
+    r"tabulat|bid\s*tab|\btab(?:s|ulation)?\b|bid\s*results?|results?\s*of\s*bid|opening\s*results|"
+    r"bid\s*opening|apparent\s*low|low\s*bidder|award(?:ed)?\b|bid\s*summary|abstract\s*of\s*bids|certified\s*bid", re.I)
+_RESULTS_PROMPT = (
+    "You read the RESULTS of a public construction bid opening (a bid tabulation, abstract of bids, "
+    "or award notice) for a concrete contractor. Copy names and numbers EXACTLY as printed. Never "
+    "estimate; use \"\", null or [] when the document does not say. If it is not a bid result "
+    "(a bid form, plans, an invitation), return {\"is_results\": false}.\n\n"
+    "Return ONE JSON object with keys:\n"
+    "\"is_results\": true.\n"
+    "\"opened\": the bid opening date as printed.\n"
+    "\"bidders\": every bidder, each {\"name\", \"total\" (the total bid as a number)}, in the order printed.\n"
+    "\"awarded_to\": the bidder the contract was awarded or recommended to, if the document says, else \"\".\n"
+    "\"items\": the bid items with the LOW bidder's prices, each {\"item_no\", \"description\", "
+    "\"quantity\", \"unit\", \"unit_price\"} -- only when unit prices are printed.\n"
+    "No markdown, nothing outside the object.\n\nRESULTS TEXT:\n"
+)
+
+
+def _clean_results_result(raw):
+    if not isinstance(raw, dict) or raw.get("is_results") is False:
+        return {"is_results": False, "bidders": [], "items": []}
+
+    def text(v, n=200):
+        return re.sub(r"\s+", " ", v).strip()[:n] if isinstance(v, str) else ""
+    bidders = []
+    for r in (raw.get("bidders") or [])[:40]:
+        if isinstance(r, dict) and text(r.get("name")):
+            t = _num_or_none(str(r.get("total") or "").replace("$", ""))
+            bidders.append({"name": text(r.get("name"), 120), "total": t})
+    priced = sorted([b for b in bidders if b["total"]], key=lambda b: b["total"])
+    bidders = priced + [b for b in bidders if not b["total"]]
+    items = []
+    for it in (raw.get("items") or [])[:200]:
+        if not isinstance(it, dict):
+            continue
+        price = _num_or_none(str(it.get("unit_price") or "").replace("$", ""))
+        desc = text(it.get("description"), 200)
+        if not desc or not price:
+            continue
+        unit = str(it.get("unit") or "").strip()
+        items.append({"item_no": text(it.get("item_no"), 20), "description": desc,
+                      "quantity": _num_or_none(it.get("quantity")),
+                      "unit": unit if _UNIT_RE.match(unit) else "", "unit_price": price})
+    return {"is_results": bool(bidders), "opened": text(raw.get("opened"), 80),
+            "bidders": bidders, "awarded_to": text(raw.get("awarded_to"), 120), "items": items}
+
+
+# ── City and county going rates ──
+# The low bidder's unit price on each concrete item of every tabulation read
+# above, by state: what city and county work actually wins for. Public
+# records, kept without any account or bidder name -- just the item, its
+# quantity, the price and when. Read back by /city-prices.
+_CITY_PRICES_KEY = "bidcaller:city_prices:"
+CITY_PRICES_PER_STATE = 4000
+CITY_PRICES_YEARS = 4
+_CITY_CATS = (
+    ("removal", re.compile(r"remov|demoli|break\s*out|tear\s*out|saw\s*cut\s*and\s*remov", re.I)),
+    ("domes", re.compile(r"detectable|truncated|warning\s*(?:panel|surface|tile)", re.I)),
+    ("ramp", re.compile(r"\bramps?\b", re.I)),
+    ("curb_gutter", re.compile(r"curb\s*(?:&|and|\+)?\s*gutter|\bc\s*&\s*g\b", re.I)),
+    ("curb", re.compile(r"\bcurb", re.I)),
+    ("driveway", re.compile(r"driveway|drive\s*approach|\bapproach", re.I)),
+    ("sidewalk", re.compile(r"sidewalk|\bwalk\b|flatwork", re.I)),
+)
+_CITY_UNITS = {"SY": "sq yd", "SQYD": "sq yd", "SQYDS": "sq yd", "SF": "sq ft", "SQFT": "sq ft",
+               "LF": "ft", "LFT": "ft", "FT": "ft", "LINFT": "ft", "EA": "each", "EACH": "each"}
+
+
+def _city_cat(desc):
+    if not re.search(r"concrete|sidewalk|curb|ramp|detectable|truncated|driveway|walk|flatwork|gutter", desc, re.I):
+        return ""
+    # "Curb ramp w/ detectable warning" is a ramp that includes its domes.
+    if re.search(r"\bramps?\b", desc, re.I) and re.search(r"(?:w/|with|incl\w*)\s*(?:the\s*)?(?:detectable|truncated)", desc, re.I):
+        return "ramp"
+    for cat, rx in _CITY_CATS:
+        if rx.search(desc):
+            return cat
+    return ""
+
+
+def _record_city_prices(state, town, ident, result):
+    """Add one tabulation's low-bid concrete unit prices. Returns rows added."""
+    st = str(state or "").upper()
+    if not re.fullmatch(r"[A-Z]{2}", st) or not result or not result.get("items"):
+        return 0
+    rows = []
+    for it in result["items"]:
+        cat = _city_cat(it.get("description") or "")
+        unit = _CITY_UNITS.get(re.sub(r"[^A-Z]", "", str(it.get("unit") or "").upper()), "")
+        if cat and unit and it.get("unit_price"):
+            rows.append({"k": f"{ident}:{it.get('item_no') or ''}:{cat}", "cat": cat, "unit": unit,
+                         "qty": it.get("quantity") or 0, "price": it["unit_price"],
+                         "town": str(town or "")[:60], "at": time.strftime("%Y-%m-%d")})
+    if not rows:
+        return 0
+    key = _CITY_PRICES_KEY + st
+    try:
+        have = kv_backend.get(key, None) or []
+        if not isinstance(have, list):
+            have = []
+        seen = {r.get("k") for r in have}
+        fresh = [r for r in rows if r["k"] not in seen]
+        if fresh:
+            kv_backend.set(key, (have + fresh)[-CITY_PRICES_PER_STATE:])
+        return len(fresh)
+    except Exception:
+        return 0
+
+
+@app.route("/city-prices", methods=["GET"])
+def city_prices():
+    """What concrete items won for on city and county jobs in a state, from
+    tabulations read so far: {cat: {unit: [[qty, price, date], ...]}}."""
+    st = str(request.args.get("state") or "").upper()
+    if not re.fullmatch(r"[A-Z]{2}", st):
+        return jsonify({"ok": False, "reason": "bad_request"}), 400
+    try:
+        rows = kv_backend.get(_CITY_PRICES_KEY + st, None) or []
+    except Exception:
+        rows = []
+    since = time.strftime("%Y-%m-%d", time.gmtime(time.time() - CITY_PRICES_YEARS * 365.25 * 86400))
+    out = {}
+    for r in rows if isinstance(rows, list) else []:
+        if isinstance(r, dict) and (r.get("at") or "") >= since:
+            out.setdefault(r["cat"], {}).setdefault(r["unit"], []).append([r.get("qty") or 0, r["price"], r["at"]])
+    return jsonify({"ok": True, "state": st, "prices": out})
+
+
 def _ai_read_bid_document(text, images=None, addendum=False, kind=None):
     images = images or []
     if not OPENAI_API_KEY or not (text.strip() or images):
         return None
     kind = kind or ("addendum" if addendum else "doc")
-    prompt = {"addendum": _ADDENDUM_PROMPT, "takeoff": _TAKEOFF_PROMPT}.get(kind, _BID_DOC_PROMPT)
+    prompt = {"addendum": _ADDENDUM_PROMPT, "takeoff": _TAKEOFF_PROMPT, "results": _RESULTS_PROMPT}.get(kind, _BID_DOC_PROMPT)
     content = prompt + (text if text.strip() else "(none: the pages are scanned images, attached)")
     if images:
         content = [{"type": "text", "text": content + "\n\nSCANNED PAGES are attached as images; read them too."}] + [
@@ -10420,7 +10557,8 @@ def _ai_read_bid_document(text, images=None, addendum=False, kind=None):
         with urllib.request.urlopen(req, timeout=120 if images else 90) as resp:
             data = json.loads(resp.read().decode("utf-8"))
         got = json.loads(data["choices"][0]["message"]["content"])
-        return {"addendum": _clean_addendum_result, "takeoff": _clean_takeoff_result}.get(kind, _clean_doc_result)(got)
+        return {"addendum": _clean_addendum_result, "takeoff": _clean_takeoff_result,
+                "results": _clean_results_result}.get(kind, _clean_doc_result)(got)
     except Exception as ex:
         print(f"[bid-doc] ai error: {ex}", flush=True)
         return None
@@ -10530,9 +10668,10 @@ def bid_documents_read():
         return jsonify({"ok": False, "reason": "ai_unavailable"})
 
     # "kind": "addendum" reads the same files for what they change instead.
-    kind = data.get("kind") if data.get("kind") in ("addendum", "takeoff") else "doc"
+    kind = data.get("kind") if data.get("kind") in ("addendum", "takeoff", "results") else "doc"
     addendum = kind == "addendum"
-    version = {"addendum": BID_ADDENDUM_READER_VERSION, "takeoff": BID_TAKEOFF_READER_VERSION}.get(kind, BID_DOC_READER_VERSION)
+    version = {"addendum": BID_ADDENDUM_READER_VERSION, "takeoff": BID_TAKEOFF_READER_VERSION,
+               "results": BID_RESULTS_READER_VERSION}.get(kind, BID_DOC_READER_VERSION)
     ident = (b"upload:" + b"".join(hashlib.sha256(raw).digest() for _n, raw in upload)) if upload is not None \
         else "\n".join(urls).encode()
     cache_key = _BID_DOC_CACHE_PREFIX + ("" if kind == "doc" else kind + ":") + hashlib.sha256(ident).hexdigest()[:32]
@@ -10549,6 +10688,8 @@ def bid_documents_read():
         except (TypeError, ValueError):
             age = 1e12
         if age < BID_DOC_CACHE_TTL_DAYS * 86400:
+            if kind == "results":
+                _record_city_prices(data.get("state"), data.get("town"), cache_key[-16:], hit["result"])
             return jsonify({"ok": True, "cached": True, **hit["result"]})
 
     # Counted only for real reads: a cached answer costs nothing.
@@ -10582,7 +10723,7 @@ def bid_documents_read():
         return jsonify({"ok": False, "reason": "no_text",
                         "detail": "This document has no readable text (it may be a scan)."})
     result = (_ai_read_bid_document(text, images, addendum=True) if addendum
-              else _ai_read_bid_document(text, images, kind="takeoff") if kind == "takeoff"
+              else _ai_read_bid_document(text, images, kind=kind) if kind in ("takeoff", "results")
               else _ai_read_bid_document(text, images))
     if result is None:
         return jsonify({"ok": False, "reason": "ai_error"}), 502
@@ -10592,6 +10733,8 @@ def bid_documents_read():
         kv_backend.set(cache_key, {"at": time.time(), "v": version, "result": result})
     except Exception:
         pass
+    if kind == "results":
+        _record_city_prices(data.get("state"), data.get("town"), cache_key[-16:], result)
     return jsonify({"ok": True, "cached": False, **result})
 
 
@@ -11275,7 +11418,7 @@ _ADDENDUM_RE = re.compile(r"\baddend(?:um|a)\s*(?:no\.?|number|#)?\s*(\d{1,2})\b
 def _watch_fingerprint(url, data, ctype):
     """{docs, addenda, hash} for one fetched posting."""
     if data[:5] == b"%PDF-" or "pdf" in ctype:
-        return {"docs": [], "addenda": [], "addendum_docs": [], "hash": hashlib.sha256(data).hexdigest()[:16]}
+        return {"docs": [], "addenda": [], "addendum_docs": [], "result_docs": [], "hash": hashlib.sha256(data).hexdigest()[:16]}
     html = data.decode("utf-8", "ignore")
     text = _html_to_text(html)
     found = bid_sources.detail_documents(html, url, limit=40)
@@ -11284,8 +11427,11 @@ def _watch_fingerprint(url, data, ctype):
     # The addendum documents themselves, so the app can open and read them
     # rather than only say one exists.
     addendum_docs = [d for d in found if re.search(r"addend", d["name"] + " " + d["url"], re.I)][:10]
+    # After the opening: the tabulation or award notice, for /bid-documents/read kind "results".
+    result_docs = [d for d in found if _RESULTS_DOC_RE.search(d["name"] + " " + d["url"].rsplit("/", 1)[-1])
+                   and not re.search(r"addend", d["name"], re.I)][:5]
     norm = re.sub(r"\s+", " ", text).strip().lower()
-    return {"docs": docs, "addenda": addenda, "addendum_docs": addendum_docs,
+    return {"docs": docs, "addenda": addenda, "addendum_docs": addendum_docs, "result_docs": result_docs,
             "hash": hashlib.sha256(norm.encode("utf-8")).hexdigest()[:16]}
 
 

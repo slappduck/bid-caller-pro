@@ -3035,6 +3035,80 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── Results read when they're posted: placement, winner's prices, city rates ──
+  console.log("\nBid results are read when posted: where you placed, the winner's prices");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    let readBody = null;
+    await page.route("**/*", (route) => {
+      const u = route.request().url(), host = new URL(u).hostname;
+      if (u.endsWith("/bid-watch/check")) {
+        const urls = JSON.parse(route.request().postData()).urls;
+        return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true,
+          results: Object.fromEntries(urls.map((x) => [x, { ok: true, docs: [], addenda: [], addendum_docs: [],
+            result_docs: [{ name: "Bid Tabulation", url: "https://e.gov/tab.pdf" }] }])) }) });
+      }
+      if (u.endsWith("/bid-documents/read")) {
+        readBody = JSON.parse(route.request().postData());
+        return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, is_results: true,
+          opened: "Oct 20, 2026", awarded_to: "",
+          bidders: [{ name: "Ozark Flatwork LLC", total: 150000 }, { name: "Test Concrete, LLC", total: 153300 }, { name: "Third Co", total: 170000 }],
+          items: [{ item_no: "1", description: "Concrete sidewalk, 4 in.", quantity: 1450, unit: "SY", unit_price: 70 }] }) });
+      }
+      if (u.includes("/city-prices")) {
+        return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true,
+          prices: { sidewalk: { "sq yd": [[1200, 68, "2026-09-01"], [1500, 72, "2026-08-01"], [1600, 75, "2026-05-01"]] } } }) });
+      }
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") {
+        return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      }
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      const past = new Date(Date.now() - 10 * 864e5).toISOString().slice(0, 10);
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      localStorage.setItem("license_key", JSON.stringify("k"));
+      localStorage.setItem("company_profile", JSON.stringify({ name: "Test Concrete LLC" }));
+      localStorage.setItem("saved", JSON.stringify({ r1: { title: "Elm St Walks", url: "https://e.gov/elm", deadline: past, _city: "Springfield, MO" } }));
+      localStorage.setItem("bid_prep", JSON.stringify({ r1: { checks: {}, custom: [], markup: 0, addenda: "", updated: 1,
+        linesFrom: "you", lines: [{ name: "Concrete sidewalk, 4 in.", item: "6086004", st: "MO", unit: "sq yd", qty: 1450, price: 74 }] } }));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(800);
+    await page.evaluate(() => checkBidResults());
+    await page.waitForTimeout(800);
+    check("a bid past its deadline gets its tabulation read, with its state and town",
+          readBody && readBody.kind === "results" && readBody.url === "https://e.gov/tab.pdf" && readBody.state === "MO"
+          && readBody.town === "Springfield", JSON.stringify(readBody));
+    const sent = await page.evaluate(() => tabSentence(bidPrep.r1));
+    check("it finds the contractor by company name and says where they placed",
+          sent === "You placed 2nd of 3, 2.2% above Ozark Flatwork LLC at $150,000.", sent);
+    check("it isn't read again once it's in", await page.evaluate(() => !resultsCandidates().includes("r1")));
+    await page.evaluate(() => renderHome());
+    await page.waitForTimeout(300);
+    const home = await page.textContent("#home-outcomes");
+    check("the 'how did it go' card shows the result", /Results: You placed 2nd of 3/.test(home), home);
+    await page.click('#home-outcomes [data-out="lost"]');
+    await page.waitForTimeout(200);
+    check("...and a loss starts with the winning total filled in",
+          await page.$eval("#home-outcomes [data-win]", (el) => el.value) === "150000");
+    await page.evaluate(() => openPrep("Springfield, MO", "r1", "pricing"));
+    await page.waitForTimeout(600);
+    const pricing = await page.textContent("#prep-body");
+    check("Pricing compares the winner's unit prices with yours",
+          /Bid results are in/.test(pricing) && /\$70\.00 vs \$74\.00\s*\+6%/.test(pricing), pricing.slice(0, 700));
+    check("each line shows what city and county jobs won for",
+          /City and county jobs: won for \$72\.00\/sq yd on 3 similar-size jobs/.test(pricing));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   // ── A statewide bid is placed by its own name ──
   console.log("\nA bid from a statewide search is placed by the site its name gives");
   {
