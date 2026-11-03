@@ -65,13 +65,16 @@ jobs:
         continue-on-error: true
         env:
           ONLY: ${{ github.event.inputs.only }}
+          # Optional: a free key from https://data.bls.gov/registrationEngine/
+          # raises BLS's daily request limit. Works without it most months.
+          BLS_API_KEY: ${{ secrets.BLS_API_KEY }}
         run: |
           python tools/refresh_state_data.py --summary "$RUNNER_TEMP/refresh.md" ${ONLY:+--only "$ONLY"}
 
       - name: Check the data the app loads
         run: |
           python -m unittest tests.test_state_prices tests.test_bid_results \
-            tests.test_unit_prices tests.test_refresh_state_data
+            tests.test_unit_prices tests.test_refresh_state_data tests.test_nearby_rates_and_costs
 
       - name: Open or update the pull request
         env:

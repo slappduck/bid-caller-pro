@@ -3738,7 +3738,24 @@ const RATE_THIN_BIDS=5;
 const AGENCY={MO:"MoDOT",FL:"FDOT",OR:"ODOT",MN:"MnDOT",OK:"ODOT",NC:"NCDOT",TX:"TxDOT",TN:"TDOT",IN:"INDOT",MT:"MDT",SD:"SDDOT",KY:"KYTC",KS:"KDOT",AR:"ARDOT",IA:"Iowa DOT",IL:"IDOT",NE:"NDOT"};
 let rateIndex=null,rateIndexLoading=null;
 const rateData={},rateLoading={},rateRerenderQueued={};
-function agencyOf(d){return (d&&AGENCY[d.state])||`${(d&&d.state_name)||"State"} DOT`;}
+function agencyOf(d){return isNearby(d)?"nearby state":(d&&AGENCY[d.state])||`${(d&&d.state_name)||"State"} DOT`;}
+// A state with no prices of its own borrows what each item won for in the
+// nearest states with bid results (tools/build_nearby_rates.py). Always
+// labeled as theirs, never as this state's.
+function isNearby(d){return!!(d&&d.basis==="nearby");}
+// Prices that are winning bids, not every bid.
+function wonBasis(d){return!!(d&&(d.basis==="awarded"||d.basis==="nearby"));}
+// How new the prices are: the newest letting behind them, else the newest year.
+function pricesAsOf(d){
+  if(!d)return"";
+  const res=bidResults[d.state];
+  const last=d.through||(res&&(res.contracts||[]).reduce((m,c)=>(c.date||"")>m?c.date:m,""))||"";
+  if(last){
+    const t=new Date(last+"T12:00:00");
+    if(!isNaN(t))return`Updated monthly; newest letting ${t.toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"})}.`;
+  }
+  return d.years&&d.years.length?`Newest prices: ${ratePeriod(d,Math.max(...d.years))}.`:"";
+}
 function loadRateIndex(){
   if(rateIndex)return Promise.resolve(rateIndex);
   if(!rateIndexLoading){
@@ -3755,7 +3772,8 @@ function loadRates(st){
   if(rateData[st])return Promise.resolve(rateData[st]);
   if(!rateLoading[st]){
     rateLoading[st]=loadRateIndex()
-      .then(ix=>ix&&ix[st]?fetch(`/rates/${st.toLowerCase()}.json`).then(r=>r.ok?r.json():null):null)
+      // A state without its own rates may have its neighbors' (a 404 if not).
+      .then(ix=>fetch(ix&&ix[st]?`/rates/${st.toLowerCase()}.json`:`/rates/nearby/${st.toLowerCase()}.json`).then(r=>r.ok?r.json():null))
       .then(d=>{if(d&&d.prices)rateData[st]=d;return rateData[st]||null;})
       // A network failure may be retried later; a state with no rates is not.
       .catch(()=>{delete rateLoading[st];return null;});
@@ -3864,7 +3882,8 @@ function winPrice(d,item,qty,district){
   const dd=dist&&d.districts[dist]?dist:"STATEWIDE";
   const w=d.basis==="awarded"?null:latestWin(d,item,dd);
   if(w&&w.n>=3&&w.p25!=null&&w.p75!=null)
-    return{mid:(w.p25+w.p75)/2,p25:w.p25,p75:w.p75,n:w.n,basis:"won",where:`jobs, ${d.districts[dd]}`,district:dd};
+    return{mid:isNearby(d)?w.avg:(w.p25+w.p75)/2,p25:w.p25,p75:w.p75,n:w.n,basis:"won",
+      where:isNearby(d)?`state road jobs ${(d.items[item]&&d.items[item].where)||d.districts[dd]}`:`jobs, ${d.districts[dd]}`,district:dd};
   const r=latestRate(d,item,dd);
   if(r)return{mid:r.avg,p25:null,p75:null,n:r.bids,basis:d.basis==="awarded"?"won-avg":"bid-avg",where:d.districts[dd],district:dd};
   return null;
@@ -3897,11 +3916,11 @@ function rateRow(d,item,district,withTrend){
   // A state that doesn't publish how many bids lie behind a price (TN) gets
   // no count and no "few bids" flag rather than a made-up one.
   const thin=r.bids!=null&&r.bids<RATE_THIN_BIDS;
-  const win=d.basis==="awarded"?null:latestWin(d,item,district);
+  const win=wonBasis(d)?null:latestWin(d,item,district);
   const years=withTrend?Object.keys(d.prices[item][district]).sort():[];
   // An awarded-only state that prints a range (AR) prints it across winning
   // contract prices, so say so rather than let it read as every bid.
-  const awarded=d.basis==="awarded";
+  const awarded=wonBasis(d);
   const spread=r.low!=null&&r.high!=null
     ?`${awarded?"winning bids ":""}${fmtRate(r.low)}–${fmtRate(r.high)}${r.bids!=null?` · ${plural(r.bids,awarded?"contract":"bid")}`:""}`
     :`winning bids${r.bids!=null?` · ${plural(r.bids,"contract")}`:""}`;
@@ -3931,12 +3950,13 @@ function ratePeriod(d,year){
   return (d.periods&&(d.periods[String(year)]||d.periods.note))||String(year);
 }
 function rateFootnote(d,district){
+  if(isNearby(d))return`<div class="rate-note">No ${esc(d.state_name)} prices in the app yet, so these are what each item won for on state road jobs ${esc(d.districts.STATEWIDE)}, the nearest states with bid results. City jobs can run different. Use it as a benchmark, not a quote. ${esc(pricesAsOf(d))}</div>`;
   const y=Math.max(...d.years);
   const where=district==="STATEWIDE"?` across ${d.state_name}`:" in this district";
   const what=d.basis==="awarded"
     ?`Average winning prices on ${esc(agencyOf(d))} contracts${where}, ${esc(ratePeriod(d,y))}.`
     :`Averages of every bid ${esc(agencyOf(d))} received in ${y} on state highway jobs${where}.`;
-  return`<div class="rate-note">${what} City jobs can run different. Use it as a benchmark, not a quote.
+  return`<div class="rate-note">${what} City jobs can run different. Use it as a benchmark, not a quote. ${esc(pricesAsOf(d))}
     <a href="${esc(safeUrl(d.source_url)||"")}" target="_blank" rel="noopener noreferrer">Source: ${esc(d.source)}</a></div>`;
 }
 async function renderHomeRates(){
@@ -3945,7 +3965,7 @@ async function renderHomeRates(){
   const d=await loadRates(homeState());
   if(!d){card.style.display="none";return;}
   const district=priceDistrict(d);
-  card.innerHTML=`<div class="account-email hdr-ic" style="font-size:var(--fs-base);margin-bottom:0.5rem;"><svg class="icon-svg"><use href="#i-activity"/></svg>Going rates in ${esc(d.state_name)}</div>
+  card.innerHTML=`<div class="account-email hdr-ic" style="font-size:var(--fs-base);margin-bottom:0.5rem;"><svg class="icon-svg"><use href="#i-activity"/></svg>Going rates ${isNearby(d)?"near":"in"} ${esc(d.state_name)}</div>
     ${districtSelect(d,"home-rate-district")}
     ${d.headline.map(i=>rateRow(d,i,district,false)).join("")}
     <button class="btn-ghost" id="home-rates-all" style="margin-top:0.6rem;">All ${Object.keys(d.items).length} items${d.years.length>1?` + ${d.years.length}-year trend`:""}</button>
@@ -3959,7 +3979,8 @@ async function openRates(st){
   const mc=document.getElementById("modal-content");
   st=st||ratesSheetState||homeState();
   const ix=await loadRateIndex();
-  if(!ix||!ix[st])st=ix?(Object.keys(ix).includes("MO")?"MO":Object.keys(ix)[0]):st;
+  // A state with only its neighbors' prices still opens on itself.
+  if((!ix||!ix[st])&&!(await loadRates(st)))st=ix?(Object.keys(ix).includes("MO")?"MO":Object.keys(ix)[0]):st;
   const d=await loadRates(st);
   if(!d){toast("Couldn't load prices right now");return;}
   ratesSheetState=d.state;
@@ -3971,7 +3992,7 @@ async function openRates(st){
     .sort((a,b)=>(b[1].bids||0)-(a[1].bids||0)).map(([i])=>i);
   const states=Object.keys(ix||{}).sort();
   mc.innerHTML=`<div class="sheet-head"><h2>Going rates</h2>
-      <div class="sheet-sub"><span class="chip">${esc(agencyOf(d))} ${d.basis==="awarded"?"winning":"bid"} prices, ${
+      <div class="sheet-sub"><span class="chip">${esc(agencyOf(d))} ${wonBasis(d)?"winning":"bid"} prices, ${
         d.years.length>1?`${Math.min(...d.years)}–${Math.max(...d.years)}`:esc(ratePeriod(d,d.years[0]))}</span></div></div>
     ${states.length>1?`<select class="rate-district" id="rates-state" aria-label="State">${states.map(s=>
       `<option value="${esc(s)}"${s===d.state?" selected":""}>${esc(ix[s].name)}</option>`).join("")}</select>`:""}
@@ -4153,7 +4174,7 @@ function ballparkHTML(b,d,district){
   if(!est.lines.length&&!est.skipped.length)return"";
   const n=(x)=>Math.round(x).toLocaleString();
   const usesWidth=est.lines.some(l=>l.assumedWidth);
-  const avgWord=d.basis==="awarded"?"winning-bid averages":"averages";
+  const avgWord=isNearby(d)?"nearby winning prices":d.basis==="awarded"?"winning-bid averages":"averages";
   return`<div class="workspace-title" style="margin-top:1rem;">Ballpark — ${esc(d.districts[district])}, ${esc(ratePeriod(d,est.year||Math.max(...d.years)))} ${avgWord}</div>
     ${est.lines.map(l=>`<div class="rate-row">
       <div class="rate-main"><div class="rate-name">${esc(l.name)}</div>
@@ -4165,7 +4186,7 @@ function ballparkHTML(b,d,district){
     ${b.value?`<div class="rate-note">Posted value: <b>${esc(b.value)}</b></div>`:""}
     ${est.skipped.length?`<div class="rate-note">Not counted: ${est.skipped.map(esc).join("; ")}.</div>`:""}
     ${usesWidth?`<div class="rate-note est-width">Sidewalk width <input id="est-width" type="number" min="1" max="30" step="0.5" value="${esc(String(width))}" aria-label="Sidewalk width in feet"> ft</div>`:""}
-    <div class="rate-note">Only the quantities shown, at ${esc(agencyOf(d))}'s average ${d.basis==="awarded"?"winning ":""}bid. Removal, mobilization, traffic control and anything else the job needs aren't included.</div>`;
+    <div class="rate-note">Only the quantities shown, at ${isNearby(d)?`what each item won for on state road jobs ${esc(d.districts.STATEWIDE)}`:`${esc(agencyOf(d))}'s average ${d.basis==="awarded"?"winning ":""}bid`}. Removal, mobilization, traffic control and anything else the job needs aren't included.</div>`;
 }
 
 // ── Bid results: who bids this work, and what wins ──
@@ -4300,8 +4321,13 @@ function easyToMiss(p,b,city){
     const sqyd=lines.reduce((t,l)=>t+(l.unit==="sq yd"?Number(l.qty)||0:l.unit==="sq ft"?(Number(l.qty)||0)/9:0),0);
     out.push({key:"removal",name:"Taking out the old concrete",
       why:"The posting says the work replaces what's there. Removal is often its own line.",
-      make:()=>({name:"Remove existing concrete",unit:"sq yd",qty:sqyd?Math.round(sqyd*10)/10:"",price:"",ref:null,
-        note:"The app has no winning prices for removal. Enter your own."})});
+      make:()=>{
+        const code=d&&d.cats.removal,meta=code&&d.items[code];
+        if(!meta||!/^sq (yd|ft)$/.test(meta.unit))return{name:"Remove existing concrete",unit:"sq yd",qty:sqyd?Math.round(sqyd*10)/10:"",price:"",ref:null,
+          note:"The app has no winning prices for removal here. Enter your own."};
+        const qty=sqyd?Math.round(sqyd*(meta.unit==="sq ft"?9:1)*10)/10:"",district=jobDistrict(d,city);
+        return{name:meta.name,unit:meta.unit,qty,price:startPrice(winPrice(d,code,Number(qty)||0,district)),ref:null,item:code,st:d.state,dist:district};
+      }});
   }
   MISS_MENTIONS.forEach(([key,said,name,unit,have])=>{
     if(off[key]||!said.test(text)||named(have))return;
@@ -4449,7 +4475,7 @@ function targetHTML(p,st){
     <div><span>Winning price for ${all?"these lines":`${t.n} of ${t.total} lines`}</span><b>${money0(t.low)}–${money0(t.high)}</b></div>
     ${t.mine&&!all?`<div><span>Your price on them, with markup</span><b>${money0(t.mine)}</b></div>`:""}
     ${t.mine?`<div class="target-v">You're ${verdict}.</div>`:""}
-    <div class="rate-note" style="margin-top:0.3rem;">The middle half of what each item won for on ${esc(agencyOf(t.d))} ${esc(t.wheres.join("; "))}, at your quantities. Lines without a state item aren't counted.</div>
+    <div class="rate-note" style="margin-top:0.3rem;">The middle half of what each item won for on ${isNearby(t.d)?"":`${esc(agencyOf(t.d))} `}${esc(t.wheres.join("; "))}, at your quantities. Lines without a state item aren't counted.</div>
   </div>`;
 }
 
@@ -4815,6 +4841,7 @@ const STATE_CODES={alabama:"AL",alaska:"AK",arizona:"AZ",arkansas:"AR",californi
   "new jersey":"NJ","new mexico":"NM","new york":"NY","north carolina":"NC","north dakota":"ND",ohio:"OH",oklahoma:"OK",
   oregon:"OR",pennsylvania:"PA","rhode island":"RI","south carolina":"SC","south dakota":"SD",tennessee:"TN",texas:"TX",
   utah:"UT",vermont:"VT",virginia:"VA",washington:"WA","west virginia":"WV",wisconsin:"WI",wyoming:"WY"};
+const STATE_NAMES_BY_CODE=Object.fromEntries(Object.entries(STATE_CODES).map(([n,c])=>[c,n.replace(/\b\w/g,x=>x.toUpperCase())]));
 // {city, state} to search from: "Aurora, MO" is a town; "Oklahoma" from a
 // statewide search is only a state.
 function searchPlace(city,b){
@@ -4966,7 +4993,7 @@ async function openPrep(city,id,step){
   const b=findBid(id)||saved[id];
   if(!b){toast("That bid isn't available any more");return;}
   const st=bidState(city,b);
-  await Promise.all([loadRates(st),loadBidResults(st)]);
+  await Promise.all([loadRates(st),loadBidResults(st),loadCostData()]);
   const p=prepFor(id);
   if(!p.lines){p.lines=withOwnPrices(defaultPrepLines(b,city),id);p.linesFrom="ballpark";}
   savePrep(id,city);
@@ -6420,7 +6447,36 @@ const COST_FIELDS=[["crew","Crew size","people"],["wage","Labor cost per hour, w
   ["sf_day","Sidewalk and slabs placed per day","sq ft"],["lf_day","Curb and gutter placed per day","ft"],
   ["ea_day","ADA ramps per day","each"],["mat_sf","Base, forms and rebar per sq ft","$"],["mat_lf","Forms and base per ft of curb","$"],
   ["curb_cy_ft","Concrete per ft of curb and gutter","cu yd"],["ramp_cy","Concrete per ramp","cu yd"],["overhead","Overhead","%"]];
-function myCosts(){const c=(bidInfo().costs)||{};return{...COST_DEFAULTS,...c};}
+// Local costs (tools/build_cost_data.py, refreshed monthly): cement
+// masons' median pay in each state and the national ready-mix price trend,
+// both from the Bureau of Labor Statistics. Until the contractor enters
+// their own labor cost, it starts at their state's pay plus LABOR_BURDEN for
+// payroll taxes, workers' comp and insurance.
+const LABOR_BURDEN=1.35;
+let costData=null,costDataLoading=null;
+function loadCostData(){
+  if(costData)return Promise.resolve(costData);
+  if(!costDataLoading){
+    costDataLoading=fetch("/rates/costs.json").then(r=>r.ok?r.json():null)
+      .then(d=>{costData=d&&d.labor?d:null;if(!costData)costDataLoading=null;return costData;})
+      .catch(()=>{costDataLoading=null;return null;});
+  }
+  return costDataLoading;
+}
+function localWage(st){
+  const w=costData&&costData.labor&&(costData.labor.by_state||{})[String(st||"").toUpperCase()];
+  return w&&w.median>0?{...w,st:String(st).toUpperCase(),loaded:Math.round(w.median*LABOR_BURDEN)}:null;
+}
+function readyMixTrend(){
+  const r=costData&&costData.ready_mix;
+  if(!r||typeof r.change_12m!=="number"||!r.month)return"";
+  const ch=r.change_12m;
+  return ch===0?"flat over the past year nationally":`${ch>0?"up":"down"} ${Math.abs(ch)}% over the past year nationally`;
+}
+function myCosts(){
+  const c=(bidInfo().costs)||{},lw=localWage(homeState());
+  return{...COST_DEFAULTS,...(lw?{wage:lw.loaded}:{}),...c};
+}
 function costsAreMine(){return!!(bidInfo().costs&&Object.keys(bidInfo().costs).length);}
 // The concrete price this bid is costed at: a quote logged on it, else the
 // middle of the typical range.
@@ -6460,6 +6516,8 @@ function costsEditorHTML(){
   const c=myCosts();
   return`<details class="rm-log" id="cost-edit"><summary>${costsAreMine()?"Your costs":"Set your costs (now using starting guesses)"}</summary>
     <div class="rate-note" style="margin-top:0.3rem;">Used on every bid to show what it makes you. Saved with your bid details.</div>
+    ${(()=>{const own=(bidInfo().costs||{}).wage,lw=localWage(homeState());
+      return!own&&lw?`<div class="rate-note">Labor starts at ${money0(lw.loaded)}/hr: cement masons in ${esc(STATE_NAMES_BY_CODE[lw.st]||lw.st)} earn a median ${money2(lw.median)}/hr (U.S. Bureau of Labor Statistics, ${esc(String(lw.year))}), plus about ${Math.round((LABOR_BURDEN-1)*100)}% for payroll taxes, workers' comp and insurance. Change it to your real cost.</div>`:"";})()}
     <div class="cost-grid">${COST_FIELDS.map(([k,label,u])=>`<label><span>${esc(label)}</span>
       <span class="cost-in">${u==="$"?"$":""}<input class="input" inputmode="decimal" data-cost-k="${k}" value="${esc(String(c[k]))}">${u&&u!=="$"?` ${esc(u)}`:""}</span></label>`).join("")}</div>
   </details>`;
@@ -6592,7 +6650,8 @@ function renderPrepPricing(body,city,id,b){
   const t=prepTotals(p);
   const rates=rateData[bidState(city,b)];
   const startNote=!rates?"Prices for this state aren't in the app yet. Enter your own."
-    :"Prices start at what each item won for on similar-size jobs near here. Change any number.";
+    :isNearby(rates)?`No ${esc(rates.state_name)} prices in the app yet, so prices start at what each item won for on state road jobs ${esc(rates.districts.STATEWIDE)}. Change any number to your own. ${esc(pricesAsOf(rates))}`
+    :`Prices start at what each item won for on similar-size jobs near here. Change any number. ${esc(pricesAsOf(rates))}`;
   const canRead=prepDocCandidates(b).length>0;
   const hasPast=pastPreparedBids(id).length>0;
   const miss=easyToMiss(p,b,city);
@@ -7202,7 +7261,8 @@ function priceBases(c,quotes){
     label:`My quote (${mine.name}, ${yd(mine.price)} a yard)`});
   if(quotes&&quotes.enough)out.push({kind:"area",lo:quotes.low,hi:quotes.high,median:quotes.median,count:quotes.count,radius:quotes.radius_mi,
     label:`Local quotes (${ydRange(quotes.low,quotes.high)} a yard)`});
-  out.push({kind:"est",lo:READY_MIX.low,hi:READY_MIX.high,label:`Typical price (${ydRange(READY_MIX.low,READY_MIX.high)} a yard)`});
+  const trend=readyMixTrend();
+  out.push({kind:"est",lo:READY_MIX.low,hi:READY_MIX.high,label:`Typical price (${ydRange(READY_MIX.low,READY_MIX.high)} a yard${trend?`; ready-mix ${trend}`:""})`});
   return out;
 }
 function readyMixEstimate(yards,basis,truck){
@@ -7590,7 +7650,7 @@ async function fillDetailRates(city,b){
   box.innerHTML=`${odds}${ballparkHTML(b,d,district)}
     <div class="workspace-title" style="margin-top:1rem;">Going rates — ${esc(d.districts[district])}</div>
     ${rows}
-    <div class="rate-note">${esc(agencyOf(d))} ${d.basis==="awarded"?"average winning prices":"state highway averages"}. <a href="#" id="detail-rates-all">Change district or see all items</a></div>
+    <div class="rate-note">${isNearby(d)?`No ${esc(d.state_name)} prices yet: winning prices on state road jobs ${esc(d.districts.STATEWIDE)}`:`${esc(agencyOf(d))} ${d.basis==="awarded"?"average winning prices":"state highway averages"}`}. <a href="#" id="detail-rates-all">Change district or see all items</a></div>
     ${competitorsHTML(d,items,district)}`;
   document.getElementById("detail-rates-all").onclick=(e)=>{e.preventDefault();openRates(d.state);};
   const w=document.getElementById("est-width");

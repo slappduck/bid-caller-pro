@@ -2924,6 +2924,58 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── A state with no prices of its own borrows its neighbors', labeled ──
+  console.log("\nEvery state starts priced: nearby states' winning prices, local labor pay");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const host = new URL(route.request().url()).hostname;
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") {
+        return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      }
+      return route.abort();
+    });
+    await page.route("**/rates/costs.json", (route) => route.fulfill({ status: 200, contentType: "application/json",
+      body: JSON.stringify({ labor: { by_state: { OH: { median: 30, year: 2024 } } }, ready_mix: { month: "2026-09", change_12m: 3.1 } }) }));
+    await page.addInitScript(() => {
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      localStorage.setItem("last_feed", JSON.stringify({ "Columbus, OH": [
+        { title: "Sidewalk Program", scope: "1,450 SY 4 in. sidewalk, 12 ADA curb ramps, 600 LF curb and gutter", deadline: "2099-01-01", status: "open", url: "https://e.gov/oh1" }] }));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(800);
+    const id = await page.evaluate(() => bidId("Columbus, OH", bidData["Columbus, OH"][0]));
+    await page.evaluate((i) => openPrep("Columbus, OH", i, "pricing"), id);
+    await page.waitForTimeout(600);
+    const sheet = await page.textContent("#prep-body");
+    check("an Ohio bid says it has no Ohio prices and names the states it borrows from",
+          /No Ohio prices in the app yet/.test(sheet) && /Kentucky/.test(sheet), sheet.slice(0, 500));
+    check("...and how new they are", /newest letting [A-Z][a-z]{2} \d{1,2}, \d{4}/.test(sheet));
+    const lines = await page.evaluate((i) => bidPrep[i].lines, id);
+    check("every line starts priced, ramps included",
+          lines.length === 3 && lines.every((l) => Number(l.price) > 0), JSON.stringify(lines));
+    check("each line's check names where its price came from",
+          /on \d+ state road jobs in Kentucky/.test(sheet) && /state road jobs in Missouri/.test(sheet));
+    check("labor starts at the state's cement mason pay plus 35%",
+          await page.evaluate(() => myCosts().wage === 41));
+    await page.evaluate(() => { document.getElementById("price-more").open = true; document.getElementById("cost-edit").open = true; });
+    check("...and says so in the costs",
+          /cement masons in Ohio earn a median \$30\.00\/hr/.test(await page.textContent("#cost-edit")));
+    await page.evaluate(() => {
+      companyProfile.bid_info = { ...bidInfo(), costs: { wage: 52 } };
+    });
+    check("a labor cost the contractor sets wins over the local one",
+          await page.evaluate(() => myCosts().wage === 52));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   // ── A statewide bid is placed by its own name ──
   console.log("\nA bid from a statewide search is placed by the site its name gives");
   {

@@ -161,6 +161,15 @@ def main():
     # The public price pages are built from the same files, so they follow them.
     import build_cost_pages
     build_cost_pages.main()
+    # States with no rates of their own borrow their neighbors' results.
+    import build_nearby_rates
+    build_nearby_rates.main()
+    # Local labor pay and the ready-mix trend. A failure keeps last month's
+    # file and is noted, but isn't a state data problem, so it doesn't fail
+    # the run.
+    import build_cost_data
+    if build_cost_data.main() != 0:
+        rows.append(("BLS labor and ready-mix", "kept last month's costs.json (BLS didn't answer)"))
     lines = ["| Source | This month |", "|---|---|"] + [f"| {n} | {t} |" for n, t in rows]
     if kept:
         lines += ["", "**Kept last month's data** (look at these; the source may have changed):", ""]
