@@ -37,7 +37,7 @@ BIDS_NEAR_URL = "https://bid-caller-pro.onrender.com/bids-near"
 
 AGENCY = {"MO": "MoDOT", "FL": "FDOT", "OR": "ODOT", "MN": "MnDOT", "OK": "ODOT", "NC": "NCDOT",
           "TX": "TxDOT", "TN": "TDOT", "IN": "INDOT", "MT": "MDT", "SD": "SDDOT", "KY": "KYTC",
-          "KS": "KDOT", "AR": "ARDOT", "IA": "Iowa DOT", "IL": "IDOT", "NE": "NDOT"}
+          "KS": "KDOT", "AR": "ARDOT", "IA": "Iowa DOT", "IL": "IDOT", "NE": "NDOT", "CA": "Caltrans"}
 # The same typical ready-mix figures the app's concrete panel uses (READY_MIX
 # in app.js; a test keeps the two equal). National 2026 cost-guide ranges.
 READY_MIX = {"low": 110, "high": 175, "truckCY": 10, "deliveryHigh": 180, "shortLow": 40, "shortHigh": 100}

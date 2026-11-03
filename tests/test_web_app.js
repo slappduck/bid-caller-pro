@@ -3109,6 +3109,47 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── California: Caltrans' own prices, with what it lacks from Oregon ──
+  console.log("\nA state's own prices, with the items it lacks filled in from nearby");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const host = new URL(route.request().url()).hostname;
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") {
+        return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      }
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      localStorage.setItem("last_feed", JSON.stringify({ "Fresno, CA": [
+        { title: "Sidewalk Program", scope: "1,450 SY 4 in. sidewalk, 600 LF curb and gutter", deadline: "2099-01-01", status: "open", url: "https://e.gov/ca1" }] }));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(800);
+    const id = await page.evaluate(() => bidId("Fresno, CA", bidData["Fresno, CA"][0]));
+    await page.evaluate((i) => openPrep("Fresno, CA", i, "pricing"), id);
+    await page.waitForTimeout(700);
+    const lines = await page.evaluate((i) => bidPrep[i].lines, id);
+    const sheet = await page.textContent("#prep-body");
+    check("sidewalk is priced from Caltrans' own results, in Fresno's district",
+          lines[0].item === "731521-SY" && lines[0].price > 0 && lines[0].dist === "06", JSON.stringify(lines[0]));
+    check("curb and gutter, which Caltrans pays by the cubic yard, comes from Oregon, labeled",
+          lines[1] && lines[1].unit === "ft" && lines[1].price > 0 && /state road jobs in Oregon/.test(sheet), JSON.stringify(lines[1]));
+    await page.evaluate(() => { closeModal(); openRates("CA"); });
+    await page.waitForTimeout(500);
+    check("the going-rates sheet lists only Caltrans' own items",
+          !/Concrete curb and gutter/.test(await page.textContent("#modal-content")));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   // ── A statewide bid is placed by its own name ──
   console.log("\nA bid from a statewide search is placed by the site its name gives");
   {

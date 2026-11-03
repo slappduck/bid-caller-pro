@@ -172,17 +172,24 @@ def build():
     if not anchor:
         return {}
     since = (datetime.date.fromisoformat(anchor) - datetime.timedelta(days=int(WIN_YEARS * 365.25))).isoformat()
-    own = {m.group(1).upper() for n in os.listdir(RATES) if (m := re.fullmatch(r"([a-z]{2})\.json", n))}
+    own = {m.group(1).upper(): set(load(os.path.join(RATES, n)).get("cats") or {})
+           for n in os.listdir(RATES) if (m := re.fullmatch(r"([a-z]{2})\.json", n))}
     sources, newest = source_prices(since)
     files = {}
     for st in sorted(CENTERS):
-        if st in own or st in SKIP:
+        if st in SKIP:
             continue
-        within = sorted((s for s in sources if miles(st, s) <= MAX_MILES), key=lambda s: miles(st, s))
+        # A state with rates of its own gets only the items it lacks (Caltrans
+        # pays curb and gutter by the cubic yard; Kansas has no domes item),
+        # merged into its own by the app and labeled with where they're from.
+        fill = st in own
+        within = sorted((s for s in sources if s != st and miles(st, s) <= MAX_MILES), key=lambda s: miles(st, s))
         near = within[:NEAREST]
         items, prices, wins, cats, used, jobs, job_from = {}, {}, {}, {}, set(), {}, {}
         year = (newest or anchor)[:4]
         for cat, (label, unit) in ITEMS.items():
+            if fill and cat in own[st]:
+                continue
             from_ = [s for s in near if cat in sources[s]]
             pairs = [(v, 1.0 / len(sources[s][cat])) for s in from_ for _, v in sources[s][cat]]
             own_where = None
@@ -198,8 +205,8 @@ def build():
             mid, p25, p75 = (round(weighted_quantile(pairs, q), 2) for q in (0.5, 0.25, 0.75))
             code = "N-" + cat
             cats[cat], items[code] = code, {"name": label, "unit": unit}
-            if own_where:
-                items[code]["where"] = own_where
+            if own_where or fill:
+                items[code]["where"] = own_where or "in " + " and ".join(NAMES[s] for s in from_).replace(" and ", ", ", max(0, len(from_) - 2))
             wins[code] = {"STATEWIDE": {year: [mid, round(min(vals), 2), round(max(vals), 2), len(vals), p25, p75]}}
             prices[code] = {"STATEWIDE": {year: [mid, round(min(vals), 2), round(max(vals), 2), len(vals), None]}}
             # Every job behind it, [quantity, unit price, source], so the app
@@ -220,7 +227,7 @@ def build():
             "fields": ["avg", "low", "high", "n", "avg_qty"],
             "districts": {"STATEWIDE": f"in {listed}"},
             "cats": cats, "items": items, "prices": prices, "wins": wins,
-            "jobs": jobs, "job_from": job_from,
+            "jobs": jobs, "job_from": job_from, "fill": fill,
             "headline": [cats[c] for c in HEADLINE if c in cats],
         }
     return files
@@ -235,7 +242,8 @@ def main():
     for st, d in files.items():
         with open(os.path.join(OUT, st.lower() + ".json"), "w", encoding="utf-8") as f:
             json.dump(d, f, separators=(",", ":"), sort_keys=True)
-    index = {st: {"name": d["state_name"], "from": d["from"], "through": d["through"]} for st, d in files.items()}
+    index = {st: {"name": d["state_name"], "from": d["from"], "through": d["through"], "fill": d["fill"]}
+             for st, d in files.items()}
     with open(os.path.join(OUT, "index.json"), "w", encoding="utf-8") as f:
         json.dump({"states": index}, f, separators=(",", ":"), sort_keys=True)
     print(f"nearby prices for {len(files)} states:", ", ".join(sorted(files)))

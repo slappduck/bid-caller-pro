@@ -33,7 +33,7 @@ sys.path.insert(0, TOOLS)
 import build_state_prices  # noqa: E402
 
 # States whose results builder also writes their rates (from the bid tabs).
-RESULTS_WITH_RATES = ("nc", "tx", "ky", "ks", "ia", "il")
+RESULTS_WITH_RATES = ("nc", "tx", "ky", "ks", "ia", "il", "ca")
 RESULTS_ONLY = ("mo", "or")
 MIN_ITEMS_KEPT = 0.7       # of the items that had prices
 MIN_CONTRACTS_KEPT = 0.6   # of the contracts (a rolling window, so it moves)

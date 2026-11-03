@@ -3737,7 +3737,7 @@ function renderScanSummary(){
 // winning range is shown too -- the number a contractor pricing to win needs.
 const PRICE_DISTRICT_KEY="price_district";
 const RATE_THIN_BIDS=5;
-const AGENCY={MO:"MoDOT",FL:"FDOT",OR:"ODOT",MN:"MnDOT",OK:"ODOT",NC:"NCDOT",TX:"TxDOT",TN:"TDOT",IN:"INDOT",MT:"MDT",SD:"SDDOT",KY:"KYTC",KS:"KDOT",AR:"ARDOT",IA:"Iowa DOT",IL:"IDOT",NE:"NDOT"};
+const AGENCY={MO:"MoDOT",FL:"FDOT",OR:"ODOT",MN:"MnDOT",OK:"ODOT",NC:"NCDOT",TX:"TxDOT",TN:"TDOT",IN:"INDOT",MT:"MDT",SD:"SDDOT",KY:"KYTC",KS:"KDOT",AR:"ARDOT",IA:"Iowa DOT",IL:"IDOT",NE:"NDOT",CA:"Caltrans"};
 let rateIndex=null,rateIndexLoading=null;
 const rateData={},rateLoading={},rateRerenderQueued={};
 function agencyOf(d){return isNearby(d)?"nearby state":(d&&AGENCY[d.state])||`${(d&&d.state_name)||"State"} DOT`;}
@@ -3745,6 +3745,21 @@ function agencyOf(d){return isNearby(d)?"nearby state":(d&&AGENCY[d.state])||`${
 // nearest states with bid results (tools/build_nearby_rates.py). Always
 // labeled as theirs, never as this state's.
 function isNearby(d){return!!(d&&d.basis==="nearby");}
+// Items a state's own rates don't have, from its fill-in file. Each keeps
+// where it came from; the state's own items are never replaced.
+function mergeFillIns(d,nb){
+  if(!d||!nb||!nb.fill||!nb.cats)return d;
+  for(const [cat,code] of Object.entries(nb.cats)){
+    if(d.cats[cat]||!nb.items[code])continue;
+    d.cats[cat]=code;
+    d.items[code]={...nb.items[code],nearby:true,where:nb.items[code].where||nb.districts.STATEWIDE};
+    (d.jobs=d.jobs||{})[code]=(nb.jobs||{})[code]||[];
+    (d.wins=d.wins||{})[code]=(nb.wins||{})[code];
+    d.prices[code]=nb.prices[code];
+  }
+  return d;
+}
+function isFillIn(d,item){return!!(d&&d.items&&d.items[item]&&d.items[item].nearby);}
 // Prices that are winning bids, not every bid.
 function wonBasis(d){return!!(d&&(d.basis==="awarded"||d.basis==="nearby"));}
 // How new the prices are: the newest letting behind them, else the newest year.
@@ -3776,6 +3791,11 @@ function loadRates(st){
     rateLoading[st]=loadRateIndex()
       // A state without its own rates may have its neighbors' (a 404 if not).
       .then(ix=>fetch(ix&&ix[st]?`/rates/${st.toLowerCase()}.json`:`/rates/nearby/${st.toLowerCase()}.json`).then(r=>r.ok?r.json():null))
+      // A state's own rates may lack an item (Caltrans pays curb and gutter
+      // by the cubic yard): those come from nearby states, labeled as theirs.
+      .then(d=>d&&d.prices&&!isNearby(d)
+        ?fetch(`/rates/nearby/${st.toLowerCase()}.json`).then(r=>r.ok?r.json():null).catch(()=>null).then(nb=>mergeFillIns(d,nb))
+        :d)
       .then(d=>{if(d&&d.prices)rateData[st]=d;return rateData[st]||null;})
       // A network failure may be retried later; a state with no rates is not.
       .catch(()=>{delete rateLoading[st];return null;});
@@ -3867,7 +3887,7 @@ function winPrice(d,item,qty,district){
   if(!d||!item)return null;
   // Borrowed prices carry every job behind them: sized like a state's own
   // results, each source state counting the same however many jobs it let.
-  const jobs=isNearby(d)&&d.jobs&&d.jobs[item];
+  const jobs=(isNearby(d)||isFillIn(d,item))&&d.jobs&&d.jobs[item];
   if(jobs&&jobs.length>=WIN_MIN){
     const q=Number(qty)||0;
     const sized=q?jobs.filter(r=>r[0]>=q/WIN_SPAN&&r[0]<=q*WIN_SPAN):[];
@@ -3991,7 +4011,7 @@ async function renderHomeRates(){
   card.innerHTML=`<div class="account-email hdr-ic" style="font-size:var(--fs-base);margin-bottom:0.5rem;"><svg class="icon-svg"><use href="#i-activity"/></svg>Going rates ${isNearby(d)?"near":"in"} ${esc(d.state_name)}</div>
     ${districtSelect(d,"home-rate-district")}
     ${d.headline.map(i=>rateRow(d,i,district,false)).join("")}
-    <button class="btn-ghost" id="home-rates-all" style="margin-top:0.6rem;">All ${Object.keys(d.items).length} items${d.years.length>1?` + ${d.years.length}-year trend`:""}</button>
+    <button class="btn-ghost" id="home-rates-all" style="margin-top:0.6rem;">All ${Object.keys(d.items).filter(i=>!isFillIn(d,i)).length} items${d.years.length>1?` + ${d.years.length}-year trend`:""}</button>
     ${rateFootnote(d,district)}`;
   card.style.display="";
   wireDistrictSelect(d,"home-rate-district",renderHomeRates);
@@ -4010,7 +4030,7 @@ async function openRates(st){
   await loadBidResults(d.state);
   const district=priceDistrict(d);
   // Most-bid items first: the ones with the most behind their number.
-  const items=Object.keys(d.items)
+  const items=Object.keys(d.items).filter(i=>!isFillIn(d,i))
     .map(i=>[i,latestRate(d,i,district)]).filter(([,r])=>r)
     .sort((a,b)=>(b[1].bids||0)-(a[1].bids||0)).map(([i])=>i);
   const states=Object.keys(ix||{}).sort();
@@ -4166,7 +4186,7 @@ function ballpark(b,d,district,width){
     curb:"curb",driveway:"driveway",gutter:"gutter",median:"median"})[c]||c;
   for(const q of quantities){
     const item=d.cats[q.cat],meta=item&&d.items[item];
-    const r=meta&&latestRate(d,item,district);
+    const r=meta&&(latestRate(d,item,district)||(meta.nearby?latestRate(d,item,"STATEWIDE"):null));
     if(!r){skipped.push(`${q.raw} ${meta?meta.name.toLowerCase():label(q.cat)}: no ${agencyOf(d)} price for ${meta?d.districts[district]:"that item"}`);continue;}
     const conv=toItemUnit(q,meta.unit,width);
     if(!conv){skipped.push(`${q.raw} ${meta.name.toLowerCase()}: can't convert to ${meta.unit}`);continue;}
@@ -6605,7 +6625,8 @@ function lineItemSelect(l,i,d){
   const items=pickableItems(d);
   return`<select class="input pl-pick" data-pick="${i}" aria-label="Item">
       <option value=""${cur===""?" selected":""}>Choose an item…</option>
-      ${items.length?`<optgroup label="${esc(agencyOf(d))} items">${items.map(c=>opt("s:"+c,`${d.items[c].name} (${d.items[c].unit})`)).join("")}</optgroup>`:""}
+      ${items.some(c=>!isFillIn(d,c))?`<optgroup label="${esc(agencyOf(d))} items">${items.filter(c=>!isFillIn(d,c)).map(c=>opt("s:"+c,`${d.items[c].name} (${d.items[c].unit})`)).join("")}</optgroup>`:""}
+      ${items.some(c=>isFillIn(d,c))?`<optgroup label="From nearby states">${items.filter(c=>isFillIn(d,c)).map(c=>opt("s:"+c,`${d.items[c].name} (${d.items[c].unit})`)).join("")}</optgroup>`:""}
       <optgroup label="Other work">${EXTRA_LINES.map(([n,u])=>opt("x:"+n,`${n} (${u})`)).join("")}</optgroup>
       <option value="custom"${cur==="custom"?" selected":""}>Other (type it)</option>
     </select>

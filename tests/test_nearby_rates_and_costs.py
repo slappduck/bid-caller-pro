@@ -44,14 +44,28 @@ class NearbyRatesTests(unittest.TestCase):
         for st, d in built.items():
             self.assertEqual(json.loads(json.dumps(d)), self.files[st], st)
 
-    def test_a_state_with_its_own_rates_never_gets_borrowed_ones(self):
-        self.assertFalse(self.own & set(self.files))
+    def test_a_state_with_its_own_rates_only_borrows_what_it_lacks(self):
+        for st in self.own & set(self.files):
+            d = self.files[st]
+            own = _load(os.path.join(RATES, st.lower() + ".json"))
+            self.assertTrue(d["fill"], st)
+            self.assertFalse(set(d["cats"]) & set(own["cats"]), st)
+            self.assertNotIn(st, d["from"], "a state never borrows from itself")
+            self.assertTrue(all(i.get("where", "").startswith("in ") for i in d["items"].values()))
+        for st in set(self.files) - self.own:
+            self.assertFalse(self.files[st]["fill"])
+
+    def test_california_borrows_curb_and_gutter_by_the_foot(self):
+        """Caltrans pays it by the cubic yard, which a city posting can't use."""
+        d = self.files["CA"]
+        self.assertEqual(d["items"][d["cats"]["curb_gutter"]]["unit"], "ft")
+        self.assertNotIn("sidewalk", d["cats"])
 
     def test_most_of_the_country_is_covered_but_not_alaska_or_hawaii(self):
-        self.assertGreaterEqual(len(self.own) + len(self.files), 45)
+        self.assertGreaterEqual(len(self.own | set(self.files)), 45)
         self.assertNotIn("AK", self.files)
         self.assertNotIn("HI", self.files)
-        for st in ("OH", "GA", "CA", "PA", "NY", "MI", "AZ"):
+        for st in ("OH", "GA", "PA", "NY", "MI", "AZ"):
             self.assertIn(st, self.files)
 
     def test_prices_come_only_from_states_with_bid_results_and_say_which(self):

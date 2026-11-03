@@ -950,6 +950,132 @@ def build_il(cache, months):
             "lettings": sorted(used), "contracts": contracts, "wins": wins(contracts), "named": True}
 
 
+# ── California ──────────────────────────────────────────────────────────────
+# Caltrans' Contract Cost Data search (public domain, no login) returns every
+# bidder's unit price on an item, by contract, district and bid-open date,
+# ranked. It doesn't give contract totals or bidder names, so CA results are
+# unnamed and carry no totals: the app shows bidder counts and unit prices,
+# never a "beat second place by" figure.
+#
+# A search returns at most CA_CAP rows, so each item is asked for a year at a
+# time, and a year that hits the cap is asked for again district by district.
+#
+# Caltrans pays sidewalk by the cubic yard. City postings price it by area,
+# so a second item carries the same bids per sq yd at 4 in. thick (a cubic
+# yard covers 9 sq yd), named so. Curb and gutter, ramps and driveways stay
+# per cubic yard: no thickness or section can be assumed for them.
+CA_SEARCH = "https://sv08data.dot.ca.gov/results.php"
+CA_PAGE = "https://sv08data.dot.ca.gov/contractcost/"
+CA_CAP = 500
+CA_DISTRICTS = {
+    "01": "District 1 (Eureka, Ukiah)", "02": "District 2 (Redding)",
+    "03": "District 3 (Sacramento, Marysville)", "04": "District 4 (Oakland, San Francisco, San Jose)",
+    "05": "District 5 (San Luis Obispo, Santa Barbara)", "06": "District 6 (Fresno, Bakersfield)",
+    "07": "District 7 (Los Angeles, Ventura)", "08": "District 8 (San Bernardino, Riverside)",
+    "09": "District 9 (Bishop)", "10": "District 10 (Stockton, Modesto)",
+    "11": "District 11 (San Diego)", "12": "District 12 (Orange County)"}
+CA_ITEMS = {
+    "731521-SY": ("Concrete sidewalk, per sq yd at 4 in. (Caltrans pays by the cu yd)", "sidewalk", "sq yd"),
+    "731521": ("Minor concrete (sidewalk)", None, "cu yd"),
+    "731504": ("Minor concrete (curb and gutter)", None, "cu yd"),
+    "730010": ("Minor concrete (curb)", "curb", "ft"),
+    "730040": ("Minor concrete (gutter)", "gutter", "ft"),
+    "730070": ("Detectable warning surface", "domes", "sq ft"),
+    "731516": ("Minor concrete (driveway)", None, "cu yd"),
+    "731623": ("Minor concrete (curb ramp)", None, "cu yd"),
+    "731780": ("Remove concrete sidewalk", "removal", "sq yd"),
+}
+CA_UNITS = {"CY": "cu yd", "LF": "ft", "SQFT": "sq ft", "SQYD": "sq yd"}
+_CA_ROW = re.compile(r"(?is)<tr[^>]*>(.*?)</tr>")
+_CA_CELL = re.compile(r"(?is)<td[^>]*>(.*?)</td>")
+
+
+def parse_ca_rows(page):
+    """[(code, unit, district, qty, price, date, contract, rank)] from one results page."""
+    import html as _html
+    out = []
+    for r in _CA_ROW.findall(page):
+        c = [re.sub(r"\s+", " ", _html.unescape(re.sub(r"<[^>]+>", "", x))).strip() for x in _CA_CELL.findall(r)]
+        if len(c) < 11 or not re.fullmatch(r"\d\d-\d\d-\d{4}", c[8]) or not c[10].isdigit():
+            continue
+        code = c[1].split(" ", 1)[0]
+        try:
+            qty, price = _num(c[4]), _num(c[5].lstrip("$"))
+        except ValueError:
+            continue
+        mm, dd, yy = c[8].split("-")
+        out.append((code, CA_UNITS.get(c[2], ""), c[3], qty, price, f"{yy}-{mm}-{dd}", c[9], int(c[10])))
+    return out
+
+
+def ca_contracts(rows):
+    """Group search rows into contracts, each item's prices by rank."""
+    cs = {}
+    for code, unit, dist, qty, price, date, cid, rank in rows:
+        if code not in CA_ITEMS or unit != CA_ITEMS[code][2] or qty <= 0:
+            continue
+        c = cs.setdefault(cid, {"id": cid, "date": date, "district": dist, "items": {}})
+        it = c["items"].setdefault(code, {})
+        q, a = it.get(rank, (0.0, 0.0))
+        it[rank] = (q + qty, a + qty * price)
+    out = []
+    for cid, c in cs.items():
+        items, n = {}, 0
+        for code, by_r in c["items"].items():
+            ranks = sorted(by_r)
+            if ranks != list(range(1, len(ranks) + 1)):
+                continue
+            qty = by_r[1][0]
+            prices = [round(by_r[r][1] / by_r[r][0], 2) for r in ranks]
+            items[code] = [round(qty, 2), prices]
+            n = max(n, len(ranks))
+            if code == "731521":
+                items["731521-SY"] = [round(qty * 9, 1), [round(p / 9, 2) for p in prices]]
+        if items:
+            out.append({"id": cid, "date": c["date"], "desc": f"Caltrans contract {cid}", "counties": "",
+                        "district": c["district"], "bidders": [["", None] for _ in range(n)], "items": items})
+    return out
+
+
+def _ca_get(room, code, year, district=None):
+    q = [("item", code), ("ob", "0"), ("Year[]", f"y{year}"), ("unit", "none"), ("start", "Search")]
+    if district:
+        q.append(("DISTRICT[]", district))
+    page = room.get(CA_SEARCH + "?" + urllib.parse.urlencode(q), timeout=300).decode("utf-8", "replace")
+    time.sleep(2)            # one search at a time, gently
+    return parse_ca_rows(page)
+
+
+def build_ca(cache, months, room=None):
+    room = room or Room()
+    today = datetime.date.today()
+    first = (today - datetime.timedelta(days=months * 31)).year
+    rows = []
+    for code in [c for c in CA_ITEMS if not c.endswith("-SY")]:
+        for year in range(first, today.year + 1):
+            path = os.path.join(cache, f"ca_{code}_{year}.json")
+            if os.path.exists(path) and year < today.year:
+                got = [tuple(r) for r in json.load(open(path))]
+            else:
+                got = _ca_get(room, code, year)
+                if len(got) >= CA_CAP:      # capped: ask district by district
+                    got = []
+                    for d in CA_DISTRICTS:
+                        part = _ca_get(room, code, year, d)
+                        if len(part) >= CA_CAP:
+                            print(f"CA {code} {year} district {d}: still capped; some rows missing")
+                        got += part
+                with open(path, "w") as f:
+                    json.dump(got, f)
+            print(f"CA {code} {year}: {len(got)} bid rows")
+            rows += got
+    cutoff = (today - datetime.timedelta(days=months * 31)).isoformat()
+    contracts = sorted((c for c in ca_contracts(rows) if c["date"] >= cutoff), key=lambda c: (c["date"], c["id"]))
+    return {"state": "CA", "source": "Caltrans Contract Cost Data", "source_url": CA_PAGE,
+            "lettings": sorted({c["date"] for c in contracts}), "contracts": contracts,
+            "wins": wins(contracts), "named": False, "totals": False}
+
+
 def rates_from_results(results, st, name, items_def, page, headline):
     """rates/<st>.json from bid results: every bid's average, range and count
     per item, district and year (plus statewide); winning prices from rank 1."""
@@ -977,12 +1103,12 @@ def rates_from_results(results, st, name, items_def, page, headline):
     return s
 
 
-def check(contracts, lettings):
+def check(contracts, lettings, totals=True):
     problems = []
     if not contracts:
         problems.append("no contracts read")
     for c in contracts:
-        if any(b[1] is None or b[1] <= 0 for b in c["bidders"]):
+        if totals and any(b[1] is None or b[1] <= 0 for b in c["bidders"]):
             problems.append(f"{c['id']}: a bidder with no total")
         for code, (qty, prices) in c["items"].items():
             if qty <= 0 or any(p < 0 for p in prices):
@@ -1031,7 +1157,7 @@ class Room:
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--states", default="mo,or,nc,tx,ky,ks,ia,il")
+    ap.add_argument("--states", default="mo,or,nc,tx,ky,ks,ia,il,ca")
     ap.add_argument("--out", default=OUT)
     ap.add_argument("--months", type=int, default=24)
     ap.add_argument("--cache", default=None, help="folder to keep the PDFs in")
@@ -1133,6 +1259,22 @@ def main():
         s.districts = {"STATEWIDE": "All of Illinois",
                        **{k: IL_DISTRICTS.get(k, f"District {k}")
                           for k in sorted(s.districts, key=lambda k: (len(k), k)) if k != "STATEWIDE"}}
+        print("wrote", build_state_prices.write_state(s))
+    if "ca" in states:
+        data = build_ca(cache, args.months)
+        bad = check(data["contracts"], data["lettings"], totals=False)
+        if bad:
+            print("CA not written:", *bad[:20], sep="\n  ", file=sys.stderr)
+            return 1
+        path = os.path.join(os.path.dirname(args.out), "ca.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, separators=(",", ":"), sort_keys=True)
+        print(f"wrote {path}: {len(data['contracts'])} contracts")
+        import build_state_prices
+        s = rates_from_results(data, "CA", "California", CA_ITEMS, CA_PAGE,
+                               ["731521-SY", "730010", "730070", "731780"])
+        s.districts = {"STATEWIDE": "All of California",
+                       **{k: CA_DISTRICTS.get(k, f"District {k}") for k in sorted(s.districts) if k != "STATEWIDE"}}
         print("wrote", build_state_prices.write_state(s))
     if "mo" not in states:
         import build_state_prices
