@@ -785,3 +785,77 @@ is the differentiated asset -- platform aggregators are bounded by their own
 customer lists and cannot reach a township that posts a PDF on its own site.
 Effort is better spent there, or on making existing bids better, than on a
 fifth state.
+
+---
+
+## Phase 7 — Town and county notices published by the state (built 2026-11-02)
+
+Small towns let federal-aid work (sidewalks, trails, Safe Routes to School)
+themselves, and several states require that notice be posted on a state
+site. One state page then covers hundreds of towns that have no bid page of
+their own. All of these live in `LOCAL_NOTICE_SOURCES`
+(`license_server/search_sources.py`), each with a plain parser in
+`bid_sources.LOCAL_NOTICE_PARSERS`, no model calls, cached 3 hours in memory.
+Tests run on captured copies in `data/recall_fixtures/`.
+
+| State | Source | What it adds (live, 2026-11-02) |
+|---|---|---|
+| MO | MoDOT "Local Projects Administered by Cities and Counties" table | 18 open jobs: sidewalks in Milan, Bethany, Creve Coeur, Desloge, Linn Creek; Ozark and Maryville trails |
+| AR | ARDOT "Currently Advertised Local Projects" | Lake Village, Tyronza, Alma sidewalks; Green Forest trail |
+| IA | Iowa DOT Notice to Bidders PDF (monthly letting) | 31 proposals with flatwork quantities, many county and city projects |
+| IL | IDOT Notice to Contractors Bulletin (weekly PDF, newest 4 read) | ~15 town and county jobs a month: Joliet, Kinmundy, Country Club Hills |
+| OK | ODOT letting spreadsheets (next 4 lettings within 75 days) | Tulsa, Warr Acres, Cleveland County sidewalks; Tahlequah pedestrian work |
+| WI | WisDOT Notice to Contractors PDF per letting (next 3) | 20 proposals with concrete flatwork on the Nov 10 letting: Madison, Middleton, Deforest, Milwaukee, Pleasant Prairie |
+| IN | INDOT Notice to Highway Contractors PDF per letting (next 3) | 29 contracts on the Nov 5 letting: Lake County sidewalks; Hancock, Porter, Harrison bike and pedestrian facilities |
+| KY | KYTC Notice to Contractors PDF per letting (next 3) | 18 contracts on the Nov 19 letting, county road and city street work among them |
+
+### Looked at and not used
+
+- **Newspaper public-notice sites** (mopublicnotices.com and the same
+  platform in other states). Their Terms of Use forbid automated collection
+  and set liquidated damages at $10,000 per incident. Not used, and should
+  not be, short of a written data agreement with the press association.
+- **Kansas DOT**: the site refuses automated readers outright (Akamai 403).
+  Its lettings are published in the Kansas Register, but each issue's
+  address is unpredictable and the jobs are mostly signing, guardrail and
+  bridges. Not built.
+- **Tennessee DOT local programs page**: answers 403 to an honest user
+  agent, although the bid-ad PDFs themselves load. Not worked around.
+- **Oklahoma county bid list (SB 2173)**: county, bid number and date only,
+  no description; mostly road materials. Not built.
+- **Nebraska**: current letting details are on Bid Express (a commercial site, not read); NDOT's own upcoming-projects PDF lists about 8 jobs a month with no county. Not built.
+- **Minnesota**: city and county ads are gathered on eAdvert (run by the county and city engineers' associations), which this sandbox cannot reach, so its terms are unchecked. Worth a look from a normal connection.
+- **Texas**: TxDOT's notices are in a Tableau dashboard; the old monthly pages are gone. Not built.
+
+### Discovery changes the same day
+
+- Homepage links labelled Public Notices or Legal Notices are followed, and
+  `/public-notices`, `/legal-notices`, `/projects-bids`, `/projectsbids`
+  are probed. A page still has to read as procurement.
+- A page is no longer recorded when it is an error page served with status
+  200, a file decoded as text, or a single news post (`news-detail`,
+  `CivicAlerts.aspx?AID=`, a long `/news/` article slug). News categories
+  such as `/news/bids/` still count.
+- `tools/discover_bid_portals.py --reverify-found` re-checks recorded pages
+  and demotes those that load and fail these checks. A page that fails to
+  load is kept: unreachable proves nothing.
+
+### Decided: expired certificates stay unread (2026-11-03)
+
+Small towns let their HTTPS certificate expire (Greene County, MO and
+Chatham, IL did), and the scanner treats that as unreachable. Falling back
+to plain http for those pages was considered and declined by the owner:
+certificate checking stays on everywhere, and such a town is read again
+once it renews.
+
+### School districts (2026-11-02)
+
+The directory held about 700 school districts of roughly 13,500 regular
+public districts, and districts let summer concrete work (parking lots,
+sidewalks, bus lanes). `data/nces_school_districts.csv` is every open
+regular district with a website from the NCES Common Core of Data, LEA
+universe 2023-24 (public domain), minus districts already in the
+directory: 11,205 domains. Run through discovery with
+`--registry data/nces_school_districts.csv --state XX --out ...`, then
+merge the verified rows into the directory. Nebraska's records carry no
+websites.

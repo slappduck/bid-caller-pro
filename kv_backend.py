@@ -9,7 +9,7 @@ written to a local JSON file there is not storage, it is a scratchpad.
 Four things depend on surviving that:
 
   * the licence database — issued keys, email and device mappings, revocations,
-    and trial start dates. Losing it hands out fresh 7-day trials on every
+    and trial start dates. Losing it hands out fresh free trials on every
     restart and resurrects revoked keys;
   * the portal directory — which page holds each town's bids. This is the whole
     "gets better the more it runs" mechanism; without persistence it learns

@@ -18,14 +18,14 @@
 <meta property="og:site_name" content="CurbCall Pro" />
 <meta property="og:url" content="https://curbcallpro.com/" />
 <meta property="og:title" content="CurbCall Pro — Find Sidewalk, ADA &amp; Curb Bids Near You" />
-<meta property="og:description" content="We watch the bid pages of every city, county, school district and special district in your radius and surface the sidewalk, ADA-ramp and curb &amp; gutter work. More than 6,800 verified agency bid pages across 52 states." />
+<meta property="og:description" content="We watch the bid pages of every city, county, school district and special district in your radius and surface the sidewalk, ADA-ramp and curb &amp; gutter work. More than 9,000 verified agency bid pages across 52 states." />
 <meta property="og:image" content="https://curbcallpro.com/og-card.png" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
 <meta property="og:image:alt" content="CurbCall Pro — sidewalk, ADA ramp and curb bids near you." />
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="CurbCall Pro — Find Sidewalk, ADA &amp; Curb Bids Near You" />
-<meta name="twitter:description" content="Sidewalk, ADA-ramp and curb &amp; gutter bids from more than 6,800 verified agency bid pages across 52 states. Check your area free." />
+<meta name="twitter:description" content="Sidewalk, ADA-ramp and curb &amp; gutter bids from more than 9,000 verified agency bid pages across 52 states. Check your area free." />
 <meta name="twitter:image" content="https://curbcallpro.com/og-card.png" />
 <!-- Without these, iOS "Add to Home Screen" on the marketing page gives a
      generated letter tile instead of the logo -- app.html already had them,
@@ -348,6 +348,22 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
   .trust{margin-top:0.85rem;}
   .mapwrap{margin-top:1.1rem;}
 }
+/* Open bids near the visitor, under the coverage check. */
+.nb{margin-top:1rem;padding:0.9rem 1rem;border:1px solid rgba(34,197,94,0.35);border-radius:12px;background:rgba(34,197,94,0.05);}
+.nb-h{color:var(--text);font-weight:800;font-size:0.95rem;margin-bottom:0.4rem;}
+.nb ul{list-style:none;margin:0 0 0.8rem;padding:0;}
+.nb li{padding:0.45rem 0;border-bottom:1px solid var(--line);}
+.nb li:last-child{border-bottom:none;}
+.nb li b{display:block;color:var(--text);font-size:0.92rem;line-height:1.35;}
+.nb li span{color:var(--text3);font-size:0.82rem;}
+.nb .btn{display:block;text-align:center;}
+.nb-note{color:var(--text3);font-size:0.8rem;margin-top:0.5rem;}
+.hero-grid>*{min-width:0;}
+.hero-zip{display:flex;gap:0.5rem;margin:1.2rem 0 0.9rem;max-width:30rem;width:100%;}
+.hero-zip input{flex:1;min-width:0;width:100%;background:var(--bg);border:1px solid var(--line);border-radius:10px;
+  padding:0.8rem 0.95rem;color:var(--text);font-family:var(--ui);font-size:1rem;}
+.hero-zip input:focus{outline:2px solid var(--amber);outline-offset:1px;}
+.hero-zip .btn{white-space:nowrap;}
 </style>
 </head>
 <body>
@@ -391,8 +407,16 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
       <span class="eyebrow">Concrete bid intelligence</span>
       <h1>Win more<br><span class="hi">flatwork.</span></h1>
       <p class="lead">Tell CurbCall Pro your ZIP and it finds the live sidewalk, ADA ramp and curb &amp; gutter bids near you.<span class="lead-more"> It reads the government and municipal sites around you and pulls the work out automatically — so you spend your time pouring concrete, not hunting for it.</span></p>
+      <!-- The proof, at the top: a ZIP shows the open bids near it (the same
+           check as the coverage section further down, which it fills in and
+           scrolls to). Most visitors never scroll that far. -->
+      <form class="hero-zip" id="hero-zip" onsubmit="return false;">
+        <input id="hero-zip-in" inputmode="numeric" autocomplete="postal-code" placeholder="Your ZIP code"
+               aria-label="Your ZIP code" maxlength="40" />
+        <button class="btn btn-amber" type="submit" id="hero-zip-go">See bids near me</button>
+      </form>
       <div class="cta-row">
-        <a class="btn btn-amber btn-lg" href="/app.html">Start free — open the app</a>
+        <a class="btn btn-line btn-lg" href="/app.html">Start free — open the app</a>
         <a class="btn btn-line btn-lg" href="#how">See how it works</a>
       </div>
       <!-- Links here are root-absolute (/app.html, not app.html) and must stay
@@ -406,7 +430,9 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
            onboarding, and no scan-effort line. Handing a new customer a
            visibly older product is worse than offering one fewer way in.
            Restore this row once parity is back. -->
-      <div class="trust"><b><span class="dot"></span>Free 7-day trial</b><span>· no card required</span><span>· works on phone or desktop</span></div>
+      <div class="trust"><b><span class="dot"></span>Free 14-day trial</b><span>· no card required</span><span>· works on phone or desktop</span></div>
+      <!-- Filled from /proof once customers have reported enough wins; hidden until then. -->
+      <div class="trust" id="proof-line" hidden></div>
     </div>
 
     <div class="mapwrap" id="mapwrap" aria-hidden="true">
@@ -517,12 +543,13 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
     <div class="sec-head">
       <span class="eyebrow">Coverage</span>
       <h2>Check your area first</h2>
-      <!-- "more than 6,800" rather than a precise figure. The exact number was
+      <!-- "more than 9,000" rather than a precise figure (9,346 unique pages on
+           2026-11-03, after re-crawling every state and adding school districts). The exact number was
            typed by hand and was already wrong by one -- the directory holds 6,868
            today and moves every time the crawler runs. A claim that has to be
            re-typed to stay true will eventually be false, and an advertising
            claim has to be substantiated. A floor stays true as the number grows. -->
-      <p>We hold <b>more than 6,800 verified agency bid pages</b> across 52 states and
+      <p>We hold <b>more than 9,000 verified agency bid pages</b> across 52 states and
          territories &mdash; cities, counties, school districts and special districts.
          Coverage is not even everywhere &mdash; see exactly what's near you before you
          pay a cent.</p>
@@ -564,7 +591,7 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
       <b>What it isn't.</b> A promise of open work. Concrete jobs are posted when they're
       posted; in a sampling of live city bid pages, about 8% had sidewalk, ADA or concrete
       work open at that moment. Denser areas surface more, rural areas fewer, and a wider
-      radius helps a lot. That's why the trial is free for 7 days with no card &mdash;
+      radius helps a lot. That's why the trial is free for 14 days with no card &mdash;
       check your own area before deciding.
     </p>
   </div>
@@ -588,12 +615,12 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
     <div class="sec-head">
       <span class="eyebrow">Pricing</span>
       <h2>Simple, honest pricing</h2>
-      <p>Start free for 7 days. No card to try it. Cancel anytime.</p>
+      <p>Start free for 14 days. No card to try it. Cancel anytime.</p>
     </div>
     <div class="prices">
       <div class="price">
         <span class="tag">Free trial</span>
-        <div class="amt">$0<span> / 7 days</span></div>
+        <div class="amt">$0<span> / 14 days</span></div>
         <ul><li>Full location-based scanning</li><li>AI bid extraction</li><li>Going rates &amp; target prices</li><li>Save &amp; track leads</li><li>No credit card required</li></ul>
         <a class="btn btn-line" href="/app.html">Start free trial</a>
       </div>
@@ -629,7 +656,7 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
       <details><summary>Does it submit bids for me?</summary><p>No. It fills in the agency's form with the details you've saved and lists what the bid asks for, so you're not starting from a blank page. You check it, sign it and submit it. It never signs, notarizes or sends a bid for you.</p></details>
       <details><summary>Do I have to install anything?</summary><p>No — CurbCall Pro runs right in your browser on phone or desktop. Add it to your home screen and it works like an app on your phone.</p></details>
       <details><summary>Do I need to know the city websites?</summary><p>No. Just enter your ZIP or let the app detect your location, pick a radius, and it finds the sites for you.</p></details>
-      <details><summary>How does the free trial work?</summary><p>You get 7 days of full access with no credit card required. Find real bids first, then decide. When the trial ends, subscribe to keep going.</p></details>
+      <details><summary>How does the free trial work?</summary><p>You get 14 days of full access with no credit card required. Find real bids first, then decide. When the trial ends, subscribe to keep going.</p></details>
       <details><summary>How do payments work?</summary><p>Payments run securely through Stripe. Choose Monthly or Annual and complete checkout — the app unlocks automatically, and you can restore access on any device with your email. Cancel anytime.</p></details>
     </div>
   </div>
@@ -639,7 +666,7 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
   <div class="wrap">
     <div class="band">
       <h2>Stop hunting. Start pouring.</h2>
-      <p>Find the sidewalk, ADA, and curb bids in your area this week — free for 7 days, no card.</p>
+      <p>Find the sidewalk, ADA, and curb bids in your area this week — free for 14 days, no card.</p>
       <a class="btn btn-amber btn-lg" href="/app.html">Open the app</a>
     </div>
   </div>
@@ -707,6 +734,19 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
   // cheap (a cached geocode plus arithmetic — no search credits, no AI).
   (function coverageChecker(){
     var SERVER="https://bid-caller-pro.onrender.com";
+    // What customers have reported winning, once there is enough of it to
+    // say (the server holds it back until then). Self-reported, said so.
+    (function proofLine(){
+      var el=document.getElementById("proof-line");
+      if(!el||!window.fetch)return;
+      fetch(SERVER+"/proof").then(function(r){return r.json();}).then(function(d){
+        if(!d||!d.show||!(d.won_total>0))return;
+        var t=d.won_total>=1e6?"$"+(Math.floor(d.won_total/1e5)/10)+" million"
+              :"$"+Math.floor(d.won_total/1e3).toLocaleString()+"k";
+        el.innerHTML='<b><span class="dot"></span>'+t+' of public work won</b><span>· reported by CurbCall customers, '+d.wins+' jobs</span>';
+        el.hidden=false;
+      }).catch(function(){});
+    })();
     var btn=document.getElementById("cov-go");
     var out=document.getElementById("cov-out");
     var zip=document.getElementById("cov-zip");
@@ -715,6 +755,8 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
     function check(){
       var loc=(zip.value||"").trim();
       if(!loc){out.textContent="Enter a ZIP code or city first.";return;}
+      // Carried into the app's setup, so "Start free" doesn't ask again.
+      try{localStorage.setItem("landing_loc",JSON.stringify(loc.slice(0,60)));}catch(e){}
       var radius=document.getElementById("cov-radius").value;
       btn.disabled=true;
       // The backend sleeps on a free plan, so a cold start really can take
@@ -735,19 +777,72 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
           var near=(d.nearest||[]).length
             ? '<div style="margin-top:0.45rem;color:var(--text3);font-size:0.85rem;">Nearest: '
               + d.nearest.slice(0,5).map(esc).join(" · ") + '</div>' : "";
+          var lists=d.state_lists||[];
           var verdict = d.agencies>=40 ? "Strong coverage here."
                       : d.agencies>=15 ? "Solid coverage here."
+                      : lists.length   ? "Fewer town bid pages here, but the state lists below cover the small towns."
                       : d.agencies>0   ? "Thin coverage here — a wider radius will help."
                                        : "No verified pages in range yet — a scan would fall back to search only.";
+          // Small towns with no bid page of their own still post federal-aid
+          // work with the state, and the scan reads those lists too.
+          var plus=lists.length
+            ? '<div style="margin-top:0.45rem;color:var(--text2);font-size:0.9rem;">Also read on every scan: '
+              + lists.map(esc).join("; ") + '.</div>' : "";
           out.innerHTML='<b style="color:var(--text);font-size:1.05rem;">'
             + d.agencies + ' verified agencies</b> within ' + d.radius
-            + ' mi of ' + esc(d.location) + '. ' + esc(verdict) + near;
+            + ' mi of ' + esc(d.location) + '. ' + esc(verdict) + near + plus
+            + '<div id="cov-bids"></div>';
+          showOpenBids(loc, radius);
         })
         .catch(function(){btn.disabled=false;
           out.textContent="Couldn't reach the server. Try again in a moment.";});
     }
+    // The work itself, not just the agency count: open bids that scans have
+    // already found near this place (see /bids-near on the server). Shown
+    // only when there are some; the agency count stands on its own if not.
+    var MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    function dueText(iso){
+      var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(iso||"");
+      return m ? "due " + MON[+m[2]-1] + " " + (+m[3]) : "due date on the posting";
+    }
+    function showOpenBids(loc, radius){
+      fetch(SERVER+"/bids-near",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({location:loc,radius:parseInt(radius,10)})})
+        .then(function(r){return r.json();})
+        .then(function(d){
+          var box=document.getElementById("cov-bids");
+          if(!box||!d||!d.ok)return;
+          if(!d.count){
+            // No scan has covered this area lately. Say so, and make the next
+            // step the scan itself rather than a dead end.
+            box.innerHTML='<div class="nb"><div class="nb-h">We haven\'t scanned around ' + esc(d.location) + ' lately</div>'
+              + '<div class="nb-note" style="margin:0 0 0.7rem;">Start free and the app reads every agency above for open sidewalk, curb and ramp bids, in about a minute.</div>'
+              + '<a class="btn btn-amber" href="/app.html">Start free: scan it now</a></div>';
+            return;
+          }
+          var more=d.count>d.bids.length ? "See all " + d.count + " and price them" : "Open them and price them";
+          box.innerHTML='<div class="nb"><div class="nb-h">Open right now near ' + esc(d.location) + '</div><ul>'
+            + d.bids.map(function(b){
+                return '<li><b>' + esc(b.title) + '</b><span>' + esc(b.town) + ' &middot; '
+                  + esc(String(b.miles)) + ' mi &middot; ' + esc(dueText(b.due)) + '</span></li>';
+              }).join("")
+            + '</ul><a class="btn btn-amber" href="/app.html">Start free: ' + esc(more) + '</a>'
+            + '<div class="nb-note">Free for 14 days, no card. The app reads each one\'s bid form and gives you a target price.</div></div>';
+        })
+        .catch(function(){});
+    }
     btn.addEventListener("click",check);
     zip.addEventListener("keydown",function(e){if(e.key==="Enter")check();});
+    var heroForm=document.getElementById("hero-zip");
+    if(heroForm)heroForm.addEventListener("submit",function(){
+      var v=(document.getElementById("hero-zip-in").value||"").trim();
+      if(!v){document.getElementById("hero-zip-in").focus();return;}
+      zip.value=v;
+      document.getElementById("cov-radius").value="50";
+      var sec=document.getElementById("coverage");
+      if(sec)sec.scrollIntoView({behavior:"smooth",block:"start"});
+      check();
+    });
   })();
 
   // Testimonials, read straight from Supabase with a plain fetch rather than
@@ -944,9 +1039,34 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
 // Once per browser session, so a reload or a scroll back to the top does not
 // inflate it. No identifier of any kind is sent -- the server keeps a tally
 // per day, which is all a ratio needs.
+// The source goes with it: which ad, search engine, outreach link or
+// referral brought the visit. A label only (google-ad, facebook, search,
+// outreach, referral, direct...), counted per day on the server with no
+// identifier. Kept for this browser session so the app can say the same
+// when a trial starts. No cookie, no third-party script.
+function visitSource() {
+  var q = new URLSearchParams(location.search), clean = function (s) {
+    return String(s || "").toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32);
+  };
+  var src = clean(q.get("utm_source")), med = clean(q.get("utm_medium"));
+  if (q.get("gclid") || q.get("gbraid") || q.get("wbraid") || (src === "google" && /cpc|ppc|paid/.test(med))) return "google-ad";
+  if (q.get("fbclid") || /^(facebook|fb|instagram|ig|meta)$/.test(src)) return /cpc|paid|ad/.test(med) || !src ? "facebook-ad" : "facebook";
+  if (src) return src;
+  if (/^\/go\//.test(location.pathname)) return "outreach";
+  if (q.get("ref")) return "referral";
+  var r = "";
+  try { r = new URL(document.referrer).hostname; } catch (e) {}
+  if (/(^|\.)(google|bing|duckduckgo|yahoo)\./.test(r)) return "search";
+  if (/(^|\.)(facebook|instagram)\.com$/.test(r)) return "facebook";
+  if (r && r !== location.hostname) return "link";
+  return "direct";
+}
 (function () {
+  var source = "direct";
+  try { source = visitSource(); } catch (e) {}
   try {
     var seen = "visit_counted";
+    if (!sessionStorage.getItem("visit_source") || source !== "direct") sessionStorage.setItem("visit_source", source);
     if (sessionStorage.getItem(seen)) return;
     sessionStorage.setItem(seen, "1");
   } catch (e) {
@@ -956,7 +1076,7 @@ footer{border-top:1px solid var(--line);padding:2.4rem 0;color:var(--text3);font
     fetch("https://bid-caller-pro.onrender.com/visit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: "{}",
+      body: JSON.stringify({ source: source }),
       keepalive: true,
       mode: "cors"
     }).catch(function () {});

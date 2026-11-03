@@ -941,7 +941,8 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
         return route.fulfill({
           status: 200, contentType: "application/json",
           body: JSON.stringify({ ok: true, agencies: 104, radius: 125,
-            location: "Kansas City, KS", nearest: [] }),
+            location: "Kansas City, KS", nearest: [],
+            state_lists: ["MoDOT's list of every city and county federal-aid bid in Missouri"] }),
         });
       }
       if (host.endsWith("fonts.googleapis.com") || host.endsWith("fonts.gstatic.com")
@@ -962,6 +963,8 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     check("the radius matches what the email states", radiusValue === "125", radiusValue);
     check("the check actually ran, not just filled the box",
       /104 verified agencies/.test(outText), outText);
+    check("the state lists that cover small towns are named",
+      /Also read on every scan: MoDOT/.test(outText), outText);
 
     // A slug with no entry in go_locations.json must not break the page --
     // it just falls through to the ordinary empty box.
@@ -1470,14 +1473,14 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await page.evaluate((i) => openPrep("Salem, OR", i, "pricing"), id);
     await page.waitForTimeout(500);
     const line = await page.evaluate((i) => bidPrep[i].lines[0], id);
-    check("Oregon pricing starts at the average winning bid",
-          line && line.st === "OR" && line.price === Math.round(orWin[0] * 100) / 100, JSON.stringify(line));
+    check("Oregon pricing starts at what that size of walk won for in Oregon",
+          line && line.st === "OR" && line.price === startPriceFor("or", line.item, "STATEWIDE", 2000), JSON.stringify(line));
     const sheet = await page.textContent("#prep-body");
     check("the line says where that price sits", /Inside the winning range|winning/.test(sheet), sheet.slice(0, 300));
     await page.fill('.prep-line[data-i="0"] input[data-f="price"]', String(Math.ceil(orWin[2] + 5)));
     await page.waitForTimeout(300);
-    check("a price over every winning bid is called out as it's typed",
-          /Above every winning bid/.test(await page.textContent('[data-pc="0"]')));
+    check("a price above most winning bids is called out as it's typed",
+          /Higher than most winning bids/.test(await page.textContent('[data-pc="0"]')));
 
     const moId = await page.evaluate(() => { closeModal(); return bidId("Springfield, MO", bidData["Springfield, MO"][0]); });
     await page.evaluate(() => openDetail("Springfield, MO", bidData["Springfield, MO"][0]));
@@ -1498,19 +1501,36 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
 
   // Where a pricing line starts: the average winning bid where the state's
   // records give one, else the average bid. Read from the committed files.
-  const startPrice = (item, district) => {
-    const rates = JSON.parse(fs.readFileSync(path.join(ROOT, "rates", "mo.json"), "utf8"));
-    const resPath = path.join(ROOT, "results", "mo.json");
-    const res = fs.existsSync(resPath) ? JSON.parse(fs.readFileSync(resPath, "utf8")) : {};
+  // What the app should start a line at: the median winning unit price on
+  // similar-size jobs (1/2.5 to 2.5 times the quantity) from the last four
+  // years, in the job's district when it has 5 such wins, else statewide at
+  // that size, else statewide at any size. Worked out here from the raw
+  // results file, independently of the app.
+  function startPriceFor(st, item, district, qty) {
+    const resPath = path.join(ROOT, "results", st + ".json");
+    const rates = JSON.parse(fs.readFileSync(path.join(ROOT, "rates", st + ".json"), "utf8"));
+    const res = fs.existsSync(resPath) ? JSON.parse(fs.readFileSync(resPath, "utf8")) : { contracts: [] };
+    const since = new Date(Date.now() - 4 * 365.25 * 864e5).toISOString().slice(0, 10);
+    const rows = (res.contracts || []).filter((c) => c.items && c.items[item] && Array.isArray(c.items[item][1])
+        && c.items[item][1][0] > 0 && (c.date || "") >= since)
+      .map((c) => ({ q: Number(c.items[item][0]) || 0, w: Number(c.items[item][1][0]), d: String(c.district || "") }));
+    const sized = (r) => !qty || (r.q >= qty / 2.5 && r.q <= qty * 2.5);
+    const tiers = [district && district !== "STATEWIDE" ? rows.filter((r) => r.d === district && sized(r)) : [],
+      rows.filter(sized), qty ? rows : []];
+    for (const t of tiers) {
+      if (t.length < 5) continue;
+      const w = t.map((r) => r.w).sort((a, b) => a - b), i = (w.length - 1) / 2;
+      return Math.round(((w[Math.floor(i)] + w[Math.ceil(i)]) / 2) * 100) / 100;
+    }
     const last = (by) => by && by[Object.keys(by).sort().pop()];
-    const w = last(((res.wins || {})[item] || {})[district]);
-    return Math.round((w ? w[0] : last(rates.prices[item][district])[0]) * 100) / 100;
-  };
+    return Math.round(last(rates.prices[item][district] || rates.prices[item].STATEWIDE)[0] * 100) / 100;
+  }
+  function startPrice(item, district, qty) { return startPriceFor("mo", item, district, qty); }
 
   // ── Prepare bid: steps, pricing, summary ──
   console.log("\nPrepare bid keeps the whole bid in the app");
   {
-    const swAvg = startPrice("6086004", "SW");
+    const swAvg = startPrice("6086004", "SW", 666.7);
     const ctx = await browser.newContext(MOBILE_VIEWPORT);
     const page = await ctx.newPage();
     const pageErrors = [];
@@ -1574,10 +1594,14 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     const lines = await page.evaluate((i) => bidPrep[i].lines, id);
     const swLine = lines.find((l) => /sidewalk/i.test(l.name));
     const rampLine = lines.find((l) => /ramp/i.test(l.name));
-    check("pricing starts from the ballpark: sidewalk at the SW winning (else average) bid",
+    check("pricing starts from the posting's quantities, at what that size of sidewalk won for in the SW",
           swLine && Math.abs(swLine.qty - 666.7) < 0.1 && swLine.price === swAvg, JSON.stringify(swLine));
-    check("the ramp count becomes a line for you to price, not a guess",
-          rampLine && rampLine.qty === 4 && rampLine.unit === "each" && rampLine.price === "", JSON.stringify(rampLine));
+    // MoDOT pays ramps by the square yard; a ramp counted "each" is priced as
+    // a typical ramp's area, and the line says so.
+    const rampSy = startPrice("6081010", "SW", 4 * 8);
+    check("the ramp count becomes a line priced as a typical ramp's area, and says so",
+          rampLine && rampLine.qty === 4 && rampLine.unit === "each" && rampLine.price === Math.round(rampSy * 8 * 100) / 100
+          && /about 8 sq yd a ramp/.test(rampLine.note), JSON.stringify(rampLine));
     // The item is a dropdown: the state's items, other common work, or typed.
     const pick = await page.$$eval('.prep-line[data-i="0"] .pl-pick option', (os) => os.map((o) => o.textContent));
     check("the item is a dropdown of the state's items and other work",
@@ -1591,7 +1615,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await page.waitForTimeout(300);
     const picked = await page.evaluate(([i, n]) => bidPrep[i].lines[n], [id, newIdx]);
     check("picking a state item fills its unit and going price",
-          picked.name === "Curb and gutter, type B" && picked.unit === "ft" && picked.item === "6091052" && picked.price === startPrice("6091052", "SW"),
+          picked.name === "Curb and gutter, type B" && picked.unit === "ft" && picked.item === "6091052" && picked.price === startPrice("6091052", "SW", 0),
           JSON.stringify(picked));
     await page.selectOption(`.prep-line[data-i="${newIdx}"] .pl-pick`, "custom");
     await page.waitForTimeout(300);
@@ -1642,7 +1666,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
   // ── Phase 2: read the bid form's schedule of items ──
   console.log("\nThe bid form's own items fill the pricing sheet, after review");
   {
-    const swAvg = startPrice("6086004", "SW");
+    const swAvg = startPrice("6086004", "SW", 1250);
     const ctx = await browser.newContext(MOBILE_VIEWPORT);
     const page = await ctx.newPage();
     const pageErrors = [];
@@ -1707,6 +1731,9 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await page.waitForTimeout(800);
     const id = await page.evaluate(() => bidId("Aurora, MO", bidData["Aurora, MO"][0]));
     await page.evaluate(() => { currentUser = { id: "u1", email: "tester@example.com" }; window.getSupabaseToken = async () => "tok"; });
+    // Signed in, so it would read the documents by itself; this checks the
+    // steps for doing it by hand, as on a day the automatic read already ran.
+    await page.evaluate((i) => { prepFor(i).autoTried = { docs: Date.now(), locate: Date.now() }; }, id);
     await page.evaluate((i) => openPrep("Aurora, MO", i, "steps"), id);
     await page.waitForTimeout(500);
     check("the documents step offers to get them from email once the server has an address",
@@ -1739,7 +1766,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await page.waitForTimeout(400);
     const lines = await page.evaluate((i) => bidPrep[i].lines, id);
     const sy = lines.find((l) => /^2\./.test(l.name)), ls = lines.find((l) => /^3\./.test(l.name));
-    check("a sidewalk item in SY gets the SW sidewalk average",
+    check("a sidewalk item in SY gets what sidewalks that size won for in the SW",
           sy && sy.qty === 1250 && sy.unit === "sq yd" && sy.price === swAvg, JSON.stringify(sy));
     check("the same words in a lump-sum unit get no MoDOT price", ls && ls.unit === "lump sum" && ls.price === "", JSON.stringify(ls));
     check("mobilization comes through to be priced", lines.some((l) => /Mobilization/.test(l.name) && l.unit === "lump sum"));
@@ -2114,10 +2141,12 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await page.evaluate((i) => openPrep("Aurora, MO", i, "pricing"), id);
     await page.waitForTimeout(400);
     const pricing = await page.textContent("#prep-body");
-    check("each line it can cost shows your cost and what it makes", /Your cost about \$\d/.test(pricing) && /makes \$|loses \$/.test(pricing), pricing.slice(0, 600));
-    check("...and the bid shows a profit from starting guesses until costs are set",
-          /Profit on those lines|Loss on those lines/.test(pricing) && /starting guesses/.test(pricing));
+    check("the bid shows one line of what it makes, from starting guesses until costs are set",
+          /You'd (?:make|lose) about[^$]*\$\d/.test(pricing) && /starting guesses/.test(pricing) && !/Your cost about/.test(pricing),
+          pricing.slice(-700));
     const before = await page.evaluate((i) => lineCost(prepFor(i).lines[0], prepFor(i)).perUnit, id);
+    await page.evaluate(() => { const d = document.getElementById("price-more"); if (d) d.open = true; });
+
     await page.click("#cost-edit summary");
     await page.fill('[data-cost-k="sf_day"]', "1600");
     await page.waitForTimeout(300);
@@ -2150,6 +2179,8 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     // Measuring from the plans.
     await page.evaluate((i) => openPrep("Aurora, MO", i, "pricing"), id);
     await page.waitForTimeout(400);
+    await page.evaluate(() => { const d = document.getElementById("price-more"); if (d) d.open = true; });
+
     await page.click("#pl-takeoff");
     await page.waitForTimeout(300);
     await page.click('[data-tl="0"]');
@@ -2168,7 +2199,7 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
   }
 
   // ── The job, once it's won ──
-  console.log("\nA won bid runs as a job: award paperwork, pours, daily log, pay requests, payroll");
+  console.log("\nA won bid gets its award paperwork");
   {
     const ctx = await browser.newContext(MOBILE_VIEWPORT);
     const page = await ctx.newPage();
@@ -2187,9 +2218,6 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
         { title: "Elm St Sidewalk", bid_number: "B-17", scope: "Sidewalk", deadline: "2099-11-01", status: "open", agency: "City of Aurora" }] }));
       localStorage.setItem("company_profile", JSON.stringify({ name: "Ace Concrete", phone: "417-555-0100",
         bid_info: { bond_email: "bonds@agent.example", bond_agent: "Pat Lee", insurance_email: "coi@agent.example", address: "1 Main St" } }));
-      // Every page the job prints, captured instead of opened.
-      window.__printed = [];
-      window.open = () => ({ document: { open() {}, write(h) { window.__printed.push(h); }, close() {} } });
     });
     await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
     await page.waitForTimeout(600);
@@ -2208,8 +2236,8 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await page.evaluate((i) => { setPipelineStatus(i, "won"); return openPrep("Aurora, MO", i); }, id);
     await page.waitForTimeout(400);
     const job = await page.textContent("#prep-body");
-    check("a won bid opens on its Job tab", await page.$eval('[data-step="job"]', (b) => b.classList.contains("on")) && /Award paperwork/.test(job) && /Kept on this phone only/.test(job), job.slice(0, 300));
-    check("the contract is the priced lines with the markup in", /Contract \$69,960/.test(job) && /Retainage 5%/.test(job), job);
+    check("a won bid opens on its Job tab", await page.$eval('[data-step="job"]', (b) => b.classList.contains("on")) && /Award paperwork/.test(job), job.slice(0, 300));
+    check("only the paperwork, nothing more to manage", !/Pours|Daily log|Pay requests|payroll/i.test(job), job);
     const bond = decodeURIComponent(await page.getAttribute('a[href^="mailto:bonds%40agent.example"]', "href"));
     check("the bonding agent is asked for performance and payment bonds on the contract amount",
           /Hi Pat,/.test(bond) && /Contract amount: \$69,960\.00/.test(bond) && /performance and payment bonds/.test(bond), bond);
@@ -2220,68 +2248,6 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await page.waitForTimeout(200);
     check("the notice to proceed gives the finish date", /Finish by May 1, 2099/.test(await page.textContent("#prep-body")), await page.textContent("#prep-body"));
 
-    // A pour, ordered from the plant.
-    await page.click("#jb-pour");
-    await page.selectOption('[data-pf="line"]', "0");
-    check("picking the line fills its yards with waste", (await page.inputValue('[data-pf="yards"]')) === "117", await page.inputValue('[data-pf="yards"]'));
-    await page.fill('[data-pf="date"]', "2099-03-10");
-    await page.fill('[data-pf="email"]', "orders@mix.example");
-    await page.$eval("#pr-order", (a) => a.addEventListener("click", (e) => e.preventDefault()));
-    await page.click("#pr-order");
-    const order = decodeURIComponent(await page.getAttribute("#pr-order", "href"));
-    check("the order email has the yards, date and delivery address", order.startsWith("mailto:orders@mix.example") && /Yards: 117/.test(order)
-          && /Date: Mar 10, 2099, first truck at 7:00 AM/.test(order) && /Deliver to: /.test(order), order);
-    check("...and marks the pour ordered", await page.evaluate((i) => jobFor(i).pours[0].status === "ordered", id));
-    await page.click("#pr-back");
-
-    // A day on the log, with a photo, feeds the pay request.
-    await page.click("#jb-log");
-    await page.waitForTimeout(200);
-    await page.fill('[data-lf="date"]', "2099-03-10");
-    await page.fill('[data-lf="crew"]', "4");
-    await page.fill('[data-lf="work"]', "Poured Elm St north side");
-    await page.fill('[data-placed="0"]', "200");
-    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.click("#lg-photo")]);
-    await chooser.setFiles({ name: "site.jpg", mimeType: "image/jpeg", buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]) });
-    await page.waitForTimeout(600);
-    check("a photo is kept with the day", (await page.$$(".log-photos img")).length === 1);
-    await page.click("#lg-save");
-    await page.waitForTimeout(300);
-    check("the job shows what's been placed", /Placed so far: 4 in\. concrete sidewalk 200 sq yd/.test(await page.textContent("#prep-body")));
-    await page.click("#jb-pay");
-    await page.waitForTimeout(200);
-    check("the pay request starts from what the log says was placed", (await page.inputValue('[data-py="0"]')) === "200");
-    const tot = await page.textContent("#py-tot");
-    check("...holds back retainage and shows what's due", /\$13,200\.00/.test(tot) && /\$660\.00/.test(tot) && /Due this request\$12,540\.00/.test(tot), tot);
-    await page.click("#py-save");
-    await page.waitForTimeout(300);
-    const pay = await page.evaluate(() => window.__printed.pop());
-    check("it prints as an application for payment", /Application for payment No\. 1/.test(pay) && /Current payment due<\/span><b>\$12,540\.00/.test(pay), pay.slice(0, 200));
-    await page.click("#jb-pay");
-    await page.waitForTimeout(200);
-    check("the next request starts after the last one", (await page.inputValue('[data-py="0"]')) === "" && /Before/.test(await page.textContent("#prep-body")));
-    await page.click("#py-back");
-
-    // Certified payroll.
-    await page.click("#jb-crew");
-    await page.click("#cr-add");
-    await page.fill('[data-cw="name"]', "Sam Ortiz");
-    await page.fill('[data-cw="cls"]', "Cement Mason");
-    await page.fill('[data-cw="rate"]', "30");
-    await page.fill('[data-cw="fringe"]', "5");
-    await page.click("#cr-save");
-    await page.click("#jb-week");
-    for (const x of [1, 2, 3, 4, 5]) await page.fill(`[data-ph="0:${x}"]`, "10");
-    await page.click("#pw-save");
-    await page.waitForTimeout(300);
-    const pr = await page.evaluate(() => window.__printed.pop());
-    check("payroll pays overtime past 40 hours and cash fringe", /\$1,900\.00/.test(pr) && /40 \+ 10 OT/.test(pr), pr.replace(/<[^>]+>/g, " ").slice(0, 600));
-    check("...with the statement of compliance to sign, and no ID numbers kept", /Statement of compliance/.test(pr) && /ID no\. \(write in\)/.test(pr));
-    await page.click("#jb-logprint");
-    await page.waitForTimeout(500);
-    const log = await page.evaluate(() => window.__printed.pop() || "");
-    check("the daily log prints with its photos", /Daily log/.test(log) && /Poured Elm St north side/.test(log) && /<img src="data:image/.test(log));
-    check("none of it goes to the server", await page.evaluate(() => !JSON.stringify(bidPrep).includes("Sam Ortiz") && !JSON.stringify(companyProfile).includes("Sam Ortiz")));
     check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
     await ctx.close();
   }
@@ -2413,6 +2379,8 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     // Measuring from every plan file at once, through a server restart.
     await page.evaluate((i) => openPrep("Aurora, MO", i, "pricing"), a);
     await page.waitForTimeout(400);
+    await page.evaluate(() => { const d = document.getElementById("price-more"); if (d) d.open = true; });
+
     await page.click("#pl-takeoff");
     await page.waitForTimeout(300);
     await page.click("#to-all");
@@ -2435,6 +2403,437 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     check("...the posting is sent to be searched for the form", hits.fill.length === 1 && hits.fill[0].url === "https://e.gov/bids/18");
     const names = await page.evaluate(async (i) => (await bidFiles.list(i, "filled")).map((f) => f.name), b2);
     check("...and the filled copy is named after the form found", names.includes("Bid Proposal Form (filled).pdf"), JSON.stringify(names));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
+  // ── A trial reads documents too, and the first scan shows it ──
+  console.log("\nA trial gets the automatic reading, and a scan's best bids arrive ready");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    const reads = [];
+    let licensed = true;
+    await page.route("**/*", (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      const json = (o, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(o) });
+      if (u.endsWith("/bid-documents/read")) {
+        const body = JSON.parse(route.request().postData() || "{}");
+        reads.push(body);
+        if (!licensed) return json({ ok: false, reason: "not_licensed" }, 403);
+        if (body.kind === "addendum") return json({ ok: false, reason: "ai_error" });
+        return json({ ok: true, line_items: [{ item_no: "1", description: "Sidewalk", quantity: 900, unit: "SY" },
+          { item_no: "2", description: "Curb", quantity: 300, unit: "LF" }, { item_no: "3", description: "Ramps", quantity: 6, unit: "EA" }],
+          sources: ["Bid Form"] });
+      }
+      if (u.endsWith("/bid/locate")) return json({ ok: false });
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem("last_user_email", JSON.stringify("trial@example.com"));
+      localStorage.setItem("last_feed", JSON.stringify({ "Aurora, MO": [
+        { title: "Elm St Sidewalk", scope: "Sidewalk", deadline: "2099-11-20", status: "open", url: "https://e.gov/bids/17",
+          documents: [{ name: "Bid Form", url: "https://e.gov/bid-form.pdf" }] },
+        { title: "Oak Ave Curb", scope: "Curb", deadline: "2099-11-10", status: "open", url: "https://e.gov/bids/18",
+          documents: [{ name: "Specs", url: "https://e.gov/specs.pdf" }] },
+        { title: "Pine St Ramps", scope: "Ramps", deadline: "2099-11-30", status: "open", url: "https://e.gov/bids/19" },
+        { title: "Due Tomorrow", scope: "Sidewalk", deadline: new Date(Date.now() + 86400000).toISOString().slice(0, 10), status: "open",
+          url: "https://e.gov/bids/20", documents: [{ name: "Bid Form", url: "https://e.gov/soon.pdf" }] }] }));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(800);
+    // A trial: signed in, no license key on the phone.
+    await page.evaluate(() => { currentUser = { id: "u1", email: "trial@example.com" }; window.getSupabaseToken = async () => "tok";
+      window.isOffline = () => false; localStorage.removeItem("license_key"); });
+    check("a signed-in trial counts for reading", await page.evaluate(() => canAutoRead() && !licenseKey()));
+    await page.evaluate(() => preReadAfterScan(["Aurora, MO"]));
+    await page.waitForTimeout(500);
+    const urls = reads.map((r) => r.url);
+    check("after a scan, the two best bids with documents are read, soonest workable first",
+          JSON.stringify(urls) === JSON.stringify(["https://e.gov/specs.pdf", "https://e.gov/bid-form.pdf"]), JSON.stringify(urls));
+    check("...not one due too soon to bid, nor one with no files when two have them", !urls.includes("https://e.gov/soon.pdf"));
+    await page.evaluate(() => { goTo("feed"); renderFeed(); });
+    await page.waitForTimeout(300);
+    const chips = await page.$$eval(".chip.ready", (els) => els.map((e) => e.textContent));
+    check("their cards say the items are ready", chips.length === 2 && chips.every((t) => t === "3 items ready"), JSON.stringify(chips));
+    check("...without starring or saving them", await page.evaluate(() => Object.keys(saved).length === 0 && Object.keys(bidPrep).length === 0));
+    // Opening one fills it in with no license key.
+    const id = await page.evaluate(() => bidId("Aurora, MO", bidData["Aurora, MO"][1]));
+    await page.evaluate((i) => openPrep("Aurora, MO", i, "steps"), id);
+    await page.waitForTimeout(800);
+    check("a trial's bid fills in from its documents", await page.evaluate((i) => prepFor(i).linesFrom === "documents" && prepFor(i).lines.length === 3, id));
+    // An expired trial: no reading, and no "couldn't read" message blaming the documents.
+    licensed = false;
+    const id2 = await page.evaluate(() => bidId("Aurora, MO", bidData["Aurora, MO"][0]));
+    await page.evaluate((i) => openPrep("Aurora, MO", i, "steps"), id2);
+    await page.waitForTimeout(800);
+    check("an expired trial isn't told the documents couldn't be read", !(await page.evaluate((i) => prepFor(i).autoFilled && prepFor(i).autoFilled.failed, id2)));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
+  // ── The landing page shows real open bids near the visitor ──
+  console.log("\nThe landing page shows open bids near a ZIP, not just an agency count");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    let nearBody = null, empty = false;
+    await page.route("**/*", (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      const json = (o) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(o) });
+      if (u.endsWith("/coverage")) return json({ ok: true, location: "Kansas City, KS", radius: 125, agencies: 74, nearest: ["Olathe, KS"] });
+      if (u.endsWith("/bids-near")) {
+        nearBody = JSON.parse(route.request().postData() || "{}");
+        if (empty) return json({ ok: true, location: "Nowhere, KS", radius: 50, count: 0, bids: [] });
+        return json({ ok: true, location: "Kansas City, KS", radius: 125, count: 9, bids: [
+          { title: "Oak Ave Curb & Gutter", town: "Olathe", due: "2099-11-05", miles: 18 },
+          { title: "Sidewalk <Repair> Phase 2", town: "Lenexa", due: "", miles: 22 }] });
+      }
+      if (u.endsWith("/click") || u.endsWith("/visit")) return json({ ok: true });
+      if (host === "127.0.0.1") return route.continue();
+      return route.abort();
+    });
+    // Arriving from an outreach link fills in the town and shows the work.
+    await page.goto(`${BASE}/go/redbird-ks-kc`, { waitUntil: "load" });
+    await page.waitForTimeout(1200);
+    const box = await page.textContent("#cov-out");
+    check("an outreach visitor sees open bids near their town without typing anything",
+          nearBody && nearBody.location === "Kansas City, KS" && nearBody.radius === 125
+          && /Open right now near Kansas City, KS/.test(box) && /Oak Ave Curb & Gutter/.test(box) && /Olathe · 18 mi · due Nov 5/.test(box), box);
+    check("...an undated one says the date is on the posting, and titles are shown as text",
+          /due date on the posting/.test(box) && (await page.$$eval("#cov-bids li b", (els) => els.map((e) => e.textContent))).includes("Sidewalk <Repair> Phase 2"));
+    check("...with a way straight into the trial", (await page.getAttribute("#cov-bids a.btn", "href")) === "/app.html"
+          && /See all 9 and price them/.test(await page.textContent("#cov-bids a.btn")));
+    // Nowhere with bids: just the agency count, no empty box.
+    empty = true;
+    await page.fill("#cov-zip", "67801");
+    await page.click("#cov-go");
+    await page.waitForTimeout(800);
+    check("with nothing found yet, it offers to scan the area now", /We haven't scanned around Nowhere, KS lately/.test(await page.textContent("#cov-bids"))
+          && /scan it now/.test(await page.textContent("#cov-bids a.btn")));
+    // The ZIP box at the top of the page runs the same check.
+    empty = false; nearBody = null;
+    await page.goto(`${BASE}/index.html`, { waitUntil: "load" });
+    await page.fill("#hero-zip-in", "65605");
+    await page.click("#hero-zip-go");
+    await page.waitForTimeout(1000);
+    check("the ZIP box at the top shows the bids near it", nearBody && nearBody.location === "65605" && nearBody.radius === 50
+          && (await page.$$("#cov-bids .nb li")).length === 2, JSON.stringify(nearBody));
+    check("the page doesn't scroll sideways on a phone", await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
+  // ── The end of the trial, said where people look ──
+  console.log("\nThe trial's end shows on Home, and the paywall says what the trial found");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    let trial = { ok: true, active: true, days_left: 1, expires_at: new Date(Date.now() + 30 * 3600000).toISOString() };
+    let trialCalls = 0;
+    await page.route("**/*", (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      const json = (o) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(o) });
+      if (u.endsWith("/trial")) { trialCalls++; return json(trial); }
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem("last_user_email", JSON.stringify("trial@example.com"));
+      localStorage.setItem("last_feed", JSON.stringify({ "Aurora, MO": [
+        { title: "Elm St Sidewalk", scope: "Sidewalk", deadline: "2099-11-20", status: "open", url: "https://e.gov/1" },
+        { title: "Oak Ave Curb", scope: "Curb", deadline: "2099-11-10", status: "open", url: "https://e.gov/2" }] }));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(600);
+    await page.evaluate(() => { currentUser = { id: "u1", email: "trial@example.com" }; window.getSupabaseToken = async () => "tok";
+      window.isOffline = () => false; localStorage.removeItem("plan_status"); planStatus = null;
+      const c = "Aurora, MO", i = bidId(c, bidData[c][0]); docsReady[i] = { items: 5 }; });
+    await page.evaluate(() => { goTo("home"); renderHome(); });
+    await page.waitForTimeout(800);
+    let banner = await page.textContent("#home-main");
+    check("in the last two days, Home says the trial is ending, with what it found",
+          /Your free trial ends in 1d \d+h\./.test(banner) && /So far: 2 open bids found near you, 1 bid read from its documents/.test(banner), banner.slice(0, 300));
+    await page.click("[data-plan-go]");
+    await page.waitForTimeout(600);
+    check("...and one tap goes to the plans", await page.evaluate(() => document.getElementById("screen-account").classList.contains("active")));
+    // Not checked again for hours.
+    const calls = trialCalls;
+    await page.evaluate(() => { goTo("home"); renderHome(); });
+    await page.waitForTimeout(400);
+    check("the trial isn't asked about on every visit to Home", trialCalls === calls);
+    // Plenty of time left: nothing.
+    await page.evaluate(() => { planStatus = { state: "trial", expires_at: new Date(Date.now() + 5 * 86400000).toISOString(), at: Date.now() }; renderHome(); });
+    check("with days to go, no banner", (await page.$$(".plan-banner")).length === 0);
+    // Ended.
+    trial = { ok: false, active: false, reason: "trial_expired" };
+    await page.evaluate(() => { planStatus = null; localStorage.removeItem("plan_status"); renderHome(); });
+    await page.waitForTimeout(800);
+    banner = await page.textContent("#home-main");
+    check("after it ends, Home says so and that the saved work is still there",
+          /Your free trial has ended\./.test(banner) && /saved bids and prices are still here/.test(banner), banner.slice(0, 300));
+    // Account: the recap and plans that say what you get.
+    await page.evaluate(() => goTo("account"));
+    await page.waitForTimeout(1200);
+    const acct = await page.textContent("#screen-account");
+    check("the plan card recaps the trial", /What your trial found/.test(acct) && /2 open bids found near you/.test(acct), acct.slice(0, 500));
+    check("...and the plans sell the work, not the features", /Bid documents read, line items filled in/.test(acct) && /bid form filled in for you/.test(acct));
+    // Paid on another device: the purchase is found before any "ended" message.
+    await page.route("**/mykey", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, key: "CCP-PAID" }) }));
+    await page.evaluate(() => { planStatus = null; localStorage.removeItem("plan_status"); lastUnlockCheck = 0; goTo("home"); renderHome(); });
+    await page.waitForTimeout(800);
+    check("a customer who paid elsewhere isn't told the trial ended", (await page.$$(".plan-banner")).length === 0
+          && await page.evaluate(() => licenseKey() === "CCP-PAID" && planStatus.state === "paid"));
+    // Paying: no banner.
+    await page.evaluate(() => { localStorage.setItem("license_key", JSON.stringify("CCP-TEST")); planStatus = null; goTo("home"); renderHome(); });
+    await page.waitForTimeout(400);
+    check("a subscriber never sees it", (await page.$$(".plan-banner")).length === 0);
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
+  // ── The state price pages show open bids near a ZIP too ──
+  console.log("\nSomeone reading what sidewalk costs can see the open bids near them");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    let asked = null;
+    await page.route("**/*", (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      if (u.endsWith("/bids-near")) {
+        asked = JSON.parse(route.request().postData() || "{}");
+        return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, location: "Joplin, MO",
+          radius: 50, count: 4, bids: [{ title: "Main St Sidewalk", town: "Carthage", due: "2099-11-19", miles: 15 }] }) });
+      }
+      if (host === "127.0.0.1") return route.continue();
+      return route.abort();
+    });
+    await page.goto(`${BASE}/concrete-cost/missouri.html`, { waitUntil: "load" });
+    await page.fill("#nz-in", "64801");
+    await page.click("#nz button");
+    await page.waitForTimeout(600);
+    const out = await page.textContent("#nz-out");
+    check("a state price page lists open bids near the reader's ZIP", asked && asked.location === "64801"
+          && /Main St Sidewalk/.test(out) && /Carthage · 15 mi · due Nov 19/.test(out) && /see all 4 and price them/.test(out), out);
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
+  // ── Word of mouth: setup shows the work, a shared bid says where it came from ──
+  console.log("\nSetup shows open bids found nearby, and a shared bid carries the link back");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      const json = (o) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(o) });
+      if (u.endsWith("/coverage")) return json({ ok: true, location: "Aurora, MO", radius: 50, agencies: 23, nearest: [] });
+      if (u.endsWith("/bids-near")) return json({ ok: true, location: "Aurora, MO", radius: 50, count: 7, bids: [] });
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem("last_user_email", JSON.stringify("new@example.com"));
+      localStorage.setItem("last_feed", JSON.stringify({ "Aurora, MO": [
+        { title: "Elm St Sidewalk", scope: "Sidewalk", deadline: "2099-11-20", status: "open", url: "https://e.gov/bids/17" }] }));
+      localStorage.setItem("referral_code", JSON.stringify("AB12CD34"));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => { window.isOffline = () => false; showOnboarding(); });
+    await page.fill("#onb-loc", "65605");
+    await page.dispatchEvent("#onb-loc", "input");
+    await page.waitForTimeout(1500);
+    const cov = await page.textContent("#onb-cov");
+    check("setup shows the open bids already found there", /23 agencies posting bids within \d+ miles · 7 open bids found there lately/.test(cov), cov);
+    // The ZIP from the landing page, or from the Monday email's link, starts setup.
+    await page.evaluate(() => { localStorage.setItem("landing_loc", JSON.stringify("64801")); document.getElementById("onb-loc").value = ""; showOnboarding(); });
+    check("setup starts from the ZIP typed on the landing page", (await page.inputValue("#onb-loc")) === "64801");
+    check("...and it survives the account check at sign-in", await page.evaluate(() => DEVICE_KEYS.has("landing_loc")));
+    await page.goto(`${BASE}/app.html?loc=65806`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => { localStorage.removeItem("landing_loc"); window.isOffline = () => false; showOnboarding(); });
+    check("...or from the bid email's link", (await page.inputValue("#onb-loc")) === "65806");
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(600);
+    const shared = await page.evaluate(async () => {
+      let got = null;
+      Object.defineProperty(navigator, "share", { configurable: true, value: async (d) => { got = d; } });
+      const c = "Aurora, MO";
+      await shareBid(c, bidId(c, bidData[c][0]));
+      return got && got.text;
+    });
+    check("a shared bid says it was found with CurbCall, with the sender's referral link",
+          /https:\/\/e\.gov\/bids\/17\n\nFound with CurbCall Pro: https:\/\/curbcallpro\.com\/\?ref=AB12CD34$/.test(shared || ""), shared);
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
+  // ── Which ad or link brought a visitor, carried into their trial ──
+  console.log("\nAn ad click is counted as an ad visit, and the trial says so too");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    const visits = [], trials = [];
+    await page.route("**/*", (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      const json = (o) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(o) });
+      if (u.endsWith("/visit")) { visits.push(JSON.parse(route.request().postData() || "{}")); return json({ ok: true }); }
+      if (u.endsWith("/trial")) { trials.push(JSON.parse(route.request().postData() || "{}")); return json({ ok: true, active: true, expires_at: new Date(Date.now() + 6 * 86400000).toISOString() }); }
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      return route.abort();
+    });
+    await page.goto(`${BASE}/index.html?gclid=abc123&utm_campaign=sidewalk-mo`, { waitUntil: "load" });
+    await page.waitForTimeout(500);
+    check("a Google ad click is counted as one", visits.length === 1 && visits[0].source === "google-ad", JSON.stringify(visits));
+    const kinds = await page.evaluate(() => {
+      const tries = { "?utm_source=facebook&utm_medium=paid": "facebook-ad", "?ref=AB12CD34": "referral", "": "direct", "?utm_source=Nextdoor": "nextdoor" };
+      const out = {};
+      for (const q in tries) { history.replaceState(null, "", location.pathname + q); out[q] = [visitSource(), tries[q]]; }
+      return out;
+    });
+    check("other sources are told apart", Object.values(kinds).every(([got, want]) => got === want), JSON.stringify(kinds));
+    // Into the app in the same tab: the trial carries the source and the setup answer.
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => { currentUser = { id: "u1", email: "ad@example.com" }; window.getSupabaseToken = async () => "tok";
+      window.isOffline = () => false;
+      // The test's stand-in database lacks a few calls finishing setup makes.
+      const q = { select: () => q, eq: () => q, maybeSingle: async () => ({ data: null, error: null }), upsert: async () => ({}) };
+      sb.from = () => q;
+      showOnboarding(); onbStep(2); });
+    await page.selectOption("#onb-heard", "google-ad");
+    await page.click("#onb-done");
+    await page.waitForTimeout(800);
+    check("setup's answer and the ad source go with the trial",
+          trials.some((t) => t.source === "google-ad" && t.heard === "google-ad"), JSON.stringify(trials));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
+  // ── The setup area gets the daily bid email by default ──
+  console.log("\nThe area given in setup is watched for new bids without a tap");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const host = new URL(route.request().url()).hostname;
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      return route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    const r = await page.evaluate(async () => {
+      const inserted = [];
+      let cloud = [];
+      const q = { select: async () => ({ data: cloud, error: null }), insert: async (row) => { inserted.push(row); return {}; } };
+      sb.from = (t) => t === "saved_searches" ? q : { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }) }) }), upsert: async () => ({}) };
+      currentUser = { id: "u1", email: "new@example.com" };
+      store.set(HOME_LOC_KEY, "Aurora, MO"); store.set(HOME_RADIUS_KEY, 75);
+      store.set("auto_watch_checked", false); savedSearches = []; store.set("saved_searches", []);
+      await syncPullSavedSearches();
+      const first = inserted.slice();
+      // They delete it on purpose: the next sync must not put it back.
+      savedSearches = []; store.set("saved_searches", []); cloud = [];
+      await syncPullSavedSearches();
+      const afterDelete = inserted.length;
+      // Another account that already watches somewhere else is left alone.
+      store.set("auto_watch_checked", false); cloud = [{ location: "Joplin, MO", radius: 50 }];
+      await syncPullSavedSearches();
+      return { first, afterDelete, total: inserted.length, shown: (document.getElementById("saved-searches-wrap").textContent || "") };
+    });
+    check("the setup area becomes a watched search",
+          r.first.length === 1 && r.first[0].location === "Aurora, MO" && r.first[0].radius === 75, JSON.stringify(r));
+    check("a deleted one is not put back", r.afterDelete === 1, JSON.stringify(r));
+    check("an account with its own search is left alone", r.total === 1 && /Joplin/.test(r.shown), JSON.stringify(r));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
+  // ── A reported win reaches the server; the landing page says so only when there is enough ──
+  console.log("\nWins are reported, and the landing page totals them only when there are enough");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    const outcomes = [];
+    let proof = { ok: true, show: false };
+    await page.route("**/*", (route) => {
+      const u = route.request().url();
+      const host = new URL(u).hostname;
+      const json = (o) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(o) });
+      if (u.endsWith("/outcome")) { outcomes.push(JSON.parse(route.request().postData() || "{}")); return json({ ok: true }); }
+      if (u.endsWith("/proof")) return json(proof);
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      if (u.includes("onrender.com")) return json({ ok: true });
+      return route.abort();
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => {
+      currentUser = { id: "u1", email: "w@example.com" }; window.getSupabaseToken = async () => "tok";
+      // The test's stand-in database lacks a few calls Home makes.
+      const q = { select: () => q, eq: () => q, order: () => q, limit: () => q, maybeSingle: async () => ({ data: null, error: null }),
+                  upsert: async () => ({}), insert: async () => ({}), then: (r) => r({ data: [], error: null }) };
+      sb.from = () => q;
+      store.set("referral_code", "AB12CD34"); store.set("license_plan", "annual");
+      const d = new Date(Date.now() - 10 * 86400e3);
+      saved.w1 = { title: "Elm St Sidewalk", deadline: d.toISOString().slice(0, 10), _city: "Aurora, MO" };
+      resultAsked = {}; showApp(); switchScreen("home");
+    });
+    await page.waitForTimeout(500);
+    await page.click('.outcome[data-oid="w1"] [data-out="won"]');
+    await page.fill(".outcome [data-won]", "$41,250");
+    await page.click(".outcome [data-save]");
+    await page.waitForTimeout(500);
+    check("the win and its amount are sent with the account's token",
+          outcomes.length === 1 && outcomes[0].result === "won" && outcomes[0].amount === 41250
+          && outcomes[0].bid_id === "w1" && outcomes[0].supabase_token === "tok" && outcomes[0].state === "MO", JSON.stringify(outcomes));
+    const next = await page.textContent("#home-outcomes");
+    check("after a win: the referral link, and no annual pitch to an annual customer",
+          /Share my link/.test(next) && !/Go annual/.test(next), next);
+    await page.goto(`${BASE}/index.html`, { waitUntil: "load" });
+    await page.waitForTimeout(500);
+    check("the landing page says nothing until there is enough to say",
+          await page.evaluate(() => document.getElementById("proof-line").hidden));
+    proof = { ok: true, show: true, wins: 7, won_total: 1284000 };
+    await page.goto(`${BASE}/index.html`, { waitUntil: "load" });
+    await page.waitForTimeout(500);
+    const line = await page.evaluate(() => { const e = document.getElementById("proof-line"); return e.hidden ? "" : e.textContent; });
+    check("...then shows the total, rounded down, as reported by customers",
+          /\$1\.2 million of public work won/.test(line) && /reported by CurbCall customers, 7 jobs/.test(line), line);
     check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
     await ctx.close();
   }
@@ -2557,6 +2956,9 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
           /Your past prices: \$75\.00 lost · \$60\.00 won/.test(sheet), sheet.slice(0, 400));
     check("the ramp line shows your past ramp price", /\$1,800\.00 won/.test(sheet));
 
+    await page.evaluate(() => { const d = document.getElementById("price-more"); if (d) d.open = true; });
+
+
     await page.click("#pl-past");
     await page.waitForTimeout(200);
     check("past bids are listed by name", /Oak St Ramps/.test(await page.textContent("#prep-body")));
@@ -2567,6 +2969,8 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
           lines.find((l) => l.item === "6086004").price === 60 && lines.find((l) => /ramp/i.test(l.name)).price === 1800, JSON.stringify(lines));
     const qtyBefore = lines.find((l) => l.item === "6086004").qty;
     check("...without touching this job's quantities", Math.abs(qtyBefore - 666.7) < 0.1);
+    await page.evaluate(() => { const d = document.getElementById("price-more"); if (d) d.open = true; });
+
     await page.click("#pl-past");
     await page.waitForTimeout(200);
     await page.click('[data-lines="pastlost"]');
@@ -3080,8 +3484,13 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     check("a loss records the winning bid", await page.evaluate(() => pipeline.oldjob === "lost" && bidPrep.oldjob.result.winning_total === 13500));
     await page.click('.outcome[data-oid="wonjob"] [data-out="won"]');
     await page.waitForTimeout(200);
-    check("a win is recorded and asks for a review", await page.evaluate(() => pipeline.wonjob === "won")
+    check("a win asks what the job was worth", /What was the job worth/.test(await page.textContent("#home-outcomes")));
+    await page.fill(".outcome [data-won]", "52000");
+    await page.click(".outcome [data-save]");
+    await page.waitForTimeout(300);
+    check("a win is recorded with its amount and asks for a review", await page.evaluate(() => pipeline.wonjob === "won" && bidPrep.wonjob.won_total === 52000)
           && /Leave a review/.test(await page.textContent("#home-outcomes")));
+    check("...and offers the annual plan to someone not on it", /Go annual/.test(await page.textContent("#home-outcomes")));
     await page.evaluate(() => openRates("OR"));
     await page.waitForTimeout(500);
     check("the rates sheet says how far above the winner you were", /you were a median 11\.1% above the winner/.test(await page.textContent("#modal-content")));

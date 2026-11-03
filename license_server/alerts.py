@@ -39,6 +39,42 @@ def _get_user_email(user_id):
     return None
 
 
+# ── Who the alert jobs work for ──
+# Both jobs below scan every saved search in the table, and a saved search
+# outlives the trial that made it. Unchecked, a trial that lapsed months ago
+# still gets the daily new-bid email and the weekly planned-work email, free,
+# forever, and every one of those runs is a paid scan. That is the product
+# given away and paid for twice: the emails are what customers pay for. So
+# the jobs work for an account that is paying or still inside its trial,
+# and pick it back up the day it subscribes.
+def _alerts_active(db, email, now=None):
+    email = (email or "").strip().lower()
+    if not email:
+        return False
+    if _has_paid_licence(db, email):
+        return True
+    rec = (db.get("trials") or {}).get(f"email:{email}") or {}
+    try:
+        started = datetime.datetime.fromisoformat(rec["started"])
+    except Exception:
+        return False
+    return (now or datetime.datetime.now()) <= started + datetime.timedelta(days=TRIAL_DAYS)
+
+
+def _alert_recipient(user_id, email_cache, active_cache, db):
+    """(email, active) for a saved search's owner, each looked up once a run."""
+    if user_id not in email_cache:
+        email_cache[user_id] = _get_user_email(user_id) or ""
+    email = email_cache[user_id]
+    if user_id not in active_cache:
+        try:
+            active_cache[user_id] = _alerts_active(db, email)
+        except Exception as ex:
+            print(f"[alerts] could not check {user_id}: {ex}", flush=True)
+            active_cache[user_id] = False
+    return email, active_cache[user_id]
+
+
 def _bid_sig(city, bid):
     """Stable id for 'have we already told this user about this bid' —
     based on content, not a server-assigned id (there isn't one), so the
@@ -59,7 +95,7 @@ def _send_alert_email(email, location, radius, new_bids):
     if len(new_bids) > 20:
         lines.append(f"...and {len(new_bids) - 20} more.")
     lines.append("")
-    lines.append("Open Bid Caller Pro to see full details or save any of these to your pipeline.")
+    lines.append("Open CurbCall Pro to see full details or save any of these to your pipeline.")
     body = json.dumps({
         "from": FROM_EMAIL,
         "to": [email],
@@ -99,6 +135,9 @@ def _run_saved_search_alerts():
     cdb = _cache()
     seen_store = cdb.setdefault("alert_seen", {})
     email_cache = {}
+    active_cache = {}
+    skipped_inactive = 0
+    db = _db()
     emails_sent = 0
     users_checked = set()
     errors = []
@@ -111,6 +150,10 @@ def _run_saved_search_alerts():
         except (TypeError, ValueError):
             radius = 25.0
         if not (user_id and location):
+            continue
+        email, active = _alert_recipient(user_id, email_cache, active_cache, db)
+        if not active:
+            skipped_inactive += 1
             continue
         users_checked.add(user_id)
 
@@ -137,9 +180,6 @@ def _run_saved_search_alerts():
         seen_store[seen_key] = all_sigs[-300:]  # cap so this can't grow forever
 
         if new_bids:
-            if user_id not in email_cache:
-                email_cache[user_id] = _get_user_email(user_id) or ""
-            email = email_cache[user_id]
             if email:
                 _send_alert_email(email, outcome.get("location", location), radius, new_bids)
                 emails_sent += 1
@@ -156,6 +196,7 @@ def _run_saved_search_alerts():
     _save_cache(cdb)
     return {"ok": True, "searches_checked": len(searches),
             "users_checked": len(users_checked),
+            "skipped_inactive": skipped_inactive,
             "emails_sent": emails_sent, "errors": errors}
 
 
@@ -234,6 +275,9 @@ def _run_upcoming_alerts():
     cdb = _cache()
     seen_store = cdb.setdefault("upcoming_alert_seen", {})
     email_cache = {}
+    active_cache = {}
+    skipped_inactive = 0
+    db = _db()
     emails_sent = 0
     users_checked = set()
     errors = []
@@ -246,6 +290,10 @@ def _run_upcoming_alerts():
         except (TypeError, ValueError):
             radius = 25.0
         if not (user_id and location):
+            continue
+        email, active = _alert_recipient(user_id, email_cache, active_cache, db)
+        if not active:
+            skipped_inactive += 1
             continue
         users_checked.add(user_id)
 
@@ -273,9 +321,6 @@ def _run_upcoming_alerts():
         seen_store[seen_key] = all_sigs[-300:]  # cap so this can't grow forever
 
         if new_items:
-            if user_id not in email_cache:
-                email_cache[user_id] = _get_user_email(user_id) or ""
-            email = email_cache[user_id]
             if email and _send_upcoming_email(
                     email, outcome.get("location", location), radius, new_items):
                 emails_sent += 1
@@ -284,6 +329,7 @@ def _run_upcoming_alerts():
     _save_cache(cdb)
     return {"ok": True, "searches_checked": len(searches),
             "users_checked": len(users_checked),
+            "skipped_inactive": skipped_inactive,
             "emails_sent": emails_sent, "errors": errors}
 
 

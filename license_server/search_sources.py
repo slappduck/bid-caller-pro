@@ -1067,7 +1067,11 @@ def _ddg_search(query, count=6):
 FETCH_TIMEOUT = int(os.environ.get("SCAN_FETCH_TIMEOUT", "18"))
 PROBE_TIMEOUT = int(os.environ.get("SCAN_PROBE_TIMEOUT", "6"))
 PORTAL_WORKERS = int(os.environ.get("SCAN_PORTAL_WORKERS", "6"))
-PORTALS_PER_TOWN = int(os.environ.get("SCAN_PORTALS_PER_TOWN", "8"))
+# Every verified page a town holds should be read. Adding public school
+# districts took Houston to 11 and San Antonio to 10, metros with many
+# districts; no other town is above 8, so the higher cap costs nothing
+# elsewhere (tests/test_seed_merge.py checks it).
+PORTALS_PER_TOWN = int(os.environ.get("SCAN_PORTALS_PER_TOWN", "12"))
 # Contact details live on each individual posting, so reading them costs one
 # fetch per bid. Bounded per portal, and given the shorter probe timeout: a
 # missing phone number degrades a lead, a blown request budget loses every one.
@@ -2836,6 +2840,275 @@ STATE_SOURCE_TIMEOUT = float(os.environ.get("STATE_SOURCE_TIMEOUT", "20"))
 STATE_WORKERS = int(os.environ.get("SCAN_STATE_WORKERS", "4"))
 _state_sources_cache = {"at": 0.0, "rows": None}
 
+# State pages that re-post each town's OWN bid notice for federal-aid local
+# work (sidewalks, trails, Safe Routes to School). Read by
+# bid_sources.parse_local_agency_notices and placed at the town, not a county.
+# Checked live 2026-11-02: Arkansas listed sidewalk jobs in Lake Village,
+# Tyronza and Alma, two of which have no bid page of their own anywhere.
+# Read with a plain parser, not a model: ARDOT's robots.txt allows search and
+# reference use and says nothing either way about model input.
+#
+# Missouri's is a table on MoDOT's site that every city and county letting
+# federal-aid work is required to post to: 18 open concrete-relevant jobs the
+# day it was added. modot.org's robots.txt allows the page.
+#
+# {state: [(url, kind)]}; kind names the reader in
+# bid_sources.LOCAL_NOTICE_PARSERS.
+LOCAL_NOTICE_SOURCES = {
+    "AR": [("https://ardot.gov/divisions/local-programs/currently-advertised-local-projects/",
+            "local_notices")],
+    "MO": [("https://www.modot.org/projects-be-let-others", "lpa_table")],
+    # Iowa lets county and city federal-aid work in the DOT's own monthly
+    # letting. The Notice to Bidders PDF is always at this address and lists
+    # every proposal with its county and item quantities. robots.txt allows it.
+    "IA": [("https://iowadot.gov/contracts/lettings/NoticeToBidders.pdf", "iowa_ntb_pdf")],
+    # Illinois' weekly Notice to Contractors Bulletin, where counties,
+    # townships and towns advertise what they let themselves. The page lists
+    # each week's PDF; a notice is printed in full only the week it first
+    # runs, so the newest few are read. idot.illinois.gov allows all agents.
+    "IL": [("https://idot.illinois.gov/doing-business/procurements/construction-services/contractors-bulletin.html",
+            "il_bulletin")],
+    "OK": [("https://oklahoma.gov/odot/business-center/contracts-and-proposals.html",
+            "ok_letting")],
+    "KY": [("https://transportation.ky.gov/Construction-Procurement/Pages/default.aspx",
+            "ky_ntc")],
+    "WI": [("https://wisconsindot.gov/Pages/doing-bus/contractors/hcci/bid-let.aspx",
+            "wi_ntc")],
+    "IN": [("https://www.in.gov/indot/doing-business-with-indot/home/contracts/", "in_ntc")],
+}
+# Oklahoma: ODOT's contracts page links one page per upcoming letting, each
+# naming the folder of its spreadsheet. odot.org has no robots.txt of its own
+# (it redirects to oklahoma.gov's home page); oklahoma.gov allows all agents.
+OK_LETTINGS_READ = int(os.environ.get("OK_LETTINGS_READ", "4"))
+OK_LETTING_HORIZON_DAYS = 75
+_OK_LETTING_LINK_RE = re.compile(
+    r'href="(/odot/business-center/contracts-and-proposals/(?:future-bid-openings/)?'
+    r'([a-z]{3})-(\d{1,2})-(\d{4})\.html)"', re.I)
+_OK_FOLDER_RE = re.compile(r'name="description"\s+content="b(\d{4}/\d{8})"', re.I)
+_OK_MONTHS = {m: i + 1 for i, m in enumerate(
+    ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"))}
+
+
+def _ok_letting_text(index_html, index_url, today=None):
+    """Spreadsheets of the next few ODOT lettings, joined with markers."""
+    today = today or datetime.date.today()
+    picks = {}
+    for path, mon, day, year in _OK_LETTING_LINK_RE.findall(index_html or ""):
+        try:
+            when = datetime.date(int(year), _OK_MONTHS[mon.lower()], int(day))
+        except (KeyError, ValueError):
+            continue
+        if today <= when <= today + datetime.timedelta(days=OK_LETTING_HORIZON_DAYS):
+            picks.setdefault(when, urllib.parse.urljoin(index_url, path))
+    parts = []
+    for when in sorted(picks)[:OK_LETTINGS_READ]:
+        page, outcome = _fetch_page(picks[when], timeout=STATE_SOURCE_TIMEOUT)
+        m = _OK_FOLDER_RE.search(page or "")
+        if outcome != "ok" or not m:
+            continue
+        csv_url = "https://www.odot.org/contracts/%s/letting-spreadsheet.csv" % m.group(1)
+        body, outcome = _fetch_page(csv_url, timeout=STATE_SOURCE_TIMEOUT)
+        if outcome == "ok" and body:
+            label = "%s %d, %d" % (when.strftime("%B"), when.day, when.year)
+            parts.append("%s%s %s\n%s" % (bid_sources.OK_LETTING_MARK, label, csv_url, body))
+    return "\n".join(parts)
+
+
+# Kentucky: KYTC's Construction Procurement page links each letting date, and
+# each letting's Notice to Contractors sits at a fixed address built from it.
+# robots.txt disallows /Lists/, which this never touches.
+KY_LETTINGS_READ = int(os.environ.get("KY_LETTINGS_READ", "3"))
+_KY_LETTING_RE = re.compile(r"Lettings\.aspx\?letting=(\d{1,2})/(\d{1,2})/(\d{4})")
+
+
+def _ky_letting_text(index_html, today=None):
+    today = today or datetime.date.today()
+    dates = set()
+    for mo, dy, yr in _KY_LETTING_RE.findall(index_html or ""):
+        try:
+            when = datetime.date(int(yr), int(mo), int(dy))
+        except ValueError:
+            continue
+        if today <= when <= today + datetime.timedelta(days=OK_LETTING_HORIZON_DAYS):
+            dates.add(when)
+    parts = []
+    for when in sorted(dates)[:KY_LETTINGS_READ]:
+        url = ("https://transportation.ky.gov/Construction-Procurement/Publications/"
+               "%s/Notice%%20to%%20Contractors.pdf" % when.isoformat())
+        raw, _ctype, outcome = _fetch_document(url)
+        text = _pdf_all_text(raw) if outcome == "ok" else ""
+        if text:
+            label = "%s %d, %d" % (when.strftime("%B"), when.day, when.year)
+            parts.append("%s%s %s\n%s" % (bid_sources.OK_LETTING_MARK, label, url, text))
+    return "\n".join(parts)
+
+
+# Wisconsin: the year's advertisement schedule page links each letting by its
+# date (bid-let/2026/20261110.aspx), and the Notice to Contractors for that
+# letting sits at hccidocs/bid-let/<year>/<date>/advertisement.pdf.
+WI_LETTINGS_READ = int(os.environ.get("WI_LETTINGS_READ", "3"))
+_WI_LETTING_RE = re.compile(r"/bid-let/(\d{4})/(\d{4})(\d{2})(\d{2})\.aspx")
+
+
+def _wi_letting_text(today=None):
+    today = today or datetime.date.today()
+    dates = set()
+    for year in sorted({today.year, (today + datetime.timedelta(days=OK_LETTING_HORIZON_DAYS)).year}):
+        page, outcome = _fetch_page(
+            "https://wisconsindot.gov/Pages/doing-bus/contractors/hcci/bid-let-%d.aspx" % year,
+            timeout=STATE_SOURCE_TIMEOUT)
+        for _y, y, m, d in _WI_LETTING_RE.findall(page or ""):
+            try:
+                when = datetime.date(int(y), int(m), int(d))
+            except ValueError:
+                continue
+            if today <= when <= today + datetime.timedelta(days=OK_LETTING_HORIZON_DAYS):
+                dates.add(when)
+    parts = []
+    for when in sorted(dates)[:WI_LETTINGS_READ]:
+        url = ("https://wisconsindot.gov/hccidocs/bid-let/%d/%s/advertisement.pdf"
+               % (when.year, when.strftime("%Y%m%d")))
+        raw, _ctype, outcome = _fetch_document(url)
+        text = _pdf_all_text(raw) if outcome == "ok" else ""
+        if text:
+            label = "%s %d, %d" % (when.strftime("%B"), when.day, when.year)
+            parts.append("%s%s %s\n%s" % (bid_sources.OK_LETTING_MARK, label, url, text))
+    return "\n".join(parts)
+
+
+# Indiana: INDOT's contracts page links each upcoming letting's page by a
+# dated slug ("thursday-november-5-2026-regular-letting"), and that
+# letting's Notice to Contractors is /indot/files/<YYYYMMDD>-REG-NTC.pdf.
+IN_LETTINGS_READ = int(os.environ.get("IN_LETTINGS_READ", "3"))
+_IN_LETTING_RE = re.compile(
+    r"(january|february|march|april|may|june|july|august|september|october|november|december)"
+    r"-(\d{1,2}),?-(\d{4})-regular-letting", re.I)
+
+
+def _in_letting_text(index_html, today=None):
+    today = today or datetime.date.today()
+    months = ["january", "february", "march", "april", "may", "june", "july",
+              "august", "september", "october", "november", "december"]
+    dates = set()
+    for mon, day, year in _IN_LETTING_RE.findall(index_html or ""):
+        try:
+            when = datetime.date(int(year), months.index(mon.lower()) + 1, int(day))
+        except ValueError:
+            continue
+        if today <= when <= today + datetime.timedelta(days=OK_LETTING_HORIZON_DAYS):
+            dates.add(when)
+    parts = []
+    for when in sorted(dates)[:IN_LETTINGS_READ]:
+        url = "https://www.in.gov/indot/files/%s-REG-NTC.pdf" % when.strftime("%Y%m%d")
+        raw, _ctype, outcome = _fetch_document(url)
+        text = _pdf_all_text(raw) if outcome == "ok" else ""
+        if text:
+            label = "%s %d, %d" % (when.strftime("%B"), when.day, when.year)
+            parts.append("%s%s %s\n%s" % (bid_sources.OK_LETTING_MARK, label, url, text))
+    return "\n".join(parts)
+
+
+IL_BULLETINS_READ = int(os.environ.get("IL_BULLETINS_READ", "4"))
+# These pages change at most daily, and Illinois alone is five downloads, so
+# each source's text is kept in memory this long instead of refetched by every
+# scan that touches the state. A cold 125-mile scan from Springfield, MO spent
+# about 13 seconds more on them than a warm one.
+LOCAL_SOURCE_TTL_SEC = int(os.environ.get("LOCAL_SOURCE_TTL_SEC", "10800"))
+_local_source_cache = {}
+
+
+def _cached_local_source(url, load):
+    hit = _local_source_cache.get(url)
+    if hit and time.time() - hit[0] < LOCAL_SOURCE_TTL_SEC:
+        return hit[1], hit[2]
+    text, outcome = load()
+    if text:
+        _local_source_cache[url] = (time.time(), text, outcome)
+    return text, outcome
+_IL_BULLETIN_LINK_RE = re.compile(r'href="([^"]*/local-roads/bulletins/[^"]+\.pdf)"', re.I)
+
+
+def _il_bulletin_text(index_html, index_url):
+    """The newest few weekly bulletins, joined with a marker naming each."""
+    links = []
+    for href in _IL_BULLETIN_LINK_RE.findall(index_html or ""):
+        url = urllib.parse.urljoin(index_url, bid_sources._unescape(href))
+        if url not in links:
+            links.append(url)
+    parts = []
+    for url in links[:IL_BULLETINS_READ]:
+        raw, _ctype, outcome = _fetch_document(url)
+        text = _pdf_all_text(raw) if outcome == "ok" else ""
+        if text:
+            parts.append(bid_sources.IL_BULLETIN_MARK + url + "\n" + text)
+    return "\n".join(parts)
+# Sources that are a PDF rather than a page; read as text, every page.
+_LOCAL_PDF_KINDS = {"iowa_ntb_pdf"}
+LOCAL_PDF_MAX_PAGES = 120
+
+
+def _pdf_all_text(raw, max_pages=LOCAL_PDF_MAX_PAGES):
+    """Text of every page of a PDF, or "" if it cannot be read."""
+    try:
+        from pypdf import PdfReader
+        reader = PdfReader(io.BytesIO(raw))
+        return "\n".join((p.extract_text() or "") for p in reader.pages[:max_pages])
+    except Exception:
+        return ""
+# Towns named on those pages, geocoded once per process.
+_LOCAL_NOTICE_GEO = {}
+
+
+def _place_local_notice(grouped, row, center, radius, city_coords=None, stats=None):
+    """Place a town's own notice from a state page at that town.
+
+    Open-or-not is decided before any geocoding: Missouri's table keeps
+    hundreds of past notices, and looking up each of their towns would spend
+    a scan's whole budget on work nobody can bid.
+    """
+    def _count(reason):
+        if stats is not None:
+            stats[reason] = stats.get(reason, 0) + 1
+
+    bid = {k: row[k] for k in ("title", "scope", "url", "deadline", "status",
+                               "source", "documents", "agency", "call") if k in row}
+    _apply_deadline_status(bid)
+    if not _is_open_bid(bid):
+        _count("state_letting_already_held")
+        return None
+    st = (row.get("state") or center.get("state") or "").upper()
+    point, label = None, ""
+    if row.get("county"):
+        point = counties.lookup(st, row["county"])
+        label = "%s County, %s" % (str(row["county"]).title(), st)
+    elif row.get("town"):
+        town = row["town"]
+        known = bid_portals._coords().get((town, st))
+        point = known or _city_coords(town, st, _LOCAL_NOTICE_GEO)
+        if not point and town.lower().endswith(" city"):
+            # "Odessa City", "St. Louis City": the place is the name before it.
+            point = _city_coords(town[:-5].strip(), st, _LOCAL_NOTICE_GEO)
+        label = town if st == center.get("state") else "%s, %s" % (town, st)
+    if not point:
+        _count("state_row_unplaceable")
+        return None
+    miles = _miles_between(center["lat"], center["lon"], point[0], point[1])
+    if miles > radius:
+        _count("out_of_radius")
+        return None
+    bid["miles"] = int(round(miles))
+    bucket = grouped.setdefault(label, [])
+    key = _bid_dupe_key(bid)
+    if key[0] and any(_bid_dupe_key(x) == key for x in bucket):
+        _count("duplicate")
+        return None
+    bucket.append(bid)
+    _count("kept")
+    _count("state_local_kept")
+    if city_coords is not None:
+        city_coords[label] = {"lat": point[0], "lon": point[1]}
+    return bid
+
 
 def _resolve_state_listing(url, kind, page):
     """(listing_url, listing_html) for a source, following an index if needed.
@@ -3030,6 +3303,33 @@ def _attach_plan_holders(bids, letting_html, letting_url, stats=None):
     return found
 
 
+def _load_local_source(url, kind):
+    """(text, outcome) for one local-notices source, whatever its format."""
+    if kind in _LOCAL_PDF_KINDS:
+        raw, _ctype, outcome = _fetch_document(url)
+        text = _pdf_all_text(raw) if outcome == "ok" else ""
+        return text, (outcome if outcome != "ok" or text else "unreadable")
+    page, outcome = _fetch_page(url, timeout=STATE_SOURCE_TIMEOUT)
+    if outcome != "ok" or not page:
+        return "", outcome
+    if kind == "il_bulletin":
+        text = _il_bulletin_text(page, url)
+        return text, ("ok" if text else "unreadable")
+    if kind == "ok_letting":
+        text = _ok_letting_text(page, url)
+        return text, ("ok" if text else "unreadable")
+    if kind == "ky_ntc":
+        text = _ky_letting_text(page)
+        return text, ("ok" if text else "unreadable")
+    if kind == "wi_ntc":
+        text = _wi_letting_text()
+        return text, ("ok" if text else "unreadable")
+    if kind == "in_ntc":
+        text = _in_letting_text(page)
+        return text, ("ok" if text else "unreadable")
+    return page, "ok"
+
+
 def _run_state_sources(center, radius, grouped, city_coords=None, stats=None):
     """Read the letting page of every verified state the radius touches.
 
@@ -3038,15 +3338,18 @@ def _run_state_sources(center, radius, grouped, city_coords=None, stats=None):
     costs its own rows, never the scan.
     """
     sources = _state_sources()
-    if not sources:
+    if not sources and not LOCAL_NOTICE_SOURCES:
         return 0
     try:
         states = counties.states_within(center["lat"], center["lon"], radius)
     except Exception:
         states = [center.get("state", "").upper()]
     todo = [(st,) + sources[st] for st in states if st in sources]
+    todo += [(st, url, kind) for st in states
+             for url, kind in LOCAL_NOTICE_SOURCES.get(st, ())]
     if not todo:
         return 0
+    kinds = {url: kind for _st, url, kind in todo}
 
     # Fetch every state at once, then process them one at a time.
     #
@@ -3063,6 +3366,9 @@ def _run_state_sources(center, radius, grouped, city_coords=None, stats=None):
     def _load(item):
         st, url, kind = item
         try:
+            if kind in bid_sources.LOCAL_NOTICE_PARSERS:
+                text, outcome = _cached_local_source(url, lambda: _load_local_source(url, kind))
+                return st, url, (text or None), outcome
             page, outcome = _fetch_page(url, timeout=STATE_SOURCE_TIMEOUT)
             if outcome != "ok" or not page:
                 return st, url, None, outcome
@@ -3081,6 +3387,17 @@ def _run_state_sources(center, radius, grouped, city_coords=None, stats=None):
                 if stats is not None:
                     k = "state_fetch_%s" % outcome
                     stats[k] = stats.get(k, 0) + 1
+                continue
+            reader = bid_sources.LOCAL_NOTICE_PARSERS.get(kinds.get(url))
+            if reader:
+                rows = reader(page, st, url)
+                if stats is not None:
+                    stats["state_local_rows_read"] = \
+                        stats.get("state_local_rows_read", 0) + len(rows)
+                for row in rows:
+                    if _place_local_notice(grouped, row, center, radius,
+                                           city_coords, stats) is not None:
+                        placed += 1
                 continue
             rows = bid_sources.parse_state_letting(
                 page, st, url, counties.counties_named)

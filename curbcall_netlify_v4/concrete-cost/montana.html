@@ -53,6 +53,13 @@ details p{color:var(--text2);margin-top:0.4rem;font-size:0.93rem;}
 .su{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0.6rem 0.9rem;margin-top:0.8rem;}
 .su label{display:flex;flex-direction:column;font-size:0.8rem;color:var(--text2);gap:0.25rem;}
 .su input{width:100%;min-width:0;min-height:44px;background:var(--bg);border:1px solid var(--line);border-radius:10px;color:var(--text);padding:0.4rem 0.6rem;font-family:var(--ui);font-size:16px;}
+.nz{display:flex;gap:0.5rem;margin-top:0.7rem;}
+.nz input{flex:1;min-width:0;min-height:46px;background:var(--bg);border:1px solid var(--line);border-radius:10px;color:var(--text);padding:0.4rem 0.7rem;font-family:var(--ui);font-size:16px;}
+.nz button{min-height:46px;padding:0 1rem;background:var(--amber);color:#10131c;font-weight:800;border:0;border-radius:10px;cursor:pointer;font-family:var(--ui);white-space:nowrap;}
+.nb-list{list-style:none;margin:0.8rem 0 0;padding:0;}
+.nb-list li{padding:0.45rem 0;border-bottom:1px solid var(--line);}
+.nb-list li b{display:block;color:var(--text);font-size:0.92rem;}
+.nb-list li span{color:var(--text3);font-size:0.82rem;}
 .su button{grid-column:1/-1;min-height:48px;background:var(--amber);color:#10131c;font-weight:800;font-size:1rem;border:0;border-radius:12px;cursor:pointer;font-family:var(--ui);}
 .su .hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0;}
 footer{border-top:1px solid var(--line);padding:2rem 0;color:var(--text3);font-size:0.82rem;margin-top:2.5rem;}
@@ -75,6 +82,30 @@ These are state highway jobs; city and county work can run different.</p>
 <p class="note">Source: <a href="https://mdt.mt.gov/business/contracting/" rel="nofollow noopener" target="_blank">MDT Weighted Average Prices</a>.
 Averages of winning prices only.</p>
 
+<div class="card" id="bids-near">
+<h2 style="margin-top:0;">Open bids near you right now</h2>
+<p class="why">Type your ZIP to see the open sidewalk, curb and ADA ramp bids within 50 miles.</p>
+<form class="nz" id="nz"><input id="nz-in" inputmode="numeric" autocomplete="postal-code" placeholder="ZIP code" aria-label="ZIP code" maxlength="40" /><button type="submit">Show me</button></form>
+<div id="nz-out" class="note"></div>
+</div>
+<script>(function(){
+var f=document.getElementById("nz"),i=document.getElementById("nz-in"),o=document.getElementById("nz-out");
+var M=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function h(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
+function due(s){var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(s||"");return m?"due "+M[+m[2]-1]+" "+(+m[3]):"due date on the posting";}
+f.onsubmit=function(){
+  var v=(i.value||"").trim();if(!v){i.focus();return false;}
+  o.textContent="Looking…";
+  fetch("https://bid-caller-pro.onrender.com/bids-near",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({location:v,radius:50})})
+  .then(function(r){return r.json();}).then(function(d){
+    if(!d||!d.ok){o.textContent="Couldn't find that place. Try a ZIP code.";return;}
+    if(!d.count){o.innerHTML='None found near '+h(d.location)+' in the last few weeks. <a href="/app.html">Run a fresh scan, free</a>.';return;}
+    o.innerHTML='<ul class="nb-list">'+d.bids.map(function(b){return '<li><b>'+h(b.title)+'</b><span>'+h(b.town)+' &middot; '+h(b.miles)+' mi &middot; '+h(due(b.due))+'</span></li>';}).join("")
+      +'</ul><a class="cta" href="/app.html">Start free: '+(d.count>d.bids.length?'see all '+d.count+' and price them':'open them and price them')+'</a>';
+  }).catch(function(){o.textContent="Couldn't check right now. Try again in a moment.";});
+  return false;
+};
+})();</script>
 <div class="card" id="weekly-bids">
 <h2 style="margin-top:0;">Get open bids near you, free, every Monday</h2>
 <p class="why">The open sidewalk, curb and ADA ramp bids within 50 miles of your ZIP, in one email a week. No account. One click to stop.</p>

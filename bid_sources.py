@@ -141,6 +141,11 @@ CANDIDATE_BID_PATHS = (
     "/RFP.aspx",
     "/Purchasing.aspx",
     "/bids.html",
+    # ── small towns that post bids among their notices ──
+    "/projects-bids",
+    "/projectsbids",
+    "/public-notices",
+    "/legal-notices",
 )
 
 
@@ -168,7 +173,12 @@ def candidate_bid_urls(domain, limit=None):
 # the same as it being about the city that was searched for.
 _HOMEPAGE_LINK_RE = re.compile(r'<a[^>]+href="([^"#][^"]*)"[^>]*>(.*?)</a>', re.I | re.S)
 _HOMEPAGE_LINK_HINTS = ("bid", "rfp", "rfq", "solicitation", "procurement",
-                        "purchasing", "vendor")
+                        "purchasing", "vendor",
+                        # A small town with no bid page posts its "Notice to
+                        # Bidders" under Public Notices or Legal Notices. The
+                        # page still has to read as procurement to be kept.
+                        "public notice", "public-notice", "publicnotice",
+                        "legal notice", "legal-notice", "legalnotice")
 _HOMEPAGE_LINK_NOISE = ("facebook.com", "twitter.com", "x.com", "instagram.com",
                         "youtube.com", "linkedin.com", "mailto:", "tel:", "javascript:")
 
@@ -361,6 +371,8 @@ NICHE_TERMS = (
     "paving", "pavement", "ramp", "driveway", "apron", "trail", "greenway",
     "street improvement", "streetscape", "roadway", "road improvement",
     "intersection", "safe routes", "pedestrian", "walkway", "crosswalk",
+    # A shared-use path is a wide sidewalk, and most are poured concrete.
+    "shared use path", "shared-use path", "multi-use path", "multiuse path",
     "parking lot", "slab", "curb ramp", "transition plan", "cdbg",
     "public works", "infrastructure", "reconstruction", "resurfacing",
     # A street overlay programme is let with curb, gutter and ADA ramp repair
@@ -1690,6 +1702,714 @@ def _state_row(ident, desc, text, places, state, base_url, call="",
         # nearest is both true and the only useful answer to "how far is it".
         "places": list(places),
     }
+
+
+# ── Local-agency notices on a state page ───────────────────────────────────
+# Federal-aid money for small towns (sidewalks, trails, Safe Routes to School)
+# flows through the state DOT, and some DOTs re-post each town's own bid
+# notice on one page. Arkansas does: "Currently Advertised Local Projects",
+# where the town's name links to its notice and a paragraph of the notice
+# follows. Tyronza and Lake Village have no bid page of their own anywhere
+# discovery could find, so this page is the only place their sidewalk jobs
+# show up online outside the newspaper.
+#
+# Each entry is a town or a county letting its own job, which is the whole
+# difference from a state letting row: it is placed at the town, not a county
+# centroid, and it is labelled with the town, the way a city posting is.
+_LOCAL_AGENCY_SPLIT_RE = re.compile(r'<p\b[^>]*class="[^"]*has-medium-font-size[^"]*"[^>]*>', re.I)
+_LOCAL_AGENCY_HEAD_RE = re.compile(r'\s*<a\b[^>]*href="([^"]+)"[^>]*>(.*?)</a>', re.I | re.S)
+_LOCAL_DATE_RE = re.compile(
+    r"\b(January|February|March|April|May|June|July|August|September|October|"
+    r"November|December)\s+(\d{1,2})\s*(?:st|nd|rd|th)?\s*,?\s+(20\d\d)\b", re.I)
+# The notice says what the job is in one of a few set phrases. Ordered from
+# the most to the least specific; the first that matches wins.
+_LOCAL_TITLE_RES = (
+    re.compile(r"following project:\s*(?:job no\.?\s*\d+\s*)?(.+?)(?:\s+\.|\.\s+(?=[A-Z][a-z])|$)", re.I),
+    re.compile(r"\bJOB\s+\d{5,6},\s*(.+?)(?:,\s*F\.A\.P\.|$)"),
+    re.compile(r"\bfor (?:the )?construction of (?:the )?(.+?)(?:\.\s+(?=[A-Z][a-z])|\.$| will be received)", re.I),
+    re.compile(r"\bbids for (?:the )?(.+?)(?: FAP No| will be received| until )", re.I),
+    re.compile(r"\bfor the (.+?) project\b", re.I),
+    re.compile(r"\bnecessary to construct (?:an? |the )?(.+?)(?:\.\s|\.$)", re.I),
+)
+_LOCAL_TITLE_NOISE_RE = re.compile(
+    r"\((?:TAP|SRTS|STP|CMAQ|RTP)[^)]*\)|\(S\)|\(ARDOT Job[^)]*\)|\bARDOT Job (?:No\.?\s*)?\d+\b", re.I)
+_LOCAL_ABBREV = ((r"\bImpvts?\.?", "Improvements"), (r"\bPed\.", "Pedestrian"),
+                 (r"\bPkwy\.", "Parkway"), (r"\bPh\.", "Phase"))
+
+
+def _local_title(text, agency):
+    title = ""
+    for rx in _LOCAL_TITLE_RES:
+        m = rx.search(text)
+        if m and len(m.group(1).strip()) >= 8:
+            title = m.group(1)
+            break
+    title = _LOCAL_TITLE_NOISE_RE.sub(" ", title)
+    for pat, rep in _LOCAL_ABBREV:
+        title = re.sub(pat, rep, title)
+    title = re.sub(r"\s+", " ", title).strip(" ,.;:-")
+    if title and title.upper() == title:
+        # str.title() would print "Crowley’S": it starts a word after an
+        # apostrophe. Capitalize on spaces only.
+        title = " ".join(re.sub(r"[a-z]", lambda m: m.group(0).upper(), w.lower(), count=1)
+                         for w in title.split(" "))
+    if len(title) > 140:
+        title = title[:140].rsplit(" ", 1)[0]
+    if not title:
+        return agency
+    if title[:1].islower():
+        title = title[0].upper() + title[1:]
+    return title
+
+
+def _local_place(agency):
+    """("town", name) or ("county", name) for 'City of X' / 'X County'."""
+    a = re.sub(r"\s+", " ", str(agency or "")).strip()
+    m = re.match(r"(?:city|town|village) of (.+)$", a, re.I)
+    if m:
+        return "town", m.group(1).strip()
+    m = re.match(r"(.+?) county$", a, re.I)
+    if m:
+        return "county", m.group(1).strip()
+    return "", ""
+
+
+def parse_local_agency_notices(html, state, base_url=""):
+    """Rows for each town's bid notice on a state local-programs page.
+
+    Pure: text in, rows out. The caller puts each row on the map, from its
+    "town" or "county". A notice that is not this trade's work, or names no
+    place we can find, does not come back. An "Addendum" entry belongs to the
+    notice above it and is added to that notice's documents.
+    """
+    rows = []
+    parts = _LOCAL_AGENCY_SPLIT_RE.split(str(html or ""))
+    for part in parts[1:]:
+        head = _LOCAL_AGENCY_HEAD_RE.match(part)
+        if not head:
+            continue
+        href = urllib.parse.urljoin(base_url, _unescape(head.group(1)))
+        agency = _clean(head.group(2))
+        body = re.split(r"_{10,}", part)[0]
+        text = _clean(body)
+        if re.match(r"addend", agency, re.I):
+            if rows:
+                rows[-1]["documents"].append({"name": agency, "url": href})
+            continue
+        kind, place = _local_place(agency)
+        if not place:
+            continue
+        rest = text[len(agency):].strip() if text.startswith(agency) else text
+        title = _local_title(rest, agency)
+        if not looks_relevant(title, rest):
+            continue
+        m = _LOCAL_DATE_RE.search(rest)
+        deadline = ("%s %s, %s" % (m.group(1).title(), int(m.group(2)), m.group(3))) if m else ""
+        rows.append({
+            "title": title,
+            "scope": rest[:1200],
+            "url": href,
+            "deadline": deadline,
+            "status": status_from_title(title) or "Open",
+            "agency": agency,
+            kind: place,
+            "state": str(state or "").upper(),
+            "source": "state_local",
+            "documents": [{"name": "Bid notice", "url": href}],
+        })
+    return rows
+
+
+# Missouri's version is a table. A city or county letting federal-aid work
+# must post its bid opening on MoDOT's "Local Projects Administered by Cities
+# and Counties" page, one row per notice: status, "<District>, <Agency>,
+# <what the job is>", post date, revision date, letting date. Checked live
+# 2026-11-02 it held 18 open concrete-relevant jobs: sidewalks in Milan,
+# Bethany, Creve Coeur, Desloge, Linn Creek, trails in Ozark and Maryville.
+_LPA_ROW_RE = re.compile(r"(?s)<tr\b.*?</tr>", re.I)
+_LPA_CELL_RE = re.compile(r"(?s)<t[dh]\b[^>]*>(.*?)</t[dh]>", re.I)
+_LPA_HREF_RE = re.compile(r'href="([^"]+)"', re.I)
+_LPA_DISTRICT_RE = re.compile(r"^[A-Za-z. ]{1,20}\bDistrict$", re.I)
+_MONTHS = ("January February March April May June July August September "
+           "October November December").split()
+
+
+def _lpa_date(text):
+    m = re.match(r"\s*(\d{1,2})/(\d{1,2})/(\d{2}|\d{4})\s*$", str(text or ""))
+    if not m:
+        return ""
+    month, day, year = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    if year < 100:
+        year += 2000
+    if not (1 <= month <= 12 and 1 <= day <= 31):
+        return ""
+    return "%s %d, %d" % (_MONTHS[month - 1], day, year)
+
+
+def _lpa_agency(text):
+    """(kind, place, description) from "<District>, <Agency>, <job>"."""
+    parts = [p.strip() for p in str(text or "").split(",")]
+    if parts and _LPA_DISTRICT_RE.match(parts[0]):
+        parts = parts[1:]
+    if len(parts) >= 2 and parts[0].lower() == "st" and parts[1].lower().endswith("county"):
+        parts = ["St. " + parts[1]] + parts[2:]          # "St, Francois County"
+    if len(parts) < 2:
+        return "", "", ""
+    head, rest = parts[0], ", ".join(parts[1:]).strip()
+    head = re.sub(r"^re-?bid\s*[-:\u2013]\s*", "", head, flags=re.I)
+    m = re.match(r"(?:city|town|village) of (.+)$", head, re.I)
+    if m:
+        return "town", m.group(1).strip(), rest
+    m = re.match(r"(.+?) county$", head, re.I)
+    if m:
+        return "county", m.group(1).strip(), rest
+    # "Central District, New Bloomfield, construction of ..." names the town
+    # bare. Only a short capitalised name counts, so a job description that
+    # happens to sit first is not mistaken for a place.
+    if len(head.split()) <= 3 and head[:1].isupper() and not re.search(r"\d", head):
+        return "town", head, rest
+    return "", "", ""
+
+
+def _lpa_title(desc):
+    t = re.sub(r"\s+", " ", str(desc or "")).strip(" ,.;")
+    if t[:1].islower():
+        t = t[0].upper() + t[1:]
+    if len(t) > 110:
+        t = t[:110].rsplit(" ", 1)[0].rstrip(" ,;") + "…"
+    return t
+
+
+# A row with no letting date is kept only while its post is this fresh. The
+# table keeps old notices, and one posted in March 2025 with the letting date
+# left blank would otherwise read as open work forever.
+LPA_UNDATED_MAX_DAYS = 60
+
+
+def parse_lpa_table(html, state, base_url="", today=None):
+    """Rows from a state's table of locally administered bid notices.
+
+    Pure: text in, rows out, placed by the caller from "town" or "county".
+    An addendum row is added to the notice it amends, not shown on its own.
+    """
+    import datetime as _dt
+    today = today or _dt.date.today()
+    rows = []
+    for tr in _LPA_ROW_RE.findall(str(html or "")):
+        cells = [re.sub(r"\s+", " ", _unescape(_clean(c)).replace("\xa0", " ")).strip()
+                 for c in _LPA_CELL_RE.findall(tr)]
+        if len(cells) < 5 or cells[0].lower() == "status":
+            continue
+        status, text, letting = cells[0], cells[1], cells[4]
+        href = _LPA_HREF_RE.search(tr)
+        url = urllib.parse.urljoin(base_url, _unescape(href.group(1))) if href else base_url
+        if status.lower().startswith("addend"):
+            base = re.sub(r"\s*addendum\s*\d*\s*$", "", text, flags=re.I).strip()
+            for r in reversed(rows):
+                if r["notice"] == base:
+                    r["documents"].append({"name": status, "url": url})
+                    break
+            continue
+        kind, place, desc = _lpa_agency(text)
+        if not place or not desc:
+            continue
+        title = _lpa_title(desc)
+        if not looks_relevant(title, desc):
+            continue
+        deadline = _lpa_date(letting)
+        if not deadline:
+            posted = _lpa_date(cells[2])
+            try:
+                age = (today - _dt.datetime.strptime(posted, "%B %d, %Y").date()).days
+            except ValueError:
+                continue
+            if age > LPA_UNDATED_MAX_DAYS:
+                continue
+        rows.append({
+            "title": title,
+            "scope": desc[:1200],
+            "url": url,
+            "deadline": deadline,
+            "status": status_from_title(title) or "Open",
+            "agency": ("City of %s" % place) if kind == "town" else ("%s County" % place),
+            kind: place,
+            "state": str(state or "").upper(),
+            "source": "state_local",
+            "documents": [{"name": "Bid notice", "url": url}],
+            "notice": text,
+        })
+    for r in rows:
+        r.pop("notice", None)
+    return rows
+
+
+# Iowa lets county and city federal-aid work through the DOT's own monthly
+# letting, and the Notice to Bidders PDF lists every proposal with its county,
+# work type and full item list. That item list is the point: a flatwork crew
+# can see "244 sq yd sidewalk, P.C.C." before opening a single plan sheet.
+# The 2026-11-17 letting carried 63 proposals. A proposal is kept only when
+# it has flatwork items of its own, so a steel-girder bridge with nothing a
+# concrete crew pours outside the deck does not come back.
+_IA_ORDER_SPLIT_RE = re.compile(r"BID ORDER NUMBER:\s*\d+")
+_IA_PROPOSAL_RE = re.compile(r"PROPOSAL ID:\s*(\S+)\s+COUNTY:\s*([A-Z' .\-]+?)\s*$", re.M)
+_IA_WORK_RE = re.compile(r"WORK TYPE:\s*(.+)$", re.M)
+_IA_LETTING_RE = re.compile(r"FOR THE\s+LETTING\s*-+\s*(\d{4})/(\d{2})/(\d{2})")
+_IA_ITEM_RE = re.compile(
+    r"^\s*([\d,]+\.\d{2})\s+(SQUARE YARD|SQUARE FOOT|LINEAR FOOT|CUBIC YARD|EACH|TON|STATION)\s+(.+?)\s*$",
+    re.M)
+# Paved shoulders are left out: on these lettings they are usually asphalt,
+# and a bridge job with nothing else would read as flatwork work.
+_IA_FLATWORK_RE = re.compile(
+    r"SIDEWALK|P\.\s?C\.\s?C\.|\bPCC\b|CURB|DRIVES?\b|DRIVEWAY|\bRAMP|"
+    r"DETECTABLE WARNING|MEDIAN|PATCH", re.I)
+_IA_ACRONYMS = {"PCC", "HMA", "RCB", "CCS", "PPCB", "CMP", "RCP", "ADA", "DBE"}
+_IA_UNITS = {"SQUARE YARD": "sq yd", "SQUARE FOOT": "sq ft", "LINEAR FOOT": "ft",
+             "CUBIC YARD": "cu yd", "EACH": "each", "TON": "ton", "STATION": "sta"}
+
+
+def _ia_case(text):
+    text = re.sub(r"P\.\s?C\.\s?C\.?", "PCC", str(text or ""))
+    out = []
+    for w in text.split():
+        core = w.strip(",.;:()")
+        if core.upper() in _IA_ACRONYMS or not w.isupper():
+            out.append(w)
+        else:
+            out.append(w[:1].upper() + w[1:].lower())
+    return " ".join(out)
+
+
+def parse_iowa_notice_to_bidders(text, state="IA", base_url=""):
+    """Rows for proposals with flatwork items in Iowa DOT's Notice to Bidders.
+
+    Takes the PDF's extracted text. Pure, like the other readers; each row
+    names its county for the caller to place.
+    """
+    text = str(text or "")
+    m = _IA_LETTING_RE.search(text)
+    deadline = ""
+    if m:
+        deadline = "%s %d, %s" % (_MONTHS[int(m.group(2)) - 1], int(m.group(3)), m.group(1))
+    rows = []
+    for block in _IA_ORDER_SPLIT_RE.split(text)[1:]:
+        pm = _IA_PROPOSAL_RE.search(block)
+        if not pm:
+            continue
+        ident, county = pm.group(1), pm.group(2).strip().split(",")[0].strip()
+        work = (_IA_WORK_RE.search(block) or [None, ""])[1].strip()
+        items = []
+        for q, unit, name in _IA_ITEM_RE.findall(block):
+            up = name.upper()
+            if up.startswith("REMOVAL") or "HMA" in up or not _IA_FLATWORK_RE.search(name):
+                continue
+            qty = q.rstrip("0").rstrip(".") if "." in q else q
+            items.append("%s %s %s" % (qty, _IA_UNITS[unit], _ia_case(name).rstrip(".")))
+        if not items:
+            continue
+        where = ""
+        for line in block.splitlines():
+            line = line.strip()
+            if line.startswith(("On ", "In ")) and len(line) > 8:
+                where = line
+                break
+        title = _ia_case(work) or "Iowa DOT letting"
+        if where:
+            title = "%s, %s" % (title, where)
+        rows.append({
+            "title": title[:160],
+            "scope": ("Proposal %s. Flatwork items: %s." % (ident, "; ".join(items[:12])))[:1200],
+            "url": base_url,
+            "deadline": deadline,
+            "status": "Open",
+            "agency": "Iowa DOT letting",
+            "call": ident,
+            "county": _ia_case(county),
+            "state": str(state or "IA").upper(),
+            "source": "state_dot",
+            "documents": [{"name": "Notice to Bidders (all projects)", "url": base_url},
+                          {"name": "Plans and bidding (Bid Express)",
+                           "url": "https://www.bidx.com/ia/main"}],
+        })
+    return rows
+
+
+# Illinois: the Bureau of Local Roads and Streets publishes a weekly Notice to
+# Contractors Bulletin where counties, townships and towns advertise the
+# contracts they let themselves. A notice appears in full once, in the week
+# it is first advertised, so the caller passes the last few bulletins joined
+# with a marker line naming each one's address. Each district header lists
+# its counties, which is how a county is told apart from a town here without
+# a lookup table.
+IL_BULLETIN_MARK = "@@BULLETIN "
+_IL_BLOCK_HEAD = "City/County Section No. Time Date Location of Letting"
+_IL_SECTION_RE = re.compile(r"\b\d{2}-[A-Z0-9]{4,6}-\d{2}-[A-Z]{2}\b|\bNon-MFT\b|\bN/A\b")
+_IL_TIME_RE = re.compile(r"\b\d{1,2}:\d{2}\s*[ap]m\b", re.I)
+_IL_DATE_RE = re.compile(r"\b(\d{1,2})/(\d{1,2})/(\d{4})\b")
+_IL_DISTRICT_RE = re.compile(r"District:\s*\d+\s+([A-Z][A-Za-z .,'\n]+?)(?=\n(?:City/County|No New|No Adv))")
+_IL_URL_RE = re.compile(r"(https?://\S+|www\.\S+)", re.I)
+
+
+def _il_field(block, start, ends):
+    i = block.find(start)
+    if i < 0:
+        return ""
+    i += len(start)
+    j = min([k for k in (block.find(e, i) for e in ends) if k >= 0] or [len(block)])
+    return re.sub(r"\s+", " ", block[i:j]).strip()
+
+
+def parse_il_contractors_bulletin(text, state="IL", base_url=""):
+    """Rows for this trade's notices in Illinois' local-roads bulletins."""
+    rows, seen = [], set()
+    # The PDF's text layer turns some quotes and spaces into ¶ ´ ±.
+    text = re.sub(r"[\u00b6\u00b4\u00b1\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]+", " ",
+                  str(text or ""))
+    chunks = text.split(IL_BULLETIN_MARK)
+    for chunk in chunks:
+        url, _, body = chunk.partition("\n")
+        url = url.strip() if chunk is not chunks[0] or text.startswith(IL_BULLETIN_MARK) else base_url
+        if not body.strip():
+            continue
+        # Only new advertisements carry details (Part II); awards follow in Part III.
+        part2 = body.split("PART II", 1)[-1].split("PART III", 1)[0]
+        county_names = set()
+        for m in _IL_DISTRICT_RE.finditer(part2):
+            for name in m.group(1).replace("\n", " ").split(","):
+                name = name.strip().lower()
+                if name:
+                    county_names.add(name)
+        for block in part2.split(_IL_BLOCK_HEAD)[1:]:
+            block = re.split(r"\nPage \d+ of \d+|\nDistrict:", block)[0]
+            first = block.strip().splitlines()[0] if block.strip() else ""
+            cut = [m.start() for m in (_IL_SECTION_RE.search(first), _IL_TIME_RE.search(first)) if m]
+            agency = re.sub(r"\s+", " ", first[:min(cut)] if cut else first).strip(" ,")
+            dm = _IL_DATE_RE.search(block)
+            if not agency or not dm:
+                continue
+            deadline = "%s %d, %s" % (_MONTHS[int(dm.group(1)) - 1], int(dm.group(2)), dm.group(3))
+            desc = _il_field(block, "Description:", ("Project Location:", "Proposal Available:"))
+            where = _il_field(block, "Project Location:", ("Proposal Available:",))
+            plans = _il_field(block, "Proposal Available:", ("Proposal Fee:",))
+            if not desc:
+                continue
+            title = re.split(r"(?<=[a-z0-9)])\.\s", desc, maxsplit=1)[0].strip(" .")
+            if title[:1].islower():
+                title = title[0].upper() + title[1:]
+            if title.upper() == title:
+                title = title[:1] + title[1:].lower()
+            if len(title) > 110:
+                title = title[:110].rsplit(" ", 1)[0].rstrip(" ,;") + "…"
+            if not looks_relevant(title, desc + " " + where):
+                continue
+            cm = re.match(r"(.+?)\s+(?:county|co\.)\b", agency, re.I)
+            name = cm.group(1).strip() if cm else agency
+            m = re.match(r"(?:city|village|town) of (.+)$", name, re.I)
+            if m:
+                kind, place = "town", m.group(1)
+            elif cm or name.lower() in county_names:
+                kind, place = "county", name.title() if name.isupper() else name
+            else:
+                kind, place = "town", name.title() if name.isupper() else name
+            # The same notice printed in two bulletins can differ in spacing
+            # and stray glyphs, so compare letters and digits only.
+            key = (place.lower(), deadline, re.sub(r"[^a-z0-9]", "", title.lower())[:30])
+            if key in seen:
+                continue
+            seen.add(key)
+            docs = [{"name": "Notice to Contractors Bulletin", "url": url or base_url}]
+            link = _IL_URL_RE.search(plans) or _IL_URL_RE.search(desc)
+            if link:
+                href = link.group(1).rstrip(".,;)")
+                if not href.lower().startswith("http"):
+                    href = "https://" + href
+                docs.append({"name": "Plans and proposal", "url": href})
+            scope = desc + (" Location: %s." % where if where else "") + \
+                (" Plans: %s" % plans if plans else "")
+            rows.append({
+                "title": title,
+                "scope": scope[:1200],
+                "url": url or base_url,
+                "deadline": deadline,
+                "status": status_from_title(title) or "Open",
+                "agency": agency.title() if agency.isupper() else agency,
+                kind: place,
+                "state": str(state or "IL").upper(),
+                "source": "state_local",
+                "documents": docs,
+            })
+    return rows
+
+
+# Oklahoma: each upcoming ODOT letting has its own page, and the page's table
+# is filled from a spreadsheet at odot.org/contracts/<year>/<folder>/letting-
+# spreadsheet.csv. The caller joins the spreadsheets of the next few lettings,
+# each after a marker line "@@LETTING <Month D, YYYY> <spreadsheet url>".
+# The Nov 12, 2026 letting carried sidewalk jobs in Tulsa and Oklahoma City
+# and pedestrian work in Tahlequah, let by ODOT for those cities.
+OK_LETTING_MARK = "@@LETTING "
+_OK_CITY_RE = re.compile(r"\b(?:IN|NEAR) THE CITY OF ([A-Z][A-Z .'-]+?)(?:[.,<]|$)")
+
+
+def parse_ok_letting_csv(text, state="OK", base_url=""):
+    import csv as _csv
+    rows = []
+    for chunk in str(text or "").split(OK_LETTING_MARK)[1:]:
+        head, _, body = chunk.partition("\n")
+        m = re.match(r"(.+?\d{4})\s+(\S+)\s*$", head.strip())
+        if not m:
+            continue
+        deadline, url = m.group(1), m.group(2)
+        for rec in _csv.reader(io_lines(body)):
+            if len(rec) < 10:
+                continue
+            call, ident, county_cell, raw = rec[1].strip(), rec[7].strip(), rec[8], rec[9]
+            lines = [re.sub(r"\s+", " ", _unescape(x)).strip()
+                     for x in re.split(r"<br\s*/?>", raw, flags=re.I)]
+            lines = [x for x in lines if x and not x.lower().startswith(
+                ("there will be", "prequalification", "project length"))]
+            if not lines:
+                continue
+            desc = " ".join(lines)
+            work = _ok_case(lines[0])
+            where = lines[1] if len(lines) > 1 else ""
+            title = work + (": " + _ok_case(where.rstrip(":")) if where else "")
+            title = re.sub(r"\s+", " ", title)[:150]
+            if not looks_relevant(work, desc):
+                continue
+            cm = _OK_CITY_RE.search(desc.upper())
+            county = county_cell.split("/")[0].strip().title()
+            row = {
+                "title": title,
+                "scope": ("Call %s, project %s. %s" % (call, ident, desc.capitalize()))[:1200],
+                "url": url,
+                "deadline": deadline,
+                "status": "Open",
+                "agency": "ODOT letting",
+                "call": call,
+                "state": str(state or "OK").upper(),
+                "source": "state_dot",
+                "documents": [{"name": "Letting spreadsheet", "url": url},
+                              {"name": "Plans and bidding (Bid Express)",
+                               "url": "https://www.bidx.com/OKDOT/main"}],
+            }
+            if cm:
+                row["town"] = cm.group(1).strip().title()
+            else:
+                row["county"] = county
+            rows.append(row)
+    return rows
+
+
+def _ok_case(text):
+    """Title case that leaves route names, compass points and ordinals right."""
+    t = str(text or "").title()
+    t = re.sub(r"\b(Sh|Us|Ih|I|Ok|Ky|Cr|Sr)([- ])(\d)",
+               lambda m: m.group(1).upper() + m.group(2) + m.group(3), t)
+    t = re.sub(r"(\d)(St|Nd|Rd|Th)\b", lambda m: m.group(1) + m.group(2).lower(), t)
+    t = re.sub(r"\b(Nw|Ne|Sw|Se|Nb|Sb|Eb|Wb|Ota|Bnsf|Ada|Jpc|Pcc|Hma|Mp|Emp|Kytc)\b",
+               lambda m: m.group(1).upper(), t)
+    t = re.sub(r"\bMc([a-z])", lambda m: "Mc" + m.group(1).upper(), t)
+    return t
+
+
+def io_lines(text):
+    """Lines of a CSV body, with a byte-order mark dropped."""
+    return str(text or "").lstrip("﻿").splitlines()
+
+
+# Kentucky: each KYTC letting has a Notice to Contractors PDF at a fixed
+# address built from the letting date. Every contract gives its call number,
+# county and a description; city and county projects let by the Cabinet are
+# among them. Same marker convention as Oklahoma's reader.
+_KY_CALL_RE = re.compile(r"CALL\s+(\d+)\s+CONTRACT ID\s+(\d+)")
+_KY_COUNTY_RE = re.compile(r"^\s*([A-Z][A-Z .'-]+?) COUNTY\s*$", re.M)
+
+
+def parse_ky_notice_to_contractors(text, state="KY", base_url=""):
+    rows = []
+    for chunk in str(text or "").split(OK_LETTING_MARK)[1:]:
+        head, _, body = chunk.partition("\n")
+        m = re.match(r"(.+?\d{4})\s+(\S+)\s*$", head.strip())
+        if not m:
+            continue
+        deadline, url = m.group(1), m.group(2)
+        parts = _KY_CALL_RE.split(body)
+        for i in range(1, len(parts) - 2, 3):
+            call, ident, block = parts[i], parts[i + 1], parts[i + 2]
+            block = re.split(r"BIDS WILL BE RECEIVED|POSTED:", block)[0]
+            cm = _KY_COUNTY_RE.search(block)
+            if not cm:
+                continue
+            descs = []
+            for seg in re.findall(r":\s*(.+?)(?:SYP NO\.|THE DBE|$)", block, re.S):
+                seg = re.sub(r"\s+", " ", seg).strip(" .")
+                if seg and seg not in descs:
+                    descs.append(seg)
+            if not descs:
+                continue
+            desc = " / ".join(descs)
+            title = _ok_case(descs[0])
+            if len(title) > 120:
+                title = title[:120].rsplit(" ", 1)[0].rstrip(" ,;") + "…"
+            if not looks_relevant(title, desc):
+                continue
+            rows.append({
+                "title": title,
+                "scope": ("Call %s, contract %s. %s." % (call, ident, desc.capitalize()))[:1200],
+                "url": url,
+                "deadline": deadline,
+                "status": "Open",
+                "agency": "KYTC letting",
+                "call": call,
+                "county": _ok_case(cm.group(1).strip()),
+                "state": str(state or "KY").upper(),
+                "source": "state_dot",
+                "documents": [{"name": "Notice to Contractors", "url": url},
+                              {"name": "Plans and bidding (Bid Express)",
+                               "url": "https://www.bidx.com/ky/main"}],
+            })
+    return rows
+
+
+# Wisconsin: each WisDOT letting's Notice to Contractors is at a fixed
+# address built from the letting date, and every proposal gives its
+# location, county and a "Work Summary" listing the items. Town, village and
+# county projects (LOC STR, CTH) are let here too. A proposal is kept only
+# when its summary names concrete flatwork, so asphalt-only bridge work and
+# tree clearing do not come back.
+_WI_PROPOSAL_RE = re.compile(r"^\s*(\d{11})\.\s*$", re.M)
+_WI_COUNTY_RE = re.compile(r"^\s*([A-Z][A-Za-z .'-]+?) County\s*$", re.M)
+_WI_FLATWORK_RE = re.compile(
+    r"Concrete (?:Pavement|Sidewalk|Driveway|Curb|Base|Barrier)|Curb and Gutter|"
+    r"Curb Ramp|Sidewalk|Concrete Masonry", re.I)
+
+
+def parse_wi_notice_to_contractors(text, state="WI", base_url=""):
+    rows = []
+    for chunk in str(text or "").split(OK_LETTING_MARK)[1:]:
+        head, _, body = chunk.partition("\n")
+        m = re.match(r"(.+?\d{4})\s+(\S+)\s*$", head.strip())
+        if not m:
+            continue
+        deadline, url = m.group(1), m.group(2)
+        parts = _WI_PROPOSAL_RE.split(body)
+        for i in range(1, len(parts) - 1, 2):
+            ident, block = parts[i], parts[i + 1]
+            block = re.sub(r"^\s*\d+\s*$", "", block, flags=re.M)      # page numbers
+            summary = re.search(r"Work Summary:\s*(.+?)\s*Work Type:", block, re.S)
+            cm = _WI_COUNTY_RE.search(block)
+            if not summary or not cm:
+                continue
+            summary = re.sub(r"\s+", " ", summary.group(1)).strip()
+            if not _WI_FLATWORK_RE.search(summary):
+                continue
+            lines = [ln.strip() for ln in block[:cm.start()].splitlines() if ln.strip()]
+            where = [ln for ln in lines if not re.match(r"^\d{4}-\d{2}-\d{2}\b", ln)]
+            title = re.sub(r"\s+", " ", " ".join(where)).strip(" ,")
+            title = re.sub(r"\bOf Of\b", "of", title)
+            # "C Madison", "V Deforest", "T Excelsior" are WisDOT's city,
+            # village and town.
+            title = re.sub(r"^C ", "City of ", title)
+            title = re.sub(r"^V ", "Village of ", title)
+            title = re.sub(r"^T ", "Town of ", title)
+            if len(title) > 130:
+                title = title[:130].rsplit(" ", 1)[0].rstrip(" ,") + "…"
+            row = {
+                "title": title or "WisDOT letting",
+                "scope": ("Proposal %s. Work: %s" % (ident, summary))[:1200],
+                "url": url,
+                "deadline": deadline,
+                "status": "Open",
+                "agency": "WisDOT letting",
+                "call": ident[-3:],
+                "state": str(state or "WI").upper(),
+                "source": "state_dot",
+                "documents": [{"name": "Notice to Contractors", "url": url},
+                              {"name": "Plans and bidding (Bid Express)",
+                               "url": "https://www.bidx.com/wi/main"}],
+            }
+            tm = re.search(r"\b(?:City|Village) of ([A-Z][A-Za-z .'-]+?),", title)
+            if tm:
+                row["town"] = tm.group(1).strip()
+            else:
+                row["county"] = cm.group(1).strip()
+            rows.append(row)
+    return rows
+
+
+# Indiana: each INDOT letting's Notice to Highway Contractors PDF is at
+# /indot/files/<YYYYMMDD>-REG-NTC.pdf. Every contract gives its call number,
+# contract id, the work, its district and a "<COUNTY> COUNTY - ON ..." line
+# for each project in it.
+_IN_CONTRACT_RE = re.compile(r"^\s*([A-Z])\s*-(\d{5})-([A-Z])\s+(.+)$", re.M)
+_IN_COUNTY_RE = re.compile(r"^\s*([A-Z][A-Z .'-]+?) COUNTY\s*-\s*(.+)$", re.M)
+_IN_TOWN_RE = re.compile(r"^\s*(?:CITY|TOWN) OF ([A-Z][A-Z .'-]+?)\s*-\s*(.+)$", re.M)
+
+
+def parse_in_notice_to_contractors(text, state="IN", base_url=""):
+    rows = []
+    for chunk in str(text or "").split(OK_LETTING_MARK)[1:]:
+        head, _, body = chunk.partition("\n")
+        m = re.match(r"(.+?\d{4})\s+(\S+)\s*$", head.strip())
+        if not m:
+            continue
+        deadline, url = m.group(1), m.group(2)
+        hits = list(_IN_CONTRACT_RE.finditer(body))
+        for n, cm in enumerate(hits):
+            end = hits[n + 1].start() if n + 1 < len(hits) else len(body)
+            block = body[cm.end():end]
+            ident = "%s-%s-%s" % (cm.group(1), cm.group(2), cm.group(3))
+            work = cm.group(4).strip()
+            more = re.split(r"\n\s*[A-Za-z ]+ ?District\s*Call", block, maxsplit=1)
+            if len(more) == 2:
+                work = (work + " " + re.sub(r"\s+", " ", more[0])).strip()
+            before = body[max(0, cm.start() - 40):cm.start()].strip().splitlines()
+            call = before[-1].strip() if before and before[-1].strip().isdigit() else ""
+            places = _IN_TOWN_RE.findall(block)
+            counties = _IN_COUNTY_RE.findall(block)
+            if not (places or counties):
+                continue
+            where = re.sub(r"\s+", " ", (places or counties)[0][1]).strip()
+            title = re.sub(r"\s+", " ", _ok_case(work) + ": " + _ok_case(where))
+            if len(title) > 140:
+                title = title[:140].rsplit(" ", 1)[0].rstrip(" ,") + "…"
+            if not looks_relevant(work, block):
+                continue
+            row = {
+                "title": title,
+                "scope": ("Contract %s%s. %s, %s." % (
+                    ident, (", call %s" % call) if call else "", _ok_case(work), _ok_case(where)))[:1200],
+                "url": url,
+                "deadline": deadline,
+                "status": "Open",
+                "agency": "INDOT letting",
+                "call": call or ident,
+                "state": str(state or "IN").upper(),
+                "source": "state_dot",
+                "documents": [{"name": "Notice to Contractors", "url": url},
+                              {"name": "Plans and bidding (Bid Express)",
+                               "url": "https://www.bidx.com/in/main"}],
+            }
+            if places:
+                row["town"] = _ok_case(places[0][0].strip())
+            else:
+                row["county"] = _ok_case(counties[0][0].strip())
+            rows.append(row)
+    return rows
+
+
+# Which reader a local-notices source uses. Keyed by the kind named in
+# license_server's LOCAL_NOTICE_SOURCES.
+LOCAL_NOTICE_PARSERS = {
+    "local_notices": parse_local_agency_notices,
+    "lpa_table": parse_lpa_table,
+    "iowa_ntb_pdf": parse_iowa_notice_to_bidders,
+    "il_bulletin": parse_il_contractors_bulletin,
+    "ok_letting": parse_ok_letting_csv,
+    "ky_ntc": parse_ky_notice_to_contractors,
+    "wi_ntc": parse_wi_notice_to_contractors,
+    "in_ntc": parse_in_notice_to_contractors,
+}
 
 
 # ── Plan holders ────────────────────────────────────────────────────────────

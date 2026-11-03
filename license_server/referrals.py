@@ -86,8 +86,8 @@ def _apply_referral_reward(db, ref_code, referred_email, referred_device):
 def _send_referral_email(email, days):
     if not email:
         return
-    _send_email(email, "You earned a free month on Bid Caller Pro",
-                "Someone you referred just subscribed to Bid Caller Pro -- "
+    _send_email(email, "You earned a free month on CurbCall Pro",
+                "Someone you referred just subscribed to CurbCall Pro -- "
                 f"we've added {days} free days to your plan. Thanks for "
                 "spreading the word!")
 
@@ -167,6 +167,12 @@ def stripe_webhook():
             _apply_referral_reward(db, ref_code, email, device)
         _save_db(db)
         _bi_note(db, "subscribed", email, plan)
+        # Which source paid, by the customer's own answer in setup.
+        try:
+            rec = (db.get("trials") or {}).get(f"email:{(email or '').strip().lower()}") or {}
+            _tally_source("p", rec.get("heard") or "not-said")
+        except Exception:
+            pass
         _save_db(db)
         _send_key_email(email, key, plan)
         print(f"[stripe] issued {plan} key for {email or device}", flush=True)

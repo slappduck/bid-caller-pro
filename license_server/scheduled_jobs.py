@@ -38,11 +38,12 @@ def _send_key_email(email, key, plan="monthly"):
     """Email the license key to the buyer (only if Resend is configured)."""
     if not email:
         return
-    _send_email(email, "Your Bid Caller Pro license key",
-                "Thanks for subscribing to Bid Caller Pro!\n\n"
+    _send_email(email, "Your CurbCall Pro license key",
+                "Thanks for subscribing to CurbCall Pro!\n\n"
                 f"Your license key:\n\n    {key}\n\n"
-                "If the app didn't unlock automatically, open it, go to the Plan "
-                "tab, paste the key under 'Have a license key?', and tap Activate.\n\n"
+                "If the app didn't unlock automatically, open it (" + APP_URL + "), "
+                "go to the Account tab, paste the key under 'Have a license key?', "
+                "and tap Activate.\n\n"
                 + _renewal_terms_text(plan) + "\n\n"
                 + (MAILING_ADDRESS or ""))
 
@@ -194,6 +195,7 @@ CRON_EXPECTED = {
     "purge-expired-consent": 960,  # monthly
     "bid-watch": 14,             # every 6 hours: addenda and due-tomorrow alerts
     "bid-digest": 192,           # weekly: the free bid email (digest.py)
+    "warm-areas": 108,           # twice weekly: open bids for the landing page
 }
 
 
@@ -296,7 +298,7 @@ def _cron_watchdog():
 # ── Telling somebody their trial is about to end ──
 #
 # There was a reminder for people already paying and none for people who had
-# not started. A seven-day trial that ends without a word is a cancellation
+# not started. A free trial that ends without a word is a cancellation
 # nobody had to decide on, and the whole funnel to date has converted zero.
 #
 # One email, two days out, once. Not a sequence: five a day of hand-written
@@ -336,12 +338,131 @@ def _send_trial_ending(email, days_left, ends_on):
         % (when, ends_on, APP_URL, MAILING_ADDRESS or ""))
 
 
+# ── Telling a trial what it has found, while there is time to use it ──
+#
+# Most trials are lost to forgetting, not to a decision: the app finds work
+# on day two and nobody opens it until the "your trial ends" email, by which
+# point there is no time to bid any of it. So on day TRIAL_VALUE_NOTICE_DAY,
+# one email lists the open jobs scans have found in their area (the same
+# store /bids-near reads; no scan is run for it). Sent once, only when there
+# is something to show; a trial with nothing found yet is tried again the
+# next day, up to TRIAL_VALUE_LAST_DAY, and otherwise gets nothing.
+TRIAL_VALUE_NOTICE_DAY = float(os.environ.get("TRIAL_VALUE_NOTICE_DAY", "4"))
+TRIAL_VALUE_LAST_DAY = float(os.environ.get("TRIAL_VALUE_LAST_DAY", "9"))
+TRIAL_VALUE_SHOWN = 5
+
+
+def _trial_areas():
+    """{email: (location, radius)} from saved searches, first one each."""
+    out, emails = {}, {}
+    if not (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY):
+        return out
+    for srch in _fetch_all_saved_searches():
+        uid, loc = srch.get("user_id"), (srch.get("location") or "").strip()
+        if not (uid and loc):
+            continue
+        if uid not in emails:
+            emails[uid] = (_get_user_email(uid) or "").strip().lower()
+        if emails[uid] and emails[uid] not in out:
+            try:
+                radius = float(srch.get("radius") or 50)
+            except (TypeError, ValueError):
+                radius = 50.0
+            out[emails[uid]] = (loc, radius)
+    return out
+
+
+def _open_bids_near(location, radius, today=None):
+    """(place label, [(due, miles, row)]) from bids scans have found."""
+    center = _resolve_center(location)
+    if not center:
+        return "", []
+    rows = _prune_open_bids(_open_bid_rows(), today or datetime.date.today())
+    near = []
+    for r in rows.values():
+        mi = _miles_between(center["lat"], center["lon"], r["lat"], r["lon"])
+        if mi <= radius:
+            near.append((r.get("due") or "9999", mi, r))
+    near.sort(key=lambda x: (x[0], x[1]))
+    return "%s, %s" % (center["city"], center["state"]), near
+
+
+def _due_words(iso):
+    try:
+        d = datetime.date.fromisoformat(iso)
+        return "due %s %d" % (d.strftime("%b"), d.day)
+    except (TypeError, ValueError):
+        return "due date on the posting"
+
+
+def _send_trial_value(email, place, radius, near, days_left):
+    n = len(near)
+    lines = ["%s %s found within %d miles of %s so far:" % (
+        n, "open job" if n == 1 else "open jobs", int(radius), place), ""]
+    for due, mi, r in near[:TRIAL_VALUE_SHOWN]:
+        lines.append("- %s, %s, %s (%d mi)" % (r.get("title") or "Untitled",
+                                               r.get("town") or "", _due_words(due), round(mi)))
+    if n > TRIAL_VALUE_SHOWN:
+        lines.append("...and %d more in the app." % (n - TRIAL_VALUE_SHOWN))
+    _send_email(
+        email,
+        "%d open %s near %s" % (n, "job" if n == 1 else "jobs", place.split(",")[0]),
+        "\n".join(lines) + "\n\n"
+        "Each one is in the app with its documents. Open a job marked "
+        "\"items ready\" and the bid form's line items are already filled "
+        "in, with what the same work went for nearby.\n\n"
+        "Your free trial has %d days left:\n\n    %s\n\n"
+        "Joshua Hukel\nCurbCall Pro\n%s" % (days_left, APP_URL, MAILING_ADDRESS or ""))
+
+
+def _run_trial_value_notices(db, now):
+    """Day-4 "here is what we found you" emails. Returns how many went."""
+    trials = db.get("trials") or {}
+    due = []
+    for rec in trials.values():
+        email = (rec.get("email") or "").strip().lower()
+        if not email or rec.get("value_notice_at"):
+            continue
+        try:
+            started = datetime.datetime.fromisoformat(rec["started"])
+        except Exception:
+            continue
+        age = (now - started).total_seconds() / 86400.0
+        left = TRIAL_DAYS - age
+        if TRIAL_VALUE_NOTICE_DAY <= age <= TRIAL_VALUE_LAST_DAY and left > TRIAL_NOTICE_DAYS_OUT:
+            due.append((email, rec, left))
+    if not due:
+        return 0
+    areas = _trial_areas()
+    sent = 0
+    for email, rec, left in due:
+        if email not in areas or _has_paid_licence(db, email):
+            continue
+        place, near = _open_bids_near(*areas[email], today=now.date())
+        if not near:
+            continue
+        try:
+            _send_trial_value(email, place, areas[email][1], near, max(1, int(left)))
+        except Exception as ex:
+            print(f"[trial] value notice failed for {email}: {ex}", flush=True)
+            continue
+        rec["value_notice_at"] = now.isoformat()
+        sent += 1
+    return sent
+
+
 def _run_trial_reminders(now=None):
-    """One notice per trial, TRIAL_NOTICE_DAYS_OUT before it lapses."""
+    """One notice per trial, TRIAL_NOTICE_DAYS_OUT before it lapses, and
+    on day TRIAL_VALUE_NOTICE_DAY one listing what it has found."""
     now = now or datetime.datetime.now()
     db = _db()
     trials = db.get("trials") or {}
-    sent, skipped, changed = [], 0, False
+    try:
+        value_sent = _run_trial_value_notices(db, now)
+    except Exception as ex:
+        print(f"[trial] value notices skipped: {ex}", flush=True)
+        value_sent = 0
+    sent, skipped, changed = [], 0, bool(value_sent)
     for rec in trials.values():
         email = (rec.get("email") or "").strip()
         if not email or rec.get("ending_notice_at"):
@@ -373,7 +494,7 @@ def _run_trial_reminders(now=None):
         sent.append(email)
     if changed:
         _save_db(db)
-    return {"ok": True, "sent": len(sent), "skipped": skipped}
+    return {"ok": True, "sent": len(sent), "skipped": skipped, "value_sent": value_sent}
 
 
 @app.route("/run-trial-reminders", methods=["POST"])
@@ -386,6 +507,82 @@ def run_trial_reminders():
     result = _run_trial_reminders()
     if result.get("ok"):
         _cron_beat("trial-reminders")
+    return jsonify(result), (200 if result.get("ok") else 500)
+
+
+# ── Keeping the landing page's bid list current where outreach points ──
+#
+# /bids-near shows a visitor the open bids that scans have found near them.
+# Scans only happen where customers, digest subscribers or saved searches
+# are, so a contractor who clicks an outreach link for a town nobody has
+# scanned would see nothing but an agency count -- in exactly the place the
+# email promised real work. This scans the outreach towns (go_locations.json,
+# the same list the /go/ links fill in) a few at a time, rotating through
+# them, so each is refreshed every few weeks. WARM_EXTRA_AREAS adds places
+# by hand ("Springfield, MO;Joplin, MO"). WARM_AREAS_PER_RUN=0 turns it off.
+WARM_AREAS_PER_RUN = int(os.environ.get("WARM_AREAS_PER_RUN", "6"))
+WARM_RADIUS_MI = int(os.environ.get("WARM_RADIUS_MI", "50"))
+_WARM_POS_KEY = "bidcaller:warm_areas_pos"
+_GO_LOCATIONS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                             "curbcall_netlify_v4", "go_locations.json")
+
+
+def _warm_area_list():
+    extra = [a.strip() for a in os.environ.get("WARM_EXTRA_AREAS", "").split(";") if a.strip()]
+    try:
+        with open(_GO_LOCATIONS, encoding="utf-8") as f:
+            towns = list((json.load(f) or {}).values())
+    except Exception:
+        towns = []
+    seen, out = set(), []
+    for a in extra + towns:
+        k = str(a).strip().lower()
+        if k and k not in seen:
+            seen.add(k)
+            out.append(str(a).strip())
+    return out
+
+
+def _run_warm_areas(n=None):
+    """Scan the next n outreach towns (one per call by default, so a call
+    stays well inside the server's request timeout; the workflow loops).
+    WARM_AREAS_PER_RUN caps n, and 0 turns the job off."""
+    try:
+        n = 1 if n is None else max(0, int(n))
+    except (TypeError, ValueError):
+        n = 1
+    n = min(n, WARM_AREAS_PER_RUN)
+    areas = _warm_area_list()
+    if not n or not areas:
+        return {"ok": True, "scanned": 0, "areas": len(areas)}
+    try:
+        pos = int(kv_backend.get(_WARM_POS_KEY, 0) or 0)
+    except Exception:
+        pos = 0
+    done, kept, failed = [], 0, []
+    for i in range(min(n, len(areas))):
+        area = areas[(pos + i) % len(areas)]
+        try:
+            outcome = _perform_scan(area, WARM_RADIUS_MI)
+            done.append(area)
+            kept += int((outcome or {}).get("total_bids") or 0)
+        except Exception as ex:
+            failed.append(area)
+            print(f"[warm] scan failed for {area}: {ex}", flush=True)
+    kv_backend.set(_WARM_POS_KEY, (pos + min(n, len(areas))) % len(areas))
+    return {"ok": True, "scanned": len(done), "bids": kept, "failed": failed, "areas": len(areas)}
+
+
+@app.route("/run-warm-areas", methods=["POST"])
+def run_warm_areas():
+    """Twice weekly. Scans a few outreach towns so /bids-near has their work."""
+    data = request.get_json(force=True, silent=True) or {}
+    token = data.get("token") or request.headers.get("X-Cron-Secret", "")
+    if not CRON_SECRET or not hmac.compare_digest(token, CRON_SECRET):
+        return jsonify({"ok": False, "reason": "unauthorized"}), 403
+    result = _run_warm_areas(data.get("n"))
+    if result.get("ok"):
+        _cron_beat("warm-areas")
     return jsonify(result), (200 if result.get("ok") else 500)
 
 
@@ -407,7 +604,9 @@ def _digest_sections():
     for heading, fn in (("Funnel", _funnel_summary),
                         ("Lifecycle", _bi_summary),
                         ("Engagement", _engagement),
-                        ("Outcomes", _wins_summary)):
+                        ("Outcomes", _wins_summary),
+                        ("Sources", _source_summary),
+                        ("Won work (reported)", _outcome_summary)):
         try:
             data = fn()
         except Exception as ex:

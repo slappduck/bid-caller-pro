@@ -171,7 +171,7 @@ def _admin_ok(supplied):
     """Constant-time admin token check. Compare with hmac, never ==, so the
     response time can't be used to guess the token a character at a time."""
     return _admin_configured() and hmac.compare_digest(supplied or "", ADMIN_TOKEN)
-TRIAL_DAYS = 7
+TRIAL_DAYS = 14
 
 # ── Persistence ──────────────────────────────────────────────────────────
 # License data (trials/keys/customers) is stored in Upstash Redis via its REST
@@ -323,8 +323,21 @@ def trial():
         return jsonify({"ok": False, "active": False, "reason": "trial_expired"})
 
     trial_key = f"email:{email}" if email else None
+    heard = str(data.get("heard") or "").strip().lower()
+    heard = heard if heard in HEARD_OPTIONS else ""
     if trial_key and trial_key in trials:
-        return _status(trials[trial_key])
+        rec = trials[trial_key]
+        # Their answer to "How did you hear about CurbCall?", given in setup,
+        # which may come after the trial already started.
+        if heard and not rec.get("heard"):
+            rec["heard"] = heard
+            _save_db(db)
+            _tally_source("h", heard)
+        if data.get("source") and not rec.get("source_counted"):
+            rec["source_counted"] = True
+            _save_db(db)
+            _tally_source("t", data.get("source"))
+        return _status(rec)
     if device and device in trials:
         # Legacy/anonymous trial already running — honor it either way.
         return _status(trials[device])
@@ -336,8 +349,15 @@ def trial():
 
     started = datetime.datetime.now()
     trials[trial_key] = {"started": started.isoformat(), "email": email}
+    if heard:
+        trials[trial_key]["heard"] = heard
+    if data.get("source"):
+        trials[trial_key]["source_counted"] = True
     _bi_note(db, "trial_started", email)
     _save_db(db)
+    _tally_source("t", data.get("source") or "direct")
+    if heard:
+        _tally_source("h", heard)
     end = started + datetime.timedelta(days=TRIAL_DAYS)
     return jsonify({"ok": True, "active": True, "days_left": TRIAL_DAYS,
                     "expires": end.isoformat()[:10], "expires_at": end.isoformat(), "new": True})
@@ -491,6 +511,169 @@ _VISIT_KEY = "bidcaller:site_visits"
 _VISIT_DAYS = int(os.environ.get("SITE_VISIT_DAYS", "60"))
 _visit_lock = threading.Lock()
 
+# ── Where people come from (ads, search, outreach, referrals) ──
+#
+# Paid ads need one answer: which source produces trials, and which produces
+# customers. Counted the same way visits are -- a tally per day per source,
+# no identifier, nothing that follows anyone across sites. The landing page
+# works the source out from the link it was opened with (an ad's gclid or
+# utm_source, a /go/ outreach link, a referral link, a search engine) and
+# reports it with the visit; the app reports it again when a trial starts.
+# Who paid is matched to the source the CUSTOMER told us during setup ("How
+# did you hear about CurbCall?"), which is their own answer, kept on their
+# trial record.
+_SOURCE_KEY = "bidcaller:source_tally"
+_SOURCE_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
+HEARD_OPTIONS = ("google-ad", "google-search", "facebook", "email", "friend",
+                 "ready-mix-plant", "supply-house", "other")
+_source_lock = threading.Lock()
+
+
+def _clean_source(s):
+    s = str(s or "").strip().lower()[:32]
+    return s if _SOURCE_RE.match(s) else ""
+
+
+def _tally_source(kind, label):
+    """kind: v (visit), t (trial started), h (trial said how they heard),
+    p (paid, by how they said they heard). Never raises."""
+    label = _clean_source(label)
+    if not label:
+        return
+    day = datetime.datetime.now().strftime("%Y-%m-%d")
+    try:
+        with _source_lock:
+            store = kv_backend.get(_SOURCE_KEY, None)
+            store = store if isinstance(store, dict) else {}
+            row = store.setdefault(day, {})
+            k = f"{kind}:{label}"
+            if k not in row and len(row) >= 200:
+                return              # bounded: a flood of made-up labels can't grow it
+            row[k] = int(row.get(k, 0)) + 1
+            for old in sorted(store)[:-_VISIT_DAYS]:
+                store.pop(old, None)
+            kv_backend.set(_SOURCE_KEY, store)
+    except Exception as ex:
+        print(f"[source] not counted: {ex}", flush=True)
+
+
+def _source_summary():
+    """Totals by source over the visit window, for the weekly note."""
+    try:
+        store = kv_backend.get(_SOURCE_KEY, None) or {}
+    except Exception:
+        store = {}
+    out = {"visits": {}, "trials_by_link": {}, "trials_said": {}, "paid_said": {}}
+    names = {"v": "visits", "t": "trials_by_link", "h": "trials_said", "p": "paid_said"}
+    for row in (store.values() if isinstance(store, dict) else []):
+        for k, n in (row or {}).items():
+            kind, _, label = k.partition(":")
+            if kind in names:
+                d = out[names[kind]]
+                d[label] = d.get(label, 0) + int(n or 0)
+    for k in out:
+        out[k] = dict(sorted(out[k].items(), key=lambda kv: -kv[1]))
+    out["window_days"] = _VISIT_DAYS
+    return out
+
+
+# ── Bid outcomes: did the work CurbCall found turn into jobs? ──
+#
+# The app asks "how did it go?" once a saved bid's due date passes. The
+# answer used to stay on the phone, so the one fact that sells this product,
+# that customers win work from it, could not be stated anywhere. A won job
+# with its amount is recorded here, by account, and /proof totals them for
+# the landing page. Self-reported, and the page says so. Bounded: one row
+# per account and bid, at most OUTCOMES_PER_ACCOUNT rows per account, and
+# an amount above OUTCOME_AMOUNT_MAX is kept as a win without the amount,
+# so one typo cannot make the public total absurd.
+_OUTCOMES_KEY = "bidcaller:outcomes"
+_outcome_lock = threading.Lock()
+OUTCOMES_PER_ACCOUNT = 100
+OUTCOME_AMOUNT_MAX = 2_000_000
+PROOF_MIN_WINS = int(os.environ.get("PROOF_MIN_WINS", "3"))
+
+
+def _record_outcome(email, bid_id, result, amount=None, state=""):
+    email = (email or "").strip().lower()
+    bid_id = str(bid_id or "").strip()[:120]
+    if not email or not bid_id or result not in ("won", "lost", "passed"):
+        return False
+    try:
+        amount = float(amount) if amount not in (None, "") else None
+    except (TypeError, ValueError):
+        amount = None
+    if amount is not None and not (0 < amount <= OUTCOME_AMOUNT_MAX):
+        amount = None
+    with _outcome_lock:
+        store = kv_backend.get(_OUTCOMES_KEY, None)
+        store = store if isinstance(store, dict) else {}
+        key = "%s|%s" % (email, bid_id)
+        if key not in store and sum(1 for k in store if k.startswith(email + "|")) >= OUTCOMES_PER_ACCOUNT:
+            return False
+        store[key] = {"result": result, "amount": amount,
+                      "state": str(state or "")[:2].upper(),
+                      "at": datetime.datetime.now().isoformat(timespec="seconds")}
+        kv_backend.set(_OUTCOMES_KEY, store)
+    return True
+
+
+def _forget_outcomes(email):
+    """Account deletion: remove every outcome this account reported."""
+    email = (email or "").strip().lower()
+    if not email:
+        return
+    with _outcome_lock:
+        store = kv_backend.get(_OUTCOMES_KEY, None)
+        if not isinstance(store, dict):
+            return
+        for k in [k for k in store if k.startswith(email + "|")]:
+            store.pop(k, None)
+        kv_backend.set(_OUTCOMES_KEY, store)
+
+
+def _outcome_summary():
+    """Wins, losses and passes reported, and the total of won work."""
+    try:
+        store = kv_backend.get(_OUTCOMES_KEY, None) or {}
+    except Exception:
+        store = {}
+    out = {"won": 0, "lost": 0, "passed": 0, "won_total": 0, "accounts_with_a_win": 0}
+    winners = set()
+    for key, row in (store.items() if isinstance(store, dict) else []):
+        r = (row or {}).get("result")
+        if r in out:
+            out[r] += 1
+        if r == "won":
+            winners.add(key.split("|", 1)[0])
+            out["won_total"] += int(row.get("amount") or 0)
+    out["accounts_with_a_win"] = len(winners)
+    return out
+
+
+@app.route("/outcome", methods=["POST"])
+def report_outcome():
+    """The signed-in user's answer to "how did it go?" for one saved bid."""
+    data = request.get_json(force=True, silent=True) or {}
+    email = _verify_supabase_token(data.get("supabase_token", ""))
+    if not email:
+        return jsonify({"ok": False, "reason": "signin_required"}), 401
+    ok = _record_outcome(email, data.get("bid_id"), data.get("result"),
+                         data.get("amount"), data.get("state", ""))
+    return jsonify({"ok": ok})
+
+
+@app.route("/proof", methods=["GET"])
+def proof():
+    """What customers have reported winning, for the landing page.
+
+    Public. Only totals, and nothing until PROOF_MIN_WINS wins from at least
+    two accounts are in, so one person's answers are never the claim."""
+    s = _outcome_summary()
+    if s["won"] < PROOF_MIN_WINS or s["accounts_with_a_win"] < 2 or s["won_total"] <= 0:
+        return jsonify({"ok": True, "show": False})
+    return jsonify({"ok": True, "show": True, "wins": s["won"], "won_total": s["won_total"]})
+
 
 @app.route("/visit", methods=["POST"])
 def visit():
@@ -506,6 +689,8 @@ def visit():
     a tally, which is all the ratio needs.
     """
     day = datetime.datetime.now().strftime("%Y-%m-%d")
+    data = request.get_json(force=True, silent=True) or {}
+    _tally_source("v", data.get("source") or "direct")
     with _visit_lock:
         try:
             store = kv_backend.get(_VISIT_KEY, None)
@@ -794,7 +979,7 @@ def _trial_identity(email):
     license-key lookups, which must stay exact. Strips a +tag from the local
     part: josh+1@gmail.com and josh+2@gmail.com deliver to the same inbox on
     Gmail, Outlook, Fastmail and most other providers, so without this, a free
-    7-day trial (no card required, and every scan spends real OpenAI/search
+    trial (no card required, and every scan spends real OpenAI/search
     budget) could be farmed indefinitely from one real inbox."""
     email = (email or "").strip().lower()
     local, sep, domain = email.partition("@")
@@ -983,6 +1168,138 @@ def coverage():
         "nearest_mi": (round(_miles_between(center["lat"], center["lon"],
                                             towns[0][2], towns[0][3]), 1)
                        if towns else None),
+        # State-published lists of town and county lettings the radius
+        # touches (see LOCAL_NOTICE_SOURCES). These cover towns with no bid
+        # page at all, which the agency count above cannot show.
+        "state_lists": _state_lists_near(center, radius),
+    })
+
+
+LOCAL_NOTICE_LABELS = {
+    "MO": "MoDOT's list of every city and county federal-aid bid in Missouri",
+    "AR": "ARDOT's list of town and county federal-aid bids in Arkansas",
+    "IA": "Iowa DOT's monthly letting, county and city jobs included, with quantities",
+    "IL": "IDOT's weekly bulletin of town and county lettings in Illinois",
+    "OK": "ODOT's lettings, city sidewalk and street jobs included",
+    "KY": "KYTC's lettings, county and city road jobs included",
+    "WI": "WisDOT's lettings, city, village and county street jobs included",
+    "IN": "INDOT's lettings, sidewalk and trail jobs included",
+}
+
+
+def _state_lists_near(center, radius):
+    try:
+        states = counties.states_within(center["lat"], center["lon"], radius)
+    except Exception:
+        states = [center.get("state", "")]
+    return [LOCAL_NOTICE_LABELS[st] for st in states
+            if st in LOCAL_NOTICE_SOURCES and st in LOCAL_NOTICE_LABELS]
+
+
+# ── Open bids near a ZIP, before anyone signs up ──
+#
+# The landing page could only say "74 verified agencies within 50 miles",
+# which is a promise, not proof. The proof is the work itself: "Elm St
+# Sidewalk, Aurora, due Nov 20". Every scan anyone runs (a customer, the
+# Monday digest, the daily alerts) already finds that work, so the open
+# bids it finds are kept here by location and the landing page shows the
+# ones near a visitor's ZIP. Nothing is scanned for a visitor: a lookup is
+# a geocode (cached) and arithmetic, like /coverage.
+#
+# Only what the agency published goes in: title, town, due date, place.
+# Nothing about who ran the scan. Undated bids are dropped after
+# OPEN_BIDS_UNDATED_DAYS since they were last seen, dated ones the day
+# after they're due.
+_OPEN_BIDS_KEY = "bidcaller:open_bids"
+_OPEN_BIDS_RATE_KEY = "bidcaller:open_bids_rate"
+OPEN_BIDS_MAX = int(os.environ.get("OPEN_BIDS_MAX", "2000"))  # one stored value; ~200 bytes a row
+OPEN_BIDS_UNDATED_DAYS = 21
+OPEN_BIDS_SHOWN = 6
+OPEN_BIDS_PER_IP_PER_DAY = int(os.environ.get("OPEN_BIDS_PER_IP_PER_DAY", "60"))
+_open_bids_lock = threading.Lock()
+
+
+def _open_bid_rows():
+    got = kv_backend.get(_OPEN_BIDS_KEY, None)
+    return got if isinstance(got, dict) else {}
+
+
+def _prune_open_bids(rows, today):
+    """Rows still worth showing: not past due, recently seen if undated."""
+    stale = (today - datetime.timedelta(days=OPEN_BIDS_UNDATED_DAYS)).isoformat()
+    keep = {k: r for k, r in rows.items()
+            if (r.get("due") and r["due"] >= today.isoformat())
+            or (not r.get("due") and (r.get("seen") or "") >= stale)}
+    if len(keep) > OPEN_BIDS_MAX:
+        newest = sorted(keep, key=lambda k: keep[k].get("seen") or "", reverse=True)[:OPEN_BIDS_MAX]
+        keep = {k: keep[k] for k in newest}
+    return keep
+
+
+def _remember_open_bids(grouped, city_coords):
+    """Keep the open bids a scan found, by place. Never raises."""
+    try:
+        today = datetime.date.today()
+        fresh = {}
+        for town, bids in (grouped or {}).items():
+            place = (city_coords or {}).get(town) or {}
+            for b in bids or []:
+                if not _is_open_bid(b):
+                    continue
+                lat = b.get("lat", place.get("lat"))
+                lon = b.get("lon", place.get("lon"))
+                title = re.sub(r"\s+", " ", str(b.get("title") or "")).strip()[:140]
+                if lat is None or lon is None or not title:
+                    continue
+                due = _parse_deadline(b.get("deadline"))
+                if due and due < today:
+                    continue
+                key = hashlib.sha256(f"{title.lower()}|{town.lower()}".encode()).hexdigest()[:16]
+                fresh[key] = {"title": title, "town": str(town)[:80], "lat": float(lat), "lon": float(lon),
+                              "due": due.isoformat() if due else "", "seen": today.isoformat()}
+        if not fresh:
+            return 0
+        with _open_bids_lock:
+            rows = _open_bid_rows()
+            rows.update(fresh)
+            kv_backend.set(_OPEN_BIDS_KEY, _prune_open_bids(rows, today))
+        return len(fresh)
+    except Exception as ex:
+        print(f"[open-bids] not kept: {ex}", flush=True)
+        return 0
+
+
+@app.route("/bids-near", methods=["POST"])
+def bids_near():
+    """Open bids recently found within a radius of somewhere. Public, like
+    /coverage: it is what a contractor sees before deciding to sign up."""
+    data = request.get_json(force=True, silent=True) or {}
+    location = (data.get("location") or "").strip()[:80]
+    try:
+        radius = float(data.get("radius") or 50)
+    except (TypeError, ValueError):
+        radius = 50.0
+    radius = max(5.0, min(radius, 125.0))
+    if not location:
+        return jsonify({"ok": False, "reason": "no_location"}), 400
+    if not _ip_rate_ok(_OPEN_BIDS_RATE_KEY, _client_ip(), OPEN_BIDS_PER_IP_PER_DAY):
+        return jsonify({"ok": False, "reason": "rate_limited"}), 429
+    center = _resolve_center(location)
+    if not center:
+        return jsonify({"ok": False, "reason": "unresolved_location"}), 404
+    rows = _prune_open_bids(_open_bid_rows(), datetime.date.today())
+    near = []
+    for r in rows.values():
+        mi = _miles_between(center["lat"], center["lon"], r["lat"], r["lon"])
+        if mi <= radius:
+            near.append((r.get("due") or "9999", mi, r))
+    # Soonest due first; undated after the dated ones, nearest first.
+    near.sort(key=lambda x: (x[0], x[1]))
+    return jsonify({
+        "ok": True, "location": f"{center['city']}, {center['state']}".strip(", "),
+        "radius": int(radius), "count": len(near),
+        "bids": [{"title": r["title"], "town": r["town"], "due": r.get("due") or "",
+                  "miles": round(mi)} for _d, mi, r in near[:OPEN_BIDS_SHOWN]],
     })
 
 
@@ -1538,8 +1855,8 @@ def _supabase_delete_user(user_id):
 # weak when the Terms change; "they accepted 2026-06-17" is evidence. These
 # constants must match the dates published on terms.html and privacy.html,
 # and a test fails if they drift.
-TERMS_VERSION = os.environ.get("TERMS_VERSION", "2026-10-10")
-PRIVACY_VERSION = os.environ.get("PRIVACY_VERSION", "2026-10-21")
+TERMS_VERSION = os.environ.get("TERMS_VERSION", "2026-11-02")
+PRIVACY_VERSION = os.environ.get("PRIVACY_VERSION", "2026-11-03")
 # "reaccept" is an existing user agreeing to a version published after
 # they signed up. Recorded distinctly so the record shows which
 # acceptances were made at signup and which on a re-prompt.
@@ -1804,7 +2121,7 @@ def account_delete():
     _trial_identity() produces rather than the address as typed. That does
     mean deleting an account frees up a fresh trial on the same email, which
     is a real trade: the alternative is keeping a record of someone who asked
-    to be forgotten, and a seven-day trial is not worth that. The trade is the
+    to be forgotten, and a free trial is not worth that. The trade is the
     same one for a tagged address -- it just was not honoured for those, which
     is the bug this note exists to stop coming back.
     """
@@ -1853,6 +2170,10 @@ def account_delete():
         for k in [k for k, v in rows.items() if v == email or k == email]:
             rows.pop(k, None)
     _save_db(db)
+    try:
+        _forget_outcomes(email)
+    except Exception:
+        pass
     # Deliberately not logged. The one action whose entire purpose is to
     # remove someone should not write their address into a log line on the
     # way out.
@@ -1900,11 +2221,12 @@ def _send_key_email(email, key, plan="monthly"):
     """Email the license key to the buyer (only if Resend is configured)."""
     if not email:
         return
-    _send_email(email, "Your Bid Caller Pro license key",
-                "Thanks for subscribing to Bid Caller Pro!\n\n"
+    _send_email(email, "Your CurbCall Pro license key",
+                "Thanks for subscribing to CurbCall Pro!\n\n"
                 f"Your license key:\n\n    {key}\n\n"
-                "If the app didn't unlock automatically, open it, go to the Plan "
-                "tab, paste the key under 'Have a license key?', and tap Activate.\n\n"
+                "If the app didn't unlock automatically, open it (" + APP_URL + "), "
+                "go to the Account tab, paste the key under 'Have a license key?', "
+                "and tap Activate.\n\n"
                 + _renewal_terms_text(plan) + "\n\n"
                 + (MAILING_ADDRESS or ""))
 
@@ -2056,6 +2378,7 @@ CRON_EXPECTED = {
     "purge-expired-consent": 960,  # monthly
     "bid-watch": 14,             # every 6 hours: addenda and due-tomorrow alerts
     "bid-digest": 192,           # weekly: the free bid email (digest.py)
+    "warm-areas": 108,           # twice weekly: open bids for the landing page
 }
 
 
@@ -2158,7 +2481,7 @@ def _cron_watchdog():
 # ── Telling somebody their trial is about to end ──
 #
 # There was a reminder for people already paying and none for people who had
-# not started. A seven-day trial that ends without a word is a cancellation
+# not started. A free trial that ends without a word is a cancellation
 # nobody had to decide on, and the whole funnel to date has converted zero.
 #
 # One email, two days out, once. Not a sequence: five a day of hand-written
@@ -2198,12 +2521,131 @@ def _send_trial_ending(email, days_left, ends_on):
         % (when, ends_on, APP_URL, MAILING_ADDRESS or ""))
 
 
+# ── Telling a trial what it has found, while there is time to use it ──
+#
+# Most trials are lost to forgetting, not to a decision: the app finds work
+# on day two and nobody opens it until the "your trial ends" email, by which
+# point there is no time to bid any of it. So on day TRIAL_VALUE_NOTICE_DAY,
+# one email lists the open jobs scans have found in their area (the same
+# store /bids-near reads; no scan is run for it). Sent once, only when there
+# is something to show; a trial with nothing found yet is tried again the
+# next day, up to TRIAL_VALUE_LAST_DAY, and otherwise gets nothing.
+TRIAL_VALUE_NOTICE_DAY = float(os.environ.get("TRIAL_VALUE_NOTICE_DAY", "4"))
+TRIAL_VALUE_LAST_DAY = float(os.environ.get("TRIAL_VALUE_LAST_DAY", "9"))
+TRIAL_VALUE_SHOWN = 5
+
+
+def _trial_areas():
+    """{email: (location, radius)} from saved searches, first one each."""
+    out, emails = {}, {}
+    if not (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY):
+        return out
+    for srch in _fetch_all_saved_searches():
+        uid, loc = srch.get("user_id"), (srch.get("location") or "").strip()
+        if not (uid and loc):
+            continue
+        if uid not in emails:
+            emails[uid] = (_get_user_email(uid) or "").strip().lower()
+        if emails[uid] and emails[uid] not in out:
+            try:
+                radius = float(srch.get("radius") or 50)
+            except (TypeError, ValueError):
+                radius = 50.0
+            out[emails[uid]] = (loc, radius)
+    return out
+
+
+def _open_bids_near(location, radius, today=None):
+    """(place label, [(due, miles, row)]) from bids scans have found."""
+    center = _resolve_center(location)
+    if not center:
+        return "", []
+    rows = _prune_open_bids(_open_bid_rows(), today or datetime.date.today())
+    near = []
+    for r in rows.values():
+        mi = _miles_between(center["lat"], center["lon"], r["lat"], r["lon"])
+        if mi <= radius:
+            near.append((r.get("due") or "9999", mi, r))
+    near.sort(key=lambda x: (x[0], x[1]))
+    return "%s, %s" % (center["city"], center["state"]), near
+
+
+def _due_words(iso):
+    try:
+        d = datetime.date.fromisoformat(iso)
+        return "due %s %d" % (d.strftime("%b"), d.day)
+    except (TypeError, ValueError):
+        return "due date on the posting"
+
+
+def _send_trial_value(email, place, radius, near, days_left):
+    n = len(near)
+    lines = ["%s %s found within %d miles of %s so far:" % (
+        n, "open job" if n == 1 else "open jobs", int(radius), place), ""]
+    for due, mi, r in near[:TRIAL_VALUE_SHOWN]:
+        lines.append("- %s, %s, %s (%d mi)" % (r.get("title") or "Untitled",
+                                               r.get("town") or "", _due_words(due), round(mi)))
+    if n > TRIAL_VALUE_SHOWN:
+        lines.append("...and %d more in the app." % (n - TRIAL_VALUE_SHOWN))
+    _send_email(
+        email,
+        "%d open %s near %s" % (n, "job" if n == 1 else "jobs", place.split(",")[0]),
+        "\n".join(lines) + "\n\n"
+        "Each one is in the app with its documents. Open a job marked "
+        "\"items ready\" and the bid form's line items are already filled "
+        "in, with what the same work went for nearby.\n\n"
+        "Your free trial has %d days left:\n\n    %s\n\n"
+        "Joshua Hukel\nCurbCall Pro\n%s" % (days_left, APP_URL, MAILING_ADDRESS or ""))
+
+
+def _run_trial_value_notices(db, now):
+    """Day-4 "here is what we found you" emails. Returns how many went."""
+    trials = db.get("trials") or {}
+    due = []
+    for rec in trials.values():
+        email = (rec.get("email") or "").strip().lower()
+        if not email or rec.get("value_notice_at"):
+            continue
+        try:
+            started = datetime.datetime.fromisoformat(rec["started"])
+        except Exception:
+            continue
+        age = (now - started).total_seconds() / 86400.0
+        left = TRIAL_DAYS - age
+        if TRIAL_VALUE_NOTICE_DAY <= age <= TRIAL_VALUE_LAST_DAY and left > TRIAL_NOTICE_DAYS_OUT:
+            due.append((email, rec, left))
+    if not due:
+        return 0
+    areas = _trial_areas()
+    sent = 0
+    for email, rec, left in due:
+        if email not in areas or _has_paid_licence(db, email):
+            continue
+        place, near = _open_bids_near(*areas[email], today=now.date())
+        if not near:
+            continue
+        try:
+            _send_trial_value(email, place, areas[email][1], near, max(1, int(left)))
+        except Exception as ex:
+            print(f"[trial] value notice failed for {email}: {ex}", flush=True)
+            continue
+        rec["value_notice_at"] = now.isoformat()
+        sent += 1
+    return sent
+
+
 def _run_trial_reminders(now=None):
-    """One notice per trial, TRIAL_NOTICE_DAYS_OUT before it lapses."""
+    """One notice per trial, TRIAL_NOTICE_DAYS_OUT before it lapses, and
+    on day TRIAL_VALUE_NOTICE_DAY one listing what it has found."""
     now = now or datetime.datetime.now()
     db = _db()
     trials = db.get("trials") or {}
-    sent, skipped, changed = [], 0, False
+    try:
+        value_sent = _run_trial_value_notices(db, now)
+    except Exception as ex:
+        print(f"[trial] value notices skipped: {ex}", flush=True)
+        value_sent = 0
+    sent, skipped, changed = [], 0, bool(value_sent)
     for rec in trials.values():
         email = (rec.get("email") or "").strip()
         if not email or rec.get("ending_notice_at"):
@@ -2235,7 +2677,7 @@ def _run_trial_reminders(now=None):
         sent.append(email)
     if changed:
         _save_db(db)
-    return {"ok": True, "sent": len(sent), "skipped": skipped}
+    return {"ok": True, "sent": len(sent), "skipped": skipped, "value_sent": value_sent}
 
 
 @app.route("/run-trial-reminders", methods=["POST"])
@@ -2248,6 +2690,82 @@ def run_trial_reminders():
     result = _run_trial_reminders()
     if result.get("ok"):
         _cron_beat("trial-reminders")
+    return jsonify(result), (200 if result.get("ok") else 500)
+
+
+# ── Keeping the landing page's bid list current where outreach points ──
+#
+# /bids-near shows a visitor the open bids that scans have found near them.
+# Scans only happen where customers, digest subscribers or saved searches
+# are, so a contractor who clicks an outreach link for a town nobody has
+# scanned would see nothing but an agency count -- in exactly the place the
+# email promised real work. This scans the outreach towns (go_locations.json,
+# the same list the /go/ links fill in) a few at a time, rotating through
+# them, so each is refreshed every few weeks. WARM_EXTRA_AREAS adds places
+# by hand ("Springfield, MO;Joplin, MO"). WARM_AREAS_PER_RUN=0 turns it off.
+WARM_AREAS_PER_RUN = int(os.environ.get("WARM_AREAS_PER_RUN", "6"))
+WARM_RADIUS_MI = int(os.environ.get("WARM_RADIUS_MI", "50"))
+_WARM_POS_KEY = "bidcaller:warm_areas_pos"
+_GO_LOCATIONS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                             "curbcall_netlify_v4", "go_locations.json")
+
+
+def _warm_area_list():
+    extra = [a.strip() for a in os.environ.get("WARM_EXTRA_AREAS", "").split(";") if a.strip()]
+    try:
+        with open(_GO_LOCATIONS, encoding="utf-8") as f:
+            towns = list((json.load(f) or {}).values())
+    except Exception:
+        towns = []
+    seen, out = set(), []
+    for a in extra + towns:
+        k = str(a).strip().lower()
+        if k and k not in seen:
+            seen.add(k)
+            out.append(str(a).strip())
+    return out
+
+
+def _run_warm_areas(n=None):
+    """Scan the next n outreach towns (one per call by default, so a call
+    stays well inside the server's request timeout; the workflow loops).
+    WARM_AREAS_PER_RUN caps n, and 0 turns the job off."""
+    try:
+        n = 1 if n is None else max(0, int(n))
+    except (TypeError, ValueError):
+        n = 1
+    n = min(n, WARM_AREAS_PER_RUN)
+    areas = _warm_area_list()
+    if not n or not areas:
+        return {"ok": True, "scanned": 0, "areas": len(areas)}
+    try:
+        pos = int(kv_backend.get(_WARM_POS_KEY, 0) or 0)
+    except Exception:
+        pos = 0
+    done, kept, failed = [], 0, []
+    for i in range(min(n, len(areas))):
+        area = areas[(pos + i) % len(areas)]
+        try:
+            outcome = _perform_scan(area, WARM_RADIUS_MI)
+            done.append(area)
+            kept += int((outcome or {}).get("total_bids") or 0)
+        except Exception as ex:
+            failed.append(area)
+            print(f"[warm] scan failed for {area}: {ex}", flush=True)
+    kv_backend.set(_WARM_POS_KEY, (pos + min(n, len(areas))) % len(areas))
+    return {"ok": True, "scanned": len(done), "bids": kept, "failed": failed, "areas": len(areas)}
+
+
+@app.route("/run-warm-areas", methods=["POST"])
+def run_warm_areas():
+    """Twice weekly. Scans a few outreach towns so /bids-near has their work."""
+    data = request.get_json(force=True, silent=True) or {}
+    token = data.get("token") or request.headers.get("X-Cron-Secret", "")
+    if not CRON_SECRET or not hmac.compare_digest(token, CRON_SECRET):
+        return jsonify({"ok": False, "reason": "unauthorized"}), 403
+    result = _run_warm_areas(data.get("n"))
+    if result.get("ok"):
+        _cron_beat("warm-areas")
     return jsonify(result), (200 if result.get("ok") else 500)
 
 
@@ -2269,7 +2787,9 @@ def _digest_sections():
     for heading, fn in (("Funnel", _funnel_summary),
                         ("Lifecycle", _bi_summary),
                         ("Engagement", _engagement),
-                        ("Outcomes", _wins_summary)):
+                        ("Outcomes", _wins_summary),
+                        ("Sources", _source_summary),
+                        ("Won work (reported)", _outcome_summary)):
         try:
             data = fn()
         except Exception as ex:
@@ -2382,6 +2902,42 @@ def _get_user_email(user_id):
     return None
 
 
+# ── Who the alert jobs work for ──
+# Both jobs below scan every saved search in the table, and a saved search
+# outlives the trial that made it. Unchecked, a trial that lapsed months ago
+# still gets the daily new-bid email and the weekly planned-work email, free,
+# forever, and every one of those runs is a paid scan. That is the product
+# given away and paid for twice: the emails are what customers pay for. So
+# the jobs work for an account that is paying or still inside its trial,
+# and pick it back up the day it subscribes.
+def _alerts_active(db, email, now=None):
+    email = (email or "").strip().lower()
+    if not email:
+        return False
+    if _has_paid_licence(db, email):
+        return True
+    rec = (db.get("trials") or {}).get(f"email:{email}") or {}
+    try:
+        started = datetime.datetime.fromisoformat(rec["started"])
+    except Exception:
+        return False
+    return (now or datetime.datetime.now()) <= started + datetime.timedelta(days=TRIAL_DAYS)
+
+
+def _alert_recipient(user_id, email_cache, active_cache, db):
+    """(email, active) for a saved search's owner, each looked up once a run."""
+    if user_id not in email_cache:
+        email_cache[user_id] = _get_user_email(user_id) or ""
+    email = email_cache[user_id]
+    if user_id not in active_cache:
+        try:
+            active_cache[user_id] = _alerts_active(db, email)
+        except Exception as ex:
+            print(f"[alerts] could not check {user_id}: {ex}", flush=True)
+            active_cache[user_id] = False
+    return email, active_cache[user_id]
+
+
 def _bid_sig(city, bid):
     """Stable id for 'have we already told this user about this bid' —
     based on content, not a server-assigned id (there isn't one), so the
@@ -2402,7 +2958,7 @@ def _send_alert_email(email, location, radius, new_bids):
     if len(new_bids) > 20:
         lines.append(f"...and {len(new_bids) - 20} more.")
     lines.append("")
-    lines.append("Open Bid Caller Pro to see full details or save any of these to your pipeline.")
+    lines.append("Open CurbCall Pro to see full details or save any of these to your pipeline.")
     body = json.dumps({
         "from": FROM_EMAIL,
         "to": [email],
@@ -2442,6 +2998,9 @@ def _run_saved_search_alerts():
     cdb = _cache()
     seen_store = cdb.setdefault("alert_seen", {})
     email_cache = {}
+    active_cache = {}
+    skipped_inactive = 0
+    db = _db()
     emails_sent = 0
     users_checked = set()
     errors = []
@@ -2454,6 +3013,10 @@ def _run_saved_search_alerts():
         except (TypeError, ValueError):
             radius = 25.0
         if not (user_id and location):
+            continue
+        email, active = _alert_recipient(user_id, email_cache, active_cache, db)
+        if not active:
+            skipped_inactive += 1
             continue
         users_checked.add(user_id)
 
@@ -2480,9 +3043,6 @@ def _run_saved_search_alerts():
         seen_store[seen_key] = all_sigs[-300:]  # cap so this can't grow forever
 
         if new_bids:
-            if user_id not in email_cache:
-                email_cache[user_id] = _get_user_email(user_id) or ""
-            email = email_cache[user_id]
             if email:
                 _send_alert_email(email, outcome.get("location", location), radius, new_bids)
                 emails_sent += 1
@@ -2499,6 +3059,7 @@ def _run_saved_search_alerts():
     _save_cache(cdb)
     return {"ok": True, "searches_checked": len(searches),
             "users_checked": len(users_checked),
+            "skipped_inactive": skipped_inactive,
             "emails_sent": emails_sent, "errors": errors}
 
 
@@ -2577,6 +3138,9 @@ def _run_upcoming_alerts():
     cdb = _cache()
     seen_store = cdb.setdefault("upcoming_alert_seen", {})
     email_cache = {}
+    active_cache = {}
+    skipped_inactive = 0
+    db = _db()
     emails_sent = 0
     users_checked = set()
     errors = []
@@ -2589,6 +3153,10 @@ def _run_upcoming_alerts():
         except (TypeError, ValueError):
             radius = 25.0
         if not (user_id and location):
+            continue
+        email, active = _alert_recipient(user_id, email_cache, active_cache, db)
+        if not active:
+            skipped_inactive += 1
             continue
         users_checked.add(user_id)
 
@@ -2616,9 +3184,6 @@ def _run_upcoming_alerts():
         seen_store[seen_key] = all_sigs[-300:]  # cap so this can't grow forever
 
         if new_items:
-            if user_id not in email_cache:
-                email_cache[user_id] = _get_user_email(user_id) or ""
-            email = email_cache[user_id]
             if email and _send_upcoming_email(
                     email, outcome.get("location", location), radius, new_items):
                 emails_sent += 1
@@ -2627,6 +3192,7 @@ def _run_upcoming_alerts():
     _save_cache(cdb)
     return {"ok": True, "searches_checked": len(searches),
             "users_checked": len(users_checked),
+            "skipped_inactive": skipped_inactive,
             "emails_sent": emails_sent, "errors": errors}
 
 
@@ -3185,8 +3751,8 @@ def _apply_referral_reward(db, ref_code, referred_email, referred_device):
 def _send_referral_email(email, days):
     if not email:
         return
-    _send_email(email, "You earned a free month on Bid Caller Pro",
-                "Someone you referred just subscribed to Bid Caller Pro -- "
+    _send_email(email, "You earned a free month on CurbCall Pro",
+                "Someone you referred just subscribed to CurbCall Pro -- "
                 f"we've added {days} free days to your plan. Thanks for "
                 "spreading the word!")
 
@@ -3266,6 +3832,12 @@ def stripe_webhook():
             _apply_referral_reward(db, ref_code, email, device)
         _save_db(db)
         _bi_note(db, "subscribed", email, plan)
+        # Which source paid, by the customer's own answer in setup.
+        try:
+            rec = (db.get("trials") or {}).get(f"email:{(email or '').strip().lower()}") or {}
+            _tally_source("p", rec.get("heard") or "not-said")
+        except Exception:
+            pass
         _save_db(db)
         _send_key_email(email, key, plan)
         print(f"[stripe] issued {plan} key for {email or device}", flush=True)
@@ -5220,7 +5792,11 @@ def _ddg_search(query, count=6):
 FETCH_TIMEOUT = int(os.environ.get("SCAN_FETCH_TIMEOUT", "18"))
 PROBE_TIMEOUT = int(os.environ.get("SCAN_PROBE_TIMEOUT", "6"))
 PORTAL_WORKERS = int(os.environ.get("SCAN_PORTAL_WORKERS", "6"))
-PORTALS_PER_TOWN = int(os.environ.get("SCAN_PORTALS_PER_TOWN", "8"))
+# Every verified page a town holds should be read. Adding public school
+# districts took Houston to 11 and San Antonio to 10, metros with many
+# districts; no other town is above 8, so the higher cap costs nothing
+# elsewhere (tests/test_seed_merge.py checks it).
+PORTALS_PER_TOWN = int(os.environ.get("SCAN_PORTALS_PER_TOWN", "12"))
 # Contact details live on each individual posting, so reading them costs one
 # fetch per bid. Bounded per portal, and given the shorter probe timeout: a
 # missing phone number degrades a lead, a blown request budget loses every one.
@@ -6989,6 +7565,275 @@ STATE_SOURCE_TIMEOUT = float(os.environ.get("STATE_SOURCE_TIMEOUT", "20"))
 STATE_WORKERS = int(os.environ.get("SCAN_STATE_WORKERS", "4"))
 _state_sources_cache = {"at": 0.0, "rows": None}
 
+# State pages that re-post each town's OWN bid notice for federal-aid local
+# work (sidewalks, trails, Safe Routes to School). Read by
+# bid_sources.parse_local_agency_notices and placed at the town, not a county.
+# Checked live 2026-11-02: Arkansas listed sidewalk jobs in Lake Village,
+# Tyronza and Alma, two of which have no bid page of their own anywhere.
+# Read with a plain parser, not a model: ARDOT's robots.txt allows search and
+# reference use and says nothing either way about model input.
+#
+# Missouri's is a table on MoDOT's site that every city and county letting
+# federal-aid work is required to post to: 18 open concrete-relevant jobs the
+# day it was added. modot.org's robots.txt allows the page.
+#
+# {state: [(url, kind)]}; kind names the reader in
+# bid_sources.LOCAL_NOTICE_PARSERS.
+LOCAL_NOTICE_SOURCES = {
+    "AR": [("https://ardot.gov/divisions/local-programs/currently-advertised-local-projects/",
+            "local_notices")],
+    "MO": [("https://www.modot.org/projects-be-let-others", "lpa_table")],
+    # Iowa lets county and city federal-aid work in the DOT's own monthly
+    # letting. The Notice to Bidders PDF is always at this address and lists
+    # every proposal with its county and item quantities. robots.txt allows it.
+    "IA": [("https://iowadot.gov/contracts/lettings/NoticeToBidders.pdf", "iowa_ntb_pdf")],
+    # Illinois' weekly Notice to Contractors Bulletin, where counties,
+    # townships and towns advertise what they let themselves. The page lists
+    # each week's PDF; a notice is printed in full only the week it first
+    # runs, so the newest few are read. idot.illinois.gov allows all agents.
+    "IL": [("https://idot.illinois.gov/doing-business/procurements/construction-services/contractors-bulletin.html",
+            "il_bulletin")],
+    "OK": [("https://oklahoma.gov/odot/business-center/contracts-and-proposals.html",
+            "ok_letting")],
+    "KY": [("https://transportation.ky.gov/Construction-Procurement/Pages/default.aspx",
+            "ky_ntc")],
+    "WI": [("https://wisconsindot.gov/Pages/doing-bus/contractors/hcci/bid-let.aspx",
+            "wi_ntc")],
+    "IN": [("https://www.in.gov/indot/doing-business-with-indot/home/contracts/", "in_ntc")],
+}
+# Oklahoma: ODOT's contracts page links one page per upcoming letting, each
+# naming the folder of its spreadsheet. odot.org has no robots.txt of its own
+# (it redirects to oklahoma.gov's home page); oklahoma.gov allows all agents.
+OK_LETTINGS_READ = int(os.environ.get("OK_LETTINGS_READ", "4"))
+OK_LETTING_HORIZON_DAYS = 75
+_OK_LETTING_LINK_RE = re.compile(
+    r'href="(/odot/business-center/contracts-and-proposals/(?:future-bid-openings/)?'
+    r'([a-z]{3})-(\d{1,2})-(\d{4})\.html)"', re.I)
+_OK_FOLDER_RE = re.compile(r'name="description"\s+content="b(\d{4}/\d{8})"', re.I)
+_OK_MONTHS = {m: i + 1 for i, m in enumerate(
+    ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"))}
+
+
+def _ok_letting_text(index_html, index_url, today=None):
+    """Spreadsheets of the next few ODOT lettings, joined with markers."""
+    today = today or datetime.date.today()
+    picks = {}
+    for path, mon, day, year in _OK_LETTING_LINK_RE.findall(index_html or ""):
+        try:
+            when = datetime.date(int(year), _OK_MONTHS[mon.lower()], int(day))
+        except (KeyError, ValueError):
+            continue
+        if today <= when <= today + datetime.timedelta(days=OK_LETTING_HORIZON_DAYS):
+            picks.setdefault(when, urllib.parse.urljoin(index_url, path))
+    parts = []
+    for when in sorted(picks)[:OK_LETTINGS_READ]:
+        page, outcome = _fetch_page(picks[when], timeout=STATE_SOURCE_TIMEOUT)
+        m = _OK_FOLDER_RE.search(page or "")
+        if outcome != "ok" or not m:
+            continue
+        csv_url = "https://www.odot.org/contracts/%s/letting-spreadsheet.csv" % m.group(1)
+        body, outcome = _fetch_page(csv_url, timeout=STATE_SOURCE_TIMEOUT)
+        if outcome == "ok" and body:
+            label = "%s %d, %d" % (when.strftime("%B"), when.day, when.year)
+            parts.append("%s%s %s\n%s" % (bid_sources.OK_LETTING_MARK, label, csv_url, body))
+    return "\n".join(parts)
+
+
+# Kentucky: KYTC's Construction Procurement page links each letting date, and
+# each letting's Notice to Contractors sits at a fixed address built from it.
+# robots.txt disallows /Lists/, which this never touches.
+KY_LETTINGS_READ = int(os.environ.get("KY_LETTINGS_READ", "3"))
+_KY_LETTING_RE = re.compile(r"Lettings\.aspx\?letting=(\d{1,2})/(\d{1,2})/(\d{4})")
+
+
+def _ky_letting_text(index_html, today=None):
+    today = today or datetime.date.today()
+    dates = set()
+    for mo, dy, yr in _KY_LETTING_RE.findall(index_html or ""):
+        try:
+            when = datetime.date(int(yr), int(mo), int(dy))
+        except ValueError:
+            continue
+        if today <= when <= today + datetime.timedelta(days=OK_LETTING_HORIZON_DAYS):
+            dates.add(when)
+    parts = []
+    for when in sorted(dates)[:KY_LETTINGS_READ]:
+        url = ("https://transportation.ky.gov/Construction-Procurement/Publications/"
+               "%s/Notice%%20to%%20Contractors.pdf" % when.isoformat())
+        raw, _ctype, outcome = _fetch_document(url)
+        text = _pdf_all_text(raw) if outcome == "ok" else ""
+        if text:
+            label = "%s %d, %d" % (when.strftime("%B"), when.day, when.year)
+            parts.append("%s%s %s\n%s" % (bid_sources.OK_LETTING_MARK, label, url, text))
+    return "\n".join(parts)
+
+
+# Wisconsin: the year's advertisement schedule page links each letting by its
+# date (bid-let/2026/20261110.aspx), and the Notice to Contractors for that
+# letting sits at hccidocs/bid-let/<year>/<date>/advertisement.pdf.
+WI_LETTINGS_READ = int(os.environ.get("WI_LETTINGS_READ", "3"))
+_WI_LETTING_RE = re.compile(r"/bid-let/(\d{4})/(\d{4})(\d{2})(\d{2})\.aspx")
+
+
+def _wi_letting_text(today=None):
+    today = today or datetime.date.today()
+    dates = set()
+    for year in sorted({today.year, (today + datetime.timedelta(days=OK_LETTING_HORIZON_DAYS)).year}):
+        page, outcome = _fetch_page(
+            "https://wisconsindot.gov/Pages/doing-bus/contractors/hcci/bid-let-%d.aspx" % year,
+            timeout=STATE_SOURCE_TIMEOUT)
+        for _y, y, m, d in _WI_LETTING_RE.findall(page or ""):
+            try:
+                when = datetime.date(int(y), int(m), int(d))
+            except ValueError:
+                continue
+            if today <= when <= today + datetime.timedelta(days=OK_LETTING_HORIZON_DAYS):
+                dates.add(when)
+    parts = []
+    for when in sorted(dates)[:WI_LETTINGS_READ]:
+        url = ("https://wisconsindot.gov/hccidocs/bid-let/%d/%s/advertisement.pdf"
+               % (when.year, when.strftime("%Y%m%d")))
+        raw, _ctype, outcome = _fetch_document(url)
+        text = _pdf_all_text(raw) if outcome == "ok" else ""
+        if text:
+            label = "%s %d, %d" % (when.strftime("%B"), when.day, when.year)
+            parts.append("%s%s %s\n%s" % (bid_sources.OK_LETTING_MARK, label, url, text))
+    return "\n".join(parts)
+
+
+# Indiana: INDOT's contracts page links each upcoming letting's page by a
+# dated slug ("thursday-november-5-2026-regular-letting"), and that
+# letting's Notice to Contractors is /indot/files/<YYYYMMDD>-REG-NTC.pdf.
+IN_LETTINGS_READ = int(os.environ.get("IN_LETTINGS_READ", "3"))
+_IN_LETTING_RE = re.compile(
+    r"(january|february|march|april|may|june|july|august|september|october|november|december)"
+    r"-(\d{1,2}),?-(\d{4})-regular-letting", re.I)
+
+
+def _in_letting_text(index_html, today=None):
+    today = today or datetime.date.today()
+    months = ["january", "february", "march", "april", "may", "june", "july",
+              "august", "september", "october", "november", "december"]
+    dates = set()
+    for mon, day, year in _IN_LETTING_RE.findall(index_html or ""):
+        try:
+            when = datetime.date(int(year), months.index(mon.lower()) + 1, int(day))
+        except ValueError:
+            continue
+        if today <= when <= today + datetime.timedelta(days=OK_LETTING_HORIZON_DAYS):
+            dates.add(when)
+    parts = []
+    for when in sorted(dates)[:IN_LETTINGS_READ]:
+        url = "https://www.in.gov/indot/files/%s-REG-NTC.pdf" % when.strftime("%Y%m%d")
+        raw, _ctype, outcome = _fetch_document(url)
+        text = _pdf_all_text(raw) if outcome == "ok" else ""
+        if text:
+            label = "%s %d, %d" % (when.strftime("%B"), when.day, when.year)
+            parts.append("%s%s %s\n%s" % (bid_sources.OK_LETTING_MARK, label, url, text))
+    return "\n".join(parts)
+
+
+IL_BULLETINS_READ = int(os.environ.get("IL_BULLETINS_READ", "4"))
+# These pages change at most daily, and Illinois alone is five downloads, so
+# each source's text is kept in memory this long instead of refetched by every
+# scan that touches the state. A cold 125-mile scan from Springfield, MO spent
+# about 13 seconds more on them than a warm one.
+LOCAL_SOURCE_TTL_SEC = int(os.environ.get("LOCAL_SOURCE_TTL_SEC", "10800"))
+_local_source_cache = {}
+
+
+def _cached_local_source(url, load):
+    hit = _local_source_cache.get(url)
+    if hit and time.time() - hit[0] < LOCAL_SOURCE_TTL_SEC:
+        return hit[1], hit[2]
+    text, outcome = load()
+    if text:
+        _local_source_cache[url] = (time.time(), text, outcome)
+    return text, outcome
+_IL_BULLETIN_LINK_RE = re.compile(r'href="([^"]*/local-roads/bulletins/[^"]+\.pdf)"', re.I)
+
+
+def _il_bulletin_text(index_html, index_url):
+    """The newest few weekly bulletins, joined with a marker naming each."""
+    links = []
+    for href in _IL_BULLETIN_LINK_RE.findall(index_html or ""):
+        url = urllib.parse.urljoin(index_url, bid_sources._unescape(href))
+        if url not in links:
+            links.append(url)
+    parts = []
+    for url in links[:IL_BULLETINS_READ]:
+        raw, _ctype, outcome = _fetch_document(url)
+        text = _pdf_all_text(raw) if outcome == "ok" else ""
+        if text:
+            parts.append(bid_sources.IL_BULLETIN_MARK + url + "\n" + text)
+    return "\n".join(parts)
+# Sources that are a PDF rather than a page; read as text, every page.
+_LOCAL_PDF_KINDS = {"iowa_ntb_pdf"}
+LOCAL_PDF_MAX_PAGES = 120
+
+
+def _pdf_all_text(raw, max_pages=LOCAL_PDF_MAX_PAGES):
+    """Text of every page of a PDF, or "" if it cannot be read."""
+    try:
+        from pypdf import PdfReader
+        reader = PdfReader(io.BytesIO(raw))
+        return "\n".join((p.extract_text() or "") for p in reader.pages[:max_pages])
+    except Exception:
+        return ""
+# Towns named on those pages, geocoded once per process.
+_LOCAL_NOTICE_GEO = {}
+
+
+def _place_local_notice(grouped, row, center, radius, city_coords=None, stats=None):
+    """Place a town's own notice from a state page at that town.
+
+    Open-or-not is decided before any geocoding: Missouri's table keeps
+    hundreds of past notices, and looking up each of their towns would spend
+    a scan's whole budget on work nobody can bid.
+    """
+    def _count(reason):
+        if stats is not None:
+            stats[reason] = stats.get(reason, 0) + 1
+
+    bid = {k: row[k] for k in ("title", "scope", "url", "deadline", "status",
+                               "source", "documents", "agency", "call") if k in row}
+    _apply_deadline_status(bid)
+    if not _is_open_bid(bid):
+        _count("state_letting_already_held")
+        return None
+    st = (row.get("state") or center.get("state") or "").upper()
+    point, label = None, ""
+    if row.get("county"):
+        point = counties.lookup(st, row["county"])
+        label = "%s County, %s" % (str(row["county"]).title(), st)
+    elif row.get("town"):
+        town = row["town"]
+        known = bid_portals._coords().get((town, st))
+        point = known or _city_coords(town, st, _LOCAL_NOTICE_GEO)
+        if not point and town.lower().endswith(" city"):
+            # "Odessa City", "St. Louis City": the place is the name before it.
+            point = _city_coords(town[:-5].strip(), st, _LOCAL_NOTICE_GEO)
+        label = town if st == center.get("state") else "%s, %s" % (town, st)
+    if not point:
+        _count("state_row_unplaceable")
+        return None
+    miles = _miles_between(center["lat"], center["lon"], point[0], point[1])
+    if miles > radius:
+        _count("out_of_radius")
+        return None
+    bid["miles"] = int(round(miles))
+    bucket = grouped.setdefault(label, [])
+    key = _bid_dupe_key(bid)
+    if key[0] and any(_bid_dupe_key(x) == key for x in bucket):
+        _count("duplicate")
+        return None
+    bucket.append(bid)
+    _count("kept")
+    _count("state_local_kept")
+    if city_coords is not None:
+        city_coords[label] = {"lat": point[0], "lon": point[1]}
+    return bid
+
 
 def _resolve_state_listing(url, kind, page):
     """(listing_url, listing_html) for a source, following an index if needed.
@@ -7183,6 +8028,33 @@ def _attach_plan_holders(bids, letting_html, letting_url, stats=None):
     return found
 
 
+def _load_local_source(url, kind):
+    """(text, outcome) for one local-notices source, whatever its format."""
+    if kind in _LOCAL_PDF_KINDS:
+        raw, _ctype, outcome = _fetch_document(url)
+        text = _pdf_all_text(raw) if outcome == "ok" else ""
+        return text, (outcome if outcome != "ok" or text else "unreadable")
+    page, outcome = _fetch_page(url, timeout=STATE_SOURCE_TIMEOUT)
+    if outcome != "ok" or not page:
+        return "", outcome
+    if kind == "il_bulletin":
+        text = _il_bulletin_text(page, url)
+        return text, ("ok" if text else "unreadable")
+    if kind == "ok_letting":
+        text = _ok_letting_text(page, url)
+        return text, ("ok" if text else "unreadable")
+    if kind == "ky_ntc":
+        text = _ky_letting_text(page)
+        return text, ("ok" if text else "unreadable")
+    if kind == "wi_ntc":
+        text = _wi_letting_text()
+        return text, ("ok" if text else "unreadable")
+    if kind == "in_ntc":
+        text = _in_letting_text(page)
+        return text, ("ok" if text else "unreadable")
+    return page, "ok"
+
+
 def _run_state_sources(center, radius, grouped, city_coords=None, stats=None):
     """Read the letting page of every verified state the radius touches.
 
@@ -7191,15 +8063,18 @@ def _run_state_sources(center, radius, grouped, city_coords=None, stats=None):
     costs its own rows, never the scan.
     """
     sources = _state_sources()
-    if not sources:
+    if not sources and not LOCAL_NOTICE_SOURCES:
         return 0
     try:
         states = counties.states_within(center["lat"], center["lon"], radius)
     except Exception:
         states = [center.get("state", "").upper()]
     todo = [(st,) + sources[st] for st in states if st in sources]
+    todo += [(st, url, kind) for st in states
+             for url, kind in LOCAL_NOTICE_SOURCES.get(st, ())]
     if not todo:
         return 0
+    kinds = {url: kind for _st, url, kind in todo}
 
     # Fetch every state at once, then process them one at a time.
     #
@@ -7216,6 +8091,9 @@ def _run_state_sources(center, radius, grouped, city_coords=None, stats=None):
     def _load(item):
         st, url, kind = item
         try:
+            if kind in bid_sources.LOCAL_NOTICE_PARSERS:
+                text, outcome = _cached_local_source(url, lambda: _load_local_source(url, kind))
+                return st, url, (text or None), outcome
             page, outcome = _fetch_page(url, timeout=STATE_SOURCE_TIMEOUT)
             if outcome != "ok" or not page:
                 return st, url, None, outcome
@@ -7234,6 +8112,17 @@ def _run_state_sources(center, radius, grouped, city_coords=None, stats=None):
                 if stats is not None:
                     k = "state_fetch_%s" % outcome
                     stats[k] = stats.get(k, 0) + 1
+                continue
+            reader = bid_sources.LOCAL_NOTICE_PARSERS.get(kinds.get(url))
+            if reader:
+                rows = reader(page, st, url)
+                if stats is not None:
+                    stats["state_local_rows_read"] = \
+                        stats.get("state_local_rows_read", 0) + len(rows)
+                for row in rows:
+                    if _place_local_notice(grouped, row, center, radius,
+                                           city_coords, stats) is not None:
+                        placed += 1
                 continue
             rows = bid_sources.parse_state_letting(
                 page, st, url, counties.counties_named)
@@ -8535,6 +9424,9 @@ def _perform_scan(location, radius, force=False, _progress_token=""):
     result = {"bids": grouped, "total": total, "city_coords": city_coords,
               "center": {"lat": center["lat"], "lon": center["lon"],
                         "label": f"{center['city']}, {center['state']}"}}
+
+    # The open bids, kept by place for the landing page (see /bids-near).
+    _remember_open_bids(grouped, city_coords)
 
     # cache (today only) + persist geo cache
     cache[ckey] = {"ts": datetime.datetime.now().isoformat(), **result}
@@ -11643,8 +12535,8 @@ def digest_confirm():
                         f"sidewalk, curb and ADA ramp bids within {DIGEST_RADIUS_MI} miles of "
                         f"<b>{html_escape(rec['place'])}</b>. Each email has a one-click "
                         "unsubscribe.</p><p>Want them now, with the going rate and a target "
-                        f"price for each? <a style=\"color:#f59e0b;\" href=\"{SITE_URL}/app.html\">"
-                        "Try CurbCall Pro free for 7 days</a>.</p>")
+                        f"price for each? <a style=\"color:#f59e0b;\" href=\"{SITE_URL}/app.html?loc={zip_code}\">"
+                        "Try CurbCall Pro free for 14 days</a>.</p>")
 
 
 def _digest_week():
@@ -11682,7 +12574,7 @@ def _bid_email_text(email, rec, rows):
     lines += ["",
               "Want the going rate for each one, a target price from what won, the bid form "
               "filled in, and a phone alert when an addendum drops? Try CurbCall Pro free "
-              f"for 7 days: {SITE_URL}/app.html",
+              f"for 14 days: {SITE_URL}/app.html?loc={rec.get('zip') or ''}",
               "",
               f"Concrete prices by state: {SITE_URL}/concrete-cost/index.html",
               "",

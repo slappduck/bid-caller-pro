@@ -668,6 +668,9 @@ def _perform_scan(location, radius, force=False, _progress_token=""):
               "center": {"lat": center["lat"], "lon": center["lon"],
                         "label": f"{center['city']}, {center['state']}"}}
 
+    # The open bids, kept by place for the landing page (see /bids-near).
+    _remember_open_bids(grouped, city_coords)
+
     # cache (today only) + persist geo cache
     cache[ckey] = {"ts": datetime.datetime.now().isoformat(), **result}
     cdb["scan_cache"] = {k: v for k, v in cache.items() if k.endswith(today)}

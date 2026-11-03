@@ -77,8 +77,8 @@ def _supabase_delete_user(user_id):
 # weak when the Terms change; "they accepted 2026-06-17" is evidence. These
 # constants must match the dates published on terms.html and privacy.html,
 # and a test fails if they drift.
-TERMS_VERSION = os.environ.get("TERMS_VERSION", "2026-10-10")
-PRIVACY_VERSION = os.environ.get("PRIVACY_VERSION", "2026-10-21")
+TERMS_VERSION = os.environ.get("TERMS_VERSION", "2026-11-02")
+PRIVACY_VERSION = os.environ.get("PRIVACY_VERSION", "2026-11-03")
 # "reaccept" is an existing user agreeing to a version published after
 # they signed up. Recorded distinctly so the record shows which
 # acceptances were made at signup and which on a re-prompt.
@@ -343,7 +343,7 @@ def account_delete():
     _trial_identity() produces rather than the address as typed. That does
     mean deleting an account frees up a fresh trial on the same email, which
     is a real trade: the alternative is keeping a record of someone who asked
-    to be forgotten, and a seven-day trial is not worth that. The trade is the
+    to be forgotten, and a free trial is not worth that. The trade is the
     same one for a tagged address -- it just was not honoured for those, which
     is the bug this note exists to stop coming back.
     """
@@ -392,6 +392,10 @@ def account_delete():
         for k in [k for k, v in rows.items() if v == email or k == email]:
             rows.pop(k, None)
     _save_db(db)
+    try:
+        _forget_outcomes(email)
+    except Exception:
+        pass
     # Deliberately not logged. The one action whose entire purpose is to
     # remove someone should not write their address into a log line on the
     # way out.

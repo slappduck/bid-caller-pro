@@ -59,8 +59,21 @@ def trial():
         return jsonify({"ok": False, "active": False, "reason": "trial_expired"})
 
     trial_key = f"email:{email}" if email else None
+    heard = str(data.get("heard") or "").strip().lower()
+    heard = heard if heard in HEARD_OPTIONS else ""
     if trial_key and trial_key in trials:
-        return _status(trials[trial_key])
+        rec = trials[trial_key]
+        # Their answer to "How did you hear about CurbCall?", given in setup,
+        # which may come after the trial already started.
+        if heard and not rec.get("heard"):
+            rec["heard"] = heard
+            _save_db(db)
+            _tally_source("h", heard)
+        if data.get("source") and not rec.get("source_counted"):
+            rec["source_counted"] = True
+            _save_db(db)
+            _tally_source("t", data.get("source"))
+        return _status(rec)
     if device and device in trials:
         # Legacy/anonymous trial already running — honor it either way.
         return _status(trials[device])
@@ -72,8 +85,15 @@ def trial():
 
     started = datetime.datetime.now()
     trials[trial_key] = {"started": started.isoformat(), "email": email}
+    if heard:
+        trials[trial_key]["heard"] = heard
+    if data.get("source"):
+        trials[trial_key]["source_counted"] = True
     _bi_note(db, "trial_started", email)
     _save_db(db)
+    _tally_source("t", data.get("source") or "direct")
+    if heard:
+        _tally_source("h", heard)
     end = started + datetime.timedelta(days=TRIAL_DAYS)
     return jsonify({"ok": True, "active": True, "days_left": TRIAL_DAYS,
                     "expires": end.isoformat()[:10], "expires_at": end.isoformat(), "new": True})

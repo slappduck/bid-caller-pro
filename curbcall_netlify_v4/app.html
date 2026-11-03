@@ -308,7 +308,7 @@
 
     <div id="onb-step1">
       <div class="auth-title">Where do you work out of?</div>
-      <div class="auth-sub">We'll watch the agencies around you.</div>
+      <div class="auth-sub">We'll watch the agencies around you and email you new bids as they're posted.</div>
       <div class="field-label">City and state, or ZIP</div>
       <input class="input" id="onb-loc" placeholder="Springfield, MO or 65806"
              autocomplete="postal-code" style="margin-bottom:0.5rem;" />
@@ -328,6 +328,18 @@
       <div class="field-label">What do you do?</div>
       <input class="input" id="onb-trade" placeholder="sidewalk, ADA ramp &amp; curb work"
              style="margin-bottom:0.5rem;" />
+      <div class="field-label">How did you hear about CurbCall? <span style="font-weight:400;">(optional)</span></div>
+      <select class="input" id="onb-heard" aria-label="How did you hear about CurbCall?" style="margin-bottom:0.5rem;">
+        <option value="">Choose one</option>
+        <option value="google-ad">An ad on Google</option>
+        <option value="google-search">Searching on Google</option>
+        <option value="facebook">Facebook or Instagram</option>
+        <option value="email">An email from us</option>
+        <option value="friend">Another contractor</option>
+        <option value="ready-mix-plant">A ready-mix plant</option>
+        <option value="supply-house">A supply house</option>
+        <option value="other">Somewhere else</option>
+      </select>
       <button class="btn-primary" id="onb-done">Start finding bids</button>
       <button class="btn-ghost" id="onb-skip2">Skip for now</button>
     </div>
@@ -347,7 +359,7 @@
 
   <div class="auth-card" id="auth-card">
     <div class="auth-title" id="auth-title">Create your free account</div>
-    <div class="auth-sub" id="auth-sub">7-day free trial &mdash; no card required</div>
+    <div class="auth-sub" id="auth-sub">14-day free trial &mdash; no card required</div>
 
     <button class="social-btn" id="google-btn">
       <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20H24v8h11.3C33.6 33.1 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 7.9 3l5.7-5.7C34.1 6.5 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20c11 0 20-9 20-20 0-1.3-.1-2.7-.4-4z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.5 15.1 18.9 12 24 12c3 0 5.8 1.1 7.9 3l5.7-5.7C34.1 6.5 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 10-1.9 13.6-5.1l-6.3-5.2C29.4 35.5 26.8 36 24 36c-5.2 0-9.5-2.8-11.3-7l-6.6 4.9C9.8 39.7 16.4 44 24 44z"/><path fill="#1976D2" d="M43.6 20H24v8h11.3c-1 2.7-2.8 4.9-5 6.4l6.3 5.2C40.6 35.8 44 30.3 44 24c0-1.3-.1-2.7-.4-4z"/></svg>
@@ -400,7 +412,7 @@
     <div class="auth-toggle" id="auth-toggle">Already have an account? <a id="toggle-link">Sign in</a></div>
     <div class="auth-toggle" id="forgot-wrap" style="display:none;margin-top:0.4rem;"><a id="forgot-link">Forgot password?</a></div>
   </div>
-  <div class="auth-trial-note">Free for 7 days &nbsp;&middot;&nbsp; No credit card &nbsp;&middot;&nbsp; Cancel anytime</div>
+  <div class="auth-trial-note">Free for 14 days &nbsp;&middot;&nbsp; No credit card &nbsp;&middot;&nbsp; Cancel anytime</div>
 </div>
 
 <div class="modal-back" id="modal-back"></div>

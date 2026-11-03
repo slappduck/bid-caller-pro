@@ -1,0 +1,561 @@
+"""Town bid notices re-posted on a state local-programs page.
+
+Arkansas DOT posts each town's own notice for federal-aid local work
+(sidewalks, trails) on one page. Two of the towns on the captured copy,
+Tyronza and Lake Village, have no bid page of their own that discovery could
+find, so this page is the only place their sidewalk jobs show up online.
+The fixture is the real page body captured 2026-11-02.
+"""
+import os
+import sys
+import unittest
+from unittest.mock import patch
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
+import bid_sources  # noqa: E402
+import license_server as ls  # noqa: E402
+
+
+def setUpModule():
+    ls._local_source_cache.clear()
+
+
+class _FreshCache(unittest.TestCase):
+    def setUp(self):
+        ls._local_source_cache.clear()
+
+FIXTURE = os.path.join(ROOT, "data", "recall_fixtures", "ardot_local_projects.html")
+URL = ls.LOCAL_NOTICE_SOURCES["AR"][0][0]
+
+
+def page():
+    with open(FIXTURE, encoding="utf-8") as f:
+        return f.read()
+
+
+def rows():
+    return bid_sources.parse_local_agency_notices(page(), "AR", URL)
+
+
+class ParseTests(unittest.TestCase):
+    def by_place(self):
+        return {r.get("town") or r.get("county"): r for r in rows()}
+
+    def test_the_sidewalk_jobs_are_read(self):
+        got = self.by_place()
+        self.assertEqual(got["Lake Village"]["title"],
+                         "Lake Village Rodney Angel Sports Complex Sidewalks")
+        self.assertEqual(got["Lake Village"]["deadline"], "November 17, 2026")
+        self.assertEqual(got["Tyronza"]["title"],
+                         "Tyronza Hwy. 118 Sidewalk Phase 1 (Main St)")
+        self.assertEqual(got["Tyronza"]["deadline"], "November 10, 2026")
+        self.assertEqual(got["Alma"]["title"], "Alma Southside Sidewalk Improvements")
+
+    def test_abbreviations_are_spelled_out_so_the_trade_filter_sees_them(self):
+        """"Ped. Impvts." is a sidewalk job the filter could not recognise."""
+        self.assertEqual(self.by_place()["Jonesboro"]["title"],
+                         "Jonesboro Marion Berry Parkway Pedestrian Improvements")
+
+    def test_a_county_letting_is_kept_as_a_county(self):
+        r = self.by_place()["Craighead"]
+        self.assertNotIn("town", r)
+        self.assertEqual(r["deadline"], "October 27, 2026")   # "October 27 th , 2026"
+        self.assertEqual(r["title"],
+                         "Crowley’s Ridge Gravel Trail Respite Hub (Craighead County)")
+
+    def test_other_trades_are_left_out(self):
+        self.assertNotIn("Lowell", self.by_place())          # traffic signals
+
+    def test_an_addendum_joins_the_notice_above_it(self):
+        lr = self.by_place()["Little Rock"]
+        self.assertEqual([d["name"] for d in lr["documents"]],
+                         ["Bid notice", "Addendum 1", "Addendum 2"])
+        self.assertFalse(any(r["agency"].lower().startswith("addend") for r in rows()))
+
+    def test_each_row_links_to_its_own_notice(self):
+        for r in rows():
+            self.assertTrue(r["url"].startswith("https://media.ark.org/ardot/"), r["url"])
+            self.assertEqual(r["source"], "state_local")
+
+
+class PlacementTests(unittest.TestCase):
+    CENTER = {"lat": 35.3859, "lon": -94.3985, "state": "AR"}   # Fort Smith
+
+    def place(self, row, radius=50):
+        grouped, coords = {}, {}
+        with patch("license_server._city_coords", return_value=[35.4776, -94.2219]):
+            kept = ls._place_local_notice(grouped, row, self.CENTER, radius, coords, {})
+        return kept, grouped, coords
+
+    def alma(self, **kw):
+        r = next(x for x in rows() if x.get("town") == "Alma")
+        r.update(kw)
+        return r
+
+    def test_placed_at_the_town(self):
+        with patch("license_server._is_open_bid", return_value=True):
+            kept, grouped, coords = self.place(self.alma())
+        self.assertIsNotNone(kept)
+        self.assertIn("Alma", grouped)
+        self.assertAlmostEqual(kept["miles"], 12, delta=1)
+        self.assertIn("Alma", coords)
+
+    def test_out_of_radius_is_dropped(self):
+        with patch("license_server._is_open_bid", return_value=True):
+            kept, grouped, _ = self.place(self.alma(), radius=5)
+        self.assertIsNone(kept)
+        self.assertEqual(grouped, {})
+
+    def test_a_closed_notice_is_dropped(self):
+        kept, grouped, _ = self.place(self.alma(deadline="October 1, 2020"))
+        self.assertIsNone(kept)
+
+    def test_another_states_town_is_labelled_with_its_state(self):
+        center = {"lat": 37.209, "lon": -93.2923, "state": "MO"}
+        with patch("license_server._city_coords", return_value=[36.3353, -93.4524]), \
+             patch("license_server._is_open_bid", return_value=True):
+            grouped = {}
+            r = next(x for x in rows() if x.get("town") == "Green Forest")
+            ls._place_local_notice(grouped, r, center, 100, {}, {})
+        self.assertIn("Green Forest, AR", grouped)
+
+
+class ScanWiringTests(_FreshCache):
+    def test_a_scan_touching_arkansas_reads_the_page(self):
+        fetched = []
+
+        def fake_fetch(url, timeout=None):
+            fetched.append(url)
+            return page(), "ok"
+
+        center = {"lat": 35.3859, "lon": -94.3985, "state": "AR"}
+        grouped, stats = {}, {}
+        with patch("license_server._state_sources", return_value={}), \
+             patch("license_server._fetch_page", side_effect=fake_fetch), \
+             patch("license_server._city_coords", return_value=[35.4776, -94.2219]), \
+             patch("license_server._is_open_bid", return_value=True), \
+             patch("license_server.counties.states_within", return_value=["AR"]):
+            ls._run_state_sources(center, 50, grouped, {}, stats)
+        self.assertEqual(fetched, [URL])
+        self.assertEqual(stats.get("state_local_rows_read"), len(rows()))
+        self.assertIn("Alma Southside Sidewalk Improvements",
+                      [b["title"] for v in grouped.values() for b in v])
+
+    def test_a_scan_elsewhere_does_not_fetch_it(self):
+        with patch("license_server._state_sources", return_value={}), \
+             patch("license_server._fetch_page") as f, \
+             patch("license_server.counties.states_within", return_value=["NE"]):
+            ls._run_state_sources({"lat": 41.25, "lon": -95.93, "state": "NE"}, 25, {}, {}, {})
+        f.assert_not_called()
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+
+MO_FIXTURE = os.path.join(ROOT, "data", "recall_fixtures", "modot_local_projects.html")
+MO_URL = ls.LOCAL_NOTICE_SOURCES["MO"][0][0]
+
+
+def mo_rows(today=None):
+    import datetime
+    with open(MO_FIXTURE, encoding="utf-8") as f:
+        html = f.read()
+    return bid_sources.parse_lpa_table(html, "MO", MO_URL,
+                                       today=today or datetime.date(2026, 11, 2))
+
+
+class MissouriTableTests(unittest.TestCase):
+    """MoDOT's table of locally administered federal-aid bid notices."""
+
+    def by_place(self):
+        out = {}
+        for r in mo_rows():
+            out.setdefault(r.get("town") or (r.get("county") + " County"), []).append(r)
+        return out
+
+    def test_the_open_sidewalk_jobs_are_read(self):
+        got = self.by_place()
+        self.assertEqual(got["Creve Coeur"][0]["title"], "New Ballas Sidewalk Project")
+        self.assertEqual(got["Creve Coeur"][0]["deadline"], "November 19, 2026")
+        self.assertEqual(got["Desloge"][0]["title"], "Sidewalk improvements to N. Desloge Drive")
+        self.assertIn("Milan", got)
+        self.assertIn("Ozark", got)
+
+    def test_the_district_is_not_mistaken_for_the_agency(self):
+        """"NW District, City of Milan, ..." is Milan's job, not a district's."""
+        for r in mo_rows():
+            self.assertNotIn("district", (r.get("town") or r.get("county") or "").lower())
+
+    def test_a_bare_town_name_is_a_town(self):
+        """"Central District, New Bloomfield, construction of ...\""""
+        self.assertIn("New Bloomfield", self.by_place())
+
+    def test_the_split_county_name_is_rejoined(self):
+        """The table prints "St, Francois County"."""
+        self.assertIn("St. Francois County", self.by_place())
+
+    def test_addenda_join_their_notice(self):
+        nb = self.by_place()["New Bloomfield"][0]
+        self.assertEqual([d["name"] for d in nb["documents"]],
+                         ["Bid notice", "Addendum 1", "Addendum 2"])
+        self.assertFalse(any(r["title"].lower().startswith("addendum") for r in mo_rows()))
+
+    def test_a_shared_use_path_counts_as_this_trade(self):
+        self.assertIn("Kearney", self.by_place())
+
+    def test_other_trades_are_left_out(self):
+        titles = " ".join(r["title"] for r in mo_rows()).lower()
+        self.assertNotIn("flashing beacon", titles)
+
+    def test_an_old_undated_notice_is_dropped(self):
+        """Smith Park Trail was posted 3/30/25 with no letting date."""
+        self.assertFalse(any("Smith Park" in r["title"] for r in mo_rows()))
+
+    def test_entities_are_decoded(self):
+        for r in mo_rows():
+            self.assertNotIn("&amp;", r["title"])
+            self.assertNotIn("&nbsp;", r["title"])
+
+    def test_each_row_links_to_its_notice(self):
+        for r in mo_rows():
+            self.assertTrue(r["url"].startswith("https://www.modot.org/media/"), r["url"])
+
+    def test_closed_rows_are_dropped_before_any_geocoding(self):
+        """Hundreds of past notices sit in the table; geocoding each would
+        spend the scan's budget."""
+        closed = dict(mo_rows()[0], deadline="October 1, 2020")
+        with patch("license_server._city_coords") as geo:
+            ls._place_local_notice({}, closed, {"lat": 37.2, "lon": -93.3, "state": "MO"},
+                                   100, {}, {})
+        geo.assert_not_called()
+
+
+IA_FIXTURE = os.path.join(ROOT, "data", "recall_fixtures", "iowadot_notice_to_bidders.txt")
+IA_URL = ls.LOCAL_NOTICE_SOURCES["IA"][0][0]
+
+
+def ia_rows():
+    with open(IA_FIXTURE, encoding="utf-8") as f:
+        return bid_sources.parse_iowa_notice_to_bidders(f.read(), "IA", IA_URL)
+
+
+class IowaNoticeToBiddersTests(_FreshCache):
+    """Iowa DOT's letting, which carries county and city work with quantities."""
+
+    def find(self, ident):
+        return next(r for r in ia_rows() if r["call"] == ident)
+
+    def test_the_letting_date_is_the_due_date(self):
+        self.assertTrue(all(r["deadline"] == "November 17, 2026" for r in ia_rows()))
+
+    def test_a_sidewalk_job_carries_its_quantities(self):
+        r = self.find("52-3715-674")
+        self.assertEqual(r["county"], "Johnson")
+        self.assertIn("Iowa City", r["title"])
+        self.assertIn("5,231 sq yd Recreational Trail, PCC", r["scope"])
+        self.assertIn("609 sq yd Sidewalk, PCC", r["scope"])
+
+    def test_county_projects_are_included(self):
+        """Proposal IDs with C in the middle are let for a county."""
+        r = self.find("08-C008-091")
+        self.assertEqual(r["county"], "Boone")
+        self.assertIn("22,084 sq yd Pavement, PCC", r["scope"])
+
+    def test_a_job_with_no_flatwork_is_left_out(self):
+        """A paved shoulder alone is usually asphalt, not this trade."""
+        ids = {r["call"] for r in ia_rows()}
+        self.assertNotIn("10-1503-079", ids)      # deck overlay, paved shoulders only
+        self.assertNotIn("40-1757-024", ids)      # HMA resurfacing, paved shoulders only
+
+    def test_asphalt_items_do_not_count(self):
+        for r in ia_rows():
+            self.assertNotIn("HMA", r["scope"].split("Flatwork items:")[1], r["call"])
+
+    def test_abbreviations_read_cleanly(self):
+        for r in ia_rows():
+            self.assertNotIn("P.c.c", r["scope"])
+            self.assertNotIn("Ccs", r["title"])
+
+    def test_documents_point_at_the_notice_and_bid_express(self):
+        docs = self.find("52-3715-674")["documents"]
+        self.assertEqual(docs[0]["url"], IA_URL)
+        self.assertIn("bidx.com", docs[1]["url"])
+
+    def test_a_scan_reads_the_pdf_through_the_document_fetcher(self):
+        with open(IA_FIXTURE, encoding="utf-8") as f:
+            text = f.read()
+        grouped, stats = {}, {}
+        with patch("license_server._state_sources", return_value={}), \
+             patch("license_server._fetch_document", return_value=(b"%PDF-", "application/pdf", "ok")), \
+             patch("license_server._pdf_all_text", return_value=text), \
+             patch("license_server._is_open_bid", return_value=True), \
+             patch("license_server.counties.states_within", return_value=["IA"]):
+            ls._run_state_sources({"lat": 41.661, "lon": -91.530, "state": "IA"}, 30,
+                                  grouped, {}, stats)
+        self.assertEqual(stats.get("state_local_rows_read"), len(ia_rows()))
+        self.assertIn("Johnson County, IA", grouped)
+
+
+IL_FIXTURE = os.path.join(ROOT, "data", "recall_fixtures", "idot_contractors_bulletins.txt")
+
+
+def il_rows():
+    with open(IL_FIXTURE, encoding="utf-8") as f:
+        text = f.read().split("\n", 1)[1]           # drop the provenance line
+    return bid_sources.parse_il_contractors_bulletin(text, "IL", "x")
+
+
+class IllinoisBulletinTests(unittest.TestCase):
+    """IDOT's weekly bulletin of contracts towns and counties let themselves."""
+
+    def by_place(self):
+        out = {}
+        for r in il_rows():
+            out.setdefault(r.get("town") or r.get("county") + " County", []).append(r)
+        return out
+
+    def test_town_jobs_are_read_with_their_letting_date(self):
+        got = self.by_place()
+        self.assertEqual(got["Joliet"][0]["deadline"], "November 5, 2026")
+        self.assertIn("PCC curb", got["Joliet"][0]["title"])
+        self.assertIn("Kinmundy", got)                   # curb & gutter at a crossing
+
+    def test_a_county_is_told_from_a_town_by_the_district_list(self):
+        got = self.by_place()
+        self.assertIn("Rock Island County", got)         # printed bare, "Rock Island"
+        self.assertIn("Kane County", got)                # printed "Kane County DOT"
+
+    def test_each_row_links_the_bulletin_it_came_from(self):
+        for r in il_rows():
+            self.assertTrue(r["url"].endswith(".pdf"), r["url"])
+        joliet = self.by_place()["Joliet"][0]
+        self.assertIn("october-22", joliet["url"])
+
+    def test_a_notice_in_two_bulletins_is_kept_once(self):
+        self.assertEqual(len(self.by_place()["Elgin"]), 1)
+
+    def test_other_trades_are_left_out(self):
+        titles = " ".join(r["title"].lower() for r in il_rows())
+        self.assertNotIn("tree remov", titles)
+        self.assertNotIn("traffic signal detection", titles)
+        self.assertNotIn("sign material", titles)
+
+    def test_pdf_glyph_noise_is_removed(self):
+        for r in il_rows():
+            self.assertFalse(any(ord(c) < 32 or 0x7f <= ord(c) <= 0x9f for c in r["title"]), r["title"])
+            self.assertNotIn("¶", r["scope"])
+
+    def test_the_scan_reads_the_newest_bulletins_from_the_index(self):
+        index = ('<a href="/content/dam/x/local-roads/bulletins/october-29.pdf">a</a>'
+                 '<a href="/content/dam/x/local-roads/bulletins/october-22.pdf">b</a>'
+                 '<a href="/content/dam/x/local-roads/bulletins/october-15.pdf">c</a>'
+                 '<a href="/content/dam/x/local-roads/bulletins/october-8.pdf">d</a>'
+                 '<a href="/content/dam/x/local-roads/bulletins/october-1.pdf">e</a>')
+        got = []
+        with patch("license_server._fetch_document",
+                   side_effect=lambda u: (got.append(u) or (b"%PDF", "application/pdf", "ok"))), \
+             patch("license_server._pdf_all_text", return_value="PART II"):
+            text = ls._il_bulletin_text(index, "https://idot.illinois.gov/a/b.html")
+        self.assertEqual(len(got), ls.IL_BULLETINS_READ)
+        self.assertTrue(got[0].startswith("https://idot.illinois.gov/content/dam/"))
+        self.assertIn(bid_sources.IL_BULLETIN_MARK + got[0], text)
+
+
+class LocalSourceCacheTests(_FreshCache):
+    def test_a_second_scan_reuses_the_fetched_text(self):
+        calls = []
+
+        def fake_fetch(url, timeout=None):
+            calls.append(url)
+            return page(), "ok"
+
+        with patch("license_server._state_sources", return_value={}), \
+             patch("license_server._fetch_page", side_effect=fake_fetch), \
+             patch("license_server._city_coords", return_value=[35.4776, -94.2219]), \
+             patch("license_server.counties.states_within", return_value=["AR"]):
+            for _ in range(2):
+                ls._run_state_sources({"lat": 35.39, "lon": -94.40, "state": "AR"}, 50, {}, {}, {})
+        self.assertEqual(calls, [URL])
+
+
+OK_FIXTURE = os.path.join(ROOT, "data", "recall_fixtures", "odot_ok_lettings.txt")
+
+
+def ok_rows():
+    with open(OK_FIXTURE, encoding="utf-8") as f:
+        text = f.read().split("\n", 1)[1]
+    return bid_sources.parse_ok_letting_csv(text, "OK")
+
+
+class OklahomaLettingTests(_FreshCache):
+    """ODOT lettings, read from each letting's spreadsheet."""
+
+    def test_city_sidewalk_jobs_are_placed_at_the_city(self):
+        tulsa = [r for r in ok_rows() if r.get("town") == "Tulsa"]
+        self.assertTrue(any("Sidewalks" in r["title"] for r in tulsa))
+        self.assertIn("Warr Acres", {r.get("town") for r in ok_rows()})
+
+    def test_a_job_with_no_city_is_placed_at_its_county(self):
+        self.assertIn("Cleveland", {r.get("county") for r in ok_rows()})
+
+    def test_the_letting_date_is_the_due_date(self):
+        dates = {r["deadline"] for r in ok_rows()}
+        self.assertEqual(dates, {"November 12, 2026", "November 19, 2026"})
+
+    def test_route_names_and_ordinals_are_cased_right(self):
+        titles = " ".join(r["title"] for r in ok_rows())
+        self.assertIn("US-270", titles)
+        self.assertIn("31st", titles)
+        self.assertNotIn("Sh-", titles)
+
+    def test_the_airport_taxilane_is_left_out(self):
+        """Shawnee's taxilane is airport work, not a city's flatwork."""
+        self.assertFalse(any("Taxilane" in r["title"] for r in ok_rows()))
+
+    def test_the_scan_reads_upcoming_lettings_only(self):
+        import datetime
+        index = ('<a href="/odot/business-center/contracts-and-proposals/oct-22-2026.html">old</a>'
+                 '<a href="/odot/business-center/contracts-and-proposals/nov-12-2026.html">a</a>'
+                 '<a href="/odot/business-center/contracts-and-proposals/future-bid-openings/feb-11-2027.html">far</a>')
+        fetched = []
+
+        def fake(url, timeout=None):
+            fetched.append(url)
+            if url.endswith(".html"):
+                return '<meta name="description" content="b2026/26111201"/>', "ok"
+            return "XX,028,400 Days,AD,1,--,1,ID,TULSA,\"PEDESTRIAN IMPROVEMENTS (SIDEWALKS)<br>X\"", "ok"
+
+        with patch("license_server._fetch_page", side_effect=fake):
+            text = ls._ok_letting_text(index, "https://oklahoma.gov/odot/x.html",
+                                       today=datetime.date(2026, 11, 2))
+        self.assertEqual(fetched, [
+            "https://oklahoma.gov/odot/business-center/contracts-and-proposals/nov-12-2026.html",
+            "https://www.odot.org/contracts/2026/26111201/letting-spreadsheet.csv"])
+        self.assertIn(bid_sources.OK_LETTING_MARK + "November 12, 2026 ", text)
+
+
+KY_FIXTURE = os.path.join(ROOT, "data", "recall_fixtures", "kytc_notice_to_contractors.txt")
+
+
+def ky_rows():
+    with open(KY_FIXTURE, encoding="utf-8") as f:
+        return bid_sources.parse_ky_notice_to_contractors(f.read().split("\n", 1)[1], "KY")
+
+
+class KentuckyNoticeTests(_FreshCache):
+    def find(self, call):
+        return next(r for r in ky_rows() if r["call"] == call)
+
+    def test_contracts_carry_county_and_letting_date(self):
+        r = self.find("100")
+        self.assertEqual(r["county"], "Fayette")
+        self.assertEqual(r["deadline"], "November 19, 2026")
+        self.assertIn("Main Street (US 421)", r["title"])
+
+    def test_a_concrete_pavement_job_is_kept(self):
+        self.assertIn("JPC Pavement", self.find("200")["title"])
+
+    def test_casing_of_routes_and_names(self):
+        titles = " ".join(r["title"] for r in ky_rows())
+        self.assertIn("KY-465", titles)
+        self.assertNotIn("Us 421", titles)
+        self.assertIn("McCreary", {r["county"] for r in ky_rows()})
+
+    def test_bridge_replacement_with_no_flatwork_is_left_out(self):
+        self.assertNotIn("104", {r["call"] for r in ky_rows()})
+
+    def test_the_scan_builds_the_pdf_address_from_upcoming_dates_only(self):
+        import datetime
+        index = ('<a href="Lettings.aspx?letting=10/22/2026">x</a>'
+                 '<a href="Lettings.aspx?letting=11/19/2026">y</a>'
+                 '<a href="Lettings.aspx?letting=12/10/2026">z</a>')
+        got = []
+        with patch("license_server._fetch_document",
+                   side_effect=lambda u: (got.append(u) or (b"%PDF", "application/pdf", "ok"))), \
+             patch("license_server._pdf_all_text", return_value="CALL 1"):
+            ls._ky_letting_text(index, today=datetime.date(2026, 11, 2))
+        self.assertEqual(got, [
+            "https://transportation.ky.gov/Construction-Procurement/Publications/2026-11-19/Notice%20to%20Contractors.pdf",
+            "https://transportation.ky.gov/Construction-Procurement/Publications/2026-12-10/Notice%20to%20Contractors.pdf"])
+
+
+WI_FIXTURE = os.path.join(ROOT, "data", "recall_fixtures", "wisdot_notice_to_contractors.txt")
+
+
+def wi_rows():
+    with open(WI_FIXTURE, encoding="utf-8") as f:
+        return bid_sources.parse_wi_notice_to_contractors(f.read().split("\n", 1)[1], "WI")
+
+
+class WisconsinNoticeTests(_FreshCache):
+    def test_city_and_village_jobs_are_placed_at_the_town(self):
+        towns = {r.get("town") for r in wi_rows()}
+        self.assertIn("Madison", towns)
+        self.assertIn("Deforest", towns)
+
+    def test_abbreviated_places_are_spelled_out(self):
+        titles = [r["title"] for r in wi_rows()]
+        self.assertTrue(any(t.startswith("City of Madison") for t in titles))
+        self.assertTrue(any(t.startswith("Town of Excelsior") for t in titles))
+        self.assertFalse(any(t.startswith(("C ", "V ", "T ")) for t in titles))
+
+    def test_only_proposals_with_concrete_flatwork_are_kept(self):
+        for r in wi_rows():
+            self.assertRegex(r["scope"], r"Concrete|Curb|Sidewalk")
+        self.assertFalse(any("Tree Clearing" in r["title"] for r in wi_rows()))
+
+    def test_the_letting_date_is_the_due_date(self):
+        self.assertTrue(all(r["deadline"] == "November 10, 2026" for r in wi_rows()))
+
+    def test_the_scan_builds_pdf_addresses_from_the_schedule_page(self):
+        import datetime
+        page = ('<a href="/Pages/doing-bus/contractors/hcci/bid-let/2026/20261013.aspx">o</a>'
+                '<a href="/Pages/doing-bus/contractors/hcci/bid-let/2026/20261110.aspx">n</a>')
+        got = []
+        with patch("license_server._fetch_page", return_value=(page, "ok")), \
+             patch("license_server._fetch_document",
+                   side_effect=lambda u: (got.append(u) or (b"%PDF", "application/pdf", "ok"))), \
+             patch("license_server._pdf_all_text", return_value="x"):
+            ls._wi_letting_text(today=datetime.date(2026, 11, 2))
+        self.assertEqual(got, ["https://wisconsindot.gov/hccidocs/bid-let/2026/20261110/advertisement.pdf"])
+
+
+IN_FIXTURE = os.path.join(ROOT, "data", "recall_fixtures", "indot_notice_to_contractors.txt")
+
+
+def in_rows():
+    with open(IN_FIXTURE, encoding="utf-8") as f:
+        return bid_sources.parse_in_notice_to_contractors(f.read().split("\n", 1)[1], "IN")
+
+
+class IndianaNoticeTests(_FreshCache):
+    def find(self, call):
+        return next(r for r in in_rows() if r["call"] == call)
+
+    def test_a_sidewalk_contract_is_read_with_its_county(self):
+        r = self.find("401")
+        self.assertEqual(r["county"], "Lake")
+        self.assertIn("Sidewalk Construction", r["title"])
+        self.assertEqual(r["deadline"], "November 5, 2026")
+
+    def test_bike_and_pedestrian_work_is_kept(self):
+        self.assertIn("Bike And Pedestrian", self.find("111")["title"])
+
+    def test_titles_have_no_double_spaces(self):
+        for r in in_rows():
+            self.assertNotIn("  ", r["title"])
+
+    def test_the_scan_builds_the_pdf_address_from_the_letting_slug(self):
+        import datetime
+        page = ('<a href="/indot/doing-business-with-indot/wednesday-october-7-2026-regular-letting">a</a>'
+                '<a href="/indot/doing-business-with-indot/thursday-november-5-2026-regular-letting">b</a>'
+                '<a href="/indot/doing-business-with-indot/home/contracts/december-09-2026-regular-letting">c</a>')
+        got = []
+        with patch("license_server._fetch_document",
+                   side_effect=lambda u: (got.append(u) or (b"%PDF", "application/pdf", "ok"))), \
+             patch("license_server._pdf_all_text", return_value="x"):
+            ls._in_letting_text(page, today=datetime.date(2026, 11, 2))
+        self.assertEqual(got, ["https://www.in.gov/indot/files/20261105-REG-NTC.pdf",
+                               "https://www.in.gov/indot/files/20261209-REG-NTC.pdf"])

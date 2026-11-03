@@ -179,6 +179,9 @@ const DEVICE_KEYS=new Set([
   // arriving, not the one who left, so clearing it here would throw away the
   // name they just typed.
   "pending_signup_name",
+  // The ZIP typed on the landing page moments before signing up, for
+  // setup to start from. Same reasoning: it belongs to the person arriving.
+  "landing_loc",
   // Ticked seconds ago by the person now signing in, and not yet posted to
   // the server. Clearing it here would silently lose the consent record for
   // the very account being created.
@@ -240,6 +243,10 @@ function deviceId(){
   return id;
 }
 function licenseKey(){return store.get("license_key","");}
+// Reading documents and watching bids: a paid key, or a signed-in account.
+// A trial has no key on the phone; the server knows it by the account, so it
+// decides, and a trial gets the same automatic reading as a subscription.
+function canAutoRead(){return!!(licenseKey()||currentUser);}
 
 let bidData=store.get("last_feed",{});
 let saved=store.get("saved",{});
@@ -250,6 +257,7 @@ let notes=store.get("notes",{}); // bid id -> freeform text, private/local only
 // "let" line has run would throw instead of rendering.
 let bidPrep=store.get("bid_prep",{}); // bid id -> Prepare-bid workspace
 let dismissed=store.get("dismissed",{}); // bid id -> true, hidden from the feed even if a rescan brings it back
+let docsReady=store.get("docs_ready",{}); // bid id -> {items}: documents read after a scan, see preReadAfterScan
 let companyProfile=store.get("company_profile",{}); // used to personalize AI proposal drafts
 
 // Re-keys locally stored bids from the old truncated-text id to the hashed one
@@ -739,7 +747,7 @@ function setAuthMode(mode){
   authMode=mode;
   const isSignup=mode==="signup";
   document.getElementById("auth-title").textContent=isSignup?"Create your free account":"Welcome back";
-  document.getElementById("auth-sub").textContent=isSignup?"7-day free trial \u2014 no card required":"Sign in to your account";
+  document.getElementById("auth-sub").textContent=isSignup?"14-day free trial \u2014 no card required":"Sign in to your account";
   document.getElementById("email-btn").textContent=isSignup?"Create Account":"Sign In";
   document.getElementById("password-wrap").style.display=isSignup?"block":"block";
   document.getElementById("magic-btn").style.display=isSignup?"block":"block";
@@ -1627,6 +1635,23 @@ async function syncPullSavedSearches(){
   store.set("saved_searches",savedSearches);
   renderSavedSearches();
   for(const s of localOnly)await pushSavedSearch(s.location,s.radius);
+  autoWatchHome();
+}
+// The daily new-bid email goes only to saved searches, and almost nobody
+// finds the button. So the area they gave in setup is watched by default:
+// once per account on this device, and only when they have no saved search,
+// so one they deleted on purpose is not put back.
+function autoWatchHome(){
+  if(!sb||!currentUser||store.get("auto_watch_checked",false))return;
+  store.set("auto_watch_checked",true);
+  if(savedSearches.length)return;
+  const location=String(store.get(HOME_LOC_KEY,"")||"").trim();
+  if(!location)return;
+  const r=Number(store.get(HOME_RADIUS_KEY,50))||50;
+  savedSearches.push({location,radius:r});
+  store.set("saved_searches",savedSearches);
+  pushSavedSearch(location,r);
+  renderSavedSearches();
 }
 byId("save-search-btn").onclick=()=>{
   const location=document.getElementById("loc-input").value.trim();
@@ -1636,7 +1661,7 @@ byId("save-search-btn").onclick=()=>{
   savedSearches.push({location,radius});
   store.set("saved_searches",savedSearches);
   pushSavedSearch(location,radius);
-  toast("Saved — we'll check this every time you open the app");
+  toast("Saved. We'll email you new bids here every morning.");
   renderSavedSearches();
 };
 function renderSavedSearches(){
@@ -2367,7 +2392,15 @@ function onbCheckCoverage(){
         method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({location:loc.trim(),radius:onbRadius})},20000);
       const d=await r.json();
-      if(d.ok)el.textContent=`${d.agencies} agencies posting bids within ${onbRadius} miles`;
+      if(d.ok){
+        el.textContent=`${d.agencies} agencies posting bids within ${onbRadius} miles`;
+        // And the work itself, when scans have already found some there.
+        const r2=await fetchRetry(SERVER+"/bids-near",{method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({location:loc.trim(),radius:onbRadius})},20000);
+        const n=await r2.json();
+        if(n&&n.ok&&n.count&&(document.getElementById("onb-loc")||{}).value===loc)
+          el.textContent=`${d.agencies} agencies posting bids within ${onbRadius} miles \u00b7 ${plural(n.count,"open bid")} found there lately`;
+      }
       else el.textContent="We couldn't find that place — try a ZIP code";
     }catch(e){el.textContent="";}
   },600);
@@ -2430,6 +2463,15 @@ function showOnboarding(){
   if(sent)sent.style.display="none";
   document.getElementById("onboard-card").style.display="";
   renderOnbRadius();
+  // The place they already gave: the landing page's ZIP box, or ?loc= on a
+  // link from the Monday bid email. Asking twice loses people.
+  const loc=document.getElementById("onb-loc");
+  if(loc&&!loc.value){
+    let given="";
+    try{given=new URLSearchParams(location.search).get("loc")||"";}catch(e){}
+    given=String(given||store.get("landing_loc","")||"").trim().slice(0,60);
+    if(given){loc.value=given;onbCheckCoverage();}
+  }
   const co=document.getElementById("onb-co");
   if(co&&!co.value)co.value=companyProfile.name||"";
 }
@@ -2464,6 +2506,8 @@ function finishOnboarding(){
   if(done)done.onclick=()=>{
     const name=(document.getElementById("onb-co").value||"").trim();
     const trade=(document.getElementById("onb-trade").value||"").trim();
+    const heard=(document.getElementById("onb-heard")||{}).value||"";
+    if(heard){store.set("heard",heard);reportTrialSource();}
     if(name)companyProfile.name=name;
     if(trade)companyProfile.specialty=trade;
     if(name||trade){store.set("company_profile",companyProfile);pushCompanyProfile();}
@@ -3185,6 +3229,7 @@ async function runScan(force){
     }
     const total=d.total_bids||0;
     const added=mergeOpenBids(d.bids||{},Object.keys(d.city_coords||{}));
+    setTimeout(()=>preReadAfterScan(Object.keys(d.bids||{})).catch(()=>{}),1500);
     // Unconditional: the empty-result branch below stays on this screen
     // (no goTo("feed")), so without this the Find-screen summary would
     // keep showing last scan's count after one that found nothing new.
@@ -3767,6 +3812,79 @@ function latestWin(d,item,district){
   const [avg,low,high,n,p25,p75]=byYear[year];
   return{year,avg,low,high,n,p25:p25??low,p75:p75??high};
 }
+// ── What an item wins for, at this job's size, nearby, lately ──
+// Every starting price, every line's check and the "winning price for these
+// lines" range come from here, so they can never disagree.
+//
+// It used to be the plain average of every winning price statewide. Small
+// jobs win at far higher unit prices, so that average sat well above what a
+// normal job wins for: MoDOT 4 in. sidewalk averaged $97.82/sq yd across
+// 97 wins, while the 34 wins on jobs near 1,450 sq yd had a median of
+// $72.41. A contractor pricing from the average would have lost the job.
+//
+// So: winning unit prices from the state's own results (the low bidder's
+// price on each item), from the last WIN_YEARS years, on jobs from 1/WIN_SPAN
+// to WIN_SPAN times this quantity. The job's district first if it has
+// WIN_MIN such wins, else statewide at this size, else statewide at any size.
+// The median is the starting price and the middle half (25th-75th
+// percentile) is the range a price is checked against. A state without
+// item-level results falls back to its rates file.
+const WIN_YEARS=4,WIN_SPAN=2.5,WIN_MIN=5;
+function quantile(sorted,q){
+  if(!sorted.length)return NaN;
+  const i=(sorted.length-1)*q,lo=Math.floor(i),hi=Math.ceil(i);
+  return sorted[lo]+(sorted[hi]-sorted[lo])*(i-lo);
+}
+function winPrice(d,item,qty,district){
+  if(!d||!item)return null;
+  const res=bidResults[d.state];
+  const dist=district&&district!=="STATEWIDE"?district:"";
+  if(res&&res.contracts&&res.contracts.length){
+    const since=new Date(Date.now()-WIN_YEARS*365.25*864e5).toISOString().slice(0,10);
+    const rows=[];
+    for(const c of res.contracts){
+      const it=c.items&&c.items[item];
+      if(!it||!Array.isArray(it[1])||!(Number(it[1][0])>0)||(c.date||"")<since)continue;
+      rows.push({q:Number(it[0])||0,w:Number(it[1][0]),dist:String(c.district||"")});
+    }
+    const q=Number(qty)||0;
+    const sized=r=>!q||(r.q>=q/WIN_SPAN&&r.q<=q*WIN_SPAN);
+    const place=dist?(d.districts[dist]||dist):"";
+    const tiers=[
+      dist&&[rows.filter(r=>r.dist===dist&&sized(r)),q?`similar-size jobs, ${place}`:`jobs, ${place}`,dist],
+      [rows.filter(sized),q?"similar-size jobs statewide":"jobs statewide","STATEWIDE"],
+      q&&[rows,"jobs of all sizes statewide","STATEWIDE"]];
+    for(const t of tiers){
+      if(!t||t[0].length<WIN_MIN)continue;
+      const w=t[0].map(r=>r.w).sort((a,b)=>a-b);
+      return{mid:quantile(w,0.5),p25:quantile(w,0.25),p75:quantile(w,0.75),n:w.length,
+        basis:"won",where:t[1],district:t[2]};
+    }
+  }
+  const dd=dist&&d.districts[dist]?dist:"STATEWIDE";
+  const w=d.basis==="awarded"?null:latestWin(d,item,dd);
+  if(w&&w.n>=3&&w.p25!=null&&w.p75!=null)
+    return{mid:(w.p25+w.p75)/2,p25:w.p25,p75:w.p75,n:w.n,basis:"won",where:`jobs, ${d.districts[dd]}`,district:dd};
+  const r=latestRate(d,item,dd);
+  if(r)return{mid:r.avg,p25:null,p75:null,n:r.bids,basis:d.basis==="awarded"?"won-avg":"bid-avg",where:d.districts[dd],district:dd};
+  return null;
+}
+// The price district for a job: its town named in a district's label
+// ("Southwest (Springfield, Joplin)"), else the one the contractor chose,
+// else statewide.
+function jobDistrict(d,city){
+  const town=String(city||"").split(",")[0].trim().toLowerCase();
+  if(d&&town&&d.districts){
+    for(const [k,label] of Object.entries(d.districts)){
+      if(k==="STATEWIDE")continue;
+      const names=String(label).toLowerCase().replace(/[()]/g,",").split(/,|\band\b|:/).map(x=>x.trim());
+      if(names.includes(town)||String(k).toLowerCase()===town)return k;
+    }
+  }
+  return priceDistrict(d);
+}
+function startPrice(wp){return wp?Math.round(wp.mid*100)/100:"";}
+
 function fmtRate(n){
   return "$"+(n>=1000?Math.round(n).toLocaleString():n.toFixed(2));
 }
@@ -4103,28 +4221,32 @@ function competitorsHTML(d,items,district){
 // records of winning bids; where only an average winning price exists the
 // comparison is against that, and says so.
 function priceCheckHTML(l){
+  if(l&&!l.item&&l.area){
+    const d=rateData[l.area.st],meta=d&&d.items[l.area.item];
+    const wp=meta&&winPrice(d,l.area.item,(Number(l.qty)||0)*l.area.per,l.area.dist);
+    if(!wp||wp.p25==null)return"";
+    const each=Number(l.price)/l.area.per;
+    const v=!(each>0)?"":each>wp.p75*1.0001?`<b class="pc pc-hi">Higher than most winning bids</b>`
+      :each<wp.p25*0.9999?`<b class="pc pc-lo">Lower than most winning bids</b>`:`<b class="pc pc-ok">In line with winning bids</b>`;
+    return`About ${money0(wp.p25*l.area.per)}–${money0(wp.p75*l.area.per)} a ramp at what ramps won for${v?` ${v}`:""}`;
+  }
   const d=l&&l.item&&rateData[l.st||"MO"];
   if(!d||!d.items[l.item])return"";
-  const district=priceDistrict(d),r=latestRate(d,l.item,district);
-  if(!r)return"";
-  const w=d.basis==="awarded"?null:latestWin(d,l.item,district);
-  const unit=esc(d.items[l.item].unit);
-  const price=Number(l.price);
+  const wp=winPrice(d,l.item,Number(l.qty)||0,l.dist||priceDistrict(d));
+  if(!wp)return"";
+  const unit=esc(d.items[l.item].unit),price=Number(l.price);
   let verdict="";
-  if(price>0){
-    if(w&&w.n>=2){
-      verdict=price>w.high?`<b class="pc pc-hi">Above every winning bid</b>`
-        :price<w.low?`<b class="pc pc-lo">Below every winning bid</b>`:`<b class="pc pc-ok">Inside the winning range</b>`;
-    }else if(d.basis==="awarded"||w){
-      const avg=w?w.avg:r.avg,ratio=price/avg;
-      verdict=ratio>1.25?`<b class="pc pc-hi">Over 25% above the average winning price</b>`
-        :ratio<0.75?`<b class="pc pc-lo">Over 25% below the average winning price</b>`:`<b class="pc pc-ok">Near the average winning price</b>`;
-    }
+  if(price>0&&wp.p25!=null){
+    verdict=price>wp.p75*1.0001?`<b class="pc pc-hi">Higher than most winning bids</b>`
+      :price<wp.p25*0.9999?`<b class="pc pc-lo">Lower than most winning bids</b>`:`<b class="pc pc-ok">In line with winning bids</b>`;
+  }else if(price>0){
+    const ratio=price/wp.mid;
+    verdict=ratio>1.25?`<b class="pc pc-hi">Over 25% above the average</b>`
+      :ratio<0.75?`<b class="pc pc-lo">Over 25% below the average</b>`:`<b class="pc pc-ok">Near the average</b>`;
   }
-  const ref=d.basis==="awarded"
-    ?`${esc(agencyOf(d))} ${esc(d.districts[district])}: average winning bid ${money2(r.avg)}/${unit}`
-    :`${esc(agencyOf(d))} ${esc(d.districts[district])}: average bid ${money2(r.avg)}/${unit}${
-      w?` · winning bids ${w.n>1?`${money2(w.low)}–${money2(w.high)}`:money2(w.avg)} (${plural(w.n,"job")})`:""}`;
+  const ref=wp.basis==="won"
+    ?`Won for ${money2(wp.mid)}/${unit} on ${wp.n} ${esc(wp.where)}${wp.p25!=null?` (most between ${money2(wp.p25)} and ${money2(wp.p75)})`:""}`
+    :`${esc(agencyOf(d))} ${esc(wp.where)}: ${wp.basis==="won-avg"?"average winning bid":"average bid"} ${money2(wp.mid)}/${unit}`;
   return`${ref}${verdict?` ${verdict}`:""}`;
 }
 
@@ -4232,27 +4354,33 @@ function oddsHTML(city,b,d,items,district){
 function targetRange(p,st){
   const d=rateData[st];
   if(!d||d.basis==="awarded")return null;
-  const district=priceDistrict(d);
   let low=0,high=0,mine=0,n=0;
+  const wheres=new Set();
   (p.lines||[]).forEach(l=>{
     const qty=Number(l.qty)||0;
-    if(!l.item||(l.st||"MO")!==d.state||!qty)return;
-    const w=latestWin(d,l.item,district);
-    if(!w||w.n<3)return;
-    low+=qty*w.p25;high+=qty*w.p75;mine+=qty*(Number(l.price)||0);n++;
+    // A ramp counted "each" is checked by its area: qty ramps × per sq yd.
+    const a=!l.item&&l.area&&l.area.st===d.state?l.area:null;
+    if((!l.item&&!a)||(!a&&(l.st||"MO")!==d.state)||!qty)return;
+    const per=a?a.per:1;
+    const w=winPrice(d,a?a.item:l.item,qty*per,(a?a.dist:l.dist)||priceDistrict(d));
+    if(!w||w.basis!=="won"||w.p25==null)return;
+    low+=qty*per*w.p25;high+=qty*per*w.p75;mine+=qty*(Number(l.price)||0);n++;
+    wheres.add(w.where);
   });
   if(!n)return null;
-  return{low,high,mine:mine*(1+(Number(p.markup)||0)/100),n,total:(p.lines||[]).filter(l=>Number(l.qty)).length,d,district};
+  return{low,high,mine:mine*(1+(Number(p.markup)||0)/100),n,total:(p.lines||[]).filter(l=>Number(l.qty)).length,d,wheres:[...wheres]};
 }
 function targetHTML(p,st){
   const t=targetRange(p,st);
   if(!t)return"";
   const verdict=!t.mine?"":t.mine>t.high?`<b class="pc pc-hi">above that range</b>`
     :t.mine<t.low?`<b class="pc pc-lo">below that range</b>`:`<b class="pc pc-ok">inside that range</b>`;
+  const all=t.n===t.total;
   return`<div class="target-box">
-    <div><span>Winning price for ${t.n===t.total?"these lines":`${t.n} of ${t.total} lines`}</span><b>${money0(t.low)}–${money0(t.high)}</b></div>
-    ${t.mine?`<div><span>Your price on them, with markup</span><b>${money0(t.mine)}</b></div><div class="target-v">You're ${verdict}.</div>`:""}
-    <div class="rate-note" style="margin-top:0.3rem;">The middle half of winning bids on ${esc(agencyOf(t.d))} jobs (${esc(t.d.districts[t.district])}), at your quantities. Lines without a state item, and items with fewer than 3 winning bids, aren't counted.</div>
+    <div><span>Winning price for ${all?"these lines":`${t.n} of ${t.total} lines`}</span><b>${money0(t.low)}–${money0(t.high)}</b></div>
+    ${t.mine&&!all?`<div><span>Your price on them, with markup</span><b>${money0(t.mine)}</b></div>`:""}
+    ${t.mine?`<div class="target-v">You're ${verdict}.</div>`:""}
+    <div class="rate-note" style="margin-top:0.3rem;">The middle half of what each item won for on ${esc(agencyOf(t.d))} ${esc(t.wheres.join("; "))}, at your quantities. Lines without a state item aren't counted.</div>
   </div>`;
 }
 
@@ -4287,7 +4415,7 @@ function diffWatch(prev,cur){
   return"";
 }
 async function checkSavedBids(){
-  if(bidWatchRunning||isOffline()||!licenseKey())return;
+  if(bidWatchRunning||isOffline()||!canAutoRead())return;
   const ids=watchCandidates().slice(0,25);
   if(!ids.length)return;
   bidWatchRunning=true;
@@ -4374,6 +4502,41 @@ function outcomeCardHTML(){
       </div>`;}).join("")}
   </div>`;
 }
+// The answer goes to the server too, so "customers have won $X of work" can
+// be said on the landing page (see /proof). Best effort: a failed report
+// never gets in the way of the contractor's own record.
+async function reportOutcome(id,result,amount){
+  if(!currentUser)return;
+  try{
+    const b=saved[id]||findBid(id)||{};
+    const city=String((saved[id]&&saved[id]._city)||"");
+    const st=(city.match(/,\s*([A-Z]{2})\b/)||[])[1]||String(store.get(HOME_LOC_KEY,"")).match(/,\s*([A-Z]{2})\b/)?.[1]||"";
+    await fetch(SERVER+"/outcome",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({supabase_token:await getSupabaseToken(),bid_id:id,result,
+        amount:amount>0?Math.round(amount):null,state:st})});
+  }catch(e){}
+}
+// After a win: what it was worth, then the two things a win is the moment
+// for -- a year at the annual price, and a contractor they know.
+function wonNextStepsHTML(){
+  const code=store.get("referral_code","");
+  const annual=store.get("license_plan","")==="annual";
+  return`<div class="outcome-t"><b>Nice work.</b><small>The Job tab has the award paperwork, with the bond and insurance emails written.${code?" Know another concrete contractor? Your link gives them two extra weeks free, and you a free month when they subscribe.":""}${annual?"":" A win is a good time to lock in a year: $399, about four months free."}</small></div>
+    <div class="outcome-b"><button class="btn-primary" data-job="1" style="margin-top:0;">Open the job</button>${code?'<button class="btn-ghost" data-ref="1">Share my link</button>':""}${annual?"":'<button class="btn-ghost" data-annual="1">Go annual</button>'}<button class="btn-ghost" data-review="1">Leave a review</button></div>`;
+}
+function wireWonNextSteps(row,id){
+  row.innerHTML=wonNextStepsHTML();
+  row.querySelector("[data-job]").onclick=()=>openPrep((saved[id]&&saved[id]._city)||"",id,"job");
+  row.querySelector("[data-review]").onclick=()=>{switchScreen("account");setTimeout(()=>{const c=document.getElementById("review-card");if(c)c.scrollIntoView({behavior:"smooth"});},300);};
+  const ref=row.querySelector("[data-ref]");
+  if(ref)ref.onclick=async()=>{
+    const url=`https://curbcallpro.com/?ref=${encodeURIComponent(store.get("referral_code",""))}`;
+    const text=`I've been finding city and county concrete bids with CurbCall Pro. Two extra weeks free with my link: ${url}`;
+    try{if(navigator.share)await navigator.share({title:"CurbCall Pro",text});else{await navigator.clipboard.writeText(text);toast("Link copied");}}catch(e){}
+  };
+  const ann=row.querySelector("[data-annual]");
+  if(ann)ann.onclick=()=>{switchScreen("account");setTimeout(()=>{const u=document.getElementById("upgrade-section");if(u)u.scrollIntoView({behavior:"smooth"});},300);};
+}
 function wireOutcomeCard(root){
   root.querySelectorAll(".outcome").forEach(row=>{
     const id=row.dataset.oid;
@@ -4382,11 +4545,20 @@ function wireOutcomeCard(root){
       setPipelineStatus(id,out);
       resultAsked[id]=true;store.set(RESULT_ASKED_KEY,resultAsked);
       if(out==="won"){
-        row.innerHTML=`<div class="outcome-t"><b>Nice work.</b><small>The Job tab has the award paperwork, pours, daily log, pay requests and payroll. And would you tell other contractors how CurbCall helped? It takes a minute.</small></div>
-          <div class="outcome-b"><button class="btn-primary" data-job="1" style="margin-top:0;">Open the job</button><button class="btn-ghost" data-review="1">Leave a review</button></div>`;
-        row.querySelector("[data-job]").onclick=()=>openPrep((saved[id]&&saved[id]._city)||"",id,"job");
-        row.querySelector("[data-review]").onclick=()=>{switchScreen("account");setTimeout(()=>{const c=document.getElementById("review-card");if(c)c.scrollIntoView({behavior:"smooth"});},300);};
-      }else if(out==="lost"){
+        const mine=bidPrep[id]?Math.round(prepTotals(bidPrep[id]).total||0):0;
+        row.innerHTML=`<div class="outcome-t"><b>Congratulations. What was the job worth?</b><small>Your winning bid, roughly. It adds to your won-work total.</small></div>
+          <div class="outcome-b"><input class="input" data-won inputmode="decimal" placeholder="$ total" value="${mine>0?esc(String(mine)):""}"><button class="btn-primary" data-save style="margin-top:0;">Save</button><button class="btn-ghost" data-skip>Skip</button></div>`;
+        const finish=(amt)=>{
+          if(amt>0){const p=prepFor(id);p.won_total=amt;savePrep(id,(saved[id]&&saved[id]._city)||"");}
+          reportOutcome(id,"won",amt);
+          wireWonNextSteps(row,id);
+        };
+        row.querySelector("[data-save]").onclick=()=>finish(Number(String(row.querySelector("[data-won]").value).replace(/[^0-9.]/g,""))||0);
+        row.querySelector("[data-skip]").onclick=()=>finish(0);
+        return;
+      }
+      reportOutcome(id,out,0);
+      if(out==="lost"){
         const b=saved[id]||findBid(id),r=stateResultFor(b);
         row.innerHTML=`<div class="outcome-t"><b>What did the winning bid come in at?</b><small>Optional. It shows next to your price on similar jobs.</small></div>
           <div class="outcome-b"><input class="input" data-win inputmode="decimal" placeholder="$ total" value="${r?esc(String(Math.round(r.bidders[0][1]))):""}"><button class="btn-ghost" data-save>Save</button></div>`;
@@ -4527,7 +4699,10 @@ function prepAuto(b,p,id){
   // nothing about the bid, so it doesn't count as having the documents.
   if(p.docInfo&&p.docInfo.read_at&&!SITEWIDE_DOC_RE.test(p.docInfo.source||""))out.docs="Read in the app";
   const lines=(p.lines||[]).filter(l=>Number(l.qty)>0);
-  if(lines.length&&lines.every(l=>Number(l.price)>0))out.price="Every line priced";
+  // The app fills every starting price itself, so a full set of prices is
+  // not the contractor having priced it: it counts once they have changed a
+  // line (or they tick the step).
+  if(p.linesFrom==="you"&&lines.length&&lines.every(l=>Number(l.price)>0))out.price="Every line priced";
   const c=p.concrete&&p.concrete.plants;
   if(c&&Object.values(c).some(x=>x&&x.status==="Quoted"))out.concrete="Quote saved";
   if(p.formFilledAt)out.forms="Filled in "+shortDate(new Date(p.formFilledAt));
@@ -4668,22 +4843,41 @@ function stepDue(item,b,p){
 }
 // Starting lines: the ballpark's priced quantities, then anything it could
 // read but not price (ramp counts), then one blank line to fill in.
+// Ramps counted "each" in a state that pays them by area (MoDOT pays by the
+// square yard) used to start at $0. Priced as a typical ramp's area, said on
+// the line so the contractor changes it if their plans differ.
+const RAMP_SQYD=8;
+function rampEachLine(d,n,district){
+  const code=d&&d.cats&&d.cats.ramp,meta=code&&d.items[code];
+  const line={name:"ADA curb ramp",qty:n,unit:"each",price:"",ref:null};
+  if(!meta)return line;
+  if(meta.unit==="each"){
+    const wp=winPrice(d,code,n,district);
+    return Object.assign(line,{price:startPrice(wp),item:code,st:d.state,dist:district});
+  }
+  const per=meta.unit==="sq ft"?RAMP_SQYD*9:meta.unit==="sq yd"?RAMP_SQYD:0;
+  const wp=per&&winPrice(d,code,n*per,district);
+  if(!wp)return line;
+  line.price=Math.round(wp.mid*per*100)/100;
+  line.area={item:code,per,st:d.state,dist:district};
+  line.note=`Priced as about ${RAMP_SQYD} sq yd a ramp (ramp, landing and flares) at ${money2(wp.mid)}/${meta.unit}. Change it if your plans differ.`;
+  return line;
+}
 function defaultPrepLines(b,city){
   const lines=[];
   const d=rateData[bidState(city,b)];
   if(d){
-    const district=priceDistrict(d);
+    const district=jobDistrict(d,city);
     const est=ballpark(b,d,district,sidewalkWidth());
-    // Start at what wins, where the state's records say: pricing down from
-    // an all-bids average starts above most winning bids.
-    const start=l=>{const w=latestWin(d,l.item,district);return w?w.avg:l.rate.avg;};
-    est.lines.forEach(l=>lines.push({name:l.name,qty:Math.round(l.qty*10)/10,unit:l.unit,
-      price:Math.round(start(l)*100)/100,ref:l.rate.avg,item:l.item,st:d.state,
-      // The assumption travels with the number it produced.
-      note:l.assumedWidth?`From ${l.stated.raw} at ${l.assumedWidth} ft wide (assumed). Check the plans.`:""}));
+    est.lines.forEach(l=>{
+      const qty=Math.round(l.qty*10)/10,wp=winPrice(d,l.item,qty,district);
+      lines.push({name:l.name,qty,unit:l.unit,price:startPrice(wp)||Math.round(l.rate.avg*100)/100,
+        ref:l.rate.avg,item:l.item,st:d.state,dist:district,
+        // The assumption travels with the number it produced.
+        note:l.assumedWidth?`From ${l.stated.raw} at ${l.assumedWidth} ft wide (assumed). Check the plans.`:""});
+    });
     if(!est.lines.some(l=>l.unit==="each"&&l.item===d.cats.ramp))
-      extractQuantities(`${b.title||""}\n${b.scope||""}`).rampCounts.forEach(n=>
-        lines.push({name:"ADA curb ramp",qty:n,unit:"each",price:"",ref:null}));
+      extractQuantities(`${b.title||""}\n${b.scope||""}`).rampCounts.forEach(n=>lines.push(rampEachLine(d,n,district)));
   }
   if(!lines.length)lines.push({name:"",qty:"",unit:"",price:"",ref:null});
   return lines;
@@ -4883,7 +5077,7 @@ function renderAddendumReview(body,city,id,b,key){
     qc.forEach(c=>{if(c.line>=0){lines[c.line].qty=c.new_quantity;}});
     if(p.linesFrom==="ballpark")p.linesFrom="documents";
     const d=rateData[bidState(city,b)];
-    added.forEach(c=>lines.push(lineFromDocItem({...c,quantity:c.quantity},d)));
+    added.forEach(c=>lines.push(lineFromDocItem({...c,quantity:c.quantity},d,d&&jobDistrict(d,city))));
     const drop=new Set(rm.map(c=>c.line).filter(i=>i>=0));
     p.lines=lines.filter((l,i)=>!drop.has(i));
     (p.addendaApplied=p.addendaApplied||{})[key]=Date.now();
@@ -5019,7 +5213,7 @@ function linesUntouched(p,b,city){
 async function preReadBid(city,id){
   try{
     const b=findBid(id);
-    if(!b||!licenseKey()||isOffline())return;
+    if(!b||!canAutoRead()||isOffline())return;
     const p=prepFor(id);
     if(p.docInfo&&p.docInfo.read_at)return;
     const st=bidState(city,b);
@@ -5031,11 +5225,41 @@ async function preReadBid(city,id){
     loadSuppliers(city,false,jobAddress(p),b).catch(()=>{});
   }catch(e){}
 }
+// Right after a scan, the two bids most worth a look have their documents
+// read in the background. Nothing is saved to the bid: the server keeps the
+// reading, so when one is opened (or starred) it fills in at once, and the
+// card says the items are ready. This is what a new trial sees first.
+function preReadPicks(cities){
+  const out=[];
+  for(const city of cities||[]){
+    for(const b of (bidData[city]||[])){
+      const id=bidId(city,b),d=daysUntil(b);
+      if(dismissed[id]||docsReady[id]||(bidPrep[id]&&bidPrep[id].docInfo)||!isOpen(b))continue;
+      if(d!=null&&d<3)continue;
+      const links=docsToRead(b);
+      if(!links.length)continue;
+      const files=links.filter(x=>x.name!=="Original posting").length;
+      out.push({city,b,id,links,score:(files?0:1)*1000+(d==null?500:d)});
+    }
+  }
+  return out.sort((x,y)=>x.score-y.score).slice(0,2);
+}
+async function preReadAfterScan(cities){
+  if(!canAutoRead()||isOffline())return;
+  for(const x of preReadPicks(cities)){
+    const res=await readBidDocument(x.links[0].url,x.links.slice(1).map(d=>d.url));
+    if(res&&res.reason==="not_licensed")return;
+    if(!res||!res.ok)continue;
+    docsReady[x.id]={items:(res.line_items||[]).length,at:Date.now()};
+    store.set("docs_ready",docsReady);
+    if(document.getElementById("screen-feed").classList.contains("active"))renderFeed();
+  }
+}
 const _autoRunning={};
 function autoDue(p,k){const t=p.autoTried&&p.autoTried[k];return!t||Date.now()-t>86400000;}
 async function autoPrepare(id,city,b){
   const p=prepFor(id);
-  if(_autoRunning[id]||isOffline()||!licenseKey())return;
+  if(_autoRunning[id]||isOffline()||!canAutoRead())return;
   const docsNeeded=!(p.docInfo&&p.docInfo.read_at&&!SITEWIDE_DOC_RE.test(p.docInfo.source||""))&&autoDue(p,"docs");
   const w=bidWatch[id]||{};
   const seen=new Set();
@@ -5086,7 +5310,7 @@ async function autoPrepare(id,city,b){
         if(items.length&&untouched){
           const d=rateData[bidState(city,b)];
           p.autoUndo={lines:before,linesFrom:beforeFrom||"ballpark"};
-          p.lines=items.map(it=>lineFromDocItem(it,d));
+          p.lines=items.map(it=>lineFromDocItem(it,d,d&&jobDistrict(d,city)));
           p.linesFrom="documents";
           filled.push(plural(items.length,"line item"));
         }
@@ -5096,7 +5320,7 @@ async function autoPrepare(id,city,b){
          [info.bid_security,"the bond"],[(info.required_forms||[]).length,"required forms"],[info.submission,"how to submit"],
          [info.questions_due,"the questions deadline"]].forEach(([v,label])=>{if(v)filled.push(label);});
         p.autoFilled={at:Date.now(),source:doc.name,what:filled.slice(),lines:p.linesFrom==="documents"&&!!p.autoUndo};
-      }else p.autoFilled={at:Date.now(),failed:true,source:doc&&doc.name};
+      }else if(!(res&&res.reason==="not_licensed"))p.autoFilled={at:Date.now(),failed:true,source:doc&&doc.name};
       changed=true;
     }
     for(const a of addDocs){
@@ -5419,14 +5643,15 @@ function docUnit(u){
 // A schedule row as a pricing line. The state's average is filled in only
 // when the description names a flatwork item AND the units agree -- "4 in.
 // sidewalk, SY" gets the sidewalk rate; "sidewalk, LS" gets nothing.
-function lineFromDocItem(it,d){
+function lineFromDocItem(it,d,docDistrict){
   const unit=docUnit(it.unit);
   const line={name:`${it.item_no?it.item_no+". ":""}${it.description}`,qty:it.quantity??"",unit,price:"",ref:null};
   const cat=nearestItem(it.description||"",false);
   const code=cat&&d&&d.cats[cat];
   if(code&&d.items[code]&&d.items[code].unit===unit){
-    const district=priceDistrict(d),r=latestRate(d,code,district),w=r&&latestWin(d,code,district);
-    if(r){line.ref=r.avg;line.price=Math.round((w?w.avg:r.avg)*100)/100;line.item=code;line.st=d.state;}
+    const district=docDistrict||priceDistrict(d),r=latestRate(d,code,district)||latestRate(d,code,"STATEWIDE");
+    const wp=winPrice(d,code,Number(it.quantity)||0,district);
+    if(r||wp){line.ref=r?r.avg:null;line.price=startPrice(wp)||Math.round(r.avg*100)/100;line.item=code;line.st=d.state;line.dist=district;}
   }
   return line;
 }
@@ -5510,31 +5735,22 @@ const bidFiles=(()=>{
 })();
 setTimeout(()=>{try{bidFiles.prune();}catch(e){}},5000);
 // ── The job, once it's won ──
-// Award paperwork, pours, a daily log with photos, pay requests and
-// certified payroll, on a Job tab that appears when a bid is marked Won.
-// Kept on this phone only (workers' names and pay rates are in it), never
-// synced; each part prints as a page to save or send.
+// The paperwork between "you won" and starting work: the contract, bonds,
+// insurance certificate, W-9 and the notice to proceed, with the two emails
+// to the bonding and insurance agents written for them. Ticks stay on this
+// phone.
 let jobs=store.get("jobs",{});
 function jobFor(id){
   const j=jobs[id]=jobs[id]||{};
-  j.award=j.award||{};j.pours=j.pours||[];j.log=j.log||[];j.pays=j.pays||[];j.weeks=j.weeks||[];
+  j.award=j.award||{};
   return j;
 }
 function saveJobs(){store.set("jobs",jobs);}
-function todayISO(){const d=new Date(),z=n=>String(n).padStart(2,"0");return`${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`;}
 function isoDate(s){const d=/^\d{4}-\d{2}-\d{2}$/.test(s||"")?new Date(s+"T00:00:00"):null;return d&&!isNaN(d)?d:null;}
-function fmtDate(s){const d=isoDate(s);return d?d.toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"}):String(s||"");}
-// The contract's items: the bid's priced lines with the markup in, as the
-// agency was quoted. Snapshotted when the job starts, refreshable.
-function contractLines(p){
+// What the agency was quoted: the priced lines with the markup in.
+function contractTotal(p){
   const k=1+(Number(p.markup)||0)/100;
-  return(p.lines||[]).filter(l=>(l.name||"").trim()&&Number(l.qty)>0&&Number(l.price)>0)
-    .map(l=>({name:l.name,qty:Number(l.qty),unit:l.unit||"",price:Math.round(Number(l.price)*k*100)/100}));
-}
-function jobContract(id){
-  const j=jobFor(id);
-  if(!j.contract||!j.contract.length){j.contract=contractLines(prepFor(id));saveJobs();}
-  return j.contract;
+  return(p.lines||[]).reduce((s,l)=>s+(Number(l.qty)||0)*(Number(l.price)||0)*k,0);
 }
 // "60 calendar days" / "45 working days" from the notice to proceed.
 function finishDate(ntp,completion){
@@ -5546,373 +5762,38 @@ function finishDate(ntp,completion){
   else while(n>0){out.setDate(out.getDate()+1);if(out.getDay()%6)n--;}
   return out;
 }
-function openPrintPage(title,inner,landscape){
-  const html=`<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title>
-<style>@page{size:${landscape?"landscape":"portrait"};margin:14mm;}body{font-family:Arial,Helvetica,sans-serif;color:#111;font-size:12px;margin:0;}
-h1{font-size:17px;margin:0 0 4px;}h2{font-size:14px;margin:18px 0 6px;}.m{color:#444;margin:2px 0;}
-table{width:100%;border-collapse:collapse;margin-top:10px;}th,td{border:1px solid #999;padding:4px 6px;text-align:left;vertical-align:top;}
-th{background:#eee;font-size:11px;}td.n,th.n{text-align:right;}.t{margin-top:10px;}.t div{display:flex;justify-content:space-between;max-width:420px;margin:3px 0 3px auto;}
-.g{font-weight:bold;font-size:14px;}.blank{display:inline-block;min-width:180px;border-bottom:1px solid #111;}
-.photos img{width:31%;margin:1%;vertical-align:top;}.fine{color:#666;font-size:10px;margin-top:14px;}.entry{page-break-inside:avoid;border-top:1px solid #ccc;padding-top:8px;margin-top:10px;}</style></head><body>
-${inner}<script>window.onload=function(){setTimeout(function(){window.print();},300);}<\/script></body></html>`;
-  const w=window.open("","_blank");
-  if(!w){toast("Allow pop-ups to print");return;}
-  w.document.open();w.document.write(html);w.document.close();
-}
-function jobHeaderHTML(b,p,city){
-  const c=companyProfile||{},i=bidInfo();
-  return`<div class="m"><b>${esc(b.title||"")}</b>${b.bid_number?` &middot; ${esc(b.bid_number)}`:""}</div>
-    <div class="m">${esc(jobPlace(p,city))}</div>
-    <div class="m">Contractor: ${esc(c.name||"")}${i.address?`, ${esc(i.address)}`:""}${i.city_state_zip?`, ${esc(i.city_state_zip)}`:""}</div>`;
-}
-
 function renderJob(body,city,id,b){
   const p=prepFor(id),j=jobFor(id),info=p.docInfo||{},i=bidInfo();
-  const contract=jobContract(id);
-  const total=contract.reduce((s,l)=>s+l.qty*l.price,0);
+  const total=contractTotal(p);
   const fin=finishDate(j.award.ntp,info.completion);
   const ak=j.award.checks||{};
   const item=(k,label,extra)=>`<label class="prep-check${ak[k]?" done":""}"><input type="checkbox" data-aw="${k}"${ak[k]?" checked":""}>
     <span><b>${esc(label)}</b>${extra||""}</span></label>`;
+  const clean=(lines)=>lines.filter((x,k,a)=>x!==""||a[k-1]!=="").join("\n");
+  const job=`${b.title||"this job"}${b.bid_number?` (${b.bid_number})`:""}`;
+  const agent=String(i.bond_agent||"").split(/\s+/)[0];
   const bondMail=mailtoUrl(i.bond_email,`Performance and payment bonds: ${b.title||"awarded job"}`,
-    [`${String(i.bond_agent||"").split(/\s+/)[0]?`Hi ${String(i.bond_agent).split(/\s+/)[0]},`:"Hello,"}`,"",
-     `We were awarded ${b.title||"this job"}${b.bid_number?` (${b.bid_number})`:""}, ${jobPlace(p,city)}.`,
+    clean([agent?`Hi ${agent},`:"Hello,","",`We were awarded ${job}, ${jobPlace(p,city)}.`,
      `Contract amount: ${money2(total)}.`,"The contract requires performance and payment bonds. Please prepare them, and let me know what you need from me.",
-     b.url?`Bid posting: ${b.url}`:"","","Thanks,",signOff()].filter((x,k,a)=>x!==""||a[k-1]!=="").join("\n"));
-  const owner=agencyContact(b,p).org||"the owner";
+     b.url?`Bid posting: ${b.url}`:"","","Thanks,",signOff()]));
+  const ac=agencyContact(b,p),owner=ac.org||"the owner";
   const insMail=mailtoUrl(i.insurance_email,`Certificate of insurance: ${b.title||"awarded job"}`,
-    ["Hello,","",`We were awarded ${b.title||"this job"}${b.bid_number?` (${b.bid_number})`:""} at ${jobPlace(p,city)}.`,
+    clean(["Hello,","",`We were awarded ${job} at ${jobPlace(p,city)}.`,
      `Please send a certificate of insurance naming ${owner} as certificate holder and additional insured, with the limits the contract documents require.`,
-     agencyContact(b,p).email?`It can go to ${agencyContact(b,p).email}, with a copy to me.`:"","","Thanks,",signOff()].filter((x,k,a)=>x!==""||a[k-1]!=="").join("\n"));
-  const placed={};j.log.forEach(e=>Object.entries(e.placed||{}).forEach(([k,v])=>{placed[k]=(placed[k]||0)+(Number(v)||0);}));
-  const billed=j.pays.reduce((s,r)=>s+(r.due||0),0);
-  body.innerHTML=`<div class="rate-note" style="margin-top:0;">Kept on this phone only. Each part prints as a page you can save as a PDF or send.</div>
-    <div class="job-card"><div class="workspace-title">Award paperwork</div>
+     ac.email?`It can go to ${ac.email}, with a copy to me.`:"","","Thanks,",signOff()]));
+  body.innerHTML=`<div class="job-card"><div class="workspace-title">Award paperwork</div>
       ${item("contract","Sign and return the contract")}
       ${item("bonds","Performance and payment bonds",`<small>${i.bond_email?`<a class="step-act" href="${esc(bondMail)}">Email my bonding agent</a>`:`Add your bonding agent's email in bid details to have this written for you.`}</small>`)}
       ${item("insurance","Certificate of insurance",`<small>${i.insurance_email?`<a class="step-act" href="${esc(insMail)}">Email my insurance agent</a>`:`Add your insurance agent's email in bid details to have this written for you.`}</small>`)}
       ${item("w9","W-9 to the agency")}
-      ${item("precon","Pre-construction meeting")}
       <div class="job-row"><span>Notice to proceed</span><input type="date" class="input" id="jb-ntp" value="${esc(j.award.ntp||"")}"></div>
       ${info.completion?`<div class="rate-note">Time allowed: ${esc(info.completion)}${fin?`. <b>Finish by ${esc(fin.toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"}))}.</b>`:""}</div>`:""}
-      ${info.prevailing_wage?`<div class="rate-note">Wages: ${esc(info.prevailing_wage)}. Certified payroll is below.</div>`:""}
+      ${info.prevailing_wage?`<div class="rate-note">Wages: ${esc(info.prevailing_wage)}</div>`:""}
       ${info.testing?`<div class="rate-note">Testing: ${esc(info.testing)}</div>`:""}
-    </div>
-    <div class="job-card"><div class="workspace-title">Pours</div>
-      ${j.pours.length?j.pours.slice().sort((a,z)=>String(a.date).localeCompare(z.date)).map(x=>`<div class="ff-done"><span><b>${esc(fmtDate(x.date))}${x.time?` ${esc(x.time)}`:""}</b> ${esc(x.desc||"")} · ${esc(String(x.yards||""))} yd${x.plant?` · ${esc(x.plant)}`:""} <small>${esc(x.status||"planned")}</small></span>
-        <button type="button" class="step-act" data-pour="${esc(x.id)}">Open</button></div>`).join(""):`<div class="account-status">No pours planned yet.</div>`}
-      <button class="btn-ghost" id="jb-pour">Plan a pour</button></div>
-    <div class="job-card"><div class="workspace-title">Daily log</div>
-      ${j.log.length?`<div class="rate-note" style="margin-top:0;">${plural(j.log.length,"day")} logged${Object.keys(placed).length?`. Placed so far: ${contract.map((l,k)=>placed[k]?`${esc(splitItemNo(l.name).description)} ${Math.round(placed[k]).toLocaleString()} ${esc(l.unit)}`:"").filter(Boolean).join("; ")}`:""}.</div>`:""}
-      ${j.log.slice().sort((a,z)=>String(z.date).localeCompare(a.date)).slice(0,5).map(e=>`<div class="ff-done"><span><b>${esc(fmtDate(e.date))}</b> ${esc(String(e.work||"").slice(0,60))}${e.photos&&e.photos.length?` <small>${plural(e.photos.length,"photo")}</small>`:""}</span>
-        <button type="button" class="step-act" data-log="${esc(e.id)}">Open</button></div>`).join("")}
-      <button class="btn-ghost" id="jb-log">Log today</button>${j.log.length?`<button class="btn-ghost" id="jb-logprint">Print the log with photos</button>`:""}</div>
-    <div class="job-card"><div class="workspace-title">Pay requests</div>
-      <div class="rate-note" style="margin-top:0;">Contract ${money0(total)}${j.pays.length?` · requested ${money0(billed)} so far`:""}. Retainage ${esc(String(jobRetainage(j,info)))}%.</div>
-      ${j.pays.map((r,k)=>`<div class="ff-done"><span><b>No. ${k+1}</b> through ${esc(fmtDate(r.end))} · ${money0(r.due)} due</span>
-        <button type="button" class="step-act" data-pay="${k}">Print</button></div>`).join("")}
-      <button class="btn-ghost" id="jb-pay">New pay request</button>
-      <button class="btn-ghost" id="jb-contract">Update contract items from Pricing</button></div>
-    <div class="job-card"><div class="workspace-title">Certified payroll</div>
-      <div class="rate-note" style="margin-top:0;">Weekly payroll in the federal WH-347 layout${info.prevailing_wage?"":" (for prevailing-wage jobs)"}. Some states have their own form; check which yours wants. You sign it; the numbers are yours to check.</div>
-      ${j.weeks.map((w,k)=>`<div class="ff-done"><span><b>No. ${k+1}</b> week ending ${esc(fmtDate(w.ending))}</span>
-        <button type="button" class="step-act" data-week="${k}">Open</button></div>`).join("")}
-      <button class="btn-ghost" id="jb-week">Add a payroll week</button><button class="btn-ghost" id="jb-crew">Your crew and rates</button></div>`;
+    </div>`;
   const reopen=()=>renderJob(body,city,id,b);
   body.querySelectorAll("[data-aw]").forEach(x=>x.onchange=()=>{(j.award.checks=j.award.checks||{})[x.dataset.aw]=x.checked;saveJobs();reopen();});
   document.getElementById("jb-ntp").onchange=(e)=>{j.award.ntp=e.target.value;saveJobs();reopen();};
-  document.getElementById("jb-pour").onclick=()=>renderPour(body,city,id,b,null);
-  body.querySelectorAll("[data-pour]").forEach(x=>x.onclick=()=>renderPour(body,city,id,b,x.dataset.pour));
-  document.getElementById("jb-log").onclick=()=>renderLogEntry(body,city,id,b,null);
-  body.querySelectorAll("[data-log]").forEach(x=>x.onclick=()=>renderLogEntry(body,city,id,b,x.dataset.log));
-  const lp=document.getElementById("jb-logprint");if(lp)lp.onclick=()=>printJobLog(id,b,city);
-  document.getElementById("jb-pay").onclick=()=>renderPayRequest(body,city,id,b);
-  body.querySelectorAll("[data-pay]").forEach(x=>x.onclick=()=>printPayRequest(id,b,city,Number(x.dataset.pay)));
-  document.getElementById("jb-contract").onclick=()=>{
-    if(j.pays.length&&!confirm("Pay requests already made keep their numbers. Update the contract items from Pricing?"))return;
-    j.contract=contractLines(p);saveJobs();toast("Contract items updated");reopen();
-  };
-  document.getElementById("jb-week").onclick=()=>renderPayrollWeek(body,city,id,b,null);
-  body.querySelectorAll("[data-week]").forEach(x=>x.onclick=()=>renderPayrollWeek(body,city,id,b,Number(x.dataset.week)));
-  document.getElementById("jb-crew").onclick=()=>renderCrew(body,city,id,b);
-}
-
-// ── Pours ──
-function renderPour(body,city,id,b,pid){
-  const p=prepFor(id),j=jobFor(id),c=concreteState(p),info=p.docInfo||{},i=bidInfo();
-  const contract=jobContract(id);
-  const x=pid?j.pours.find(q=>q.id===pid):{id:"p"+Date.now(),date:todayISO(),time:"7:00 AM",line:-1,desc:"",yards:"",plant:i.supplier||"",email:i.supplier_email||"",psi:c.psi||"",status:"planned"};
-  if(!x){renderJob(body,city,id,b);return;}
-  const plants=[...new Set([i.supplier,...Object.keys(c.plants)].filter(Boolean))];
-  const cyOf=(k)=>{const l=contract[k];if(!l)return"";const lc=concreteYards([{name:l.name,qty:l.qty,unit:l.unit}]);return lc.total?Math.ceil(lc.total*(1+wastePct()/100)):"";};
-  body.innerHTML=`<div class="workspace-title">${pid?"Pour":"Plan a pour"}</div>
-    <div class="job-form">
-      <label>Date<input type="date" class="input" data-pf="date" value="${esc(x.date)}"></label>
-      <label>Start time<input class="input" data-pf="time" value="${esc(x.time||"")}"></label>
-      <label>What's being poured<select class="input" data-pf="line"><option value="-1">Type it below</option>
-        ${contract.map((l,k)=>`<option value="${k}"${String(x.line)===String(k)?" selected":""}>${esc(l.name)}</option>`).join("")}</select></label>
-      <label>Description<input class="input" data-pf="desc" value="${esc(x.desc||"")}" placeholder="e.g. Elm St, 1st to 3rd, north side"></label>
-      <label>Yards<input class="input" data-pf="yards" inputmode="decimal" value="${esc(String(x.yards||""))}"></label>
-      <label>Mix (PSI)<input class="input" data-pf="psi" inputmode="numeric" value="${esc(String(x.psi||""))}" placeholder="per the specs"></label>
-      <label>Plant<input class="input" data-pf="plant" list="jb-plants" value="${esc(x.plant||"")}"><datalist id="jb-plants">${plants.map(n=>`<option value="${esc(n)}">`).join("")}</datalist></label>
-      <label>Plant's email<input class="input" data-pf="email" inputmode="email" value="${esc(x.email||"")}"></label>
-      <label>Status<select class="input" data-pf="status">${["planned","ordered","poured"].map(s=>`<option${x.status===s?" selected":""}>${s}</option>`).join("")}</select></label>
-    </div>
-    ${info.testing?`<div class="rate-note">Testing the specs ask for: ${esc(info.testing)}</div>`:`<div class="rate-note">Check the specs for testing (cylinders, slump, air) and call for any inspection the forms and base need before the pour.</div>`}
-    <div class="act-primary"><button class="ma-gold" id="pr-save">Save</button><a class="ma-ghost" id="pr-order" href="#">Email the order to the plant</a></div>
-    <button class="btn-ghost" id="pr-cal">Add to my calendar</button>
-    ${pid?`<button class="btn-ghost" id="pr-del">Delete this pour</button>`:""}
-    <button class="btn-ghost" id="pr-back">Back to the job</button>`;
-  const read=()=>{body.querySelectorAll("[data-pf]").forEach(el=>{x[el.dataset.pf]=el.value.trim();});x.line=Number(x.line);return x;};
-  body.querySelector('[data-pf="line"]').onchange=(e)=>{const k=Number(e.target.value),y=body.querySelector('[data-pf="yards"]');
-    if(k>=0&&!y.value)y.value=cyOf(k);const d=body.querySelector('[data-pf="desc"]');if(k>=0&&!d.value)d.value=contract[k].name;};
-  const save=()=>{read();if(!j.pours.some(q=>q.id===x.id))j.pours.push(x);saveJobs();};
-  document.getElementById("pr-save").onclick=()=>{save();toast("Pour saved");renderJob(body,city,id,b);};
-  const order=document.getElementById("pr-order");
-  order.onclick=(e)=>{
-    read();
-    const body_=[`Hello,`,"",`Please schedule a ready-mix delivery:`,"",`Date: ${fmtDate(x.date)}${x.time?`, first truck at ${x.time}`:""}`,
-      `Yards: ${x.yards||"(to confirm)"}`,`Mix: ${x.psi?`${x.psi} PSI, `:""}per the project specs`,`Deliver to: ${jobPlace(p,city)}`,
-      `Job: ${b.title||""}${b.bid_number?` (${b.bid_number})`:""}`,x.desc?`Pour: ${x.desc}`:"","",
-      `Call me on the day with any questions${(companyProfile||{}).phone?`: ${companyProfile.phone}`:""}.`,"","Thanks,",signOff()]
-      .filter((v,k,a)=>v!==""||a[k-1]!=="").join("\n");
-    order.href=mailtoUrl(x.email,`Concrete order: ${fmtDate(x.date)}, ${x.yards||""} yd, ${b.title||""}`,body_);
-    if(x.status==="planned")body.querySelector('[data-pf="status"]').value="ordered";
-    save();
-  };
-  document.getElementById("pr-cal").onclick=()=>{
-    read();const d=isoDate(x.date);if(!d){toast("Pick the pour date first");return;}
-    const z=n=>String(n).padStart(2,"0"),d8=`${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}`;
-    const ics=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//CurbCall Pro//Pour//EN","BEGIN:VEVENT",`UID:${x.id}-${id}@curbcall.app`,
-      `DTSTAMP:${new Date().toISOString().replace(/[-:]/g,"").split(".")[0]}Z`,`DTSTART;VALUE=DATE:${d8}`,
-      `SUMMARY:${icsEscape(`Pour: ${x.yards||""} yd, ${b.title||""}`)}`,`DESCRIPTION:${icsEscape(`${x.desc||""}${x.time?` First truck ${x.time}.`:""} ${x.plant||""}`)}`,
-      `LOCATION:${icsEscape(jobPlace(p,city))}`,"BEGIN:VALARM","TRIGGER:-P1D","ACTION:DISPLAY","DESCRIPTION:Confirm the concrete order","END:VALARM","END:VEVENT","END:VCALENDAR"];
-    downloadBlob(new Blob([ics.join("\r\n")],{type:"text/calendar"}),`pour_${x.date}.ics`);
-  };
-  const del=document.getElementById("pr-del");
-  if(del)del.onclick=()=>{if(!confirm("Delete this pour?"))return;j.pours=j.pours.filter(q=>q.id!==x.id);saveJobs();renderJob(body,city,id,b);};
-  document.getElementById("pr-back").onclick=()=>renderJob(body,city,id,b);
-}
-
-// ── Daily log ──
-async function renderLogEntry(body,city,id,b,eid){
-  const j=jobFor(id),contract=jobContract(id);
-  const e=eid?j.log.find(x=>x.id===eid):{id:"d"+Date.now(),date:todayISO(),crew:"",hours:"",weather:"",work:"",placed:{},photos:[]};
-  if(!e){renderJob(body,city,id,b);return;}
-  const photos=(await bidFiles.list(id,"photo")).filter(f=>(e.photos||[]).includes(f.key));
-  if(!document.getElementById("prep-body"))return;
-  const urls=photos.map(f=>URL.createObjectURL(f.blob));
-  body.innerHTML=`<div class="workspace-title">${eid?"Daily log":"Log today"}</div>
-    <div class="job-form">
-      <label>Date<input type="date" class="input" data-lf="date" value="${esc(e.date)}"></label>
-      <label>Crew on site<input class="input" data-lf="crew" inputmode="numeric" value="${esc(String(e.crew||""))}" placeholder="people"></label>
-      <label>Hours worked<input class="input" data-lf="hours" inputmode="decimal" value="${esc(String(e.hours||""))}"></label>
-      <label>Weather<input class="input" data-lf="weather" value="${esc(e.weather||"")}" placeholder="e.g. Sunny, 62°F"></label>
-      <label class="wide">Work done<textarea class="input" data-lf="work" rows="3" placeholder="What got done, deliveries, inspections, problems">${esc(e.work||"")}</textarea></label>
-    </div>
-    ${contract.length?`<div class="detail-label" style="margin-top:0.6rem;">Placed today (feeds your next pay request)</div>
-      <div class="job-form">${contract.map((l,k)=>`<label>${esc(l.name)}<span class="cost-in"><input class="input" inputmode="decimal" data-placed="${k}" value="${esc(String((e.placed||{})[k]||""))}"> ${esc(l.unit)}</span></label>`).join("")}</div>`:""}
-    <div class="detail-label" style="margin-top:0.6rem;">Photos</div>
-    <div class="log-photos">${urls.map((u,k)=>`<img src="${esc(u)}" alt="Photo ${k+1}">`).join("")||`<span class="rate-thin">None yet.</span>`}</div>
-    <button class="btn-ghost" id="lg-photo">Take or add photos</button>
-    <div class="act-primary"><button class="ma-gold" id="lg-save">Save the day</button></div>
-    ${eid?`<button class="btn-ghost" id="lg-del">Delete this day</button>`:""}
-    <button class="btn-ghost" id="lg-back">Back to the job</button>`;
-  const read=()=>{
-    body.querySelectorAll("[data-lf]").forEach(el=>{e[el.dataset.lf]=el.value.trim();});
-    e.placed={};body.querySelectorAll("[data-placed]").forEach(el=>{const v=Number(String(el.value).replace(/[^0-9.]/g,""));if(v>0)e.placed[el.dataset.placed]=v;});
-  };
-  const save=()=>{read();if(!j.log.some(x=>x.id===e.id))j.log.push(e);saveJobs();};
-  document.getElementById("lg-photo").onclick=()=>{
-    const inp=document.createElement("input");
-    inp.type="file";inp.accept="image/*";inp.multiple=true;inp.setAttribute("capture","environment");inp.style.display="none";
-    inp.onchange=async()=>{
-      const files=Array.from(inp.files||[]).slice(0,20);inp.remove();
-      read();
-      for(let k=0;k<files.length;k++){
-        const name=`photo-${e.date}-${Date.now()}-${k}.${(files[k].type.split("/")[1]||"jpg").slice(0,4)}`;
-        const row=await bidFiles.put(id,"photo",name,files[k],{entry:e.id,taken:files[k].lastModified||Date.now()});
-        (e.photos=e.photos||[]).push(row.key);
-      }
-      save();renderLogEntry(body,city,id,b,e.id);
-    };
-    document.body.appendChild(inp);inp.click();
-  };
-  document.getElementById("lg-save").onclick=()=>{save();urls.forEach(u=>URL.revokeObjectURL(u));toast("Day saved");renderJob(body,city,id,b);};
-  const del=document.getElementById("lg-del");
-  if(del)del.onclick=async()=>{if(!confirm("Delete this day and its photos?"))return;
-    for(const k of e.photos||[])await bidFiles.remove(k);j.log=j.log.filter(x=>x.id!==e.id);saveJobs();renderJob(body,city,id,b);};
-  document.getElementById("lg-back").onclick=()=>{urls.forEach(u=>URL.revokeObjectURL(u));renderJob(body,city,id,b);};
-}
-async function printJobLog(id,b,city){
-  const j=jobFor(id),p=prepFor(id),contract=jobContract(id);
-  const all=await bidFiles.list(id,"photo");
-  const toData=(blob)=>new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.onerror=()=>r("");fr.readAsDataURL(blob);});
-  let budget=40;
-  const parts=[];
-  for(const e of j.log.slice().sort((a,z)=>String(a.date).localeCompare(z.date))){
-    const imgs=[];
-    for(const f of all.filter(x=>(e.photos||[]).includes(x.key))){if(budget-->0)imgs.push(await toData(f.blob));}
-    parts.push(`<div class="entry"><h2>${esc(fmtDate(e.date))}</h2>
-      <div class="m">${e.crew?`Crew: ${esc(String(e.crew))}`:""}${e.hours?` &middot; Hours: ${esc(String(e.hours))}`:""}${e.weather?` &middot; Weather: ${esc(e.weather)}`:""}</div>
-      ${e.work?`<p>${esc(e.work)}</p>`:""}
-      ${Object.keys(e.placed||{}).length?`<div class="m">Placed: ${Object.entries(e.placed).map(([k,v])=>`${esc((contract[k]||{}).name||"")} ${esc(String(v))} ${esc((contract[k]||{}).unit||"")}`).join("; ")}</div>`:""}
-      ${imgs.length?`<div class="photos">${imgs.filter(Boolean).map(u=>`<img src="${u}">`).join("")}</div>`:""}</div>`);
-  }
-  openPrintPage(`Daily log - ${b.title||""}`,`<h1>Daily log</h1>${jobHeaderHTML(b,p,city)}${parts.join("")}<div class="fine">Kept with CurbCall Pro. Photos as taken on site.</div>`);
-}
-
-// ── Pay requests ──
-function jobRetainage(j,info){
-  if(j.retainage!=null&&j.retainage!=="")return Number(j.retainage);
-  const m=/(\d+(?:\.\d+)?)\s*%/.exec(String(info.retainage||""));
-  return m?Number(m[1]):5;
-}
-function renderPayRequest(body,city,id,b){
-  const j=jobFor(id),p=prepFor(id),info=p.docInfo||{},contract=jobContract(id);
-  const prevEnd=j.pays.length?j.pays[j.pays.length-1].end:"";
-  const prevQty=contract.map((l,k)=>j.pays.reduce((s,r)=>s+(Number((r.qty||{})[k])||0),0));
-  // This period: what the daily log says was placed on days no request has
-  // billed yet.
-  const billedDays=new Set(j.pays.flatMap(r=>r.logs||[]));
-  const unbilled=j.log.filter(e=>!billedDays.has(e.id));
-  const fromLog=contract.map((l,k)=>unbilled.reduce((s,e)=>s+(Number((e.placed||{})[k])||0),0));
-  body.innerHTML=`<div class="workspace-title">Pay request No. ${j.pays.length+1}</div>
-    <div class="job-form">
-      <label>Period ending<input type="date" class="input" id="py-end" value="${esc(todayISO())}"></label>
-      <label>Retainage<span class="cost-in"><input class="input" id="py-ret" inputmode="decimal" value="${esc(String(jobRetainage(j,info)))}"> %</span></label>
-    </div>
-    <div class="rate-note">${prevEnd?`Since No. ${j.pays.length} (through ${esc(fmtDate(prevEnd))}). `:""}Quantities this period start from your daily log; change any to what was measured.</div>
-    <table class="ps-table"><thead><tr><th>Item</th><th>Before</th><th>This period</th></tr></thead><tbody>
-    ${contract.map((l,k)=>`<tr><td>${esc(l.name)}<small>${esc(l.qty.toLocaleString())} ${esc(l.unit)} at ${money2(l.price)}</small></td>
-      <td>${esc(prevQty[k].toLocaleString())}</td><td><input class="input py-q" data-py="${k}" inputmode="decimal" value="${fromLog[k]?esc(String(fromLog[k])):""}"></td></tr>`).join("")}</tbody></table>
-    <div id="py-tot"></div>
-    <div class="act-primary"><button class="ma-gold" id="py-save">Save and print</button></div>
-    <button class="btn-ghost" id="py-back">Back to the job</button>`;
-  const calc=()=>{
-    const ret=Number(document.getElementById("py-ret").value)||0;
-    const qty={};body.querySelectorAll("[data-py]").forEach(el=>{const v=Number(String(el.value).replace(/[^0-9.]/g,""));if(v>0)qty[el.dataset.py]=v;});
-    const toDate=contract.reduce((s,l,k)=>s+(prevQty[k]+(qty[k]||0))*l.price,0);
-    const retained=toDate*ret/100,earned=toDate-retained;
-    const prevDue=j.pays.reduce((s,r)=>s+(r.due||0),0);
-    return{qty,ret,toDate,retained,earned,prevDue,due:Math.round((earned-prevDue)*100)/100};
-  };
-  const show=()=>{const t=calc();document.getElementById("py-tot").innerHTML=`<div class="prep-totals">
-    <div><span>Work completed to date</span><b>${money2(t.toDate)}</b></div><div><span>Less retainage (${t.ret}%)</span><b>${money2(t.retained)}</b></div>
-    <div><span>Less previous requests</span><b>${money2(t.prevDue)}</b></div><div class="pt-grand"><span>Due this request</span><b>${money2(t.due)}</b></div></div>`;};
-  body.querySelectorAll("[data-py],#py-ret").forEach(el=>el.oninput=show);show();
-  document.getElementById("py-save").onclick=()=>{
-    const t=calc();
-    j.retainage=t.ret;
-    j.pays.push({end:document.getElementById("py-end").value||todayISO(),qty:t.qty,ret:t.ret,due:t.due,at:Date.now(),logs:unbilled.map(e=>e.id)});
-    saveJobs();printPayRequest(id,b,city,j.pays.length-1);renderJob(body,city,id,b);
-  };
-  document.getElementById("py-back").onclick=()=>renderJob(body,city,id,b);
-}
-function printPayRequest(id,b,city,n){
-  const j=jobFor(id),p=prepFor(id),contract=jobContract(id),r=j.pays[n];
-  if(!r)return;
-  const before=contract.map((l,k)=>j.pays.slice(0,n).reduce((s,x)=>s+(Number((x.qty||{})[k])||0),0));
-  const sched=contract.reduce((s,l)=>s+l.qty*l.price,0);
-  let done=0;
-  const rows=contract.map((l,k)=>{
-    const prev=before[k],now=Number((r.qty||{})[k])||0,toDate=prev+now,val=toDate*l.price;done+=val;
-    return`<tr><td>${k+1}</td><td>${esc(l.name)}</td><td class="n">${esc(l.qty.toLocaleString())} ${esc(l.unit)}</td><td class="n">${money2(l.price)}</td>
-      <td class="n">${money2(l.qty*l.price)}</td><td class="n">${esc(prev.toLocaleString())}</td><td class="n">${esc(now.toLocaleString())}</td>
-      <td class="n">${esc(toDate.toLocaleString())}</td><td class="n">${money2(val)}</td><td class="n">${l.qty*l.price?Math.round(val/(l.qty*l.price)*100):0}%</td></tr>`;
-  }).join("");
-  const retained=done*(r.ret||0)/100,prevDue=j.pays.slice(0,n).reduce((s,x)=>s+(x.due||0),0);
-  openPrintPage(`Pay request ${n+1} - ${b.title||""}`,`<h1>Application for payment No. ${n+1}</h1>${jobHeaderHTML(b,p,city)}
-    <div class="m">Period ending ${esc(fmtDate(r.end))}${agencyContact(b,p).org?` &middot; To: ${esc(agencyContact(b,p).org)}`:""}</div>
-    <table><thead><tr><th>#</th><th>Item</th><th class="n">Contract qty</th><th class="n">Unit price</th><th class="n">Scheduled value</th>
-      <th class="n">Previous qty</th><th class="n">This period</th><th class="n">To date</th><th class="n">Completed to date</th><th class="n">%</th></tr></thead>
-      <tbody>${rows}</tbody></table>
-    <div class="t"><div><span>Original contract sum</span><b>${money2(sched)}</b></div><div><span>Total completed to date</span><b>${money2(done)}</b></div>
-      <div><span>Retainage (${esc(String(r.ret||0))}%)</span><b>${money2(retained)}</b></div><div><span>Total earned less retainage</span><b>${money2(done-retained)}</b></div>
-      <div><span>Less previous applications</span><b>${money2(prevDue)}</b></div><div class="g"><span>Current payment due</span><b>${money2(r.due)}</b></div></div>
-    <p style="margin-top:28px;">Contractor: <span class="blank"></span> Date: <span class="blank" style="min-width:110px"></span></p>
-    <div class="fine">Quantities as measured by the contractor; the agency's engineer verifies them. If the agency has its own pay application form, copy these figures onto it.</div>`,true);
-}
-
-// ── Certified payroll (WH-347 layout) ──
-function crewList(){return store.get("crew",[]);}
-function renderCrew(body,city,id,b){
-  const crew=crewList();
-  body.innerHTML=`<div class="workspace-title">Your crew and rates</div>
-    <div class="rate-note" style="margin-top:0;">Kept on this phone only, for certified payroll. Each worker's ID number is left for you to write on the printed form; the app never asks for it.</div>
-    <div id="cr-rows">${crew.map((w,k)=>crewRow(w,k)).join("")}</div>
-    <button class="btn-ghost" id="cr-add">Add a worker</button>
-    <div class="act-primary"><button class="ma-gold" id="cr-save">Save</button></div>
-    <button class="btn-ghost" id="cr-back">Back to the job</button>`;
-  document.getElementById("cr-add").onclick=()=>{const rows=document.getElementById("cr-rows");rows.insertAdjacentHTML("beforeend",crewRow({},rows.children.length));};
-  document.getElementById("cr-save").onclick=()=>{
-    const out=[];body.querySelectorAll(".crew-row").forEach(r=>{
-      const v=(k)=>r.querySelector(`[data-cw="${k}"]`).value.trim();
-      if(v("name"))out.push({name:v("name").slice(0,80),cls:v("cls").slice(0,60),rate:Number(v("rate"))||0,fringe:Number(v("fringe"))||0});
-    });
-    store.set("crew",out);toast("Crew saved");renderJob(body,city,id,b);
-  };
-  document.getElementById("cr-back").onclick=()=>renderJob(body,city,id,b);
-}
-function crewRow(w,k){
-  return`<div class="crew-row job-form"><label>Name<input class="input" data-cw="name" value="${esc(w.name||"")}"></label>
-    <label>Work classification<input class="input" data-cw="cls" value="${esc(w.cls||"")}" placeholder="e.g. Cement Mason"></label>
-    <label>Rate $/hr<input class="input" data-cw="rate" inputmode="decimal" value="${esc(String(w.rate||""))}"></label>
-    <label>Fringe paid in cash $/hr<input class="input" data-cw="fringe" inputmode="decimal" value="${esc(String(w.fringe||""))}"></label></div>`;
-}
-// Saturday of this week, the usual payroll week end.
-function weekEnding(){const d=new Date();d.setDate(d.getDate()+((6-d.getDay()+7)%7));const z=n=>String(n).padStart(2,"0");return`${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`;}
-function payrollPay(w,hrs){
-  const total=hrs.reduce((s,h)=>s+(Number(h)||0),0),st=Math.min(40,total),ot=Math.max(0,total-40);
-  return{total,st,ot,gross:Math.round((st*w.rate+ot*w.rate*1.5+total*(w.fringe||0))*100)/100};
-}
-function renderPayrollWeek(body,city,id,b,n){
-  const j=jobFor(id),crew=crewList();
-  if(!crew.length){toast("Add your crew and rates first");renderCrew(body,city,id,b);return;}
-  const wk=n!=null?j.weeks[n]:{ending:weekEnding(),hours:{}};
-  const ending=isoDate(wk.ending)||new Date();
-  const days=[...Array(7)].map((_,k)=>{const d=new Date(ending);d.setDate(d.getDate()-6+k);return d;});
-  body.innerHTML=`<div class="workspace-title">Payroll No. ${n!=null?n+1:j.weeks.length+1}</div>
-    <div class="job-form"><label>Week ending<input type="date" class="input" id="pw-end" value="${esc(wk.ending)}"></label></div>
-    <div class="rate-note">Hours on this job each day. Over 40 in the week is paid at time and a half.</div>
-    <div class="pw-grid"><div class="pw-h">${days.map(d=>`<span>${d.toLocaleDateString(undefined,{weekday:"short"})}<br>${d.getDate()}</span>`).join("")}</div>
-    ${crew.map((w,k)=>`<div class="pw-r"><span>${esc(w.name)}<small>${esc(w.cls)}</small></span>${days.map((d,x)=>`<input class="input" inputmode="decimal" aria-label="${esc(w.name)}, ${esc(d.toLocaleDateString(undefined,{weekday:"long"}))}" data-ph="${k}:${x}" value="${esc(String(((wk.hours||{})[k]||[])[x]||""))}">`).join("")}</div>`).join("")}</div>
-    <div class="act-primary"><button class="ma-gold" id="pw-save">Save and print</button></div>
-    ${n!=null?`<button class="btn-ghost" id="pw-del">Delete this week</button>`:""}
-    <button class="btn-ghost" id="pw-back">Back to the job</button>`;
-  document.getElementById("pw-save").onclick=()=>{
-    const hours={};body.querySelectorAll("[data-ph]").forEach(el=>{const[k,x]=el.dataset.ph.split(":").map(Number);
-      (hours[k]=hours[k]||Array(7).fill(0))[x]=Number(String(el.value).replace(/[^0-9.]/g,""))||0;});
-    const rec={ending:document.getElementById("pw-end").value||wk.ending,hours,crew:crew.slice()};
-    if(n!=null)j.weeks[n]=rec;else j.weeks.push(rec);
-    saveJobs();printPayroll(id,b,city,n!=null?n:j.weeks.length-1);renderJob(body,city,id,b);
-  };
-  const del=document.getElementById("pw-del");
-  if(del)del.onclick=()=>{if(!confirm("Delete this payroll week?"))return;j.weeks.splice(n,1);saveJobs();renderJob(body,city,id,b);};
-  document.getElementById("pw-back").onclick=()=>renderJob(body,city,id,b);
-}
-function printPayroll(id,b,city,n){
-  const j=jobFor(id),p=prepFor(id),wk=j.weeks[n],c=companyProfile||{},i=bidInfo();
-  if(!wk)return;
-  const crew=wk.crew||crewList(),end=isoDate(wk.ending)||new Date();
-  const days=[...Array(7)].map((_,k)=>{const d=new Date(end);d.setDate(d.getDate()-6+k);return d;});
-  const rows=crew.map((w,k)=>{const hrs=(wk.hours||{})[k]||Array(7).fill(0);if(!hrs.some(h=>h>0))return"";const pay=payrollPay(w,hrs);
-    return`<tr><td>${esc(w.name)}</td><td></td><td>${esc(w.cls)}</td>${hrs.map(h=>`<td class="n">${h||""}</td>`).join("")}
-      <td class="n">${pay.st}${pay.ot?` + ${pay.ot} OT`:""}</td><td class="n">${money2(w.rate)}${w.fringe?`<br>+${money2(w.fringe)} fringe`:""}</td><td class="n">${money2(pay.gross)}</td>
-      <td></td><td></td><td></td></tr>`;}).join("");
-  openPrintPage(`Certified payroll ${n+1} - ${b.title||""}`,`<h1>Payroll (WH-347 layout) No. ${n+1}</h1>
-    <div class="m">Contractor: ${esc(c.name||"")}${i.address?`, ${esc(i.address)}`:""}${i.city_state_zip?`, ${esc(i.city_state_zip)}`:""}</div>
-    <div class="m">Project and location: ${esc(b.title||"")}${b.bid_number?` (${esc(b.bid_number)})`:""}, ${esc(jobPlace(p,city))}</div>
-    <div class="m">Week ending ${esc(fmtDate(wk.ending))}</div>
-    <table><thead><tr><th>Name</th><th>ID no. (write in)</th><th>Classification</th>${days.map(d=>`<th class="n">${d.toLocaleDateString(undefined,{weekday:"short"})} ${d.getDate()}</th>`).join("")}
-      <th class="n">Total hours</th><th class="n">Rate</th><th class="n">Gross this job</th><th>Deductions</th><th>Net pay</th><th>Check no.</th></tr></thead>
-      <tbody>${rows||`<tr><td colspan="16">No hours this week.</td></tr>`}</tbody></table>
-    <h2>Statement of compliance</h2>
-    <p>I, <span class="blank"></span>, <span class="blank"></span> (title), pay or supervise the payment of the persons employed by ${esc(c.name||"[contractor]")} on the project above; during the payroll period ending ${esc(fmtDate(wk.ending))} all persons employed on the project have been paid the full weekly wages earned, no rebates have been or will be made, and no deductions have been made other than permissible deductions.</p>
-    <p>The payrolls are correct and complete; the wage rates paid are not less than the applicable rates in the contract; and classifications conform with the work each person performed.</p>
-    <p>Fringe benefits: [ ] paid to approved plans, funds or programs &nbsp; [ ] paid in cash (shown above) &nbsp; Exceptions: <span class="blank"></span></p>
-    <p style="margin-top:22px;">Signature: <span class="blank" style="min-width:260px"></span> Date: <span class="blank" style="min-width:110px"></span></p>
-    <div class="fine">Laid out after the U.S. Department of Labor's form WH-347. Gross includes overtime over 40 hours at 1.5x the base rate and any fringe paid in cash. Deductions, net pay and ID numbers are for you to complete. Use your state's form if it requires its own. False statements on certified payroll carry civil and criminal penalties: check every figure before you sign.</div>`,true);
 }
 
 function pickPdfs(multiple){
@@ -6125,7 +6006,7 @@ async function readBidDocument(url,urls){
     if(d&&d.ok)return d;
     const msg=d&&d.reason==="fetch_failed"?(FETCH_ERRORS[d.detail]||"Couldn't download that document.")
       :(d&&(DOC_ERRORS[d.reason]||d.detail))||"Couldn't read that document.";
-    return{ok:false,msg};
+    return{ok:false,msg,reason:(d&&d.reason)||""};
   }catch(e){return{ok:false,msg:offlineOrServer()};}
 }
 async function renderDocPicker(body,city,id,b){
@@ -6254,7 +6135,7 @@ async function renderDocResult(body,city,id,b,doc,info,fresh){
   body.querySelectorAll("[data-open]").forEach(x=>x.onclick=()=>{const f=files[Number(x.dataset.open)];openBlob(f.blob,f.name);});
   const take=(replace)=>{
     const d=rateData[bidState(city,b)];
-    const lines=items.map(it=>lineFromDocItem(it,d));
+    const lines=items.map(it=>lineFromDocItem(it,d,d&&jobDistrict(d,city)));
     p.lines=replace?lines:(p.lines||[]).filter(l=>(l.name||"").trim()||l.qty||l.price).concat(lines);
     p.linesFrom=replace?"documents":"you";
     if(!p.lines.length)p.lines.push({name:"",qty:"",unit:"",price:"",ref:null});
@@ -6419,11 +6300,12 @@ function applyLineChoice(l,v,d){
   if(v.startsWith("s:")&&d){
     const code=v.slice(2),meta=d.items[code];
     if(!meta)return;
-    const district=priceDistrict(d),r=latestRate(d,code,district),w=r&&latestWin(d,code,district);
+    const district=l.dist||priceDistrict(d),r=latestRate(d,code,district);
+    const wp=winPrice(d,code,Number(l.qty)||0,district);
     // A price already typed is the contractor's; only an empty one is filled.
-    const fill=!Number(l.price)||(l.ref&&Number(l.price)===Math.round(l.ref*100)/100);
-    Object.assign(l,{name:meta.name,unit:meta.unit,item:code,st:d.state,ref:r?r.avg:null});
-    if(fill&&r)l.price=Math.round((w?w.avg:r.avg)*100)/100;
+    const fill=!Number(l.price)||l.auto||(l.ref&&Number(l.price)===Math.round(l.ref*100)/100);
+    Object.assign(l,{name:meta.name,unit:meta.unit,item:code,st:d.state,ref:r?r.avg:null,dist:district});
+    if(fill&&(wp||r))l.price=startPrice(wp)||Math.round(r.avg*100)/100;
   }else if(v.startsWith("x:")){
     const x=EXTRA_LINES.find(([n])=>n===v.slice(2));
     delete l.item;delete l.st;l.ref=null;
@@ -6476,27 +6358,19 @@ function lineCost(l,p){
   const cost=(days*dayCost+yards*cy+mat)*(1+c.overhead/100);
   return{cost,perUnit:cost/qty,days};
 }
-function lineProfitHTML(l,p){
-  const lc=lineCost(l,p),price=Number(l.price)||0;
-  if(!lc)return"";
-  const k=1+(Number(p.markup)||0)/100,rev=(Number(l.qty)||0)*price*k,profit=rev-lc.cost;
-  const pct=rev>0?Math.round(profit/rev*100):null;
-  return`Your cost about ${money2(lc.perUnit)}/${esc(l.unit)}${price>0?` · <b class="pc ${profit<0?"pc-hi":pct<10?"pc-lo":"pc-ok"}">${profit<0?"loses":"makes"} ${money0(Math.abs(profit))}${pct!=null?` (${pct}%)`:""}</b>`:""}`;
-}
 function profitSummaryHTML(p){
   let cost=0,rev=0,n=0;
   const k=1+(Number(p.markup)||0)/100;
   (p.lines||[]).forEach(l=>{const lc=lineCost(l,p);if(!lc)return;n++;cost+=lc.cost;rev+=(Number(l.qty)||0)*(Number(l.price)||0)*k;});
   if(!n)return"";
   const profit=rev-cost,pct=rev>0?Math.round(profit/rev*100):0;
-  return`<div class="profit-box${profit<0?" loss":""}"><div><span>Estimated cost of the lines it can cost</span><b>${money0(cost)}</b></div>
-    <div><span>${profit<0?"Loss":"Profit"} on those lines</span><b>${money0(Math.abs(profit))} (${pct}%)</b></div>
-    <small>${costsAreMine()?"From your costs.":"From starting guesses, not your numbers yet."} Lump-sum lines and anything it can't size are left out. Concrete at ${money0(concretePriceFor(p))} a yard${Object.values((p.concrete&&p.concrete.plants)||{}).some(x=>Number(x&&x.price)>0)?", your quote":", typical price"}.</small></div>`;
+  return`<div class="profit-box${profit<0?" loss":""}"><div><span>${profit<0?"You'd lose about":"You'd make about"}${costsAreMine()?"":` <em class="est">(estimate)</em>`}</span><b>${money0(Math.abs(profit))} (${pct}%)</b></div>
+    <small>${costsAreMine()?"From your costs":"From starting guesses until you set your costs"}, on the lines it can size.</small></div>`;
 }
 function costsEditorHTML(){
   const c=myCosts();
   return`<details class="rm-log" id="cost-edit"><summary>${costsAreMine()?"Your costs":"Set your costs (now using starting guesses)"}</summary>
-    <div class="rate-note" style="margin-top:0.3rem;">Used on every bid to show what each line costs you and what it makes. Saved with your bid details.</div>
+    <div class="rate-note" style="margin-top:0.3rem;">Used on every bid to show what it makes you. Saved with your bid details.</div>
     <div class="cost-grid">${COST_FIELDS.map(([k,label,u])=>`<label><span>${esc(label)}</span>
       <span class="cost-in">${u==="$"?"$":""}<input class="input" inputmode="decimal" data-cost-k="${k}" value="${esc(String(c[k]))}">${u&&u!=="$"?` ${esc(u)}`:""}</span></label>`).join("")}</div>
   </details>`;
@@ -6598,7 +6472,7 @@ function renderTakeoffReview(body,city,id,b){
   document.getElementById("to-again").onclick=()=>renderTakeoff(body,city,id,b);
   const take=(replace)=>{
     const d=rateData[bidState(city,b)];
-    const lines=t.items.map(it=>({...lineFromDocItem(it,d),note:`Measured from the plans: ${it.basis}. Check it.`}));
+    const lines=t.items.map(it=>({...lineFromDocItem(it,d,d&&jobDistrict(d,city)),note:`Measured from the plans: ${it.basis}. Check it.`}));
     p.lines=replace?lines:(p.lines||[]).filter(l=>(l.name||"").trim()||l.qty||l.price).concat(lines);
     p.linesFrom=replace?"documents":"you";
     savePrep(id,city);back();
@@ -6622,40 +6496,54 @@ function renderPrepPricing(body,city,id,b){
         <button type="button" class="prep-x" data-del="${i}" aria-label="Delete line">×</button>
       </div>
       <small class="pl-ref" data-pc="${i}">${priceCheckHTML(l)}</small>
-      <small class="pl-ref" data-cost="${i}">${lineProfitHTML(l,p)}</small>
       ${l.note?`<small class="pl-ref rate-thin">${esc(l.note)}</small>`:""}
       ${historyHint(hist[lineKey(l)])}
     </div>`;
   const t=prepTotals(p);
   const rates=rateData[bidState(city,b)];
-  const startNote=!rates?"Prices for this state aren't in the app yet."
-    :`Starts from the quantities in the posting at ${esc(agencyOf(rates))}'s ${
-      rates.basis==="awarded"?"average winning bid":(rates.wins||bidResults[rates.state])?"average winning bid where it's known, else its average bid":"average bid"}.`;
+  const startNote=!rates?"Prices for this state aren't in the app yet. Enter your own."
+    :"Prices start at what each item won for on similar-size jobs near here. Change any number.";
   const canRead=prepDocCandidates(b).length>0;
   const hasPast=pastPreparedBids(id).length>0;
-  body.innerHTML=`<button class="btn-primary" id="pl-read" style="margin-bottom:0.6rem;">${canRead?"Read quantities from the bid form":"Read quantities from a bid form you upload"}</button>
-    ${p.docInfo&&p.docInfo.read_at?`<button class="btn-ghost" id="pl-docinfo" style="margin:0 0 0.6rem;">See what was read from ${esc(p.docInfo.source||"the documents")}</button>`:""}
-    ${hasPast?`<button class="btn-ghost" id="pl-past" style="margin:0 0 0.6rem;">Use a past bid</button>`:""}
-    <button class="btn-ghost" id="pl-takeoff" style="margin:0 0 0.6rem;">${p.takeoff?"See what was measured from the plans":"No item list? Measure from the plans"}</button>
-    <div class="rate-note" style="margin-top:0;">${p.docInfo&&p.docInfo.source?`Bid documents read: ${esc(p.docInfo.source)}. `:""}${startNote} Change anything to your own numbers.</div>
-    <div id="prep-lines">${p.lines.map(lineRow).join("")}</div>
-    <div class="prep-add"><button class="btn-ghost" id="pl-add">+ Add line</button><button class="btn-ghost" id="pl-reset">Start over from ballpark</button></div>
-    <div id="pt-target">${targetHTML(p,bidState(city,b))}</div>
-    <div class="prep-totals">
-      <div><span>Subtotal</span><b id="pt-sub">${money0(t.sub)}</b></div>
-      <div><span>Markup <input class="input pt-mk" id="pt-mk" inputmode="decimal" value="${esc(String(p.markup||0))}" aria-label="Markup percent">%</span><b id="pt-mkv">${money0(t.markup)}</b></div>
-      <div class="pt-grand"><span>Your bid</span><b id="pt-total">${money0(t.total)}</b></div>
+  const wasRead=!!(p.docInfo&&p.docInfo.read_at);
+  const mk=String(p.markup||0);
+  const MK_CHOICES=["0","10","15","20"];
+  // One screen, top to bottom: what the bid comes to and whether it wins,
+  // one button to fill the lines from the bid form, the lines, the markup.
+  // Everything else is folded under "More ways to price".
+  body.innerHTML=`<div class="price-head" id="price-head">
+      <div class="ph-total"><span>Your bid</span><b id="pt-total">${money0(t.total)}</b></div>
+      <div id="pt-target">${targetHTML(p,bidState(city,b))}</div>
+      <div id="pt-profit">${profitSummaryHTML(p)}</div>
     </div>
-    <div id="pt-profit">${profitSummaryHTML(p)}</div>
-    ${costsEditorHTML()}
+    ${wasRead?`<div class="rate-note">Lines read from ${esc(p.docInfo.source||"the bid form")}. <button class="link-btn" id="pl-read">Read again</button></div>`
+      :`<button class="btn-primary" id="pl-read" style="margin:0.7rem 0 0.4rem;">${canRead?"Fill from the bid form":"Fill from a bid form you upload"}</button>`}
+    <div class="rate-note" style="margin-top:0.2rem;">${startNote}</div>
+    <div id="prep-lines">${p.lines.map(lineRow).join("")}</div>
+    <div class="prep-add"><button class="btn-ghost" id="pl-add">+ Add line</button></div>
+    <div class="mk-row">
+      <span class="mk-label">Markup</span>
+      <span class="mk-chips">${MK_CHOICES.map(v=>`<button type="button" class="mk-chip${v===mk?" on":""}" data-mk="${v}">${v}%</button>`).join("")}</span>
+      <span class="mk-own"><input class="input pt-mk" id="pt-mk" inputmode="decimal" value="${esc(mk)}" aria-label="Markup percent">%</span>
+    </div>
+    <div class="prep-totals">
+      <div><span>Lines</span><b id="pt-sub">${money0(t.sub)}</b></div>
+      <div><span>Markup</span><b id="pt-mkv">${money0(t.markup)}</b></div>
+    </div>
     ${b.value?`<div class="rate-note">Posted value: <b>${esc(b.value)}</b></div>`:""}
-    <div class="rate-note">Add lines the posting doesn't list: removal, mobilization, traffic control, testing.</div>`;
+    <details class="price-more" id="price-more"><summary>More ways to price</summary>
+      ${wasRead?`<button class="btn-ghost" id="pl-docinfo">See what was read from ${esc(p.docInfo.source||"the documents")}</button>`:""}
+      <button class="btn-ghost" id="pl-takeoff">${p.takeoff?"See what was measured from the plans":"No item list? Measure from the plans"}</button>
+      ${hasPast?`<button class="btn-ghost" id="pl-past">Use a past bid</button>`:""}
+      <button class="btn-ghost" id="pl-reset">Start over from the posting</button>
+      ${costsEditorHTML()}
+      <div class="rate-note">Add lines the posting doesn't list: removal, mobilization, traffic control, testing.</div>
+    </details>`;
   const refresh=()=>{
     const tt=prepTotals(p);
     p.lines.forEach((l,i)=>{
       const el=body.querySelector(`[data-total="${i}"]`);if(el)el.textContent=money0((Number(l.qty)||0)*(Number(l.price)||0));
       const pc=body.querySelector(`[data-pc="${i}"]`);if(pc)pc.innerHTML=priceCheckHTML(l);
-      const cc=body.querySelector(`[data-cost="${i}"]`);if(cc)cc.innerHTML=lineProfitHTML(l,p);
     });
     const pp=document.getElementById("pt-profit");if(pp)pp.innerHTML=profitSummaryHTML(p);
     document.getElementById("pt-sub").textContent=money0(tt.sub);
@@ -6700,14 +6588,17 @@ function renderPrepPricing(body,city,id,b){
     savePrep(id,city);openPrep(city,id,"pricing");
   };
   document.getElementById("pl-reset").onclick=()=>{
-    if(!confirm("Replace your lines with the ballpark from the posting?"))return;
+    if(!confirm("Replace your lines with the quantities from the posting, at what they win for?"))return;
     p.lines=defaultPrepLines(b,city);p.linesFrom="ballpark";
     savePrep(id,city);openPrep(city,id,"pricing");
   };
-  document.getElementById("pt-mk").oninput=(e)=>{
-    p.markup=e.target.value.replace(/[^0-9.]/g,"");
+  const setMk=(v)=>{
+    p.markup=String(v).replace(/[^0-9.]/g,"");
+    body.querySelectorAll(".mk-chip").forEach(c=>c.classList.toggle("on",c.dataset.mk===String(Number(p.markup)||0)));
     savePrep(id,city);refresh();
   };
+  document.getElementById("pt-mk").oninput=(e)=>setMk(e.target.value);
+  body.querySelectorAll(".mk-chip").forEach(c=>c.onclick=()=>{document.getElementById("pt-mk").value=c.dataset.mk;setMk(c.dataset.mk);});
   wireCostsEditor(body,refresh);
 }
 
@@ -7622,9 +7513,84 @@ function homeSinceLabel(t){
   if(days<7)return d.toLocaleDateString([],{weekday:"long"});
   return d.toLocaleDateString([],{month:"short",day:"numeric"});
 }
+// Which link brought them (worked out on the landing page, kept for the
+// browser session) and how they say they heard of us (setup). Both ride on
+// the /trial call; the server counts them, with no identifier for the link.
+function trialSourceFields(){
+  let source="";
+  try{source=sessionStorage.getItem("visit_source")||"";}catch(e){}
+  return{source:source||"direct",heard:store.get("heard","")||""};
+}
+async function reportTrialSource(){
+  if(!currentUser||isOffline())return;
+  try{
+    const token=await getSupabaseToken();
+    await fetchWithTimeout(SERVER+"/trial",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({device_id:deviceId(),supabase_token:token,...trialSourceFields()})},30000);
+  }catch(e){}
+}
+// ── Where the trial stands, for Home ──
+// The trial's end was only ever shown on the Account tab, which nobody opens
+// on day 6. Checked at most every few hours (the same /trial call Account
+// makes), kept on the phone, and shown on Home in the last two days and
+// after it ends.
+const PLAN_KEY="plan_status";
+let planStatus=store.get(PLAN_KEY,null);
+let planChecking=false;
+async function refreshPlanStatus(){
+  if(planChecking||isOffline()||!currentUser)return;
+  if(licenseKey()){planStatus={state:"paid",at:Date.now()};store.set(PLAN_KEY,planStatus);return;}
+  if(planStatus&&Date.now()-(planStatus.at||0)<4*3600000)return;
+  planChecking=true;
+  try{
+    // Someone who paid on another device or from the website may not have
+    // the key on this phone yet: look for a purchase before telling them
+    // their trial is over.
+    try{await autoUnlock();}catch(e){}
+    if(licenseKey()){planStatus={state:"paid",at:Date.now()};store.set(PLAN_KEY,planStatus);return;}
+    const token=await getSupabaseToken();
+    const r=await fetchRetry(SERVER+"/trial",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({device_id:deviceId(),supabase_token:token,...trialSourceFields()})},30000);
+    const d=await r.json();
+    if(d&&d.active)planStatus={state:"trial",expires_at:d.expires_at||"",at:Date.now()};
+    else if(d&&d.reason==="trial_expired")planStatus={state:"expired",at:Date.now()};
+    else return;
+    store.set(PLAN_KEY,planStatus);
+    const main=document.getElementById("home-main");
+    if(main&&document.getElementById("screen-home")&&document.getElementById("screen-home").classList.contains("active"))renderHome();
+  }catch(e){}finally{planChecking=false;}
+}
+// What the trial turned up, from what's on this phone. Only the lines that
+// aren't zero: "0 forms filled" sells nothing.
+function trialRecap(){
+  let open=0;
+  Object.keys(bidData).forEach(c=>{open+=visibleBidsIn(c).length;});
+  const ids=Object.keys(bidPrep);
+  const read=new Set(ids.filter(i=>bidPrep[i]&&bidPrep[i].docInfo&&bidPrep[i].docInfo.read_at)
+    .concat(Object.keys(docsReady).filter(i=>docsReady[i]&&docsReady[i].items)));
+  const filled=ids.filter(i=>bidPrep[i]&&bidPrep[i].formFilledAt).length;
+  const bits=[open&&plural(open,"open bid")+" found near you",read.size&&plural(read.size,"bid")+(read.size===1?" read from its documents":" read from their documents"),
+    ids.length&&plural(ids.length,"bid")+" prepared",filled&&plural(filled,"bid form")+" filled in",
+    Object.keys(saved).length&&plural(Object.keys(saved).length,"bid")+" saved"].filter(Boolean);
+  return bits;
+}
+function planBannerHTML(){
+  const ps=planStatus;
+  if(!ps||ps.state==="paid"||licenseKey())return"";
+  const recap=trialRecap();
+  if(ps.state==="expired")return`<div class="plan-banner ended"><b>Your free trial has ended.</b>
+    <span>${recap.length?`It found ${esc(recap.slice(0,2).join(" and "))}. `:""}Your saved bids and prices are still here; subscribe to keep scanning and reading bid documents.</span>
+    <button class="btn-primary" data-plan-go>See plans</button></div>`;
+  const left=ps.expires_at?(new Date(ps.expires_at)-new Date())/86400000:99;
+  if(!(left<=2))return"";
+  return`<div class="plan-banner"><b>Your free trial ends in ${esc(timeLeftLabel(ps.expires_at)||"a day").replace(/ left$/,"")}.</b>
+    <span>${recap.length?`So far: ${esc(recap.slice(0,2).join(", "))}. `:""}Keep it going for $49 a month, or $399 a year.</span>
+    <button class="btn-primary" data-plan-go>Keep my bids</button></div>`;
+}
 function renderHome(){
   const main=document.getElementById("home-main");
   if(!main)return;
+  refreshPlanStatus();
   const rows=[];
   Object.keys(bidData).forEach(c=>visibleBidsIn(c).forEach(b=>rows.push([c,b])));
   const total=rows.length;
@@ -7643,7 +7609,7 @@ function renderHome(){
     .sort((a,b)=>daysUntil(a[1])-daysUntil(b[1]))
     .slice(0,3);
 
-  main.innerHTML=`
+  main.innerHTML=`${planBannerHTML()}
     <div class="account-card">
       <div class="account-email hdr-ic" style="font-size:var(--fs-base);margin-bottom:0.6rem;"><svg class="icon-svg"><use href="#i-activity"/></svg>Your week</div>
       <div class="stats-grid">
@@ -7660,6 +7626,8 @@ function renderHome(){
       :emptyHTML("i-list","No bids yet","Run a scan and the work near you shows up here.")}`;
 
   document.getElementById("home-scan-btn").onclick=()=>goTo("scan");
+  main.querySelectorAll("[data-plan-go]").forEach(b=>b.onclick=()=>{goTo("account");
+    setTimeout(()=>{const u=document.getElementById("upgrade-section");if(u)u.scrollIntoView({behavior:"smooth"});},300);});
   const all=document.getElementById("home-all-btn");
   if(all)all.onclick=()=>goTo("feed");
   const soon=document.getElementById("home-soon");
@@ -7825,7 +7793,8 @@ function bidCard(city,b){
         ${watchAlert(id)?`<span class="chip watch-alert">${esc(watchAlert(id))}</span>`:""}
         ${pipeline[id]?`<span class="chip status-${esc(pipeline[id])}">${esc(String(pipeline[id]).toUpperCase())}</span>`:""}
         ${notes[id]?`<span class="chip">Note</span>`:""}
-        ${(()=>{const pg=bidPrep[id]&&prepProgress(id,b);return pg?`<span class="chip">Prep ${pg.done}/${pg.total}</span>`:"";})()}
+        ${(()=>{const pg=bidPrep[id]&&prepProgress(id,b);return pg?`<span class="chip">Prep ${pg.done}/${pg.total}</span>`
+          :docsReady[id]&&docsReady[id].items?`<span class="chip ready">${docsReady[id].items} items ready</span>`:"";})()}
       </div>
     </div>
   </div>`;
@@ -8100,6 +8069,10 @@ function openDetail(city,b){
         :"<b>Pre-bid meeting.</b> Check the posting for date and place."}</span></div>`:""}
     ${b.addenda?`<div class="alert alert-amber">
       <span><b>This bid has addenda.</b> Read them before pricing \u2014 the scope may have changed.</span></div>`:""}
+    ${b.source==="state_local"?`<div class="alert alert-amber">
+      <span><b>Federal-aid town project.</b> The town lets it, so a small crew can
+      bid it as prime. Federal wage rates (Davis-Bacon) and a DBE goal usually
+      apply; the bid notice says which.</span></div>`:""}
     ${b.source==="state_dot"?`<div class="alert alert-amber">
       <span><b>State highway job.</b> Most states require prequalification to bid
       one of these as prime, and the whole contract is usually bigger than a
@@ -8216,7 +8189,12 @@ function openDetail(city,b){
 }
 window.shareBid=async function(city,id){
   const b=findBid(id);if(!b)return;
-  const text=`${b.title||"Bid"} \u2014 ${city}${b.value?" \u2022 "+b.value:""}${b.deadline?" \u2022 Due "+b.deadline:""}${b.url?"\n"+b.url:""}`;
+  // A forwarded bid goes to a partner, an estimator or another contractor:
+  // it says where it came from, with the sender's referral link when they
+  // have one, so the person it lands with can find their own.
+  const code=store.get("referral_code","");
+  const site=code?`https://curbcallpro.com/?ref=${encodeURIComponent(code)}`:"https://curbcallpro.com";
+  const text=`${b.title||"Bid"} \u2014 ${city}${b.value?" \u2022 "+b.value:""}${b.deadline?" \u2022 Due "+b.deadline:""}${b.url?"\n"+b.url:""}\n\nFound with CurbCall Pro: ${site}`;
   try{
     if(navigator.share){await navigator.share({title:b.title||"Bid",text});}
     else{await navigator.clipboard.writeText(text);toast("Copied to clipboard");}
@@ -8628,14 +8606,14 @@ function renderAccount(){
       <div class="plan featured">
         <div class="plan-name">Pro Monthly</div>
         <div class="plan-price">$49<span> / month</span></div>
-        <ul>${["Unlimited nationwide bid scans","AI bid extraction","Federal + local bids","Save &amp; track leads","Cancel anytime"].map(planLi).join("")}</ul>
+        <ul>${["Every open sidewalk, curb &amp; ramp bid near you, checked daily","Bid documents read, line items filled in","Target prices from what the work actually went for","The agency's bid form filled in for you","Addendum and due-date alerts on your phone","Cancel anytime"].map(planLi).join("")}</ul>
         <a class="btn-primary" style="text-decoration:none;" href="${mLink}" target="_blank">Subscribe Monthly</a>
         <p class="renew-note">Renews automatically at $49/month until you cancel. Cancel anytime under Billing above.</p>
       </div>
       <div class="plan">
         <div class="plan-name">Pro Annual &mdash; best value, save $189</div>
         <div class="plan-price">$399<span> / year</span></div>
-        <ul>${["Everything in Monthly","About 4 months free","Priority support"].map(planLi).join("")}</ul>
+        <ul>${["Everything in Monthly","About 4 months free: one won job pays for years of it","Priority support"].map(planLi).join("")}</ul>
         <a class="btn-ghost" style="text-decoration:none;display:block;text-align:center;" href="${aLink}" target="_blank">Subscribe Annual</a>
         <p class="renew-note">Renews automatically at $399/year until you cancel. Cancel anytime under Billing above.</p>
       </div>
@@ -9152,6 +9130,7 @@ async function loadAccountStatus(){
     try{
       const r=await fetchWithTimeout(SERVER+"/validate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({key,device_id:deviceId()})},60000);
       const d=await r.json();
+      if(d.valid)store.set("license_plan",String(d.plan||"").toLowerCase());
       if(d.valid){html=`<div class="plan-name">Active subscription</div><div class="plan-price" style="font-size:var(--fs-2xl);">${esc(d.plan||"Pro")}</div><p style="color:var(--text2);font-size:var(--fs-base);margin-top:0.4rem;">Expires ${esc(d.expires||"")}</p>`;featured=true;activePaid=true;}
     }catch{}
   }
@@ -9162,14 +9141,22 @@ async function loadAccountStatus(){
   if(!html){
     try{
       const token=await getSupabaseToken();
-      const r=await fetchWithTimeout(SERVER+"/trial",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({device_id:deviceId(),supabase_token:token})},60000);
+      const r=await fetchWithTimeout(SERVER+"/trial",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({device_id:deviceId(),supabase_token:token,...trialSourceFields()})},60000);
       const d=await r.json();
       if(d.active){
         trialExpiresAt=d.expires_at||null;
         const countdown=timeLeftLabel(trialExpiresAt)||`${d.days_left||""} days left`;
-        html=`<div class="plan-name">Free Trial Active</div><div class="plan-price"><span id="trial-countdown">${esc(countdown)}</span></div><p style="color:var(--text2);font-size:var(--fs-base);">Full access. Subscribe to keep going after trial.</p>`;featured=true;
+        const recap=trialRecap();
+        html=`<div class="plan-name">Free Trial Active</div><div class="plan-price"><span id="trial-countdown">${esc(countdown)}</span></div><p style="color:var(--text2);font-size:var(--fs-base);">Full access. Subscribe to keep going after trial.</p>
+          ${recap.length?`<div class="trial-recap"><b>Your trial so far</b>${recap.map(x=>`<span>${esc(x)}</span>`).join("")}</div>`:""}`;featured=true;
+        planStatus={state:"trial",expires_at:d.expires_at||"",at:Date.now()};store.set(PLAN_KEY,planStatus);
       }
-      else html=`<div class="plan-name" style="color:var(--red);">Trial expired</div><p style="color:var(--text2);font-size:var(--fs-base);margin-top:0.5rem;">Subscribe below to keep scanning.</p>`;
+      else{
+        const recap=trialRecap();
+        html=`<div class="plan-name" style="color:var(--red);">Trial expired</div><p style="color:var(--text2);font-size:var(--fs-base);margin-top:0.5rem;">Subscribe below to keep scanning and reading bid documents. Your saved bids and prices stay here.</p>
+          ${recap.length?`<div class="trial-recap"><b>What your trial found</b>${recap.map(x=>`<span>${esc(x)}</span>`).join("")}</div>`:""}`;
+        if(d&&d.reason==="trial_expired"){planStatus={state:"expired",at:Date.now()};store.set(PLAN_KEY,planStatus);}
+      }
     }catch{
       html=`<div class="plan-name" style="color:var(--text2);">Couldn't reach the server</div><p style="color:var(--text3);font-size:var(--fs-base);margin-top:0.5rem;">Your plan status will show once the connection's back. Try again in a bit.</p>`;
     }

@@ -159,7 +159,7 @@ def _admin_ok(supplied):
     """Constant-time admin token check. Compare with hmac, never ==, so the
     response time can't be used to guess the token a character at a time."""
     return _admin_configured() and hmac.compare_digest(supplied or "", ADMIN_TOKEN)
-TRIAL_DAYS = 7
+TRIAL_DAYS = 14
 
 # ── Persistence ──────────────────────────────────────────────────────────
 # License data (trials/keys/customers) is stored in Upstash Redis via its REST
