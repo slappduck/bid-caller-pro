@@ -6956,7 +6956,7 @@ smithfieldri.gov,Smithfield,RI,City,Town of Smithfeld,not_found,,,2026-08-11
 bigstonecitysd.gov,Big Stone City,SD,City,City of Big Stone City,not_found,,,2026-08-11
 gainesborotn.gov,Cookeville,TN,City,Upper Cumberland Development District,not_found,,,2026-08-11
 cityofaikensc.gov,Aiken,SC,City,City of Aiken,not_found,,,2026-08-11
-cityofsalemsd.gov,Salem,SD,City,City of Salem,not_found,,,2026-08-11
+cityofsalemsd.gov,Salem,SD,City,City of Salem,found,https://www.salemsd.com/index.asp?SEC={49CD34DA-EE1B-47B4-9A37-7EA8E06FC298},custom,2026-11-03
 westwarwickri.gov,West Warwick,RI,City,Town of West Warwick,found,https://westwarwick.govoffice.com/index.asp?Type=B_BASIC&SEC=%7bD01F4AB4-E2D9-4062-B488-8877AE989A10,custom,2026-11-03
 grotonsd.gov,Groton,SD,City,City of Groton,not_found,,,2026-08-11
 westcolumbiasc.gov,West Columbia,SC,City,"City of West Columbia, SC",found,https://westcolumbiasc.gov/procurement-bid-opportunities/,agency,2026-08-11
@@ -6986,7 +6986,7 @@ ninetysixsc.gov,Ninety SIX,SC,City,Town of Ninety Six,not_found,,,2026-08-11
 ststephensc.gov,St. Stephen,SC,City,"Town of St. Stephen, South Carolina",not_found,,,2026-08-11
 lakelandtn.gov,Lakeland,TN,City,City of Lakeland,found,https://lakelandtn.gov/Bids.aspx,civicplus,2026-08-11
 missionsd.gov,Mission,SD,City,City of Mission,not_found,,,2026-08-11
-hotspringssd.gov,Hot Springs,SD,City,City of Hot Springs,not_found,,,2026-08-11
+hotspringssd.gov,Hot Springs,SD,City,City of Hot Springs,found,https://hs-sd.org/government/notices.php,custom,2026-11-03
 auburntown.gov,Auburntown,TN,City,City of Auburntown,not_found,,,2026-08-11
 georgetownsc.gov,Georgetown,SC,City,City of Georgetown,found,https://georgetownsc.gov/governmental_services/departments/finance/bids__rfps.php,agency,2026-08-11
 cityofbambergsc.gov,Bamberg,SC,City,City of Bamberg,not_found,,,2026-08-11
@@ -16324,7 +16324,7 @@ leolasd.com,Leola,SD,City,Leola,not_found,,,2026-09-01
 deadwood.com,Deadwood,SD,City,Deadwood,not_found,,,2026-09-01
 clarksd.com,Clark,SD,City,Clark,not_found,,,2026-09-01
 cityofgarretson.com,Garretson,SD,City,Garretson,not_found,,,2026-09-01
-cityofmadisonsd.com,Madison,SD,City,Madison,not_found,,,2026-09-01
+cityofmadisonsd.com,Madison,SD,City,Madison,found,https://cityofmadisonsd.com/Bids.aspx,civicplus,2026-11-03
 cityofmontrosesd.com,Montrose,SD,City,Montrose,not_found,,,2026-09-01
 murdosd.com,Murdo,SD,City,Murdo,not_found,,,2026-09-01
 bowdlesd.govoffice2.com,Bowdle,SD,City,Bowdle,not_found,,,2026-09-01
@@ -16347,7 +16347,7 @@ faulktoncity.org,Faulkton,SD,City,Faulkton,not_found,,,2026-09-01
 cityofmobridge.com,Mobridge,SD,City,Mobridge,not_found,,,2026-09-01
 springfieldsd.com,Springfield,SD,City,Springfield,not_found,,,2026-09-01
 riveroflifesunbury.com,Sunbury,PA,City,Sunbury,not_found,,,2026-09-01
-cityofspearfish.com,Spearfish,SD,City,Spearfish,not_found,,,2026-09-01
+cityofspearfish.com,Spearfish,SD,City,Spearfish,found,https://cityofspearfish.com/Bids.aspx,civicplus,2026-11-03
 redfield-sd.com,Redfield,SD,City,Redfield,not_found,,,2026-09-01
 piedmontsd.com,Piedmont,SD,City,Piedmont,not_found,,,2026-09-01
 elkton.govoffice.com,Elkton,SD,City,Elkton,not_found,,,2026-09-01
@@ -16390,10 +16390,10 @@ cookeville-tn.org,Cookeville,TN,City,Cookeville,not_found,,,2026-09-01
 cityofclifton.com,Clifton,TN,City,Clifton,not_found,,,2026-09-01
 teasd.com,Tea,SD,City,Tea,not_found,,,2026-09-01
 eastridgetn.org,East Ridge,TN,City,East Ridge,not_found,,,2026-09-01
-winnersd.org,Winner,SD,City,Winner,not_found,,,2026-09-01
+winnersd.org,Winner,SD,City,Winner,found,https://winnersd.org/finance/purchasing,custom,2026-11-03
 cityofcollinwood.org,Collinwood,TN,City,Collinwood,not_found,,,2026-09-01
 eaglevilletn.com,Eagleville,TN,City,Eagleville,not_found,,,2026-09-01
-salemsd.com,Salem,SD,City,Salem,not_found,,,2026-09-01
+salemsd.com,Salem,SD,City,Salem,found,https://www.salemsd.com/index.asp?SEC={49CD34DA-EE1B-47B4-9A37-7EA8E06FC298},custom,2026-11-03
 elktontn.com,Elkton,TN,City,Elkton,not_found,,,2026-09-01
 townofalamo.net,Alamo,TN,City,Alamo,not_found,,,2026-09-01
 cityofgoodlettsville.org,Goodlettsville,TN,City,Goodlettsville,not_found,,,2026-09-01
@@ -21012,7 +21012,7 @@ hamlinco.us,Hamlin County,SD,City,Hamlin County,not_found,,,2026-09-01
 hutchinsoncountysd.org,Hutchinson County,SD,City,Hutchinson County,not_found,,,2026-09-01
 lymancounty.org,Lyman County,SD,City,Lyman County,not_found,,,2026-09-01
 emmonsnd.com,Emmons County,ND,City,Emmons County,not_found,,,2026-09-01
-lincolncountysd.org,Lincoln County,SD,City,Lincoln County,not_found,,,2026-09-01
+lincolncountysd.org,Lincoln County,SD,City,Lincoln County,found,https://lincolncountysd.org/Bids.aspx,civicplus,2026-11-03
 spinkcounty-sd.org,Spink County,SD,City,Spink County,not_found,,,2026-09-01
 gfcounty.nd.gov,Grand Forks County,ND,City,Grand Forks County,not_found,,,2026-09-01
 co.morgan.co.us,Morgan County,CO,City,Morgan County,not_found,,,2026-09-01
@@ -21024,7 +21024,7 @@ mchenrycountynd.com,McHenry County,ND,City,McHenry County,not_found,,,2026-09-01
 sandwichmass.org,Sandwich,MA,City,Sandwich,found,https://sandwichmass.org/Bids.aspx,civicplus,2026-09-01
 marshall.sdcounties.org,Marshall County,SD,City,Marshall County,not_found,,,2026-09-01
 hardingcountysd.com,Harding County,SD,City,Harding County,not_found,,,2026-09-01
-perkinscounty.org,Perkins County,SD,City,Perkins County,not_found,,,2026-09-01
+perkinscounty.org,Perkins County,SD,City,Perkins County,found,https://perkinscounty.org/departments/purchasing,custom,2026-11-03
 county.mckenziecounty.net,McKenzie County,ND,City,McKenzie County,found,https://mckenziecountynd.gov/bid-and-rfp-rfq-notices/,agency,2026-09-01
 kingsbury.sdcounties.org,Kingsbury County,SD,City,Kingsbury County,not_found,,,2026-09-01
 lotwcounty.gov,Lake of the Woods County,MN,City,Lake of the Woods County,not_found,,,2026-09-01
