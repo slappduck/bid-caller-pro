@@ -2981,6 +2981,60 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── A finished job tells the app how fast the crew really is ──
+  console.log("\nA won job's crew days tune the production rates");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const host = new URL(route.request().url()).hostname;
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") {
+        return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      }
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem("last_user_email", JSON.stringify("tester@example.com"));
+      localStorage.setItem("last_feed", JSON.stringify({ "Aurora, MO": [
+        { title: "Elm St Walks", scope: "sidewalk", deadline: "2020-01-01", status: "open", url: "https://e.gov/pace" }] }));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => showApp());
+    await page.waitForTimeout(800);
+    const id = await page.evaluate(() => {
+      const c = "Aurora, MO", b = bidData[c][0], i = bidId(c, b);
+      pipeline[i] = "won";
+      const p = prepFor(i);
+      p.lines = [{ name: "Concrete sidewalk, 4 in.", unit: "sq yd", qty: 100, price: 70 },
+                 { name: "Curb and gutter", unit: "ft", qty: 300, price: 40 },
+                 { name: "ADA curb ramp", unit: "each", qty: 2, price: 1500 }];
+      p.linesFrom = "you";
+      openPrep(c, i, "job");
+      return i;
+    });
+    await page.waitForTimeout(400);
+    check("the Job tab asks how many crew days it took", /Crew days on the job/.test(await page.textContent("#prep-body")));
+    await page.fill("#jb-days", "2.5");
+    await page.dispatchEvent("#jb-days", "change");
+    await page.waitForTimeout(300);
+    const t = await page.textContent("#prep-body");
+    check("it compares with the days the rates predict and says the crew is faster",
+          /comes to 3\.1 crew days; it took 2\.5/.test(t) && /about 25% faster/.test(t), t.slice(0, 600));
+    await page.click("#jb-pace-use");
+    await page.waitForTimeout(300);
+    const c = await page.evaluate(() => myCosts());
+    check("one tap scales the production rates to the crew's real pace",
+          c.sf_day === 1000 && c.lf_day === 375 && c.ea_day === 2.5, JSON.stringify(c));
+    check("...and it's remembered on the job", await page.evaluate((i) => jobs[i].paceApplied > 0, id)
+          && !(await page.$("#jb-pace-use")));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   // ── A statewide bid is placed by its own name ──
   console.log("\nA bid from a statewide search is placed by the site its name gives");
   {

@@ -5879,6 +5879,36 @@ function finishDate(ntp,completion){
   else while(n>0){out.setDate(out.getDate()+1);if(out.getDay()%6)n--;}
   return out;
 }
+// ── How fast the crew really was ──
+// One question when a won job is done: how many crew days it took. The
+// days the contractor's own production rates predicted for its lines,
+// against that, says whether those rates are right, and one tap scales them
+// so the next bid is costed at the crew's real pace.
+const PACE_KEYS=["sf_day","lf_day","ea_day"];
+function jobPace(p,j){
+  const actual=Number(j&&j.days)||0;
+  if(!(actual>0))return null;
+  const predicted=(p.lines||[]).reduce((t,l)=>{const lc=lineCost(l,p);return t+(lc?lc.days:0);},0);
+  if(!(predicted>0))return null;
+  return{actual,predicted,ratio:predicted/actual};
+}
+function jobPaceHTML(p,j){
+  const pace=jobPace(p,j);
+  let verdict="";
+  if(pace){
+    const pct=Math.round(Math.abs(pace.ratio-1)*100);
+    const said=`At your production rates this job comes to ${pace.predicted.toFixed(1)} crew days; it took ${pace.actual}.`;
+    if(pace.ratio<0.33||pace.ratio>3)verdict=`<div class="rate-note">${said} That's far off, so check the days (or the job had work the lines don't show) before changing anything.</div>`;
+    else if(pct<8)verdict=`<div class="rate-note">${said} Your rates are right on.</div>`;
+    else verdict=`<div class="rate-note">${said} Your crew is about <b>${pct}% ${pace.ratio>1?"faster":"slower"}</b> than your rates say${j.paceApplied?". Rates updated.":"."}</div>
+      ${j.paceApplied?"":`<button class="btn-ghost" id="jb-pace-use">Update my production rates to match</button>`}`;
+  }
+  return`<div class="job-card"><div class="workspace-title">When the work is done</div>
+    <div class="rate-note" style="margin-top:0;">How many working days did your crew spend on it? It's checked against your production rates, so the next bid is costed at your crew's real pace.</div>
+    <div class="job-row"><span>Crew days on the job</span><input type="number" class="input" id="jb-days" min="0.5" step="0.5" inputmode="decimal" value="${esc(String(j.days||""))}"></div>
+    ${verdict}
+  </div>`;
+}
 function renderJob(body,city,id,b){
   const p=prepFor(id),j=jobFor(id),info=p.docInfo||{},i=bidInfo();
   const total=contractTotal(p);
@@ -5907,8 +5937,23 @@ function renderJob(body,city,id,b){
       ${info.completion?`<div class="rate-note">Time allowed: ${esc(info.completion)}${fin?`. <b>Finish by ${esc(fin.toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"}))}.</b>`:""}</div>`:""}
       ${info.prevailing_wage?`<div class="rate-note">Wages: ${esc(info.prevailing_wage)}</div>`:""}
       ${info.testing?`<div class="rate-note">Testing: ${esc(info.testing)}</div>`:""}
-    </div>`;
+    </div>
+    ${jobPaceHTML(p,j)}`;
   const reopen=()=>renderJob(body,city,id,b);
+  const jd=document.getElementById("jb-days");
+  if(jd)jd.onchange=()=>{const v=Number(jd.value);j.days=v>0?v:"";saveJobs();reopen();};
+  const ju=document.getElementById("jb-pace-use");
+  if(ju)ju.onclick=()=>{
+    const pace=jobPace(p,j);if(!pace)return;
+    const info={...bidInfo()},c=myCosts();
+    info.costs={...(info.costs||{})};
+    PACE_KEYS.forEach(k=>{info.costs[k]=Math.round(c[k]*pace.ratio*(k==="ea_day"?10:1))/(k==="ea_day"?10:1);});
+    companyProfile.bid_info=info;store.set("company_profile",companyProfile);
+    if(currentUser)pushCompanyProfile();
+    j.paceApplied=Date.now();saveJobs();
+    toast("Your production rates are updated. Every bid's costs use them now.");
+    reopen();
+  };
   body.querySelectorAll("[data-aw]").forEach(x=>x.onchange=()=>{(j.award.checks=j.award.checks||{})[x.dataset.aw]=x.checked;saveJobs();reopen();});
   document.getElementById("jb-ntp").onchange=(e)=>{j.award.ntp=e.target.value;saveJobs();reopen();};
 }
