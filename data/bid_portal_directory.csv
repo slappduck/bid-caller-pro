@@ -2687,7 +2687,7 @@ havredegracemd.gov,Havre de Grace,MD,City,The City of Havre de Grace,found,https
 lynnma.gov,Lynn,MA,City,City of Lynn Ma.,found,https://lynnma.gov/city_government/departments/purchasing,agency,2026-08-11
 norfolkmass.gov,NORFOLK,MA,City,Town of Norfolk,found,https://norfolkmass.gov/business/bid_opportunities.php,agency,2026-08-11
 brunswickmd.gov,Brunswick,MD,City,City of Brunswick,not_found,,,2026-08-11
-frederickmd.gov,Frederick,MD,City,City of Frederick,not_found,,,2026-08-11
+frederickmd.gov,Frederick,MD,City,City of Frederick,found,https://frederickmd.gov/procurement,agency,2026-11-03
 clearspringmd.gov,Clear Spring,MD,City,Town of  Clear,not_found,,,2026-08-11
 edmonstonmd.gov,Edmonston,MD,City,Town of Edmonston,not_found,,,2026-08-11
 burkittsville-md.gov,Burkittsville,MD,City,Town of Burkittsville,found,https://burkittsville-md.gov/news-and-notices/snow-removal-invitation-for-bids,agency,2026-08-11
@@ -2727,7 +2727,7 @@ brownfieldmaine.gov,Brownfield,ME,City,"Town of Brownfield, Maine",not_found,,,2
 clinton-me.gov,Clinton,ME,City,Town of Clinton,not_found,,,2026-08-11
 riverdaleparkmd.gov,Riverdale,MD,City,Town of Riverdale Park,found,https://www.riverdaleparkmd.gov/how_do_i/find/procurement_opportunities.php,agency,2026-08-11
 chesapeakebeachmd.gov,Chesapeake Beach,MD,City,Town of Chesapeake Beach,not_found,,,2026-08-11
-oceancitymd.gov,Ocean City,MD,City,Town of Ocean City,not_found,,,2026-08-11
+oceancitymd.gov,Ocean City,MD,City,Town of Ocean City,found,https://oceancitymd.gov/procurement,agency,2026-11-03
 westwoodma.gov,Westwood,MA,City,Town of Westwood Massachusetts,not_found,,,2026-08-11
 belgrademaine.gov,Belgrade,ME,City,Town of Belgrade,not_found,,,2026-08-11
 alfredme.gov,Alfred,ME,City,Town of Alfred,not_found,,,2026-08-11
@@ -2739,7 +2739,7 @@ binghammaine.gov,Bingham,ME,City,Town of Bingham,not_found,,,2026-08-11
 camdenmaine.gov,Camden,ME,City,Town of Camden,found,http://www.camdenmaine.gov/select_board/bids.php,agency,2026-11-03
 carrabassettvalley.gov,Carrabassett Valley,ME,City,Town of Carrabassett Valley,found,https://carrabassettvalley.gov/rfp,agency,2026-08-11
 washingtongrovemd.gov,Washington Grove,MD,City,Washington Grove,not_found,,,2026-08-11
-uppermarlboromd.gov,Upper Marlboro,MD,City,Town of Upper Marlboro,not_found,,,2026-08-11
+uppermarlboromd.gov,Upper Marlboro,MD,City,Town of Upper Marlboro,found,https://uppermarlboromd.gov/how_do_i_/a_town_rfp.php,agency,2026-11-03
 caratunkmaine.gov,Caratunk,ME,City,"Town of Caratunk, Maine",not_found,,,2026-08-11
 ogunquit.gov,Ogunquit,ME,City,Town of Ogunquit,found,https://ogunquit.gov/Bids.aspx,civicplus,2026-08-11
 seekonkfire-ma.gov,Seekonk,MA,City,Seekonk Fire Dept,not_found,,,2026-08-11
@@ -2798,7 +2798,7 @@ monmouthmaine.gov,Monmouth,ME,City,Town of Monmouth,found,http://monmouthmaine.g
 drummondmd.gov,Chevy Chase,MD,City,Village of Drummond,not_found,,,2026-08-11
 lyman-me.gov,Lyman,ME,City,Town of Lyman,not_found,,,2026-08-11
 bradfordme.gov,Bradford,ME,City,Town of Bradford Maine 04401,not_found,,,2026-08-11
-stmichaelsmd.gov,St. Michaels,MD,City,"Town of St. Michaels, Maryland",not_found,,,2026-08-11
+stmichaelsmd.gov,St. Michaels,MD,City,"Town of St. Michaels, Maryland",found,https://stmichaelsmd.gov/public-notices,custom,2026-11-03
 townofprincessannemd.gov,Princess Anne,MD,City,Town of Princess Anne,not_found,,,2026-08-11
 westbathmaine.gov,West Bath,ME,City,Town of West Bath,not_found,,,2026-08-11
 leonardtownmd.gov,Leonardtown,MD,City,Commissioners of Leonardtown,found,https://leonardtownmd.gov/bidsandrfps,agency,2026-08-11
@@ -9936,7 +9936,7 @@ manisteecountymi.gov,Manistee,MI,County,Manistee County Government,found,https:/
 winnsheriff.gov,Winnfield,LA,County,Winn Parish Sheriff's Office,not_found,,,2026-08-11
 dcsoky.gov,Owensboro,KY,County,Daviess County Sheriffs Office,not_found,,,2026-08-11
 garrardcountyky.gov,Lancaster,KY,County,Garrard County Judge Executive,found,https://garrardcountyky.gov/bids-and-rfps,agency,2026-08-26
-howardcountymd.gov,Ellicott City,MD,County,Howard County Maryland Government,not_found,,,2026-08-11
+howardcountymd.gov,Ellicott City,MD,County,Howard County Maryland Government,found,https://howardcountymd.gov/purchasing,agency,2026-11-03
 baltimorecountymd.gov,Towson,MD,County,"Baltimore County, Maryland",not_found,,,2026-08-11
 princegeorgescountymd.gov,Largo,MD,County,Prince George's County/Office of Information Technology and Communications,not_found,,,2026-08-11
 kentcountymi.gov,Grand Rapids,MI,County,Kent County,found,https://kentcountymi.gov/Bids.aspx,civicplus,2026-08-11
@@ -14935,7 +14935,7 @@ worthington-ky.com,Worthington,KY,City,Worthington,not_found,,,2026-09-01
 devenscommunity.com,Devens,MA,City,Devens,not_found,,,2026-09-01
 cityofnewiberia.com,New Iberia,LA,City,New Iberia,not_found,,,2026-09-01
 cityofwestlake.com,Westlake,LA,City,Westlake,not_found,,,2026-09-01
-havredegracemd.com,Havre de Grace,MD,City,Havre de Grace,not_found,,,2026-09-01
+havredegracemd.com,Havre de Grace,MD,City,Havre de Grace,found,https://havredegracemd.com/bids,custom,2026-11-03
 westbrookmaine.com,Westbrook,ME,City,Westbrook,found,https://westbrookmaine.com/bids,civicplus,2026-09-01
 coushatta.net,Coushatta,LA,City,Coushatta,not_found,,,2026-09-01
 oaklandmd.com,Oakland,MD,City,Oakland,not_found,,,2026-09-01
@@ -21123,7 +21123,7 @@ wallingfordvt.com,Wallingford,VT,City,Wallingford,not_found,,,2026-09-01
 millsboro.org,Millsboro,DE,City,Millsboro,found,https://millsboro.org/business/bid_opportunities.php,custom,2026-09-01
 perryvillemd.org,Perryville,MD,City,Perryville,not_found,,,2026-09-01
 townofbetterton.com,Betterton,MD,City,Betterton,not_found,,,2026-09-01
-townofsykesville.org,Sykesville,MD,City,Sykesville,not_found,,,2026-09-01
+townofsykesville.org,Sykesville,MD,City,Sykesville,found,https://townofsykesville.org/Bids.aspx,civicplus,2026-11-03
 berwickmaine.org,Berwick,ME,City,Berwick,found,https://berwickmaine.org/government/rfprequests.php,custom,2026-09-01
 townofmanchester.org,Manchester,CT,City,Manchester,not_found,,,2026-09-01
 trappemd.net,Trappe,MD,City,Trappe,not_found,,,2026-09-01
@@ -21154,7 +21154,7 @@ ridgelymd.org,Ridgely,MD,City,Ridgely,found,https://ridgelymd.org/procurement,cu
 ci.guilford.ct.us,Guilford,CT,City,Guilford,found,https://ci.guilford.ct.us/town_departments/purchasing_department.php,agency,2026-09-01
 lhills.sailorsite.net,Landover Hills,MD,City,Landover Hills,not_found,,,2026-09-01
 twnlyme.org,Lyme,CT,City,Lyme,not_found,,,2026-09-01
-portdeposit.org,Port Deposit,MD,City,Port Deposit,not_found,,,2026-09-01
+portdeposit.org,Port Deposit,MD,City,Port Deposit,found,https://portdeposit.org/rfp,custom,2026-11-03
 town.north-haven.ct.us,North Haven,CT,City,North Haven,found,https://town.north-haven.ct.us/business/bids_and_proposals.php,agency,2026-11-03
 oysterbaytown.com,Oyster Bay,NY,City,Oyster Bay,found,https://oysterbaytown.com/notice-to-bidders,custom,2026-09-01
 townofmagnoliasprings.org,Magnolia Springs,AL,City,Magnolia Springs,not_found,,,2026-09-01
@@ -21169,7 +21169,7 @@ keedysvillemd.com,Keedysville,MD,City,Keedysville,found,https://keedysvillemd.co
 hebronmd.com,Hebron,MD,City,Hebron,found,https://hebronmd.com/about/vendors.php,custom,2026-09-01
 town.ledyard.ct.us,Ledyard,CT,City,Ledyard,not_found,,,2026-09-01
 townofbluehillmaine.org,Blue Hill,ME,City,Blue Hill,not_found,,,2026-09-01
-barnesvillemd.org,Barnesville,MD,City,Barnesville,not_found,,,2026-09-01
+barnesvillemd.org,Barnesville,MD,City,Barnesville,found,https://www.barnesvillemd.org/rfps,custom,2026-11-03
 arundelmaine.org,Arundel,ME,City,Arundel,not_found,,,2026-09-01
 rockyridgetown.com,Rocky Ridge,UT,City,Rocky Ridge,not_found,,,2026-09-01
 lapaz.gov,La Paz County,AZ,City,La Paz County,found,https://lapaz.gov/Bids.aspx,civicplus,2026-09-01
@@ -21187,7 +21187,7 @@ richburgsc.net,Richburg,SC,City,Richburg,not_found,,,2026-09-01
 townofquantico.org,Quantico,VA,City,Quantico,not_found,,,2026-09-01
 leedsmaine.org,Leeds,ME,City,Leeds,not_found,,,2026-09-01
 blades.delaware.gov,Blades,DE,City,Blades,found,https://blades.delaware.gov/invitation-to-bid,agency,2026-09-01
-risingsunmd.org,Rising Sun,MD,City,Rising Sun,not_found,,,2026-09-01
+risingsunmd.org,Rising Sun,MD,City,Rising Sun,found,https://risingsunmd.org/bidsandrfps,custom,2026-11-03
 deepriverct.us,Deep River,CT,City,Deep River,found,https://deepriverct.us/Bids.aspx,civicplus,2026-09-01
 doverma.org,Dover,MA,City,Dover,not_found,,,2026-09-01
 washingtongrovemd.org,Washington Grove,MD,City,Washington Grove,not_found,,,2026-09-01
@@ -21314,7 +21314,7 @@ townofbeekman.com,Beekman,NY,City,Beekman,found,https://townofbeekman.gov/active
 boonsboromd.govoffice2.com,Boonsboro,MD,City,Boonsboro,found,https://www.town.boonsboro.md.us/greenpurchasingpolicy,agency,2026-09-01
 sudlersville.org,Sudlersville,MD,City,Sudlersville,not_found,,,2026-09-01
 gorhamnh.org,Gorham,NH,City,Gorham,not_found,,,2026-09-01
-middletown.md.us,Middletown,MD,City,Middletown,not_found,,,2026-09-01
+middletown.md.us,Middletown,MD,City,Middletown,found,https://www.middletown.md.us/index.asp?SEC=446471CD-07A8-423E-A77D-E8F65E0EFDEC&Type=B_BASIC,custom,2026-11-03
 philipsburgmt.com,Philipsburg,MT,City,Philipsburg,not_found,,,2026-09-01
 townofjayfl.com,Jay,FL,City,Jay,not_found,,,2026-09-01
 browningmontana.com,Browning,MT,City,Browning,not_found,,,2026-09-01
@@ -21744,7 +21744,7 @@ estillspringstn.com,Estill Springs,TN,City,Estill Springs,not_found,,,2026-09-01
 townofsaluda.com,Saluda,SC,City,Saluda,not_found,,,2026-09-01
 inolaok.com,Inola,OK,City,Inola,found,https://inolaok.com/Bids.aspx,civicplus,2026-09-01
 townofdubach.com,Dubach,LA,City,Dubach,not_found,,,2026-09-01
-townofindianhead.org,Indian Head,MD,City,Indian Head,not_found,,,2026-09-01
+townofindianhead.org,Indian Head,MD,City,Indian Head,found,https://www.townofindianhead.org/index.asp?SEC=79C15B9B-6A37-4ACE-8A60-CECB756F9B6E&Type=B_BASIC,custom,2026-11-03
 townofnorthbranfordct.com,North Branford,CT,City,North Branford,not_found,,,2026-09-01
 townofchamplain.com,Champlain,NY,City,Champlain,not_found,,,2026-09-01
 ci.highland-beach.fl.us,Highland Beach,FL,City,Highland Beach,not_found,,,2026-09-01
