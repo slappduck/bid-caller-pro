@@ -244,6 +244,31 @@ def bids_near():
     })
 
 
+# ── Open bids in a state, for the public /concrete-bids/<state> pages ──
+# The site's Worker (worker/index.js) fills each state page's list from here,
+# cached at the edge for half an hour, so this is asked a few thousand times
+# a day at most and needs no rate limit of its own. Same rows and same rules
+# as /bids-near: only what the agency published.
+BIDS_IN_STATE_SHOWN = 25
+_bids_in_state_cache = {"at": 0.0, "rows": None}
+
+
+@app.route("/bids-in-state", methods=["GET"])
+def bids_in_state():
+    st = str(request.args.get("state") or "").strip().upper()
+    if not re.fullmatch(r"[A-Z]{2}", st):
+        return jsonify({"ok": False, "reason": "bad_request"}), 400
+    now = time.time()
+    if _bids_in_state_cache["rows"] is None or now - _bids_in_state_cache["at"] > 600:
+        _bids_in_state_cache.update(at=now, rows=_prune_open_bids(_open_bid_rows(), datetime.date.today()))
+    rows = [r for r in _bids_in_state_cache["rows"].values()
+            if str(r.get("town") or "").upper().endswith(", " + st)]
+    rows.sort(key=lambda r: (r.get("due") or "9999", r.get("town") or "", r.get("title") or ""))
+    return jsonify({"ok": True, "state": st, "count": len(rows),
+                    "bids": [{"title": r["title"], "town": r["town"], "due": r.get("due") or ""}
+                             for r in rows[:BIDS_IN_STATE_SHOWN]]})
+
+
 @app.route("/health", methods=["GET"])
 def health_detail():
     """Which backends are actually wired up, and is local search still working.

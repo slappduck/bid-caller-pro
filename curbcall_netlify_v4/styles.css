@@ -1118,3 +1118,25 @@ body{font-family:var(--ui);background:radial-gradient(ellipse 120% 60% at 50% -1
 .mk-own .pt-mk{width:3.6rem;padding-left:0.45rem;padding-right:0.3rem;}
 .prep-totals div{font-size:var(--fs-sm);color:var(--text2);}
 .prep-totals b{font-size:var(--fs-base);}
+
+/* Get started: the first five minutes, on Home for new accounts */
+.start-card{border-color:var(--amber);}
+.start-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.5rem;}
+.start-head span{color:var(--text3);font-size:var(--fs-xs);}
+.start-step{display:flex;gap:0.7rem;padding:0.55rem 0;border-top:1px solid var(--border);}
+.start-step:first-of-type{border-top:0;}
+.start-step b{display:block;font-size:var(--fs-sm);}
+.start-step small{display:block;color:var(--text2);font-size:var(--fs-xs);margin-top:0.15rem;}
+.start-step small b{display:inline;font-size:inherit;color:var(--text);}
+.start-step .btn-primary{margin-top:0.5rem;}
+.start-n{flex:0 0 1.6rem;height:1.6rem;border-radius:var(--r-pill);border:1px solid var(--amber);color:var(--amber);display:flex;align-items:center;justify-content:center;font-size:var(--fs-xs);font-weight:700;}
+.start-step.done .start-n{background:var(--amber);color:#10131c;}
+.start-step.done b{color:var(--text2);}
+.start-hide{display:block;margin:0.4rem auto 0;font-size:var(--fs-xs);min-height:36px;}
+
+/* Text alerts */
+.sms-row{display:flex;gap:0.5rem;margin:0.5rem 0;}
+.sms-row .input{flex:1;min-width:0;}
+.sms-row .btn-primary{width:auto;margin:0;padding:0 1.1rem;}
+.sms-consent{display:flex;gap:0.55rem;align-items:flex-start;margin:0.6rem 0;font-size:var(--fs-xs);color:var(--text2);line-height:1.45;}
+.sms-consent input{margin-top:0.2rem;min-width:18px;min-height:18px;}

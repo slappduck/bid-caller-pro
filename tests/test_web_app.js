@@ -3150,6 +3150,217 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── Get started: a new account is led to one priced bid ──
+  console.log("\nA new account's first five minutes: find, price one, the sheet");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const host = new URL(route.request().url()).hostname;
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") {
+        return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      }
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      const soon = (d) => new Date(Date.now() + d * 864e5).toISOString().slice(0, 10);
+      localStorage.setItem("last_user_email", JSON.stringify("new@example.com"));
+      localStorage.setItem("onboarded", JSON.stringify(true));
+      localStorage.setItem("getting_started", JSON.stringify({ new: Date.now() }));
+      localStorage.setItem("last_feed", JSON.stringify({ "Springfield, MO": [
+        { title: "Park Shelter Roof", scope: "roofing", deadline: soon(2), status: "open", url: "https://e.gov/s1" },
+        { title: "Elm St Sidewalk", scope: "1,450 SY 4 in. sidewalk, 12 ADA curb ramps", deadline: soon(12), status: "open", url: "https://e.gov/s2" },
+        { title: "Due Tomorrow Curb", scope: "300 LF curb", deadline: soon(0), status: "open", url: "https://e.gov/s3" }] }));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => { showApp(); goTo("home"); });
+    await page.waitForTimeout(800);
+    let card = await page.textContent("#start-card");
+    check("a new account sees Get started with the bids found",
+          /Get started/.test(card) && /3 open bids found/.test(card), card);
+    check("it picks concrete work with quantities, not the roof or tomorrow's job",
+          /Start with Elm St Sidewalk/.test(card), card);
+    await page.click('[data-start="price"]');
+    await page.waitForTimeout(800);
+    check("one tap opens that bid on Pricing, every line priced",
+          await page.evaluate(() => { const p = Object.values(bidPrep)[0]; return p && p.step === "pricing" && p.lines.every((l) => Number(l.price) > 0); }));
+    await page.evaluate(() => { closeModal(); goTo("home"); });
+    await page.waitForTimeout(300);
+    card = await page.textContent("#start-card");
+    check("step 2 shows done and the sheet is one tap away",
+          /Price one bid\s*Done/.test(card) && !!(await page.$('[data-start="sheet"]')), card);
+    await page.click('[data-start="sheet"]');
+    await page.waitForTimeout(600);
+    await page.evaluate(() => { closeModal(); goTo("home"); });
+    await page.waitForTimeout(300);
+    check("once the sheet has been opened, the card is gone", !(await page.$("#start-card")));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
+  // ── Existing accounts never see Get started ──
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    await page.route("**/*", (route) => {
+      const host = new URL(route.request().url()).hostname;
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem("onboarded", JSON.stringify(true));
+      localStorage.setItem("last_feed", JSON.stringify({ "Springfield, MO": [{ title: "Elm St Sidewalk", scope: "sidewalk", deadline: "2099-01-01", status: "open", url: "https://e.gov/x" }] }));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => { showApp(); goTo("home"); });
+    await page.waitForTimeout(500);
+    check("an account from before Get started doesn't see the card", !(await page.$("#start-card")));
+    await ctx.close();
+  }
+
+  // ── Text alerts: opt in with a code, in Account ──
+  console.log("\nText alerts: hidden until set up, then opt in with a code");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    const calls = [];
+    let configured = false, status = "none";
+    await page.route("**/*", (route) => {
+      const u = route.request().url(), host = new URL(u).hostname;
+      const m = /\/sms\/(status|start|confirm|stop)$/.exec(u);
+      if (m) {
+        calls.push([m[1], JSON.parse(route.request().postData() || "{}")]);
+        if (m[1] === "confirm") status = "on";
+        if (m[1] === "stop") status = "off";
+        return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(
+          m[1] === "status" ? { ok: true, configured, status, phone: "(•••) •••-0123", consent_text: "Text me new bid alerts. Reply STOP to stop." }
+            : { ok: true, phone: "(•••) •••-0123" }) });
+      }
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      return route.abort();
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => {
+      const q = { maybeSingle: async () => ({ data: null }), order: () => ({ limit: async () => ({ data: [] }) }) };
+      q.eq = () => q; q.select = () => q;
+      sb.from = () => ({ select: () => q, upsert: async () => ({}) });
+      currentUser = { id: "u1", email: "a@x.com" }; showApp(); goTo("account");
+    });
+    await page.waitForTimeout(600);
+    check("with no texting account set up, the card stays hidden",
+          await page.$eval("#sms-card", (el) => el.style.display === "none"));
+    configured = true;
+    await page.evaluate(() => loadSmsCard());
+    await page.waitForTimeout(400);
+    check("once set up, it asks for a cell number with the consent words",
+          /Reply STOP to stop/.test(await page.textContent("#sms-card")) && !!(await page.$("#sms-phone")));
+    await page.fill("#sms-phone", "417-555-0123");
+    await page.click("#sms-send");
+    await page.waitForTimeout(300);
+    check("nothing is sent until the consent box is ticked", !calls.some(([k]) => k === "start"));
+    await page.check("#sms-ok");
+    await page.click("#sms-send");
+    await page.waitForTimeout(500);
+    const start = calls.find(([k]) => k === "start");
+    check("ticked, the number and consent go to the server",
+          start && start[1].phone === "417-555-0123" && start[1].consent === true, JSON.stringify(start));
+    await page.fill("#sms-code", "123456");
+    await page.click("#sms-confirm");
+    await page.waitForTimeout(500);
+    check("the code confirms it and the card says texts are on",
+          /On for/.test(await page.textContent("#sms-card")) && calls.some(([k, b]) => k === "confirm" && b.code === "123456"));
+    await page.click("#sms-off");
+    await page.waitForTimeout(500);
+    check("turning off goes to the server", calls.some(([k]) => k === "stop"));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
+  // ── Español: the app in Spanish, bid text left as published ──
+  console.log("\nThe app in Spanish: menus and steps translated, the agency's words left alone");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const host = new URL(route.request().url()).hostname;
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem("onboarded", JSON.stringify(true));
+      localStorage.setItem("getting_started", JSON.stringify({ new: Date.now() }));
+      localStorage.setItem("last_feed", JSON.stringify({ "Springfield, MO": [
+        { title: "Home Avenue Sidewalk", scope: "1,450 SY 4 in. sidewalk", deadline: new Date(Date.now() + 9 * 864e5).toISOString().slice(0, 10), status: "open", url: "https://e.gov/es1" }] }));
+    });
+    await page.goto(`${BASE}/app.html?lang=es`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => { showApp(); goTo("home"); });
+    await page.waitForTimeout(700);
+    const nav = await page.textContent(".bottom-nav, nav");
+    check("?lang=es opens the app in Spanish", /Inicio/.test(nav) && /Cuenta/.test(nav) && await page.evaluate(() => document.documentElement.lang === "es"), nav);
+    const card = await page.textContent("#start-card");
+    check("the Get started card is in Spanish", /Para empezar/.test(card) && /Ponerle precio/.test(card), card);
+    check("the logo stays CurbCall", (await page.textContent(".brand-name")).trim() === "CurbCall");
+    check("a bid's own title is left as the agency wrote it", /Home Avenue Sidewalk/.test(await page.textContent("#home-main")));
+    check("it's remembered", await page.evaluate(() => store.get("lang") === "es"));
+    await page.evaluate(() => goTo("account"));
+    await page.waitForTimeout(400);
+    check("Account has the language choice", await page.$eval("#lang-pick", (el) => el.value === "es"));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
+  // ── A new account sees the thanks page once, then setup ──
+  console.log("\nA new sign-up lands on the thanks page once, then the setup questions");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const host = new URL(route.request().url()).hostname;
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      return route.abort();
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(500);
+    await Promise.all([
+      page.waitForURL(/\/welcome\.html$/, { timeout: 8000 }),
+      page.evaluate(() => { currentUser = { id: "new1", email: "new@example.com" }; routeAfterAuth(); }),
+    ]);
+    const thanks = await page.textContent("body");
+    check("a brand-new account goes to the thanks page", /Thanks for signing up/.test(thanks) && /14-day free trial has started/.test(thanks));
+    check("...with a Continue into the app", await page.$eval("#go", (a) => a.getAttribute("href") === "/app.html"));
+    await page.waitForURL(/\/app\.html$/, { timeout: 12000 });
+    // Let the app's own start-up (no session: the sign-in screen) finish first.
+    await page.waitForTimeout(2000);
+    // routeAfterAuth asks the account first; the test's stub never answers,
+    // so it falls back after its 4-second limit, as on a slow network.
+    await page.evaluate(() => { currentUser = { id: "new1", email: "new@example.com" }; return routeAfterAuth(); });
+    await page.waitForTimeout(300);
+    check("it continues on its own, and the second time goes straight to setup",
+          /\/app\.html$/.test(page.url()) && await page.$eval("#onboard-card", (el) => el.style.display !== "none"),
+          page.url() + " " + await page.evaluate(() => JSON.stringify([onboardingNeeded(), document.getElementById("onboard-card").style.display, localStorage.getItem("welcomed")])));
+    await page.goto(`${BASE}/welcome.html?lang=es`, { waitUntil: "load" });
+    check("in Spanish when the app is", /Gracias por registrarse/.test(await page.textContent("h1")));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   // ── A statewide bid is placed by its own name ──
   console.log("\nA bid from a statewide search is placed by the site its name gives");
   {

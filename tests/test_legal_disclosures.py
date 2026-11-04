@@ -58,7 +58,7 @@ class ProcessorsAreDisclosedTests(unittest.TestCase):
         "bigdatacloud": "BigDataCloud", "resend": "Resend",
         "overpass": "OpenStreetMap", "web.push.apple": "Apple",
         "fcm.googleapis": "Google", "push.services.mozilla": "Mozilla",
-        "notify.windows": "Microsoft",
+        "notify.windows": "Microsoft", "twilio": "Twilio",
     }
 
     def setUp(self):

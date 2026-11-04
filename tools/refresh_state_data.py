@@ -161,6 +161,9 @@ def main():
     # The public price pages are built from the same files, so they follow them.
     import build_cost_pages
     build_cost_pages.main()
+    # The state bid pages link to the price pages, so they follow too.
+    import build_bid_pages
+    build_bid_pages.main()
     # States with no rates of their own borrow their neighbors' results.
     import build_nearby_rates
     build_nearby_rates.main()

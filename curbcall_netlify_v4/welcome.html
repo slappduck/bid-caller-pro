@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Thanks for signing up — CurbCall Pro</title>
+<!-- Shown once to each new account, between creating it and the setup
+     questions (app.js routeAfterAuth). Not for search engines. -->
+<meta name="robots" content="noindex" />
+<meta name="theme-color" content="#0b0d14" />
+<link rel="icon" href="/favicon.ico" />
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{--bg:#0b0d14;--card:#1c2035;--line:#2a2f4a;--amber:#f59e0b;--text:#f1f5f9;--text2:#9aa4ba;}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);line-height:1.6;min-height:100vh;display:flex;flex-direction:column;}
+.hazard{height:6px;background:repeating-linear-gradient(135deg,var(--amber) 0 14px,#0b0d14 14px 28px);opacity:0.85;}
+main{flex:1;display:flex;align-items:center;justify-content:center;padding:2rem 1rem;}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:1.6rem 1.4rem;max-width:30rem;width:100%;}
+.logo{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:0.05em;}
+.logo b{color:var(--amber);font-weight:400;}
+.check{width:3rem;height:3rem;border-radius:999px;background:var(--amber);color:#10131c;display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:800;margin:1.2rem 0 0.8rem;}
+h1{font-size:1.6rem;line-height:1.2;margin-bottom:0.4rem;}
+.lead{color:var(--text2);}
+ol{list-style:none;margin:1.2rem 0;counter-reset:s;}
+ol li{counter-increment:s;display:flex;gap:0.7rem;padding:0.5rem 0;border-top:1px solid var(--line);}
+ol li:first-child{border-top:0;}
+ol li::before{content:counter(s);flex:0 0 1.6rem;height:1.6rem;border-radius:999px;border:1px solid var(--amber);color:var(--amber);display:flex;align-items:center;justify-content:center;font-size:0.8rem;font-weight:700;}
+.cta{display:block;text-align:center;background:var(--amber);color:#10131c;font-weight:800;text-decoration:none;border-radius:12px;padding:0.95rem;font-size:1.05rem;}
+.note{color:var(--text2);font-size:0.82rem;text-align:center;margin-top:0.7rem;}
+</style>
+</head>
+<body>
+<div class="hazard"></div>
+<main>
+  <div class="card">
+    <div class="logo">Curb<b>Call</b> Pro</div>
+    <div class="check" aria-hidden="true">✓</div>
+    <h1 data-es="¡Gracias por registrarse!">Thanks for signing up!</h1>
+    <p class="lead" data-es="Su prueba gratis de 14 días ya empezó. Sin tarjeta.">Your 14-day free trial has started. No card needed.</p>
+    <ol>
+      <li data-es="Díganos desde dónde trabaja.">Tell us where you work out of.</li>
+      <li data-es="Buscamos las licitaciones abiertas de aceras, bordillos y rampas ADA cerca de usted.">We find the open sidewalk, curb and ADA ramp bids near you.</li>
+      <li data-es="Póngale precio a una en un par de minutos: cada renglón ya empieza con su precio.">Price one in a couple of minutes: every line starts already priced.</li>
+    </ol>
+    <a class="cta" id="go" href="/app.html" data-es="Continuar →">Continue →</a>
+    <p class="note" id="auto" data-es="Seguimos solos en unos segundos.">Continuing on its own in a few seconds.</p>
+  </div>
+</main>
+<script>
+(function(){
+  // Spanish if the app is set to it (app.js keeps the choice under "lang").
+  var es=false;
+  try{es=new URLSearchParams(location.search).get("lang")==="es"||JSON.parse(localStorage.getItem("lang")||"null")==="es";}catch(e){}
+  if(es){
+    document.documentElement.lang="es";
+    document.title="Gracias por registrarse — CurbCall Pro";
+    Array.prototype.forEach.call(document.querySelectorAll("[data-es]"),function(el){el.textContent=el.getAttribute("data-es");});
+  }
+  setTimeout(function(){location.replace("/app.html");},8000);
+})();
+</script>
+</body>
+</html>
