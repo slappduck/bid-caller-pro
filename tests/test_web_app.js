@@ -3150,6 +3150,80 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── Get started: a new account is led to one priced bid ──
+  console.log("\nA new account's first five minutes: find, price one, the sheet");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const host = new URL(route.request().url()).hostname;
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") {
+        return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      }
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      const soon = (d) => new Date(Date.now() + d * 864e5).toISOString().slice(0, 10);
+      localStorage.setItem("last_user_email", JSON.stringify("new@example.com"));
+      localStorage.setItem("onboarded", JSON.stringify(true));
+      localStorage.setItem("getting_started", JSON.stringify({ new: Date.now() }));
+      localStorage.setItem("last_feed", JSON.stringify({ "Springfield, MO": [
+        { title: "Park Shelter Roof", scope: "roofing", deadline: soon(2), status: "open", url: "https://e.gov/s1" },
+        { title: "Elm St Sidewalk", scope: "1,450 SY 4 in. sidewalk, 12 ADA curb ramps", deadline: soon(12), status: "open", url: "https://e.gov/s2" },
+        { title: "Due Tomorrow Curb", scope: "300 LF curb", deadline: soon(0), status: "open", url: "https://e.gov/s3" }] }));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => { showApp(); goTo("home"); });
+    await page.waitForTimeout(800);
+    let card = await page.textContent("#start-card");
+    check("a new account sees Get started with the bids found",
+          /Get started/.test(card) && /3 open bids found/.test(card), card);
+    check("it picks concrete work with quantities, not the roof or tomorrow's job",
+          /Start with Elm St Sidewalk/.test(card), card);
+    await page.click('[data-start="price"]');
+    await page.waitForTimeout(800);
+    check("one tap opens that bid on Pricing, every line priced",
+          await page.evaluate(() => { const p = Object.values(bidPrep)[0]; return p && p.step === "pricing" && p.lines.every((l) => Number(l.price) > 0); }));
+    await page.evaluate(() => { closeModal(); goTo("home"); });
+    await page.waitForTimeout(300);
+    card = await page.textContent("#start-card");
+    check("step 2 shows done and the sheet is one tap away",
+          /Price one bid\s*Done/.test(card) && !!(await page.$('[data-start="sheet"]')), card);
+    await page.click('[data-start="sheet"]');
+    await page.waitForTimeout(600);
+    await page.evaluate(() => { closeModal(); goTo("home"); });
+    await page.waitForTimeout(300);
+    check("once the sheet has been opened, the card is gone", !(await page.$("#start-card")));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
+  // ── Existing accounts never see Get started ──
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    await page.route("**/*", (route) => {
+      const host = new URL(route.request().url()).hostname;
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem("onboarded", JSON.stringify(true));
+      localStorage.setItem("last_feed", JSON.stringify({ "Springfield, MO": [{ title: "Elm St Sidewalk", scope: "sidewalk", deadline: "2099-01-01", status: "open", url: "https://e.gov/x" }] }));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => { showApp(); goTo("home"); });
+    await page.waitForTimeout(500);
+    check("an account from before Get started doesn't see the card", !(await page.$("#start-card")));
+    await ctx.close();
+  }
+
   // ── A statewide bid is placed by its own name ──
   console.log("\nA bid from a statewide search is placed by the site its name gives");
   {

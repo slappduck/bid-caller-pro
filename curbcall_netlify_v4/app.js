@@ -2487,6 +2487,8 @@ function onbStep(n){
 
 function finishOnboarding(){
   store.set(ONBOARD_KEY,true);
+  // A new account gets the Get started card on Home (startCardHTML).
+  if(!store.get(START_KEY,null))store.set(START_KEY,{new:Date.now()});
   pushOnboarded();
   document.getElementById("onboard-card").style.display="none";
   document.getElementById("auth-card").style.display="";
@@ -3256,7 +3258,11 @@ async function runScan(force){
       // "12 bids" says nothing about what it cost to find them.
       renderScanEffort(d,Math.round((Date.now()-startedAt)/1000));
       toast(added>0?`Added ${plural(added,"new bid")}!`:"No new bids \u2014 already in your list.");
-      cityFilter="All";goTo("feed");
+      cityFilter="All";
+      // A new account's first find goes back to the Get started card, where
+      // the next step (price one) is a single tap.
+      const st=startState();
+      goTo(st.new&&!st.priced&&!st.hidden?"home":"feed");
     }else{
       // An empty result used to be one grey sentence telling the user to go
       // and change something themselves, on the screen they were already
@@ -6853,6 +6859,11 @@ function renderTakeoffReview(body,city,id,b){
 
 function renderPrepPricing(body,city,id,b){
   const p=prepFor(id);
+  // Looking at a priced bid is the step: every line already has a price.
+  if((p.lines||[]).some(l=>Number(l.price)>0)){
+    markStart("priced");
+    const st=store.get(START_KEY,null);if(st&&st.new&&!st.summary){st.lastBid=id;store.set(START_KEY,st);}
+  }
   const hist=priceHistory(id);
   const stRates=rateData[bidState(city,b)];
   const lineRow=(l,i)=>`<div class="prep-line" data-i="${i}">
@@ -7020,6 +7031,7 @@ function prepSummaryText(s){
 }
 function renderPrepSummary(body,city,id,b){
   const p=prepFor(id);
+  if(startState().priced)markStart("summary");
   const s=prepSummaryData(id,b,city);
   const c=s.company;
   const dates=bidDates(b,p),info=bidInfoCount();
@@ -7977,6 +7989,61 @@ function planBannerHTML(){
     <span>${recap.length?`So far: ${esc(recap.slice(0,2).join(", "))}. `:""}Keep it going for $49 a month, or $399 a year.</span>
     <button class="btn-primary" data-plan-go>Keep my bids</button></div>`;
 }
+// ── Get started: the first five minutes ──
+// A new account answers two questions and a first scan starts; then the
+// card on Home leads them to the point of the product: one real bid near
+// them, priced, with a sheet ready to send. Three steps, each a single tap
+// that opens the right screen. Shown only to accounts set up on this device
+// since it existed, and gone once the sheet is open or they hide it.
+const START_KEY="getting_started";
+function startState(){return store.get(START_KEY,null)||{};}
+function markStart(k){const st=store.get(START_KEY,null);if(st&&st.new&&!st[k]){st[k]=Date.now();store.set(START_KEY,st);}}
+const START_WORK_RE=/sidewalk|curb|ramp|ada\b|concrete|flatwork|driveway|gutter|trail|pcc/i;
+// The bid to price first: concrete work with quantities in the posting, not
+// due tomorrow and not months off, soonest first.
+function firstBidPick(rows){
+  const score=([c,b])=>{
+    const text=`${b.title||""} ${b.scope||""}`,dl=daysUntil(b);
+    let n=0;
+    if(START_WORK_RE.test(text))n+=2;
+    if(extractQuantities(text).quantities.length)n+=2;
+    if(dl!=null&&dl>=3&&dl<=30)n+=1;
+    if(dl!=null&&dl<1)n-=5;
+    return n;
+  };
+  return rows.map(r=>[score(r),r]).sort((a,b)=>(b[0]-a[0])||((daysUntil(a[1][1])??999)-(daysUntil(b[1][1])??999)))
+    .map(x=>x[1])[0]||null;
+}
+function startCardHTML(rows){
+  const st=startState();
+  if(!st.new||st.hidden||st.summary)return"";
+  const scanning=!!(document.getElementById("scan-btn")||{}).disabled;
+  const found=rows.length>0,priced=!!st.priced;
+  const pick=found&&!priced?firstBidPick(rows):null;
+  const step=(n,done,label,body)=>`<div class="start-step${done?" done":""}"><span class="start-n">${done?"✓":n}</span><div><b>${label}</b>${body?`<small>${body}</small>`:""}</div></div>`;
+  const left=!found?5:!priced?3:1;
+  return`<div class="account-card start-card" id="start-card">
+    <div class="start-head"><b>Get started</b><span>about ${left} minute${left===1?"":"s"} left</span></div>
+    ${step(1,found,"Find the work near you",found?`${plural(rows.length,"open bid")} found.`
+      :scanning?"Scanning the agencies near you now. This takes a minute or two.":`<button class="btn-primary" data-start="scan">Find bids near me</button>`)}
+    ${step(2,priced,"Price one bid",priced?"Done.":pick?`Start with <b>${esc(pick[1].title||"this one")}</b>. Every line starts at what it wins for near you; change any number.
+      <button class="btn-primary" data-start="price">Price this bid</button>`:"Once bids are found.")}
+    ${step(3,false,"Get your price sheet ready to send","Your company, every line and the total, to copy, print or fill onto the agency's form.")}
+    ${priced&&st.lastBid?`<button class="btn-primary" data-start="sheet">Open my price sheet</button>`:""}
+    <button class="link-btn start-hide" data-start="hide">Hide this</button>
+  </div>`;
+}
+function wireStartCard(root,rows){
+  const card=root.querySelector("#start-card");
+  if(!card)return;
+  card.querySelectorAll("[data-start]").forEach(btn=>btn.onclick=()=>{
+    const k=btn.dataset.start,st=startState();
+    if(k==="scan")goTo("scan");
+    else if(k==="hide"){markStart("hidden");renderHome();}
+    else if(k==="price"){const pick=firstBidPick(rows);if(pick)openPrep(pick[0],bidId(pick[0],pick[1]),"pricing");}
+    else if(k==="sheet"&&st.lastBid){const [c,b]=findBidWithCity(st.lastBid);if(b)openPrep(c||"",st.lastBid,"summary");}
+  });
+}
 function renderHome(){
   const main=document.getElementById("home-main");
   if(!main)return;
@@ -8000,6 +8067,7 @@ function renderHome(){
     .slice(0,3);
 
   main.innerHTML=`${planBannerHTML()}
+    ${startCardHTML(rows)}
     <div class="account-card">
       <div class="account-email hdr-ic" style="font-size:var(--fs-base);margin-bottom:0.6rem;"><svg class="icon-svg"><use href="#i-activity"/></svg>Your week</div>
       <div class="stats-grid">
@@ -8008,7 +8076,7 @@ function renderHome(){
         <div class="stat-box"><div class="n">${esc(stats.winRate)}</div><div class="l">Win rate</div></div>
         <div class="stat-box"><div class="n">${formatMoney(stats.trackedValue)}</div><div class="l">Tracked</div></div>
       </div>
-      <button class="btn-primary" id="home-scan-btn" style="margin-top:0.2rem;">${total?"Scan for new bids":"Run your first scan"}</button>
+      <button class="${startCardHTML(rows)?"btn-ghost":"btn-primary"}" id="home-scan-btn" style="margin-top:0.2rem;">${total?"Scan for new bids":"Run your first scan"}</button>
     </div>
     ${outcomeCardHTML()}
     ${soonest.length?`<div class="feed-label">CLOSING SOON</div><div id="home-soon">${soonest.map(([c,b])=>bidCard(c,b)).join("")}</div>`:""}
@@ -8016,6 +8084,7 @@ function renderHome(){
       :emptyHTML("i-list","No bids yet","Run a scan and the work near you shows up here.")}`;
 
   document.getElementById("home-scan-btn").onclick=()=>goTo("scan");
+  wireStartCard(main,rows);
   main.querySelectorAll("[data-plan-go]").forEach(b=>b.onclick=()=>{goTo("account");
     setTimeout(()=>{const u=document.getElementById("upgrade-section");if(u)u.scrollIntoView({behavior:"smooth"});},300);});
   const all=document.getElementById("home-all-btn");
