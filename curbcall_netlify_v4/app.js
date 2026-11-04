@@ -9434,7 +9434,7 @@ function renderAccount(){
     </div>
     <div class="account-card">
       <div class="account-email hdr-ic" style="font-size:var(--fs-base);"><svg class="icon-svg"><use href="#i-life-buoy"/></svg>Support</div>
-      <div class="account-status" style="margin-bottom:0.7rem;">Send us a message and we'll get back to you, or email <a href="mailto:${SUPPORT_EMAIL}" style="color:var(--amber);">${SUPPORT_EMAIL}</a> directly.</div>
+      <div class="account-status" style="margin-bottom:0.7rem;">Quick answers on billing, cancelling and sign-in are on the <a href="support.html" target="_blank" rel="noopener" style="color:var(--amber);">help page</a>. Otherwise send us a message and we'll get back to you, or email <a href="mailto:${SUPPORT_EMAIL}" style="color:var(--amber);">${SUPPORT_EMAIL}</a> directly.</div>
       <textarea class="input" id="support-msg" rows="4" placeholder="What's going on?" style="resize:vertical;margin-bottom:0.6rem;"></textarea>
       <button class="btn-ghost" id="support-send-btn">Send Message</button>
       <div class="account-status" id="support-status" style="margin-top:0.5rem;"></div>
