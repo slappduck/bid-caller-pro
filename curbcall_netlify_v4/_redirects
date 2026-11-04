@@ -29,6 +29,10 @@
 /privacy        /privacy.html      200
 /terms          /terms.html        200
 
+# The Spanish landing page (built by tools/build_es_landing.py).
+/es             /es/index.html     200
+/es/            /es/index.html     200
+
 # Per-recipient outreach links.
 #
 # 200 rewrites, not redirects, and that is the whole trick: the address bar

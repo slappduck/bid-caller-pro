@@ -3286,6 +3286,43 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── Español: the app in Spanish, bid text left as published ──
+  console.log("\nThe app in Spanish: menus and steps translated, the agency's words left alone");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const host = new URL(route.request().url()).hostname;
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      localStorage.setItem("onboarded", JSON.stringify(true));
+      localStorage.setItem("getting_started", JSON.stringify({ new: Date.now() }));
+      localStorage.setItem("last_feed", JSON.stringify({ "Springfield, MO": [
+        { title: "Home Avenue Sidewalk", scope: "1,450 SY 4 in. sidewalk", deadline: new Date(Date.now() + 9 * 864e5).toISOString().slice(0, 10), status: "open", url: "https://e.gov/es1" }] }));
+    });
+    await page.goto(`${BASE}/app.html?lang=es`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => { showApp(); goTo("home"); });
+    await page.waitForTimeout(700);
+    const nav = await page.textContent(".bottom-nav, nav");
+    check("?lang=es opens the app in Spanish", /Inicio/.test(nav) && /Cuenta/.test(nav) && await page.evaluate(() => document.documentElement.lang === "es"), nav);
+    const card = await page.textContent("#start-card");
+    check("the Get started card is in Spanish", /Para empezar/.test(card) && /Ponerle precio/.test(card), card);
+    check("the logo stays CurbCall", (await page.textContent(".brand-name")).trim() === "CurbCall");
+    check("a bid's own title is left as the agency wrote it", /Home Avenue Sidewalk/.test(await page.textContent("#home-main")));
+    check("it's remembered", await page.evaluate(() => store.get("lang") === "es"));
+    await page.evaluate(() => goTo("account"));
+    await page.waitForTimeout(400);
+    check("Account has the language choice", await page.$eval("#lang-pick", (el) => el.value === "es"));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   // ── A statewide bid is placed by its own name ──
   console.log("\nA bid from a statewide search is placed by the site its name gives");
   {

@@ -135,6 +135,180 @@ const store = {
     }
   }
 };
+// ── Español ──
+// The app in Spanish for contractors who read it first: chosen in Account,
+// arriving from the Spanish landing page (?lang=es), or a phone set to
+// Spanish on first visit. Rather than touch every screen's template, ES maps
+// each English UI string to Spanish and ES_RX covers the few with numbers in
+// them; a MutationObserver translates text as it's drawn, so a screen added
+// later is Spanish wherever its words are in the list and English where not.
+// Bid titles and scopes are the agency's own words and stay as published.
+// Emails, texts and the Terms are English.
+const LANG_KEY="lang";
+(function(){
+  try{
+    const q=new URLSearchParams(location.search).get("lang");
+    if(q==="es"||q==="en")localStorage.setItem(LANG_KEY,JSON.stringify(q));
+    else if(localStorage.getItem(LANG_KEY)===null&&/^es\b/i.test(navigator.language||""))localStorage.setItem(LANG_KEY,JSON.stringify("es"));
+  }catch(e){}
+})();
+function appLang(){return store.get(LANG_KEY,"en")==="es"?"es":"en";}
+const ES={
+  // menu
+  "Home":"Inicio","Find":"Buscar","Bids":"Licitaciones","Upcoming":"Próximas","Leads":"Clientes","Active":"Activas","Account":"Cuenta","Menu":"Menú",
+  // home
+  "Your week":"Su semana","New bids":"Nuevas","Open bids":"Abiertas","Open Bids":"Abiertas","Closing in 7d":"Cierran en 7 d","Win rate":"Ganadas","Win Rate":"Ganadas","Tracked":"En seguimiento",
+  "Scan for new bids":"Buscar licitaciones nuevas","Run your first scan":"Hacer su primera búsqueda","CLOSING SOON":"CIERRAN PRONTO","How did these go?":"¿Cómo le fue?",
+  "Your answers build your win rate and price history.":"Sus respuestas forman su historial de precios y de licitaciones ganadas.",
+  "Won":"Ganada","Lost":"Perdida","Didn't bid":"No licité","No bids yet":"Todavía no hay licitaciones","Run a scan and the work near you shows up here.":"Haga una búsqueda y aquí aparece el trabajo cerca de usted.",
+  "Here's what's open near you.":"Esto es lo que está abierto cerca de usted.","From other contractors":"De otros contratistas","Going rates":"Precios de mercado",
+  "Get started":"Para empezar","Find the work near you":"Encuentre el trabajo cerca de usted","Price one bid":"Póngale precio a una licitación","Done.":"Listo.",
+  "Price this bid":"Ponerle precio","Get your price sheet ready to send":"Prepare su hoja de precios para enviarla",
+  "Your company, every line and the total, to copy, print or fill onto the agency's form.":"Su compañía, cada renglón y el total, para copiar, imprimir o pasar al formulario de la agencia.",
+  "Open my price sheet":"Abrir mi hoja de precios","Hide this":"Ocultar","Find bids near me":"Buscar licitaciones cerca","Once bids are found.":"Cuando se encuentren licitaciones.",
+  "Scanning the agencies near you now. This takes a minute or two.":"Revisando ahora las agencias cerca de usted. Tarda uno o dos minutos.",
+  ". Every line starts at what it wins for near you; change any number.":". Cada renglón empieza con lo que se gana cerca de usted; cambie cualquier número.",
+  "Start with":"Empiece con",
+  // onboarding + auth
+  "Where do you work out of?":"¿Desde dónde trabaja?","How far will you travel?":"¿Qué tan lejos viaja?","Continue":"Continuar","Skip for now":"Omitir por ahora",
+  "Who should we put on your bids?":"¿Qué nombre ponemos en sus licitaciones?","What do you do?":"¿A qué se dedica?","Start finding bids":"Empezar a buscar licitaciones",
+  "How did you hear about CurbCall?":"¿Cómo supo de CurbCall?","Company name":"Nombre de la compañía","Specialty (optional)":"Especialidad (opcional)",
+  "Springfield, MO or 65806":"Springfield, MO o 65806","sidewalk, ADA ramp & curb work":"aceras, rampas ADA y bordillos",
+  "Enter a city or ZIP, or skip for now":"Escriba una ciudad o un código postal, u omítalo por ahora",
+  "Sign in":"Iniciar sesión","Sign out":"Cerrar sesión","Create Account":"Crear cuenta","Create free account":"Crear cuenta gratis","Create your free account":"Cree su cuenta gratis",
+  "Continue with Google":"Continuar con Google","or use email":"o use su correo","Email":"Correo","Email address":"Correo electrónico","Password":"Contraseña",
+  "Forgot password?":"¿Olvidó su contraseña?","Already have an account?":"¿Ya tiene cuenta?","Send magic link instead":"Mejor mándeme un enlace","Check your email":"Revise su correo",
+  "At least 8 characters":"Al menos 8 caracteres","Welcome back":"Bienvenido de nuevo","14-day free trial — no card required":"Prueba gratis de 14 días, sin tarjeta",
+  "Free for 14 days  ·  No credit card  ·  Cancel anytime":"Gratis por 14 días  ·  Sin tarjeta  ·  Cancele cuando quiera",
+  "I agree to the":"Acepto los","Terms of Service":"Términos de servicio","Privacy Policy":"Política de privacidad","and":"y","I agree":"Acepto",
+  "We’ve updated our Terms":"Actualizamos nuestros Términos",
+  // find
+  "Find Concrete Bids Near You":"Encuentre licitaciones de concreto cerca de usted","Enter your area — we'll find sidewalk, ADA & curb bids.":"Escriba su zona; encontramos licitaciones de aceras, ADA y bordillos.",
+  "Search Radius":"Radio de búsqueda","Use My Location":"Usar mi ubicación","Scan for Bids":"Buscar licitaciones","Scan":"Buscar","City and state, or ZIP":"Ciudad y estado, o código postal",
+  "ZIP code or City, State":"Código postal o Ciudad, Estado","Enter a ZIP or city first":"Primero escriba un código postal o una ciudad",
+  "Save this search for auto-alerts":"Guardar esta búsqueda para recibir avisos","Saved. We'll email you new bids here every morning.":"Guardado. Le mandamos por correo las licitaciones nuevas de aquí cada mañana.",
+  "Last search":"Última búsqueda","Taking longer than usual":"Está tardando más de lo normal","Connection problem":"Problema de conexión",
+  "Couldn't detect your location — enter a ZIP instead.":"No pudimos detectar su ubicación; escriba un código postal.",
+  "Find Upcoming Projects":"Buscar proyectos próximos","Find Residential Leads":"Buscar clientes residenciales","Upcoming Work":"Trabajo próximo","Residential Leads":"Clientes residenciales",
+  // bids
+  "Bids you've found. New scans add to this list.":"Las licitaciones que ha encontrado. Cada búsqueda nueva se suma a esta lista.",
+  "Search title or scope...":"Buscar por título o alcance...","All":"Todas","Newest":"Más nuevas","Deadline":"Fecha límite","Distance":"Distancia","Best Match":"Mejor opción",
+  "Fewest bidders":"Menos competencia","Few bidders":"Poca competencia","Clear all bids":"Borrar todas","Export":"Exportar","Save":"Guardar","Saved":"Guardada",
+  "Already saved":"Ya guardada","Open posting":"Abrir anuncio","Call":"Llamar","Share":"Compartir","Close":"Cerrar","Back":"Atrás","Cancel":"Cancelar",
+  "Little competition":"Poca competencia","Normal competition":"Competencia normal","Crowded: expect a tight price":"Mucha competencia: espere un precio apretado",
+  "Bid Status":"Estado","Notes":"Notas","Agency contact":"Contacto de la agencia","Pre-bid meeting":"Junta previa","Mandatory pre-bid meeting.":"Junta previa obligatoria.",
+  "Bids you're pursuing — track status, add notes, and follow them through to won or lost.":"Las licitaciones que está persiguiendo: siga su estado, agregue notas y llévelas hasta ganada o perdida.",
+  "Active Bids":"Licitaciones activas","Bid Documents":"Documentos de la licitación","Change district or see all items":"Cambiar distrito o ver todos los conceptos",
+  "Ballpark for these items":"Estimado de estos conceptos","Posted value:":"Valor publicado:","That bid isn't available any more":"Esa licitación ya no está disponible",
+  // prepare bid
+  "Prepare bid":"Preparar licitación","Steps":"Pasos","Pricing":"Precios","Summary":"Resumen","Job":"Obra","The job":"La obra",
+  "Your bid":"Su licitación","Winning price for these lines":"Precio ganador para estos renglones","Your price on them, with markup":"Su precio en ellos, con margen",
+  "Fill from the bid form":"Llenar desde el formulario de licitación","Fill from a bid form you upload":"Llenar desde un formulario que suba","Read again":"Leer de nuevo",
+  "+ Add line":"+ Agregar renglón","Markup":"Margen","Lines":"Renglones","More ways to price":"Más formas de poner precio","Easy to miss":"Fácil de olvidar",
+  "Add":"Agregar","Not needed":"No hace falta","Got it":"Entendido","Use a past bid":"Usar una licitación anterior","Start over from the posting":"Empezar de nuevo desde el anuncio",
+  "Higher than most winning bids":"Más alto que la mayoría de las ofertas ganadoras","Lower than most winning bids":"Más bajo que la mayoría de las ofertas ganadoras",
+  "In line with winning bids":"En línea con las ofertas ganadoras","Near the average":"Cerca del promedio","Over 25% above the average":"Más de 25% arriba del promedio","Over 25% below the average":"Más de 25% abajo del promedio",
+  "Choose an item…":"Escoja un concepto…","Other (type it)":"Otro (escríbalo)","Qty":"Cant.","Unit":"Unidad","Unit price":"Precio unitario","Quantity":"Cantidad","Item":"Concepto","Amount":"Importe",
+  "Subtotal":"Subtotal","Total bid":"Total de la licitación","Copy":"Copiar","Copy all":"Copiar todo","Print / save PDF":"Imprimir / guardar PDF","Summary copied":"Resumen copiado",
+  "Add your company name in Account so it prints here.":"Agregue el nombre de su compañía en Cuenta para que salga aquí.",
+  "Bid results are in":"Ya salieron los resultados","The winner's unit prices vs yours":"Los precios unitarios del ganador contra los suyos","The tabulation":"La tabulación",
+  "Mark done":"Marcar como hecho","Every step is done.":"Todos los pasos están hechos.","Next up":"Lo que sigue","Your own steps":"Sus propios pasos",
+  "Get a concrete quote":"Pedir cotización de concreto","Ask for a bid bond":"Pedir una fianza de licitación","Fill in the agency's bid form":"Llenar el formulario de la agencia",
+  "Ask the agency a question":"Hacerle una pregunta a la agencia","Addenda":"Adendas","Addendum":"Adenda","This bid has addenda.":"Esta licitación tiene adendas.",
+  "Award paperwork":"Papeles de la adjudicación","Notice to proceed":"Orden de inicio","When the work is done":"Cuando termine el trabajo","Crew days on the job":"Días de cuadrilla en la obra",
+  "Update my production rates to match":"Ajustar mis rendimientos a esto","Open the job":"Abrir la obra","Nice work.":"Buen trabajo.",
+  "Congratulations. What was the job worth?":"Felicidades. ¿Cuánto valía la obra?","Your winning bid, roughly. It adds to your won-work total.":"Su oferta ganadora, más o menos. Se suma a su total de obra ganada.",
+  "What did the winning bid come in at?":"¿En cuánto quedó la oferta ganadora?","Optional. It shows next to your price on similar jobs.":"Opcional. Aparece junto a su precio en obras parecidas.",
+  "Skip":"Omitir","Go annual":"Pasar a anual","Share my link":"Compartir mi enlace","Leave a review":"Dejar una reseña",
+  // account
+  "Company Info":"Datos de la compañía","Edit":"Editar","Bid Alerts":"Avisos de licitaciones","Text alerts":"Avisos por mensaje de texto","Text me a code":"Mándeme un código por texto",
+  "Turn off texts":"Apagar los textos","Texts on":"Textos activados","Texts off":"Textos apagados","Use a different number":"Usar otro número","Confirm":"Confirmar",
+  "Subscribe Monthly":"Suscribirse mensual","Subscribe Annual":"Suscribirse anual","Free Trial Active":"Prueba gratis activa","Trial expired":"La prueba terminó",
+  "Your free trial has ended.":"Su prueba gratis terminó.","Refer a Contractor":"Recomendar a un contratista","Support":"Soporte","Settings":"Ajustes",
+  "Sign-in & Security":"Inicio de sesión y seguridad","Delete account":"Eliminar cuenta","Notifications":"Notificaciones","Turn on alerts":"Activar avisos",
+  "Company info saved":"Datos guardados","Bid details saved":"Datos de licitación guardados","Your Stats":"Sus números","Language":"Idioma",
+  // common toasts
+  "You're offline":"No tiene conexión","Back online":"Conexión de nuevo","Couldn't reach the server":"No pudimos conectar con el servidor","Try again":"Intente de nuevo",
+  "Copied to clipboard":"Copiado","Link copied":"Enlace copiado","Sign in first":"Primero inicie sesión","Your trial or subscription isn't active.":"Su prueba o suscripción no está activa.",
+  "Check Account tab":"Revise la pestaña Cuenta",
+  "← Bid details":"← Detalles de la licitación","You're":"Está","inside that range":"dentro de ese rango","above that range":"por arriba de ese rango","below that range":"por debajo de ese rango",
+  "You'd make about":"Ganaría unos","You'd lose about":"Perdería unos","(estimate)":"(estimado)",
+  "From starting guesses until you set your costs, on the lines it can size.":"Con costos iniciales calculados hasta que ponga los suyos, en los renglones que se pueden medir.",
+  "From your costs, on the lines it can size.":"Con sus costos, en los renglones que se pueden medir.",
+  "Set your costs (now using starting guesses)":"Ponga sus costos (ahora se usan costos calculados)","Your costs":"Sus costos",
+  "See what was read from the documents":"Ver lo que se leyó de los documentos","No item list? Measure from the plans":"¿No hay lista de conceptos? Medir desde los planos",
+  "Add lines the posting doesn't list: removal, mobilization, traffic control, testing.":"Agregue renglones que el anuncio no trae: demolición, movilización, control de tráfico, pruebas.",
+  "Should you bid this?":"¿Le conviene licitar?","Details":"Detalles","Prepare bid →":"Preparar licitación →","Save bid":"Guardar licitación","Contact":"Contacto",
+  "Scope":"Alcance","Location":"Ubicación","Source":"Fuente","Closes":"Cierra","Due":"Entrega","Status":"Estado","open":"abierta",
+  "Truncated domes on the ramps":"Domos táctiles en las rampas","Taking out the old concrete":"Quitar el concreto viejo","Traffic control":"Control de tráfico","Mobilization":"Movilización",
+"Offline — showing your saved bids":"Sin conexión: mostrando sus licitaciones guardadas",
+};
+const ES_RX=[
+  [/^(\d+) open bids? found\.$/,(m,n)=>`${n} ${n==="1"?"licitación abierta encontrada":"licitaciones abiertas encontradas"}.`],
+  [/^about (\d+) minutes? left$/,(m,n)=>`queda${n==="1"?"":"n"} unos ${n} minuto${n==="1"?"":"s"}`],
+  [/^Added (\d+) new bids?!$/,(m,n)=>`¡Se agregaron ${n} licitaciones nuevas!`],
+  [/^See all (\d+) open bids?$/,(m,n)=>`Ver las ${n} licitaciones abiertas`],
+  [/^Due (.+?) · (\d+)d left$/,(m,d,n)=>`Entrega ${d} · quedan ${n} d`],
+  [/^Due (.+?) · today$/,(m,d)=>`Entrega ${d} · hoy`],
+  [/^Due (.+)$/,(m,d)=>`Entrega ${d}`],
+  [/^Good (morning|afternoon|evening)$/,(m,p)=>({morning:"Buenos días",afternoon:"Buenas tardes",evening:"Buenas noches"})[p]],
+  [/^Your price from (.+)$/,(m,b)=>`Su precio de ${b}`],
+  [/^(\d+) mi$/,(m,n)=>`${n} mi`],
+  [/^Prices start at what each item won for on similar-size jobs near here\. Change any number\.(?: Updated monthly; newest letting (.+)\.)?$/,
+    (m,d)=>`Los precios empiezan con lo que ganó cada concepto en obras de tamaño parecido cerca de aquí. Cambie cualquier número.${d?` Se actualiza cada mes; última licitación ${d}.`:""}`],
+  [/^No (.+?) prices in the app yet, so prices start at what each item won for on state road jobs in (.+?)\. Change any number to your own\.(?: Updated monthly; newest letting (.+)\.)?$/,
+    (m,st,w,d)=>`Todavía no hay precios de ${st} en la app, así que los precios empiezan con lo que ganó cada concepto en obras de carreteras estatales en ${w}. Cambie cualquier número por el suyo.${d?` Se actualiza cada mes; última licitación ${d}.`:""}`],
+  [/^Won for (.+?) on (\d+) (.+?)(?: \(most between (.+?) and (.+?)\))?$/,
+    (m,p,n,w,a,b)=>`Ganó con ${p} en ${n} ${esWhere(w)}${a?` (la mayoría entre ${a} y ${b})`:""}`],
+  [/^About (.+?) a ramp at what ramps won for$/,(m,r)=>`Unos ${r} por rampa, según lo que ganaron las rampas`],
+  [/^Priced as about (\d+) sq yd a ramp \(ramp, landing and flares\) at (.+?)\. Change it if your plans differ\.$/,
+    (m,n,p)=>`Calculado como unas ${n} yd² por rampa (rampa, descanso y aletas) a ${p}. Cámbielo si sus planos son distintos.`],
+  [/^Your price from (.+)$/,(m,b)=>`Su precio de ${b}`],
+  [/^Your past prices:$/,()=>"Sus precios anteriores:"],
+  [/^You placed (\d+)\w\w of (\d+), ([\d.]+)% above (.+) at (.+)\.$/,(m,r,n,g,w,t)=>`Quedó en el lugar ${r} de ${n}, ${g}% arriba de ${w} con ${t}.`],
+  [/^Results are in: (.+)$/,(m,b)=>`Ya salieron los resultados: ${b}`],
+  [/^City and county jobs: won for (.+?) on (\d+) (similar-size )?jobs?$/,(m,p,n,s)=>`Obras de ciudad y condado: ganó con ${p} en ${n} obras${s?" de tamaño parecido":""}`],
+];
+// The places in a price check's "on 9 similar-size jobs, Southwest (...)".
+function esWhere(w){
+  return String(w).replace("similar-size state road jobs","obras de carreteras estatales de tamaño parecido")
+    .replace("state road jobs","obras de carreteras estatales").replace("jobs of all sizes statewide","obras de todos los tamaños en el estado")
+    .replace("similar-size jobs statewide","obras de tamaño parecido en el estado").replace("similar-size jobs","obras de tamaño parecido")
+    .replace("jobs statewide","obras en el estado").replace(/^jobs/,"obras").replace(/\bin /g,"en ").replace(/ and /g," y ");
+}
+
+function trES(s){
+  const k=String(s||"").trim();
+  if(!k||k.length>240)return null;
+  if(Object.prototype.hasOwnProperty.call(ES,k))return s.replace(k,ES[k]);
+  for(const [rx,f] of ES_RX){if(rx.test(k))return s.replace(k,k.replace(rx,f));}
+  return null;
+}
+// Never translated: code, and what people type.
+const TR_NEVER=new Set(["SCRIPT","STYLE","CODE","PRE","TEXTAREA"]);
+function trNode(n){
+  if(n.nodeType===3){
+    const p=n.parentElement;
+    if(!p||TR_NEVER.has(p.tagName)||p.closest("[data-no-tr]"))return;
+    const t=trES(n.nodeValue);if(t!=null&&t!==n.nodeValue)n.nodeValue=t;
+    return;
+  }
+  if(n.nodeType!==1||TR_NEVER.has(n.tagName)||n.closest("[data-no-tr]"))return;
+  for(const a of ["placeholder","aria-label","title"]){
+    const v=n.getAttribute(a);
+    if(v){const t=trES(v);if(t!=null&&t!==v)n.setAttribute(a,t);}
+  }
+  for(const c of Array.from(n.childNodes))trNode(c);
+}
+function applyLang(){
+  if(appLang()!=="es"||!document.body)return;
+  document.documentElement.lang="es";
+  trNode(document.body);
+  new MutationObserver(ms=>{for(const m of ms){
+    if(m.type==="characterData")trNode(m.target);
+    else{m.addedNodes.forEach(trNode);if(m.type==="attributes")trNode(m.target);}
+  }}).observe(document.body,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:["placeholder"]});
+}
 // ── Whose data is cached on this device ──
 //
 // Sign-out ends the session and clears nothing else, so the previous
@@ -9158,6 +9332,13 @@ function renderAccount(){
     </div>
     <div class="account-card" id="sms-card" style="display:none;"></div>
     <div class="account-card">
+      <div class="account-email hdr-ic" style="font-size:var(--fs-base);"><svg class="icon-svg"><use href="#i-user"/></svg>Language</div>
+      <select class="input" id="lang-pick" aria-label="Language / Idioma" style="margin-top:0.5rem;" data-no-tr>
+        <option value="en"${appLang()==="en"?" selected":""}>English</option>
+        <option value="es"${appLang()==="es"?" selected":""}>Español</option>
+      </select>
+    </div>
+    <div class="account-card">
       <div style="font-size:var(--fs-base);font-weight:700;display:flex;flex-wrap:wrap;gap:0.5rem;justify-content:space-between;align-items:center;">
         <span class="hdr-ic" style="white-space:nowrap;"><svg class="icon-svg"><use href="#i-briefcase"/></svg>Company Info</span>
         ${companyEditMode?"":`<button class="btn-ghost hdr-ic" id="co-edit-btn" style="padding:0.35rem 0.9rem;min-height:44px;font-size:var(--fs-sm);flex-shrink:0;justify-content:center;align-items:center;"><svg class="icon-svg"><use href="#i-pencil"/></svg>Edit</button>`}
@@ -9341,6 +9522,8 @@ function renderAccount(){
     await sb.auth.signOut();toast("Signed out");
   };
   document.getElementById("notif-card").onclick=toggleNotifPermission;
+  const lp=document.getElementById("lang-pick");
+  if(lp)lp.onchange=()=>{store.set(LANG_KEY,lp.value);location.reload();};
   loadSmsCard();
   const adminCard=document.getElementById("admin-card");
   if(adminCard)adminCard.onclick=openAdminPanel;
@@ -9725,3 +9908,5 @@ if("serviceWorker"in navigator){
 // as a button rather than taken on their behalf. See signInAvailable().
 if(!HAS_SB)bootOffline();
 updateOfflineBar();
+// Spanish, if chosen: translate what's drawn and keep translating.
+applyLang();
