@@ -49,4 +49,58 @@
   <url><loc>https://curbcallpro.com/concrete-cost/tennessee.html</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
   <url><loc>https://curbcallpro.com/concrete-cost/texas.html</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
   <!-- /concrete-cost pages -->
+  <!-- bid pages: written by tools/build_bid_pages.py -->
+  <url><loc>https://curbcallpro.com/concrete-bids/index.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/alabama.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/alaska.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/arizona.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/arkansas.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/california.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/colorado.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/connecticut.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/delaware.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/district-of-columbia.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/florida.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/georgia.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/hawaii.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/idaho.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/illinois.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/indiana.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/iowa.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/kansas.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/kentucky.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/louisiana.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/maine.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/maryland.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/massachusetts.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/michigan.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/minnesota.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/mississippi.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/missouri.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/montana.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/nebraska.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/nevada.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/new-hampshire.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/new-jersey.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/new-mexico.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/new-york.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/north-carolina.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/north-dakota.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/ohio.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/oklahoma.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/oregon.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/pennsylvania.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/rhode-island.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/south-carolina.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/south-dakota.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/tennessee.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/texas.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/utah.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/vermont.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/virginia.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/washington.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/west-virginia.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/wisconsin.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://curbcallpro.com/concrete-bids/wyoming.html</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <!-- /bid pages -->
 </urlset>

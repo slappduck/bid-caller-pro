@@ -267,7 +267,10 @@ def signup():
 </div>"""
 
 
-def page(title, desc, path, body, ld=None):
+FOOTER = "Prices are from each state DOT's own published bid data, as linked on each page. They're a guide, not a quote."
+
+
+def page(title, desc, path, body, ld=None, footer=FOOTER):
     canon = f"{BASE_URL}/{path}"
     # "<" escaped so text from the data can never close the script tag early.
     ld_json = json.dumps(ld, separators=(",", ":")).replace("<", "\\u003c") if ld else ""
@@ -298,8 +301,8 @@ def page(title, desc, path, body, ld=None):
 <main class="wrap">
 {body}
 </main>
-<footer><div class="wrap">Prices are from each state DOT's own published bid data, as linked on each page. They're a guide, not a quote.<br />
-<a href="/concrete-cost/index.html">Concrete prices by state</a> &middot; <a href="/index.html">CurbCall Pro</a> &middot; <a href="mailto:support@curbcallpro.com">support@curbcallpro.com</a><br />
+<footer><div class="wrap">{e(footer)}<br />
+<a href="/concrete-cost/index.html">Concrete prices by state</a> &middot; <a href="/concrete-bids/index.html">Concrete bids by state</a> &middot; <a href="/index.html">CurbCall Pro</a> &middot; <a href="mailto:support@curbcallpro.com">support@curbcallpro.com</a><br />
 &copy; CurbCall Pro by Oblique Systems, LLC.</div></footer>
 </body>
 </html>
@@ -370,6 +373,7 @@ These are state highway jobs; city and county work can run different.</p>
 {signup()}
 {calculator()}
 <a class="cta" href="/app.html">See open sidewalk &amp; curb bids near you</a>
+<p class="note" style="text-align:center;"><a href="/concrete-bids/{slug(name)}.html">Open concrete bids in {e(name)}</a></p>
 <p class="note" style="text-align:center;">CurbCall Pro finds city, county and state concrete bids near you, shows these prices on each one,
 lists the ready-mix plants nearby, and works out what your concrete costs on every line. Free to try.</p>
 <h2>Common questions</h2>
@@ -408,8 +412,9 @@ def update_sitemap(paths):
              + "".join(f"  <url><loc>{BASE_URL}/{p}</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>\n"
                        for p in paths)
              + "  <!-- /concrete-cost pages -->\n")
-    xml = re.sub(r"  <!-- concrete-cost pages:.*?<!-- /concrete-cost pages -->\n", "", xml, flags=re.S)
-    xml = xml.replace("</urlset>", block + "</urlset>")
+    # Replaced where it stands, so the two page builders can run in any order.
+    rx = re.compile(r"  <!-- concrete-cost pages:.*?<!-- /concrete-cost pages -->\n", re.S)
+    xml = rx.sub(lambda _m: block, xml) if rx.search(xml) else xml.replace("</urlset>", block + "</urlset>")
     with open(SITEMAP, "w", encoding="utf-8") as f:
         f.write(xml)
 

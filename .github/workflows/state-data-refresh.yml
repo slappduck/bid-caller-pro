@@ -80,7 +80,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          DATA="curbcall_netlify_v4/rates curbcall_netlify_v4/results curbcall_netlify_v4/concrete-cost curbcall_netlify_v4/sitemap.xml"
+          DATA="curbcall_netlify_v4/rates curbcall_netlify_v4/results curbcall_netlify_v4/concrete-cost curbcall_netlify_v4/concrete-bids curbcall_netlify_v4/sitemap.xml"
           if git diff --quiet -- $DATA \
              && [ -z "$(git ls-files --others --exclude-standard $DATA)" ]; then
             echo "Nothing changed this month."
