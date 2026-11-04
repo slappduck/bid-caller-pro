@@ -40,6 +40,22 @@ summary{cursor:pointer;color:var(--text);font-weight:600;font-size:0.97rem;paddi
 summary:hover{color:var(--amber);}
 details p,details ol,details ul{margin-left:0.1rem;}
 details[open] summary{color:var(--amber);}
+.ask{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:1.1rem 1.2rem;margin-bottom:1.2rem;}
+.ask label{display:block;font-weight:700;color:var(--text);margin-bottom:0.5rem;}
+.ask-row{display:flex;gap:0.5rem;}
+.ask input,.ask textarea{flex:1;min-width:0;width:100%;background:var(--bg);border:1px solid var(--line);border-radius:8px;color:var(--text);font:inherit;font-size:16px;padding:0.6rem 0.75rem;min-height:44px;}
+.ask input:focus,.ask textarea:focus{outline:2px solid var(--amber);outline-offset:1px;}
+.ask button{min-height:44px;padding:0 1rem;border-radius:8px;border:0;background:var(--amber);color:#0b0d14;font-weight:700;font-size:0.92rem;cursor:pointer;}
+.ask button.quiet{background:none;border:1px solid var(--line);color:var(--text);}
+.ask-hint{font-size:0.82rem;color:var(--text3);margin:0.5rem 0 0;}
+.ans{border-top:1px solid var(--line);margin-top:0.9rem;padding-top:0.8rem;}
+.ans h3{font-size:0.97rem;color:var(--amber);margin-bottom:0.3rem;}
+.ans p,.ans li{font-size:0.92rem;}
+.ask-more{display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;margin-top:0.9rem;}
+.ask-more span{font-size:0.88rem;color:var(--text2);}
+.ask-form{margin-top:0.9rem;display:grid;gap:0.5rem;}
+.ask-form[hidden]{display:none;}
+.ask-status{font-size:0.9rem;color:var(--text2);margin:0;}
 .back{display:inline-block;margin-top:2.5rem;color:var(--text2);text-decoration:none;font-weight:600;}
 .back:hover{color:var(--amber);}
 footer{border-top:1px solid var(--line);margin-top:2.5rem;padding-top:1.2rem;color:var(--text3);font-size:0.82rem;}
@@ -52,6 +68,27 @@ footer a{color:var(--text3);}
   <div class="logo"><a href="index.html">&#x1F6A7; Curb<b>Call</b></a></div>
   <h1>Help &amp; Support</h1>
   <p class="lead">Quick answers to the common questions. Anything else, write in and a real person answers.</p>
+
+  <!-- Automated help. Matches the question against the answers already on
+       this page, in the browser: free, instant, and it can only ever say what
+       the page says, so it can't promise a refund or a feature we don't have.
+       When nothing fits, the question goes to support@ through the same
+       /support endpoint the app's Support card uses. -->
+  <form class="ask" id="ask" autocomplete="off">
+    <label for="ask-q">Ask a question</label>
+    <div class="ask-row">
+      <input id="ask-q" type="search" maxlength="300" placeholder="e.g. how do I cancel?" />
+      <button type="submit">Get answer</button>
+    </div>
+    <p class="ask-hint">Instant answers from this page. If it doesn't have yours, you can send it to us.</p>
+    <div id="ask-out" aria-live="polite"></div>
+    <div class="ask-form" id="ask-form" hidden>
+      <input id="ask-email" type="email" autocomplete="email" placeholder="Your email, so we can reply" />
+      <textarea id="ask-msg" rows="4" maxlength="4000" placeholder="What's going on?"></textarea>
+      <button type="button" id="ask-send">Send to support</button>
+      <p class="ask-status" id="ask-status"></p>
+    </div>
+  </form>
 
   <div class="contact" id="contact">
     <p>Email us:</p>
@@ -73,11 +110,11 @@ footer a{color:var(--text3);}
   </nav>
 
   <h2 id="billing">Billing &amp; cancelling</h2>
-  <details>
+  <details data-k="price cost much pay trial free plan monthly yearly annual subscribe precio cuesta cuanto prueba gratis">
     <summary>What does it cost?</summary>
     <p>Every new account gets a <strong>14-day free trial</strong>, no card needed. After that it's <strong>$49 a month</strong> or <strong>$399 a year</strong>. Both renew automatically until you cancel.</p>
   </details>
-  <details>
+  <details data-k="cancel stop quit end unsubscribe subscription billing cancelar">
     <summary>How do I cancel?</summary>
     <ol>
       <li>In the app, open <strong>Account</strong> and tap <strong>Manage billing</strong>, or use the <a href="https://billing.stripe.com/p/login/3cIcN4an28420Yad2fejK00" target="_blank" rel="noopener">billing page</a> directly.</li>
@@ -86,70 +123,70 @@ footer a{color:var(--text3);}
     </ol>
     <p>Cancelling stops future charges. You keep access until the end of the period you already paid for.</p>
   </details>
-  <details>
+  <details data-k="refund money back charged reimburse return reembolso dinero devolver">
     <summary>Do you give refunds?</summary>
     <p>Payments already made aren't refunded, including partial months. If you were charged by mistake or something went wrong with billing, email us and we'll make it right.</p>
   </details>
-  <details>
+  <details data-k="card declined failed payment expired update bank debit credit tarjeta pago rechazada">
     <summary>My card was declined or a payment failed.</summary>
     <p>Stripe tries the card again over the next few days and emails you. To fix it right away, open <strong>Manage billing</strong>, sign in with the email you paid with, and update your card.</p>
   </details>
-  <details>
+  <details data-k="switch change upgrade downgrade annual yearly monthly receipt invoice history plan recibo factura cambiar anual mensual">
     <summary>How do I switch between monthly and yearly, or get a receipt?</summary>
     <p>Both are on the <a href="https://billing.stripe.com/p/login/3cIcN4an28420Yad2fejK00" target="_blank" rel="noopener">billing page</a>: past invoices and receipts, your card and your plan. If you don't see the switch you want, email us and we'll do it for you.</p>
   </details>
-  <details>
+  <details data-k="renew renewal reminder automatic charge price increase">
     <summary>Will I be reminded before a yearly plan renews?</summary>
     <p>Yes. Yearly plans get an email a few weeks before they renew, with the price and a link to cancel. If a price ever changes, we email at least 30 days before it applies to you.</p>
   </details>
-  <details>
+  <details data-k="locked paid unlock license key activate trial ended blocked paywall access pague pagado bloqueado clave">
     <summary>I paid, but the app is still locked.</summary>
     <p>The app unlocks on its own when you paid with the same email you signed in with. If you used a different email at checkout, open <strong>Account</strong>, find <strong>Have a license key?</strong> and paste the key from your receipt email. Still stuck? Email us with both addresses.</p>
   </details>
 
   <h2 id="account">Signing in &amp; your account</h2>
-  <details>
+  <details data-k="new phone computer device login log sign laptop tablet another telefono celular computadora nuevo">
     <summary>How do I use it on a new phone or computer?</summary>
     <p>Go to <a href="/app.html">curbcallpro.com/app</a> and sign in with the same email or Google account. Your saved bids sync over.</p>
   </details>
-  <details>
+  <details data-k="install home screen app icon download android iphone ipad store instalar pantalla inicio">
     <summary>Can I put it on my home screen like an app?</summary>
     <p><strong>iPhone:</strong> open curbcallpro.com/app in Safari, tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>.<br />
        <strong>Android:</strong> open it in Chrome, tap the <strong>&#8942;</strong> menu, then <strong>Add to Home screen</strong> or <strong>Install app</strong>.</p>
   </details>
-  <details>
+  <details data-k="email password change reset forgot login correo contraseña">
     <summary>How do I change my email or password?</summary>
     <p>In the app, under <strong>Account &rarr; Sign-in &amp; security</strong>. A new email gets a confirmation link, and your old one keeps working until you click it.</p>
   </details>
-  <details>
+  <details data-k="spanish español espanol idioma language ingles english">
     <summary>Can I use the app in Spanish?</summary>
     <p lang="es">Sí. Open <strong>Account</strong>, scroll to <strong>Language</strong> and choose <strong>Español</strong>.</p>
   </details>
-  <details>
+  <details data-k="delete remove account data erase close borrar eliminar cuenta">
     <summary>How do I delete my account?</summary>
     <p>In the app, at the bottom of <strong>Account</strong>, type DELETE and tap <strong>Delete my account</strong>. It removes your account, saved bids and company info, and cancels any subscription. See the <a href="privacy.html">Privacy Policy</a> for what's kept and for how long.</p>
   </details>
 
   <h2 id="bids">Bids &amp; prices</h2>
-  <details>
+  <details data-k="bid source come from find scan where government city county sam">
     <summary>Where do the bids come from?</summary>
     <p>From public postings: city, county, school district and state bid pages, plus federal jobs on SAM.gov. CurbCall Pro checks them every day and keeps the concrete work: sidewalk, curb and gutter, ADA ramps, driveways and flatwork.</p>
   </details>
-  <details>
+  <details data-k="wrong error mistake incorrect deadline date bad typo">
     <summary>A bid's details look wrong.</summary>
     <p>Always check the agency's own posting before you bid. The deadline, scope and addenda there are what count. Tell us about the mistake so we can fix how it's read.</p>
   </details>
-  <details>
+  <details data-k="town city county missing add area coverage state no bids none pueblo ciudad condado falta">
     <summary>My town isn't showing up.</summary>
     <p>Email us the town and, if you know it, the page where it posts bids. We'll add it to the scans. Agencies can also post a job for free on the <a href="post-a-bid.html">post a bid</a> page.</p>
   </details>
-  <details>
+  <details data-k="price estimate target rate unit cost number pricing bid">
     <summary>Where do the target prices come from?</summary>
     <p>From what the same work went for on public bid results: your state's own lettings where they're published, nearby states where they aren't, and city results as they're posted. Each price says where it came from. They're a guide, not a quote, and you can type your own prices over them.</p>
   </details>
 
   <h2 id="alerts">Alerts</h2>
-  <details>
+  <details data-k="alert notification push notify text sms message phone alerta notificacion aviso">
     <summary>I'm not getting bid alerts on my phone.</summary>
     <ol>
       <li>In the app, open <strong>Account &rarr; Bid Alerts</strong> and turn them on.</li>
@@ -164,5 +201,114 @@ footer a{color:var(--text3);}
     &copy; 2026 CurbCall Pro by Oblique Systems, LLC &nbsp;·&nbsp; <a href="terms.html">Terms of Service</a> &nbsp;·&nbsp; <a href="privacy.html">Privacy Policy</a>
   </footer>
 </div>
+<script>
+(function(){
+  var SERVER = "https://bid-caller-pro.onrender.com";
+  var SUPPORT = "support@curbcallpro.com";
+  var SYN = {money:"refund",charge:"charged",bill:"billing",quit:"cancel",unsubscribe:"cancel",
+    stop:"cancel",login:"sign",signin:"sign",password:"password",lockout:"locked",locked:"locked",
+    notification:"alert",notify:"alert",install:"install",espanol:"spanish",idioma:"spanish",
+    expensive:"price",cheaper:"price",card:"card",receipt:"receipt",invoice:"receipt"};
+  var STOP = {"a":1,"an":1,"the":1,"i":1,"my":1,"me":1,"do":1,"does":1,"how":1,"can":1,"to":1,"is":1,
+    "it":1,"of":1,"on":1,"in":1,"for":1,"and":1,"or":1,"you":1,"your":1,"what":1,"why":1,"get":1,
+    "app":1,"curbcall":1,"pro":1,"be":1,"are":1,"was":1,"with":1,"this":1,"that":1,"im":1,"dont":1,"not":1};
+  function stem(w){
+    w = w.normalize("NFD").replace(/[̀-ͯ]/g,"");
+    w = SYN[w] || w;
+    if (w.length > 5 && /ing$/.test(w)) w = w.slice(0,-3);
+    else if (w.length > 4 && /ed$/.test(w)) w = w.slice(0,-2);
+    else if (w.length > 3 && /s$/.test(w) && !/ss$/.test(w)) w = w.slice(0,-1);
+    return w;
+  }
+  function words(t){
+    return (t.toLowerCase().match(/[a-zÀ-ſ']+/g) || [])
+      .map(function(w){return w.replace(/'/g,"");})
+      .filter(function(w){return w.length > 1 && !STOP[w];}).map(stem);
+  }
+  var items = Array.prototype.map.call(document.querySelectorAll("details[data-k]"), function(d){
+    var q = d.querySelector("summary").textContent;
+    var body = d.cloneNode(true); body.removeChild(body.querySelector("summary"));
+    return {d:d, q:q, html:body.innerHTML, k:words(d.getAttribute("data-k")),
+            s:words(q), b:words(body.textContent)};
+  });
+  // A word that fits one answer ("spanish") says more than one that fits
+  // five ("change"), so each hit is divided by how many answers share it.
+  var df = {};
+  items.forEach(function(it){
+    var seen = {};
+    it.k.concat(it.s, it.b).forEach(function(w){ if (!seen[w]) { seen[w] = 1; df[w] = (df[w] || 0) + 1; } });
+  });
+  function score(it, qw){
+    var n = 0;
+    qw.forEach(function(w){
+      var r = 1 / Math.sqrt(df[w] || 1);
+      if (it.k.indexOf(w) >= 0) n += 3 * r;
+      if (it.s.indexOf(w) >= 0) n += 2 * r;
+      else if (it.b.indexOf(w) >= 0) n += r;
+    });
+    return n;
+  }
+  var out = document.getElementById("ask-out"), form = document.getElementById("ask-form");
+  var input = document.getElementById("ask-q"), msg = document.getElementById("ask-msg");
+  function showForm(){
+    form.hidden = false;
+    if (!msg.value) msg.value = input.value;
+    document.getElementById("ask-email").focus();
+  }
+  function answer(){
+    var q = input.value.trim();
+    out.innerHTML = ""; form.hidden = true;
+    if (!q) return;
+    var qw = words(q);
+    var hits = items.map(function(it){return {it:it, n:score(it, qw)};})
+      .filter(function(h){return h.n >= 1.5;})
+      .sort(function(a,b){return b.n - a.n;});
+    var best = hits.length ? hits[0].n : 0;
+    hits = hits.filter(function(h){return h.n >= best / 2;}).slice(0,2);
+    hits.forEach(function(h){
+      var div = document.createElement("div"); div.className = "ans";
+      var h3 = document.createElement("h3"); h3.textContent = h.it.q;
+      div.appendChild(h3);
+      // Our own answer text from this page, never the visitor's words.
+      div.insertAdjacentHTML("beforeend", h.it.html);
+      out.appendChild(div);
+    });
+    var more = document.createElement("div"); more.className = "ask-more";
+    var note = document.createElement("span");
+    note.textContent = hits.length ? "Didn't answer it?" : "No quick answer for that one. Send it to us and a person will reply.";
+    var btn = document.createElement("button"); btn.type = "button"; btn.className = "quiet";
+    btn.textContent = "Ask a person"; btn.onclick = showForm;
+    more.appendChild(note); more.appendChild(btn); out.appendChild(more);
+    if (!hits.length) showForm();
+  }
+  document.getElementById("ask").addEventListener("submit", function(e){e.preventDefault(); answer();});
+  document.getElementById("ask-send").addEventListener("click", function(){
+    var email = document.getElementById("ask-email").value.trim();
+    var text = msg.value.trim(), status = document.getElementById("ask-status"), btn = this;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { status.textContent = "Add your email so we can reply."; return; }
+    if (!text) { status.textContent = "Type your question first."; return; }
+    function fallback(){
+      status.textContent = "";
+      status.appendChild(document.createTextNode("Couldn't send it from here. Email us at "));
+      var a = document.createElement("a"); a.textContent = SUPPORT;
+      a.href = "mailto:" + SUPPORT + "?subject=" + encodeURIComponent("CurbCall Pro help") + "&body=" + encodeURIComponent(text);
+      status.appendChild(a); status.appendChild(document.createTextNode(" instead."));
+      btn.disabled = false;
+    }
+    btn.disabled = true;
+    status.textContent = "Sending… this can take up to a minute.";
+    var ctl = window.AbortController ? new AbortController() : null;
+    var timer = setTimeout(function(){ if (ctl) ctl.abort(); }, 60000);
+    fetch(SERVER + "/support", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({email:email, message:"[from the help page]\n\n" + text}), signal: ctl ? ctl.signal : undefined})
+      .then(function(r){ return r.json().catch(function(){ return {}; }); })
+      .then(function(d){
+        clearTimeout(timer);
+        if (d && d.ok) { status.textContent = "Sent. We'll reply to " + email + "."; msg.value = ""; }
+        else fallback();
+      }, function(){ clearTimeout(timer); fallback(); });
+  });
+})();
+</script>
 </body>
 </html>
