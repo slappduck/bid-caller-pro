@@ -3404,6 +3404,46 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── The Bids tab filters by kind of work, with search and towns ──
+  console.log("\nThe Bids tab can be narrowed to one kind of work");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const host = new URL(route.request().url()).hostname;
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      return route.abort();
+    });
+    await page.addInitScript(() => {
+      const bid = (title, scope) => ({ title, scope, deadline: "2099-01-01", status: "open", url: "https://e.gov/" + encodeURIComponent(title) });
+      localStorage.setItem("last_feed", JSON.stringify({
+        "Aurora, MO": [bid("Elm St Sidewalk", "1,200 LF sidewalk"), bid("2026 Street Overlay", "asphalt overlay")],
+        "Joplin, MO": [bid("Main St Curb and Gutter", "800 LF curb & gutter"), bid("Oak Sidewalk and Ramps", "sidewalk, 4 curb ramps")] }));
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => { showApp(); goTo("feed"); });
+    await page.waitForTimeout(500);
+    const row = await page.textContent("#feed-work-tiles");
+    check("the Bids tab shows the kinds of work with counts",
+          /All types/.test(row) && /Sidewalk\s*2/.test(row) && /Paving & streets\s*1/.test(row) && /Curb & gutter\s*1/.test(row), row);
+    await page.click('#feed-work-tiles [data-w="sidewalk"]');
+    await page.waitForTimeout(300);
+    let list = await page.textContent("#feed-list");
+    check("picking Sidewalk shows only sidewalk bids, from every town",
+          /Elm St Sidewalk/.test(list) && /Oak Sidewalk/.test(list) && !/Overlay/.test(list) && !/Curb and Gutter/.test(list));
+    await page.click('#tiles-wrap .tile[data-c="Joplin, MO"]');
+    await page.waitForTimeout(300);
+    list = await page.textContent("#feed-list");
+    check("...and it combines with the town tiles", /Oak Sidewalk/.test(list) && !/Elm St/.test(list));
+    check("Export takes just what's showing", await page.evaluate(() => lastFeedRows.length === 1));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   // ── A statewide bid is placed by its own name ──
   console.log("\nA bid from a statewide search is placed by the site its name gives");
   {

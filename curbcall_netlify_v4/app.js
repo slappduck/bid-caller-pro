@@ -487,6 +487,22 @@ function workTypesOf(b){
   return out.length?out:["other"];
 }
 function workLabel(k){const t=WORK_TYPES.find(x=>x[0]===k);return t?t[1]:"Other";}
+// The chip row for a list of bids: each kind present, with its count, most
+// common first. Returns the filter to use (back to "All" when the current
+// one has nothing left in the list).
+function renderWorkChips(row,bids,current,pick){
+  const kinds={};
+  bids.forEach(b=>workTypesOf(b).forEach(k=>{kinds[k]=(kinds[k]||0)+1;}));
+  const order=[...WORK_TYPES.map(t=>t[0]),"other"].filter(k=>kinds[k]).sort((a,b)=>kinds[b]-kinds[a]);
+  if(current!=="All"&&!kinds[current])current="All";
+  if(row){
+    row.innerHTML=order.length>1?[`<button type="button" class="work-chip${current==="All"?" on":""}" data-w="All">All types</button>`]
+      .concat(order.map(k=>`<button type="button" class="work-chip${current===k?" on":""}" data-w="${k}">${esc(workLabel(k))} <span>${kinds[k]}</span></button>`)).join(""):"";
+    row.querySelectorAll("[data-w]").forEach(c=>c.onclick=()=>pick(c.dataset.w));
+  }
+  return current;
+}
+let feedWorkFilter="All";
 let currentUser=null;
 
 // ── Cloud sync (Supabase) for saved bids — mirrors desktop's data_sync.py.
@@ -8401,6 +8417,7 @@ function renderFeed(){
   exportBtn.style.display=total?"inline-flex":"none";
   if(!total){
     tiles.innerHTML="";
+    const fw=document.getElementById("feed-work-tiles");if(fw)fw.innerHTML="";
     list.innerHTML=emptyHTML("i-list","No bids yet","Tap Find to scan your area.");
     lastFeedRows=[];
     return;
@@ -8415,6 +8432,10 @@ function renderFeed(){
   cities.forEach(c=>{if(cityFilter==="All"||cityFilter===c)visibleBidsIn(c).forEach(b=>rows.push([c,b]));});
   const term=(document.getElementById("feed-search").value||"").trim().toLowerCase();
   if(term)rows=rows.filter(([c,b])=>(b.title||"").toLowerCase().includes(term)||(b.scope||"").toLowerCase().includes(term)||c.toLowerCase().includes(term));
+  // Kind of work: chips for what's in this town and search, then the pick.
+  feedWorkFilter=renderWorkChips(document.getElementById("feed-work-tiles"),rows.map(([,b])=>b),feedWorkFilter,
+    (w)=>{feedWorkFilter=w;renderFeed();});
+  if(feedWorkFilter!=="All")rows=rows.filter(([,b])=>workTypesOf(b).includes(feedWorkFilter));
   const sortMode=document.getElementById("feed-sort").value;
   if(sortMode==="deadline"){
     rows.sort((a,b)=>{const da=daysUntil(a[1]),db=daysUntil(b[1]);if(da==null)return 1;if(db==null)return-1;return da-db;});
@@ -9123,17 +9144,9 @@ function renderSaved(){
     .map(([k,label])=>`<div class="tile ${pipelineFilter===k?"active":""}" data-k="${k}"><div class="n">${counts[k]||0}</div><div class="l">${label}</div></div>`).join("");
   ptiles.querySelectorAll(".tile").forEach(t=>t.onclick=()=>{pipelineFilter=t.dataset.k;renderSaved();});
   const byStatus=keys.filter(id=>pipelineFilter==="All"||(pipelineFilter==="none"?!pipeline[id]:pipeline[id]===pipelineFilter));
-  // Kinds of work among the bids this status shows, most common first.
-  const kinds={};
-  byStatus.forEach(id=>workTypesOf(saved[id]).forEach(k=>{kinds[k]=(kinds[k]||0)+1;}));
-  const order=[...WORK_TYPES.map(t=>t[0]),"other"].filter(k=>kinds[k]).sort((a,b)=>kinds[b]-kinds[a]);
-  if(workFilter!=="All"&&!kinds[workFilter])workFilter="All";
-  const wrow=document.getElementById("work-tiles");
-  if(wrow){
-    wrow.innerHTML=order.length>1?[`<button type="button" class="work-chip${workFilter==="All"?" on":""}" data-w="All">All types</button>`]
-      .concat(order.map(k=>`<button type="button" class="work-chip${workFilter===k?" on":""}" data-w="${k}">${esc(workLabel(k))} <span>${kinds[k]}</span></button>`)).join(""):"";
-    wrow.querySelectorAll("[data-w]").forEach(c=>c.onclick=()=>{workFilter=c.dataset.w;renderSaved();});
-  }
+  // Kinds of work among the bids this status shows.
+  workFilter=renderWorkChips(document.getElementById("work-tiles"),byStatus.map(id=>saved[id]),workFilter,
+    (w)=>{workFilter=w;renderSaved();});
   const filteredKeys=byStatus.filter(id=>workFilter==="All"||workTypesOf(saved[id]).includes(workFilter));
   if(!filteredKeys.length){
     list.innerHTML=emptyHTML("i-search","Nothing here","No active bids with this status.");
