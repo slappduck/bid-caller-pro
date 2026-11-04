@@ -191,6 +191,15 @@ def _run_saved_search_alerts():
                              first + (f" and {len(new_bids) - 1} more" if len(new_bids) > 1 else ""))
             except Exception as ex:
                 print(f"[alerts] push failed for {user_id}: {ex}", flush=True)
+            # And a text, if they confirmed a number (push.py). One a day at most.
+            try:
+                first = re.sub(r"\s+", " ", new_bids[0][1].get("title") or "Untitled")[:70]
+                n = len(new_bids)
+                _text_user(user_id, f"CurbCall: {n} new bid{'s' if n != 1 else ''} near "
+                           f"{outcome.get('location', location)}. {first}"
+                           + (f" + {n - 1} more" if n > 1 else "") + ". curbcallpro.com/app.html Reply STOP to stop")
+            except Exception as ex:
+                print(f"[alerts] text failed for {user_id}: {ex}", flush=True)
 
     cdb["alert_seen"] = seen_store
     _save_cache(cdb)

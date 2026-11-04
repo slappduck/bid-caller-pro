@@ -3224,6 +3224,68 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── Text alerts: opt in with a code, in Account ──
+  console.log("\nText alerts: hidden until set up, then opt in with a code");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    const calls = [];
+    let configured = false, status = "none";
+    await page.route("**/*", (route) => {
+      const u = route.request().url(), host = new URL(u).hostname;
+      const m = /\/sms\/(status|start|confirm|stop)$/.exec(u);
+      if (m) {
+        calls.push([m[1], JSON.parse(route.request().postData() || "{}")]);
+        if (m[1] === "confirm") status = "on";
+        if (m[1] === "stop") status = "off";
+        return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(
+          m[1] === "status" ? { ok: true, configured, status, phone: "(•••) •••-0123", consent_text: "Text me new bid alerts. Reply STOP to stop." }
+            : { ok: true, phone: "(•••) •••-0123" }) });
+      }
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      return route.abort();
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => {
+      const q = { maybeSingle: async () => ({ data: null }), order: () => ({ limit: async () => ({ data: [] }) }) };
+      q.eq = () => q; q.select = () => q;
+      sb.from = () => ({ select: () => q, upsert: async () => ({}) });
+      currentUser = { id: "u1", email: "a@x.com" }; showApp(); goTo("account");
+    });
+    await page.waitForTimeout(600);
+    check("with no texting account set up, the card stays hidden",
+          await page.$eval("#sms-card", (el) => el.style.display === "none"));
+    configured = true;
+    await page.evaluate(() => loadSmsCard());
+    await page.waitForTimeout(400);
+    check("once set up, it asks for a cell number with the consent words",
+          /Reply STOP to stop/.test(await page.textContent("#sms-card")) && !!(await page.$("#sms-phone")));
+    await page.fill("#sms-phone", "417-555-0123");
+    await page.click("#sms-send");
+    await page.waitForTimeout(300);
+    check("nothing is sent until the consent box is ticked", !calls.some(([k]) => k === "start"));
+    await page.check("#sms-ok");
+    await page.click("#sms-send");
+    await page.waitForTimeout(500);
+    const start = calls.find(([k]) => k === "start");
+    check("ticked, the number and consent go to the server",
+          start && start[1].phone === "417-555-0123" && start[1].consent === true, JSON.stringify(start));
+    await page.fill("#sms-code", "123456");
+    await page.click("#sms-confirm");
+    await page.waitForTimeout(500);
+    check("the code confirms it and the card says texts are on",
+          /On for/.test(await page.textContent("#sms-card")) && calls.some(([k, b]) => k === "confirm" && b.code === "123456"));
+    await page.click("#sms-off");
+    await page.waitForTimeout(500);
+    check("turning off goes to the server", calls.some(([k]) => k === "stop"));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   // ── A statewide bid is placed by its own name ──
   console.log("\nA bid from a statewide search is placed by the site its name gives");
   {

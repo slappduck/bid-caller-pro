@@ -1133,3 +1133,10 @@ body{font-family:var(--ui);background:radial-gradient(ellipse 120% 60% at 50% -1
 .start-step.done .start-n{background:var(--amber);color:#10131c;}
 .start-step.done b{color:var(--text2);}
 .start-hide{display:block;margin:0.4rem auto 0;font-size:var(--fs-xs);min-height:36px;}
+
+/* Text alerts */
+.sms-row{display:flex;gap:0.5rem;margin:0.5rem 0;}
+.sms-row .input{flex:1;min-width:0;}
+.sms-row .btn-primary{width:auto;margin:0;padding:0 1.1rem;}
+.sms-consent{display:flex;gap:0.55rem;align-items:flex-start;margin:0.6rem 0;font-size:var(--fs-xs);color:var(--text2);line-height:1.45;}
+.sms-consent input{margin-top:0.2rem;min-width:18px;min-height:18px;}

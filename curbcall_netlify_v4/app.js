@@ -1746,6 +1746,56 @@ async function subscribePush(){
     return true;
   }catch(e){console.warn("[curbcall] push subscribe failed:",e);return false;}
 }
+// ── Text alerts ──
+// Opt-in, confirmed with a code (server: /sms/*). Hidden until the server
+// has a texting account set up. The consent words come from the server, so
+// what the contractor ticks is exactly what is recorded.
+const SMS_ERRORS={bad_phone:"Enter a US cell number.",no_consent:"Tick the box to agree to texts.",
+  rate_limited:"Too many codes today. Try again tomorrow.",send_failed:"Couldn't text that number. Check it and try again.",
+  wrong_code:"That code isn't right.",expired:"That code expired. Send a new one.",no_code:"Send a code first.",
+  not_configured:"Text alerts aren't available yet."};
+async function smsCall(path,extra){
+  const token=await getSupabaseToken();
+  const r=await fetchRetry(SERVER+path,{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({supabase_token:token,...(extra||{})})},20000);
+  return r.json();
+}
+async function loadSmsCard(sentTo){
+  const card=document.getElementById("sms-card");
+  if(!card||!currentUser||isOffline())return;
+  let d;
+  try{d=await smsCall("/sms/status");}catch(e){return;}
+  if(!d||!d.ok||!d.configured){card.style.display="none";return;}
+  card.style.display="";
+  const head=`<div class="account-email hdr-ic" style="font-size:var(--fs-base);"><svg class="icon-svg"><use href="#i-bell"/></svg>Text alerts</div>`;
+  if(d.status==="on"&&!sentTo){
+    card.innerHTML=`${head}<div class="account-status">On for ${esc(d.phone)}: new bids for your saved searches, up to 1 text a day. Reply STOP to any text to stop.</div>
+      <button class="btn-ghost" id="sms-off" style="margin-top:0.5rem;">Turn off texts</button>`;
+    document.getElementById("sms-off").onclick=async()=>{await smsCall("/sms/stop");toast("Texts off");loadSmsCard();};
+    return;
+  }
+  if(sentTo){
+    card.innerHTML=`${head}<div class="account-status">We texted a code to ${esc(sentTo)}. Enter it here.</div>
+      <div class="sms-row"><input class="input" id="sms-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" aria-label="Code"><button class="btn-primary" id="sms-confirm">Confirm</button></div>
+      <a href="#" id="sms-back" class="link-btn">Use a different number</a>`;
+    document.getElementById("sms-back").onclick=(e)=>{e.preventDefault();loadSmsCard();};
+    document.getElementById("sms-confirm").onclick=async()=>{
+      const r=await smsCall("/sms/confirm",{code:document.getElementById("sms-code").value});
+      if(r&&r.ok){toast("Texts on");loadSmsCard();}else toast(SMS_ERRORS[r&&r.reason]||"Couldn't confirm. Try again.");
+    };
+    return;
+  }
+  card.innerHTML=`${head}<div class="account-status">Get new bids for your saved searches by text, up to 1 a day. Good for job sites.</div>
+    <input class="input" id="sms-phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="Cell number" aria-label="Cell number" style="margin-top:0.5rem;">
+    <label class="sms-consent"><input type="checkbox" id="sms-ok"><span>${esc(d.consent_text)} <a href="terms.html#texts" target="_blank">Terms</a> &middot; <a href="privacy.html" target="_blank">Privacy</a></span></label>
+    <button class="btn-primary" id="sms-send">Text me a code</button>`;
+  document.getElementById("sms-send").onclick=async()=>{
+    const phone=document.getElementById("sms-phone").value,ok=document.getElementById("sms-ok").checked;
+    if(!ok){toast(SMS_ERRORS.no_consent);return;}
+    const r=await smsCall("/sms/start",{phone,consent:true});
+    if(r&&r.ok)loadSmsCard(r.phone);else toast(SMS_ERRORS[r&&r.reason]||"Couldn't send a code. Try again.");
+  };
+}
 async function toggleNotifPermission(){
   if(isIOSBrowserTab()){toast("Add CurbCall to your Home Screen first (Share, then Add to Home Screen), then turn alerts on from there.");return;}
   if(!("Notification"in window)){toast("Notifications aren't supported in this browser.");return;}
@@ -9106,6 +9156,7 @@ function renderAccount(){
       <div class="account-email hdr-ic" style="font-size:var(--fs-base);"><svg class="icon-svg"><use href="#i-bell"/></svg>Bid Alerts</div>
       <div class="account-status" id="notif-status">${esc(notifPermissionLabel())}</div>
     </div>
+    <div class="account-card" id="sms-card" style="display:none;"></div>
     <div class="account-card">
       <div style="font-size:var(--fs-base);font-weight:700;display:flex;flex-wrap:wrap;gap:0.5rem;justify-content:space-between;align-items:center;">
         <span class="hdr-ic" style="white-space:nowrap;"><svg class="icon-svg"><use href="#i-briefcase"/></svg>Company Info</span>
@@ -9290,6 +9341,7 @@ function renderAccount(){
     await sb.auth.signOut();toast("Signed out");
   };
   document.getElementById("notif-card").onclick=toggleNotifPermission;
+  loadSmsCard();
   const adminCard=document.getElementById("admin-card");
   if(adminCard)adminCard.onclick=openAdminPanel;
   loadReferralCard();

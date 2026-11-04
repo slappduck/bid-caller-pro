@@ -164,6 +164,224 @@ def _notify_user(user_id, title, body, url="app.html", subs=None):
     return delivered
 
 
+# ── Text-message alerts (Twilio) ────────────────────────────────────────────
+# Contractors are on job sites; a text gets read. Opt-in only, and proven:
+# the contractor enters their cell number in the app, ticks the consent text,
+# and confirms with a six-digit code we text them. At most SMS_PER_DAY texts a
+# day, from the daily saved-search alerts. STOP (and the carriers' other stop
+# words) turns texts off at once, START back on, HELP answers with how to
+# reach us; Twilio's own opt-out handling also blocks a stopped number.
+#
+# Off until TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_FROM (a verified
+# toll-free number, +1...) are set on the server; the app hides the setting
+# until then. Numbers are kept by account in KV and deleted with the account.
+TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "").strip()
+TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "").strip()
+TWILIO_FROM = os.environ.get("TWILIO_FROM", "").strip()
+SMS_PER_DAY = 1
+SMS_CODE_MINUTES = 15
+SMS_CODES_PER_DAY = 3
+_SMS_KEY = "bidcaller:sms"
+_SMS_STOP = {"STOP", "STOPALL", "UNSUBSCRIBE", "CANCEL", "END", "QUIT", "REVOKE", "OPTOUT"}
+_SMS_START = {"START", "UNSTOP", "YES"}
+SMS_CONSENT_TEXT = ("Text me new bid alerts from CurbCall Pro at this number, up to 1 text a day. "
+                    "Msg & data rates may apply. Reply STOP to stop, HELP for help. Consent isn't a "
+                    "condition of purchase.")
+SMS_HELP = ("CurbCall Pro bid alerts, up to 1 text a day. Help: support@curbcallpro.com. "
+            "Msg & data rates may apply. Reply STOP to stop.")
+
+
+def _sms_configured():
+    return bool(TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN and TWILIO_FROM)
+
+
+def _sms_phone(raw):
+    """+1XXXXXXXXXX for a US number, else ""."""
+    d = re.sub(r"\D", "", str(raw or ""))
+    if len(d) == 11 and d.startswith("1"):
+        d = d[1:]
+    return "+1" + d if len(d) == 10 and d[0] in "23456789" and d[3] in "23456789" else ""
+
+
+def _sms_rows():
+    try:
+        got = kv_backend.get(_SMS_KEY, None)
+    except Exception:
+        got = None
+    return got if isinstance(got, dict) else {}
+
+
+def _sms_save(rows):
+    kv_backend.set(_SMS_KEY, rows)
+
+
+def _forget_sms(user_id):
+    rows = _sms_rows()
+    if rows.pop(str(user_id), None) is not None:
+        _sms_save(rows)
+
+
+def _send_sms(to, text):
+    if not _sms_configured():
+        return False
+    body = urllib.parse.urlencode({"To": to, "From": TWILIO_FROM, "Body": text[:320]}).encode()
+    auth = base64.b64encode(f"{TWILIO_ACCOUNT_SID}:{TWILIO_AUTH_TOKEN}".encode()).decode()
+    req = urllib.request.Request(
+        f"https://api.twilio.com/2010-04-01/Accounts/{TWILIO_ACCOUNT_SID}/Messages.json", data=body,
+        method="POST", headers={"Authorization": "Basic " + auth, "Content-Type": "application/x-www-form-urlencoded"})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return 200 <= r.status < 300
+    except Exception as ex:
+        print(f"[sms] send failed: {ex}", flush=True)
+        return False
+
+
+def _text_user(user_id, text, today=None):
+    """One alert text to a confirmed number, at most SMS_PER_DAY a day."""
+    rows = _sms_rows()
+    row = rows.get(str(user_id))
+    if not row or row.get("status") != "on" or not _sms_configured():
+        return False
+    day = (today or datetime.date.today()).isoformat()
+    sent = row.get("sent") if row.get("sent_day") == day else 0
+    if (sent or 0) >= SMS_PER_DAY:
+        return False
+    if not _send_sms(row["phone"], text):
+        return False
+    row.update(sent_day=day, sent=(sent or 0) + 1)
+    _sms_save(rows)
+    return True
+
+
+def _sms_user():
+    """(user_id, email, data) of the signed-in caller, or a refusal response."""
+    data = request.get_json(force=True, silent=True) or {}
+    user = _supabase_user(data.get("supabase_token", ""))
+    if not user or not user.get("id"):
+        return None, None, data, (jsonify({"ok": False, "reason": "not_signed_in"}), 401)
+    return str(user["id"]), str(user.get("email") or ""), data, None
+
+
+def _masked(phone):
+    return f"(\u2022\u2022\u2022) \u2022\u2022\u2022-{phone[-4:]}" if phone else ""
+
+
+@app.route("/sms/status", methods=["POST"])
+def sms_status():
+    uid, _email, _data, err = _sms_user()
+    if err:
+        return err
+    row = _sms_rows().get(uid) or {}
+    return jsonify({"ok": True, "configured": _sms_configured(), "status": row.get("status") or "none",
+                    "phone": _masked(row.get("phone", "")), "consent_text": SMS_CONSENT_TEXT})
+
+
+@app.route("/sms/start", methods=["POST"])
+def sms_start():
+    """Send a confirmation code. Nothing else is ever texted until it's entered."""
+    uid, email, data, err = _sms_user()
+    if err:
+        return err
+    if not _sms_configured():
+        return jsonify({"ok": False, "reason": "not_configured"}), 503
+    if data.get("consent") is not True:
+        return jsonify({"ok": False, "reason": "no_consent"}), 400
+    phone = _sms_phone(data.get("phone"))
+    if not phone:
+        return jsonify({"ok": False, "reason": "bad_phone"}), 400
+    rows = _sms_rows()
+    row = rows.get(uid) or {}
+    day = datetime.date.today().isoformat()
+    codes = row.get("codes") if row.get("codes_day") == day else 0
+    if (codes or 0) >= SMS_CODES_PER_DAY:
+        return jsonify({"ok": False, "reason": "rate_limited"}), 429
+    code = f"{secrets.randbelow(10 ** 6):06d}"
+    if not _send_sms(phone, f"CurbCall Pro: your code is {code}. Bid alerts, up to 1 text a day. "
+                            "Msg & data rates may apply. Reply STOP to stop, HELP for help."):
+        return jsonify({"ok": False, "reason": "send_failed"}), 502
+    row.update(phone=phone, email=email, status="on" if row.get("status") == "on" and row.get("phone") == phone else "pending",
+               code=hashlib.sha256(f"{uid}:{code}".encode()).hexdigest(), code_at=time.time(), tries=0,
+               codes_day=day, codes=(codes or 0) + 1)
+    rows[uid] = row
+    _sms_save(rows)
+    return jsonify({"ok": True, "phone": _masked(phone)})
+
+
+@app.route("/sms/confirm", methods=["POST"])
+def sms_confirm():
+    uid, _email, data, err = _sms_user()
+    if err:
+        return err
+    rows = _sms_rows()
+    row = rows.get(uid)
+    if not row or not row.get("code"):
+        return jsonify({"ok": False, "reason": "no_code"}), 400
+    if time.time() - float(row.get("code_at") or 0) > SMS_CODE_MINUTES * 60 or row.get("tries", 0) >= 5:
+        return jsonify({"ok": False, "reason": "expired"}), 400
+    given = re.sub(r"\D", "", str(data.get("code") or ""))
+    if not hmac.compare_digest(hashlib.sha256(f"{uid}:{given}".encode()).hexdigest(), row["code"]):
+        row["tries"] = row.get("tries", 0) + 1
+        _sms_save(rows)
+        return jsonify({"ok": False, "reason": "wrong_code"}), 400
+    # The consent record: what they agreed to, to which number, and when.
+    row.update(status="on", code="", consent_at=datetime.datetime.utcnow().isoformat() + "Z",
+               consent_text=SMS_CONSENT_TEXT, consent_ip=_client_ip())
+    _sms_save(rows)
+    return jsonify({"ok": True, "phone": _masked(row["phone"])})
+
+
+@app.route("/sms/stop", methods=["POST"])
+def sms_stop():
+    uid, _email, _data, err = _sms_user()
+    if err:
+        return err
+    rows = _sms_rows()
+    if uid in rows:
+        rows[uid]["status"] = "off"
+        _sms_save(rows)
+    return jsonify({"ok": True})
+
+
+def _twilio_signature_ok(url, params, signature):
+    if not TWILIO_AUTH_TOKEN or not signature:
+        return False
+    payload = url + "".join(k + params[k] for k in sorted(params))
+    want = base64.b64encode(hmac.new(TWILIO_AUTH_TOKEN.encode(), payload.encode(), hashlib.sha1).digest()).decode()
+    return hmac.compare_digest(want, signature)
+
+
+@app.route("/sms/inbound", methods=["POST"])
+def sms_inbound():
+    """Twilio's webhook for replies: STOP, START, HELP. Signed by Twilio."""
+    params = {k: request.form.get(k, "") for k in request.form}
+    url = "https://" + request.host + request.path
+    if not _twilio_signature_ok(url, params, request.headers.get("X-Twilio-Signature", "")):
+        return jsonify({"ok": False, "reason": "bad_signature"}), 403
+    phone = _sms_phone(params.get("From"))
+    word = re.sub(r"[^A-Z]", "", str(params.get("Body") or "").upper())
+    reply = ""
+    if phone and (word in _SMS_STOP or word in _SMS_START):
+        rows = _sms_rows()
+        changed = False
+        for row in rows.values():
+            if row.get("phone") != phone:
+                continue
+            if word in _SMS_STOP and row.get("status") != "off":
+                row["status"], changed = "off", True
+            elif word in _SMS_START and row.get("status") == "off" and row.get("consent_at"):
+                row["status"], changed = "on", True
+        if changed:
+            _sms_save(rows)
+    elif word in ("HELP", "INFO"):
+        reply = SMS_HELP
+    # TwiML. STOP and START replies are Twilio's own; we add only HELP.
+    xml = '<?xml version="1.0" encoding="UTF-8"?><Response>' + (
+        "<Message>" + reply.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;") + "</Message>" if reply else "") + "</Response>"
+    from flask import Response
+    return Response(xml, mimetype="text/xml")
+
+
 @app.route("/push/vapid-public-key", methods=["GET"])
 def push_vapid_public_key():
     try:
