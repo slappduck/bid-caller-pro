@@ -240,7 +240,9 @@ const ES={
   "Add lines the posting doesn't list: removal, mobilization, traffic control, testing.":"Agregue renglones que el anuncio no trae: demolición, movilización, control de tráfico, pruebas.",
   "Should you bid this?":"¿Le conviene licitar?","Details":"Detalles","Prepare bid →":"Preparar licitación →","Save bid":"Guardar licitación","Contact":"Contacto",
   "Scope":"Alcance","Location":"Ubicación","Source":"Fuente","Closes":"Cierra","Due":"Entrega","Status":"Estado","open":"abierta",
-  "Truncated domes on the ramps":"Domos táctiles en las rampas","Taking out the old concrete":"Quitar el concreto viejo","Traffic control":"Control de tráfico","Mobilization":"Movilización",
+  "Truncated domes on the ramps":"Domos táctiles en las rampas",
+  "All types":"Todos los tipos","Sidewalk":"Aceras","ADA ramps":"Rampas ADA","Curb & gutter":"Bordillo y cuneta","Driveways":"Entradas de autos",
+  "Paving & streets":"Pavimento y calles","Slabs & flatwork":"Losas y concreto plano","Drainage":"Drenaje","Bridges":"Puentes","Other":"Otro","Taking out the old concrete":"Quitar el concreto viejo","Traffic control":"Control de tráfico","Mobilization":"Movilización",
 "Offline — showing your saved bids":"Sin conexión: mostrando sus licitaciones guardadas",
 };
 const ES_RX=[
@@ -464,6 +466,27 @@ migrateBidIds();
 
 let cityFilter="All";
 let pipelineFilter="All";
+// ── Kinds of work, for filtering Active bids ──
+// From the bid's own title and scope; a bid can be more than one kind
+// ("sidewalk and ADA ramp improvements"). Anything that matches none is
+// "Other", so every bid sits under at least one.
+let workFilter="All";
+const WORK_TYPES=[
+  ["sidewalk","Sidewalk",/sidewalk|walkway|\bwalks?\b|\btrails?\b|multi[- ]?use path|shared[- ]use path|pedestrian/i],
+  ["ada","ADA ramps",/\bada\b|curb ramps?|\bramps?\b|detectable warning|truncated dome/i],
+  ["curb","Curb & gutter",/\bcurbs?\b(?!\s*ramp)|gutter/i],
+  ["driveway","Driveways",/driveway|drive approach/i],
+  ["paving","Paving & streets",/\bpav(e|ed|ing|ement)\b|street|\broads?\b|asphalt|resurfac|overlay|mill(ing)?\b|chip seal/i],
+  ["flatwork","Slabs & flatwork",/\bslabs?\b|flatwork|\bpads?\b|patio|plaza|parking lot/i],
+  ["drainage","Drainage",/storm|drainage|culvert|\bditch|inlet|catch basin/i],
+  ["bridge","Bridges",/\bbridges?\b/i],
+];
+function workTypesOf(b){
+  const text=`${(b&&b.title)||""} ${(b&&b.scope)||""}`;
+  const out=WORK_TYPES.filter(([,,rx])=>rx.test(text)).map(([k])=>k);
+  return out.length?out:["other"];
+}
+function workLabel(k){const t=WORK_TYPES.find(x=>x[0]===k);return t?t[1]:"Other";}
 let currentUser=null;
 
 // ── Cloud sync (Supabase) for saved bids — mirrors desktop's data_sync.py.
@@ -9099,7 +9122,19 @@ function renderSaved(){
   ptiles.innerHTML=cats.filter(([k])=>k==="All"||counts[k]>0)
     .map(([k,label])=>`<div class="tile ${pipelineFilter===k?"active":""}" data-k="${k}"><div class="n">${counts[k]||0}</div><div class="l">${label}</div></div>`).join("");
   ptiles.querySelectorAll(".tile").forEach(t=>t.onclick=()=>{pipelineFilter=t.dataset.k;renderSaved();});
-  const filteredKeys=keys.filter(id=>pipelineFilter==="All"||(pipelineFilter==="none"?!pipeline[id]:pipeline[id]===pipelineFilter));
+  const byStatus=keys.filter(id=>pipelineFilter==="All"||(pipelineFilter==="none"?!pipeline[id]:pipeline[id]===pipelineFilter));
+  // Kinds of work among the bids this status shows, most common first.
+  const kinds={};
+  byStatus.forEach(id=>workTypesOf(saved[id]).forEach(k=>{kinds[k]=(kinds[k]||0)+1;}));
+  const order=[...WORK_TYPES.map(t=>t[0]),"other"].filter(k=>kinds[k]).sort((a,b)=>kinds[b]-kinds[a]);
+  if(workFilter!=="All"&&!kinds[workFilter])workFilter="All";
+  const wrow=document.getElementById("work-tiles");
+  if(wrow){
+    wrow.innerHTML=order.length>1?[`<button type="button" class="work-chip${workFilter==="All"?" on":""}" data-w="All">All types</button>`]
+      .concat(order.map(k=>`<button type="button" class="work-chip${workFilter===k?" on":""}" data-w="${k}">${esc(workLabel(k))} <span>${kinds[k]}</span></button>`)).join(""):"";
+    wrow.querySelectorAll("[data-w]").forEach(c=>c.onclick=()=>{workFilter=c.dataset.w;renderSaved();});
+  }
+  const filteredKeys=byStatus.filter(id=>workFilter==="All"||workTypesOf(saved[id]).includes(workFilter));
   if(!filteredKeys.length){
     list.innerHTML=emptyHTML("i-search","Nothing here","No active bids with this status.");
     return;
@@ -9108,7 +9143,8 @@ function renderSaved(){
   attachBidEvents(list);
 }
 byId("export-saved-btn").onclick=()=>{
-  const keys=Object.keys(saved).filter(id=>pipelineFilter==="All"||(pipelineFilter==="none"?!pipeline[id]:pipeline[id]===pipelineFilter));
+  const keys=Object.keys(saved).filter(id=>pipelineFilter==="All"||(pipelineFilter==="none"?!pipeline[id]:pipeline[id]===pipelineFilter))
+    .filter(id=>workFilter==="All"||workTypesOf(saved[id]).includes(workFilter));
   exportCSV(keys.map(id=>[saved[id]._city||"",saved[id]]),"curbcall_saved");
 };
 
