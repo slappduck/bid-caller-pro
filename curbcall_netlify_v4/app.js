@@ -2641,11 +2641,20 @@ function onbCheckCoverage(){
 //
 // So a local "not onboarded" is now treated as a question rather than an
 // answer, and the account is asked before anyone is interrupted.
+const WELCOMED_KEY="welcomed";
 async function routeAfterAuth(){
   if(!onboardingNeeded()){showApp();return;}
   let done=false;
   try{done=await accountHasOnboarded();}catch(e){done=false;}
   if(done){store.set(ONBOARD_KEY,true);showApp();return;}
+  // A brand-new account sees the thanks page once (welcome.html), then
+  // comes back here for the two setup questions. Its own address, so an ad
+  // platform or anyone else can tell a sign-up happened by a visit to it.
+  if(!store.get(WELCOMED_KEY,0)){
+    store.set(WELCOMED_KEY,Date.now());
+    location.replace("/welcome.html"+(appLang()==="es"?"?lang=es":""));
+    return;
+  }
   showOnboarding();
 }
 

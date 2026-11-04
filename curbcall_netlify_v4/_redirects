@@ -28,6 +28,7 @@
 /post-a-bid     /post-a-bid.html   200
 /privacy        /privacy.html      200
 /terms          /terms.html        200
+/welcome        /welcome.html      200
 
 # The Spanish landing page (built by tools/build_es_landing.py).
 /es             /es/index.html     200

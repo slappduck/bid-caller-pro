@@ -3323,6 +3323,44 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     await ctx.close();
   }
 
+  // ── A new account sees the thanks page once, then setup ──
+  console.log("\nA new sign-up lands on the thanks page once, then the setup questions");
+  {
+    const ctx = await browser.newContext(MOBILE_VIEWPORT);
+    const page = await ctx.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
+    await page.route("**/*", (route) => {
+      const host = new URL(route.request().url()).hostname;
+      if (host === "127.0.0.1") return route.continue();
+      if (host === "cdn.jsdelivr.net") return route.fulfill({ status: 200, contentType: "application/javascript", body: SB_STUB });
+      return route.abort();
+    });
+    await page.goto(`${BASE}/app.html`, { waitUntil: "load" });
+    await page.waitForTimeout(500);
+    await Promise.all([
+      page.waitForURL(/\/welcome\.html$/, { timeout: 8000 }),
+      page.evaluate(() => { currentUser = { id: "new1", email: "new@example.com" }; routeAfterAuth(); }),
+    ]);
+    const thanks = await page.textContent("body");
+    check("a brand-new account goes to the thanks page", /Thanks for signing up/.test(thanks) && /14-day free trial has started/.test(thanks));
+    check("...with a Continue into the app", await page.$eval("#go", (a) => a.getAttribute("href") === "/app.html"));
+    await page.waitForURL(/\/app\.html$/, { timeout: 12000 });
+    // Let the app's own start-up (no session: the sign-in screen) finish first.
+    await page.waitForTimeout(2000);
+    // routeAfterAuth asks the account first; the test's stub never answers,
+    // so it falls back after its 4-second limit, as on a slow network.
+    await page.evaluate(() => { currentUser = { id: "new1", email: "new@example.com" }; return routeAfterAuth(); });
+    await page.waitForTimeout(300);
+    check("it continues on its own, and the second time goes straight to setup",
+          /\/app\.html$/.test(page.url()) && await page.$eval("#onboard-card", (el) => el.style.display !== "none"),
+          page.url() + " " + await page.evaluate(() => JSON.stringify([onboardingNeeded(), document.getElementById("onboard-card").style.display, localStorage.getItem("welcomed")])));
+    await page.goto(`${BASE}/welcome.html?lang=es`, { waitUntil: "load" });
+    check("in Spanish when the app is", /Gracias por registrarse/.test(await page.textContent("h1")));
+    check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
+    await ctx.close();
+  }
+
   // ── A statewide bid is placed by its own name ──
   console.log("\nA bid from a statewide search is placed by the site its name gives");
   {
