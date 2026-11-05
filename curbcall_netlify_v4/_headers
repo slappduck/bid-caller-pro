@@ -1,0 +1,24 @@
+# Browser security headers for every page and file on the site.
+#
+# Read by Cloudflare Workers static assets (and Netlify) the same way
+# _redirects is; never served as a file.
+#
+#   Strict-Transport-Security  always use HTTPS here for the next year, so a
+#                              coffee-shop network can't downgrade a visit.
+#   X-Content-Type-Options     a file is only ever what its type says.
+#   X-Frame-Options and        no other site may load these pages in a frame
+#   frame-ancestors            (clickjacking). Nothing on this site frames
+#                              itself either.
+#   base-uri, object-src       close two old ways of injecting script without
+#                              restricting the scripts the app actually loads.
+#   Referrer-Policy            other sites see only curbcallpro.com, never the
+#                              page or its query string.
+#   Permissions-Policy         features the app never uses are switched off.
+#                              Geolocation stays on: "Use My Location" needs it.
+/*
+  Strict-Transport-Security: max-age=31536000
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Content-Security-Policy: frame-ancestors 'none'; base-uri 'self'; object-src 'none'
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: microphone=(), usb=(), payment=(), serial=(), bluetooth=()

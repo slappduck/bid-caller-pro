@@ -358,6 +358,12 @@ def health_detail():
             "FROM_EMAIL is still the onboarding@resend.dev default, Resend's sandbox "
             "address can only send to the account's own verified email — verify a "
             "real domain or point SUPPORT_EMAIL at that verified address.")
+    if LICENSE_SECRET_MISSING:
+        problems.append(
+            "LICENSE_SECRET is unset — license keys, digest unsubscribe links and "
+            "referral codes are not being signed with a private secret. Set it on "
+            "Render to the same value as before, or every paid customer's key stops "
+            "working.")
     if not backends["openai"]:
         problems.append(
             "OPENAI_API_KEY unset — search-discovered bids and /upcoming are "
