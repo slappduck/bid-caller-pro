@@ -216,3 +216,35 @@ class BothAreBehindTheDiagTokenTests(unittest.TestCase):
         health = self._body("health_detail")
         self.assertNotIn("_engagement", health)
         self.assertNotIn("_funnel_summary", health)
+
+
+class TrialsStartedByAScanAreCountedTests(unittest.TestCase):
+    """A new account's first scan starts its trial (_license_is_active). That
+    path logged nothing, so the weekly numbers read 0 trials while people were
+    trying the app."""
+
+    def test_a_first_scan_logs_the_trial(self):
+        from unittest.mock import patch
+        db = {}
+        with patch.object(ls, "_db", return_value=db), patch.object(ls, "_save_db"), \
+             patch.object(ls, "_verify_supabase_token", return_value="newbie@example.com"), \
+             patch.object(ls, "_is_admin_email", return_value=False):
+            self.assertTrue(ls._license_is_active("", "dev-1", "token"))
+            self.assertTrue(ls._license_is_active("", "dev-1", "token"))
+        rows = [r for r in db["lifecycle"] if r["event"] == "trial_started"]
+        self.assertEqual(len(rows), 1, "logged once, not on every scan")
+        self.assertEqual(rows[0]["id"], ls._bi_id("newbie@example.com"))
+        self.assertEqual(ls._funnel_summary(db)["signups_started"], 1)
+
+    def test_trials_that_were_never_logged_still_count(self):
+        """Trials started before the fix are on record in db["trials"]."""
+        def naive(d):
+            return (datetime.datetime.now() - datetime.timedelta(days=d)).isoformat()
+        db = {"lifecycle": [{"at": ago(1), "event": "trial_started", "id": ls._bi_id("a@x.com")}],
+              "trials": {"email:a@x.com": {"started": naive(1), "email": "a@x.com"},
+                         "email:b@x.com": {"started": naive(5), "email": "b@x.com"},
+                         "email:old@x.com": {"started": naive(ls._VISIT_DAYS + 10), "email": "old@x.com"},
+                         "device-123": {"started": naive(2)}}}
+        self.assertEqual(ls._funnel_summary(db)["signups_started"], 2,
+                         "a logged once, b from the record, old is outside the window, devices aren't people")
+        self.assertEqual(ls._bi_summary(db)["people"]["trialled"], 3)
