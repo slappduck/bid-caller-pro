@@ -151,7 +151,20 @@ def _env_secret(name, default):
     return (os.environ.get(name) or "").strip() or default
 
 
-LICENSE_SECRET = _env_secret("LICENSE_SECRET", "CHANGE_THIS_LONG_RANDOM_SECRET")
+_LICENSE_SECRET_PLACEHOLDER = "CHANGE_THIS_LONG_RANDOM_SECRET"
+LICENSE_SECRET = _env_secret("LICENSE_SECRET", _LICENSE_SECRET_PLACEHOLDER)
+# The placeholder is printed above in a public repo, so a server running on it
+# signs keys anyone can forge. Tests and local runs keep it (they need a
+# stable secret); on Render, where a lost variable would otherwise mean free
+# keys for anyone who reads this file, it is swapped for a random one that
+# exists only in this process. Old keys stop validating until the variable is
+# restored -- correct, since none of them could be trusted -- and /health
+# reports it as a problem so the watchdog pages. Render sets RENDER on every
+# service it runs; off Render the placeholder is expected, not a problem.
+LICENSE_SECRET_MISSING = (LICENSE_SECRET == _LICENSE_SECRET_PLACEHOLDER
+                          and bool(os.environ.get("RENDER")))
+if LICENSE_SECRET_MISSING:
+    LICENSE_SECRET = secrets.token_hex(32)
 _ADMIN_TOKEN_PLACEHOLDER = "CHANGE_THIS_ADMIN_TOKEN"
 ADMIN_TOKEN = _env_secret("ADMIN_TOKEN", _ADMIN_TOKEN_PLACEHOLDER)
 
@@ -1417,6 +1430,12 @@ def health_detail():
             "FROM_EMAIL is still the onboarding@resend.dev default, Resend's sandbox "
             "address can only send to the account's own verified email — verify a "
             "real domain or point SUPPORT_EMAIL at that verified address.")
+    if LICENSE_SECRET_MISSING:
+        problems.append(
+            "LICENSE_SECRET is unset — license keys, digest unsubscribe links and "
+            "referral codes are not being signed with a private secret. Set it on "
+            "Render to the same value as before, or every paid customer's key stops "
+            "working.")
     if not backends["openai"]:
         problems.append(
             "OPENAI_API_KEY unset — search-discovered bids and /upcoming are "
@@ -2211,12 +2230,19 @@ def account_delete():
 
 
 
+STRIPE_WEBHOOK_TOLERANCE = 300  # seconds, as Stripe's libraries use
+
+
 def _stripe_verify(payload, sig_header):
     """Verify a Stripe webhook signature without the stripe library."""
     if not STRIPE_WEBHOOK_SECRET or not sig_header:
         return False
     try:
         parts = dict(p.split("=", 1) for p in sig_header.split(",") if "=" in p)
+        # Stripe's own libraries refuse an event signed more than five minutes
+        # ago, so a captured webhook can't be replayed later. Same here.
+        if abs(time.time() - int(parts.get("t", "0"))) > STRIPE_WEBHOOK_TOLERANCE:
+            return False
         signed = f"{parts.get('t')}.{payload.decode('utf-8')}".encode("utf-8")
         expected = hmac.new(STRIPE_WEBHOOK_SECRET.encode(), signed,
                             hashlib.sha256).hexdigest()

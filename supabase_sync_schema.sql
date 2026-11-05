@@ -73,10 +73,12 @@ insert into storage.buckets (id, name, public)
 values ('avatars', 'avatars', true)
 on conflict (id) do nothing;
 
--- Anyone can view avatar images — they're meant to be public profile pictures.
+-- No public read policy: the bucket is public, so avatar images load from
+-- their public links without one. A select policy for everyone would also let
+-- anyone LIST the bucket -- every user's id, as folder names (Supabase
+-- Security Advisor: "Public Bucket Allows Listing"). Dropped here for
+-- projects created from an older revision of this file.
 drop policy if exists "Public read access for avatars" on storage.objects;
-create policy "Public read access for avatars" on storage.objects
-  for select using (bucket_id = 'avatars');
 
 -- A user can only upload/replace/delete their OWN avatar — enforced by
 -- requiring the file path's first folder segment to be their own user id
@@ -230,6 +232,11 @@ begin
   new.updated_at := now();
   return new;
 end $$;
+-- Only its trigger should run it; nobody calls it directly (Supabase
+-- Security Advisor: "Public Can Execute SECURITY DEFINER Function").
+revoke execute on function public.reviews_reset_approval() from public;
+revoke execute on function public.reviews_reset_approval() from anon;
+revoke execute on function public.reviews_reset_approval() from authenticated;
 drop trigger if exists reviews_reset_approval_trg on reviews;
 create trigger reviews_reset_approval_trg before update on reviews
   for each row execute function reviews_reset_approval();

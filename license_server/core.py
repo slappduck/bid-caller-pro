@@ -139,7 +139,20 @@ def _env_secret(name, default):
     return (os.environ.get(name) or "").strip() or default
 
 
-LICENSE_SECRET = _env_secret("LICENSE_SECRET", "CHANGE_THIS_LONG_RANDOM_SECRET")
+_LICENSE_SECRET_PLACEHOLDER = "CHANGE_THIS_LONG_RANDOM_SECRET"
+LICENSE_SECRET = _env_secret("LICENSE_SECRET", _LICENSE_SECRET_PLACEHOLDER)
+# The placeholder is printed above in a public repo, so a server running on it
+# signs keys anyone can forge. Tests and local runs keep it (they need a
+# stable secret); on Render, where a lost variable would otherwise mean free
+# keys for anyone who reads this file, it is swapped for a random one that
+# exists only in this process. Old keys stop validating until the variable is
+# restored -- correct, since none of them could be trusted -- and /health
+# reports it as a problem so the watchdog pages. Render sets RENDER on every
+# service it runs; off Render the placeholder is expected, not a problem.
+LICENSE_SECRET_MISSING = (LICENSE_SECRET == _LICENSE_SECRET_PLACEHOLDER
+                          and bool(os.environ.get("RENDER")))
+if LICENSE_SECRET_MISSING:
+    LICENSE_SECRET = secrets.token_hex(32)
 _ADMIN_TOKEN_PLACEHOLDER = "CHANGE_THIS_ADMIN_TOKEN"
 ADMIN_TOKEN = _env_secret("ADMIN_TOKEN", _ADMIN_TOKEN_PLACEHOLDER)
 

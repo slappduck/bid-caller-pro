@@ -1,10 +1,17 @@
 
+STRIPE_WEBHOOK_TOLERANCE = 300  # seconds, as Stripe's libraries use
+
+
 def _stripe_verify(payload, sig_header):
     """Verify a Stripe webhook signature without the stripe library."""
     if not STRIPE_WEBHOOK_SECRET or not sig_header:
         return False
     try:
         parts = dict(p.split("=", 1) for p in sig_header.split(",") if "=" in p)
+        # Stripe's own libraries refuse an event signed more than five minutes
+        # ago, so a captured webhook can't be replayed later. Same here.
+        if abs(time.time() - int(parts.get("t", "0"))) > STRIPE_WEBHOOK_TOLERANCE:
+            return False
         signed = f"{parts.get('t')}.{payload.decode('utf-8')}".encode("utf-8")
         expected = hmac.new(STRIPE_WEBHOOK_SECRET.encode(), signed,
                             hashlib.sha256).hexdigest()

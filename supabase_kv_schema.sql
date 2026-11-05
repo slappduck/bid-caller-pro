@@ -19,6 +19,9 @@ create table if not exists public.kv_store (
 create or replace function public.kv_store_touch()
 returns trigger
 language plpgsql
+-- Pinned so no same-named object in another schema can be picked up
+-- (Supabase Security Advisor: "Function Search Path Mutable").
+set search_path = ''
 as $$
 begin
     new.updated_at = now();
