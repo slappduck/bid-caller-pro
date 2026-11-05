@@ -720,6 +720,27 @@ def visit():
     return jsonify({"ok": True, "recorded": True})
 
 
+def _lifecycle_rows(db):
+    """The lifecycle log, plus a trial_started row for every trial on record
+    that the log never got.
+
+    Trials started by a first scan (_license_is_active) weren't logged before
+    that was fixed, so the log alone undercounts them. db["trials"] holds
+    every trial with its start date, so it fills the gap -- once per person,
+    and never a second row for someone the log already has.
+    """
+    log = list(db.get(LIFECYCLE_KEY) or [])
+    logged = {r.get("id") for r in log if r.get("event") == "trial_started"}
+    for key, rec in (db.get("trials") or {}).items():
+        if not (isinstance(key, str) and key.startswith("email:") and isinstance(rec, dict)):
+            continue
+        who = _bi_id(rec.get("email") or key[len("email:"):])
+        if who and who not in logged and rec.get("started"):
+            log.append({"at": rec["started"], "event": "trial_started", "id": who})
+            logged.add(who)
+    return log
+
+
 def _funnel_summary(db=None):
     """Visitors to the marketing site, and how many became trials.
 
@@ -744,7 +765,7 @@ def _funnel_summary(db=None):
         except Exception:
             continue
     try:
-        log = (db if db is not None else _db()).get(LIFECYCLE_KEY) or []
+        log = _lifecycle_rows(db if db is not None else _db())
     except Exception:
         log = []
     trials = 0
@@ -835,7 +856,7 @@ def _bi_summary(db=None):
     it safe to read from a diagnostics endpoint.
     """
     try:
-        log = (db if db is not None else _db()).get(LIFECYCLE_KEY) or []
+        log = _lifecycle_rows(db if db is not None else _db())
     except Exception:
         return {"events": 0}
 
@@ -1047,9 +1068,13 @@ def _license_is_active(key, device, supabase_token=None):
                             days=TRIAL_DAYS):
                         return True
             else:
-                # First time this account scans — start their trial
+                # First time this account scans — start their trial. Logged
+                # like /trial logs it: a new account's first scan is the usual
+                # way a trial starts, and the weekly numbers read 0 trials
+                # while this path recorded none.
                 trials[trial_key] = {"started": datetime.datetime.now().isoformat(),
                                      "email": email}
+                _bi_note(db, "trial_started", email)
                 _save_db(db)
                 return True
 
