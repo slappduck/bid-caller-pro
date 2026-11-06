@@ -60,6 +60,22 @@ const RESET_TOKEN_HASH = (() => {
   const p = new URLSearchParams(window.location.search);
   return p.get("type") === "recovery" ? p.get("token_hash") : null;
 })();
+// Sign-up confirmation and magic links, read the same stateless way as reset
+// links: token_hash + verifyOtp signs in whichever browser opens the link.
+// The default PKCE link only works in the browser that asked for it, so
+// someone who signed up in one browser and tapped the email in another (a
+// private tab, a laptop then a phone, Gmail's in-app browser) came back
+// confirmed but signed out, looking at the create-account form again. Needs
+// the "Confirm signup" and "Magic Link" email templates to link to
+// {{ .SiteURL }}/app.html?token_hash={{ .TokenHash }}&type=email
+const EMAIL_LINK = (() => {
+  const p = new URLSearchParams(window.location.search);
+  const type = p.get("type"), hash = p.get("token_hash");
+  return hash && ["email","signup","magiclink","invite"].includes(type) ? {type, hash} : null;
+})();
+// A ?code= link from Supabase's default templates. If this browser can't
+// redeem it, the person still needs telling where they stand.
+const CAME_WITH_CODE = new URLSearchParams(window.location.search).has("code");
 // Auth Logs (Authentication -> Logs -> Auth Logs) showed every failed
 // reset attempt recording a "login" audit event -- the recovery grant
 // taking effect -- immediately followed by an unexplained "logout" about
@@ -187,7 +203,11 @@ const ES={
   "Search Radius":"Radio de búsqueda","Use My Location":"Usar mi ubicación","Scan for Bids":"Buscar licitaciones","Scan":"Buscar","City and state, or ZIP":"Ciudad y estado, o código postal",
   "ZIP code or City, State":"Código postal o Ciudad, Estado","Enter a ZIP or city first":"Primero escriba un código postal o una ciudad",
   "Save this search for auto-alerts":"Guardar esta búsqueda para recibir avisos","Saved. We'll email you new bids here every morning.":"Guardado. Le mandamos por correo las licitaciones nuevas de aquí cada mañana.",
-  "Last search":"Última búsqueda","Taking longer than usual":"Está tardando más de lo normal","Connection problem":"Problema de conexión",
+  "Last search":"Última búsqueda","Taking longer than usual":"Está tardando más de lo normal","Still working on it":"Seguimos trabajando en ello",
+  "Searching for bid pages\u2026":"Buscando páginas de licitaciones\u2026","Reading town bid pages\u2026":"Leyendo las páginas de licitaciones de los pueblos\u2026",
+  "Checking deadlines and contacts\u2026":"Revisando fechas de entrega y contactos\u2026","Almost done\u2026":"Casi listo\u2026",
+  "Checking town bid pages\u2026 bigger searches take a minute or two.":"Revisando las páginas de licitaciones\u2026 las búsquedas más grandes tardan uno o dos minutos.",
+  "Reading agendas and budget documents\u2026":"Leyendo agendas y documentos de presupuesto\u2026","Checking permit records\u2026":"Revisando registros de permisos\u2026","Connection problem":"Problema de conexión",
   "Couldn't detect your location — enter a ZIP instead.":"No pudimos detectar su ubicación; escriba un código postal.",
   "Find Upcoming Projects":"Buscar proyectos próximos","Find Residential Leads":"Buscar clientes residenciales","Upcoming Work":"Trabajo próximo","Residential Leads":"Clientes residenciales",
   // bids
@@ -233,8 +253,7 @@ const ES={
   "Check Account tab":"Revise la pestaña Cuenta",
   "← Bid details":"← Detalles de la licitación","You're":"Está","inside that range":"dentro de ese rango","above that range":"por arriba de ese rango","below that range":"por debajo de ese rango",
   "You'd make about":"Ganaría unos","You'd lose about":"Perdería unos","(estimate)":"(estimado)",
-  "From starting guesses until you set your costs, on the lines it can size.":"Con costos iniciales calculados hasta que ponga los suyos, en los renglones que se pueden medir.",
-  "From your costs, on the lines it can size.":"Con sus costos, en los renglones que se pueden medir.",
+
   "Set your costs (now using starting guesses)":"Ponga sus costos (ahora se usan costos calculados)","Your costs":"Sus costos",
   "See what was read from the documents":"Ver lo que se leyó de los documentos","No item list? Measure from the plans":"¿No hay lista de conceptos? Medir desde los planos",
   "Add lines the posting doesn't list: removal, mobilization, traffic control, testing.":"Agregue renglones que el anuncio no trae: demolición, movilización, control de tráfico, pruebas.",
@@ -246,6 +265,10 @@ const ES={
 "Offline — showing your saved bids":"Sin conexión: mostrando sus licitaciones guardadas",
 };
 const ES_RX=[
+  [/^From (starting guesses until you set your costs|your costs), on the (\d+) priced concrete lines?\.$/,
+   (m,w,n)=>`${w==="your costs"?"Con sus costos":"Con costos iniciales calculados hasta que ponga los suyos"}, en ${n==="1"?"el renglón de concreto con precio":`los ${n} renglones de concreto con precio`}.`],
+  [/^(Searching for bid pages|Reading town bid pages|Checking deadlines and contacts|Almost done)\u2026 (\d+) so far$/,
+   (m,w,n)=>`${ES[w+"\u2026"]} ${n} hasta ahora`],
   [/^(\d+) open bids? found\.$/,(m,n)=>`${n} ${n==="1"?"licitación abierta encontrada":"licitaciones abiertas encontradas"}.`],
   [/^about (\d+) minutes? left$/,(m,n)=>`queda${n==="1"?"":"n"} unos ${n} minuto${n==="1"?"":"s"}`],
   [/^Added (\d+) new bids?!$/,(m,n)=>`¡Se agregaron ${n} licitaciones nuevas!`],
@@ -1180,6 +1203,29 @@ if(sb&&RESET_TOKEN_HASH){
     }
   });
 }
+// Signed in from the link itself, or told plainly what to do next. Never the
+// create-account form again for someone who just made an account.
+function showSignInAfterLink(ok){
+  showAuth();
+  setAuthMode("signin");
+  setMsg(ok?"Your account is ready. Sign in to continue."
+          :"That link didn't work. It may have expired or already been used. Sign in, or send yourself a new link below.",
+         ok?"ok":"err");
+}
+if(sb&&EMAIL_LINK){
+  sb.auth.verifyOtp({type:EMAIL_LINK.type,token_hash:EMAIL_LINK.hash}).then(({data,error})=>{
+    try{history.replaceState(null,"",window.location.pathname);}catch(e){}
+    // Success fires SIGNED_IN through onAuthStateChange, which opens the app.
+    if(error||!data||!data.session)showSignInAfterLink(false);
+  });
+}
+if(sb&&CAME_WITH_CODE&&!CAME_FROM_RESET_LINK){
+  // getSession() waits for supabase-js to finish trying the code. No session
+  // means this browser couldn't redeem it -- the email is still confirmed.
+  sb.auth.getSession().then(({data})=>{
+    if(!(data&&data.session))showSignInAfterLink(true);
+  });
+}
 function showPasswordReset(){
   document.getElementById("auth-screen").style.display="flex";
   document.getElementById("app").style.display="none";
@@ -1409,7 +1455,7 @@ byId("email-btn").onclick=async()=>{
   let res;
   try{
     res=authMode==="signup"
-      ? await sb.auth.signUp({email,password,options:{captchaToken:turnstileToken()}})
+      ? await sb.auth.signUp({email,password,options:{emailRedirectTo:authReturnUrl(),captchaToken:turnstileToken()}})
       : await sb.auth.signInWithPassword({email,password,options:{captchaToken:turnstileToken()}});
   }catch(e){
     setAuthBusy(false);
@@ -3144,18 +3190,17 @@ function mergeOpenBids(incoming,scannedCities){
 //     estimate is calibrated to the user's radius, location and connection
 //     rather than to a number somebody guessed once. With no history it uses
 //     a conservative default and says less.
-//   * When elapsed passes the estimate it stops guessing: the bar switches to
-//     a moving sweep and the copy says it is taking longer than usual. That
-//     is the honest state, and it looks alive instead of stuck.
+//   * The server reports which stage a scan is in (/scan/progress), and each
+//     stage sets a floor under the bar, so it moves when real work moves.
+//   * Past the estimate it keeps creeping toward the end instead of
+//     switching to an alarm. "Longer than usual" next to the timer read as
+//     something going wrong on what is usually just a big search, so the
+//     timer only ever says how long it has been.
 //   * It can be cancelled. Previously a scan held the button hostage for up
 //     to 150 seconds with no way out.
 //
-// Deliberately NOT invented: per-stage narration ("reading portals...",
-// "checking state lettings..."). The server does not report where it is, so
-// any such text would be theatre keyed to a timer -- which is precisely the
-// thing being removed here. Real per-step progress needs the backend to
-// publish it, and a single sync gunicorn worker cannot serve a poll while a
-// scan is blocking it, so that is a backend change, not a frontend one.
+// The stage words come only from the server (watchScanProgress), never from a
+// timer: text keyed to a clock would be theatre.
 // Kept per kind, because the three runs are not the same shape of work: a
 // bid scan reads dozens of portals, a permit lookup hits one city's open-data
 // API. Sharing one history would make both estimates wrong.
@@ -3221,22 +3266,18 @@ function startScanProgress(wrapId,barId,opts){
     cancelBtn.onclick=()=>{cancelBtn.disabled=true;cancelBtn.textContent="Cancelling...";o.onCancel();};
   }else if(cancelBtn){cancelBtn.style.display="none";}
 
-  let over=false;
+  // Where the bar may not go below, set by the stage the server reports.
+  const PHASE_FLOOR={searching:0.12,reading_towns:0.35,checking_details:0.72,finishing:0.88};
+  let floor=0,over=false;
   const tick=setInterval(()=>{
     const el=Date.now()-started;
     const frac=el/expected;
-    if(frac<1){
-      // Ease off near the end so it never sits on 99% looking broken.
-      pb.style.width=(4+Math.min(0.88,frac*0.88)*100).toFixed(1)+"%";
-      elapsedEl.textContent=fmtElapsed(el);
-    }else{
-      if(!over){
-        over=true;
-        pb.classList.add("indeterminate");
-        if(o.onOverrun)o.onOverrun();
-      }
-      elapsedEl.textContent=fmtElapsed(el)+" — longer than usual";
-    }
+    // Up to the estimate, time moves it most of the way; past it, it keeps
+    // creeping (never stopping, never reaching the end) toward 96%.
+    const byTime=frac<1?frac*0.85:0.85+0.11*(1-Math.exp(-(frac-1)));
+    pb.style.width=(4+Math.max(byTime,floor)*92).toFixed(1)+"%";
+    elapsedEl.textContent=fmtElapsed(el);
+    if(frac>=1&&!over){over=true;if(o.onOverrun)o.onOverrun();}
   },200);
 
   function stop(){
@@ -3245,6 +3286,7 @@ function startScanProgress(wrapId,barId,opts){
   }
   return{
     elapsed(){return Date.now()-started;},
+    phase(name){floor=Math.max(floor,PHASE_FLOOR[name]||0);},
     finish(){
       stop();
       pb.classList.remove("indeterminate");
@@ -3401,7 +3443,7 @@ const SCAN_PHASES={
 //
 // Entirely optional. If this endpoint is missing, slow, or the storage behind
 // it is down, the scan is unaffected and the estimate carries on alone.
-function watchScanProgress(token,statusEl){
+function watchScanProgress(token,statusEl,onPhase){
   let stop=false,last="";
   (async()=>{
     while(!stop){
@@ -3421,6 +3463,7 @@ function watchScanProgress(token,statusEl){
         if(!d||!d.known||d.done)continue;
         const words=SCAN_PHASES[d.phase];
         if(!words)continue;
+        if(onPhase)onPhase(d.phase);
         // The count is the part people care about: it says the scan is
         // finding things, not merely still running.
         const txt=(typeof d.found==="number"&&d.found>0)
@@ -3446,11 +3489,13 @@ async function runScan(force){
   // cancelled scan and a timed-out one land in the same place.
   const ctrl=new AbortController();
   let cancelled=false;
+  // Set once the server has said what stage it is in. Its words are better
+  // than anything said on a timer, so nothing below replaces them.
+  let phaseShown=false;
   const prog=startScanProgress("progress-wrap","progress-bar",{
     onCancel(){cancelled=true;ctrl.abort();},
     onOverrun(){
-      status.textContent="Still scanning \u2014 wide radiuses take longer, "
-        +"and the server may have been asleep.";
+      if(!phaseShown)status.textContent="Checking town bid pages\u2026 bigger searches take a minute or two.";
     },
   });
   // Generous timeout \u2014 real scans take a while and the backend can be
@@ -3460,7 +3505,7 @@ async function runScan(force){
   // Minted here, sent with the scan, and polled alongside it.
   const progressToken="s"+Math.random().toString(36).slice(2)
     +Date.now().toString(36);
-  const stopWatching=watchScanProgress(progressToken,status);
+  const stopWatching=watchScanProgress(progressToken,status,ph=>{phaseShown=true;prog.phase(ph);});
   async function post(signal,forceThis){
     const token=await getSupabaseToken();
     return fetch(SERVER+"/scan",{
@@ -3559,7 +3604,7 @@ async function runScan(force){
       status.textContent="Still working. The server finishes scans even after "
         +"the app stops waiting \u2014 tap Scan again in a minute and it will "
         +"return today\u2019s saved result straight away.";
-      toast("Taking longer than usual");
+      toast("Still working on it");
     }else{
       status.textContent=offlineOrServer();
       toast("Connection problem");
@@ -3594,7 +3639,7 @@ async function runUpcoming(){
   const prog=startScanProgress("up-progress-wrap","up-progress-bar",{
     expected:expectedRunMs("upcoming"),
     onCancel(){cancelled=true;ctrl.abort();},
-    onOverrun(){status.textContent="Still searching \u2014 agendas and budget documents are slow to read.";},
+    onOverrun(){status.textContent="Reading agendas and budget documents\u2026";},
   });
   const killer=setTimeout(()=>ctrl.abort(),150000);
   try{
@@ -3734,7 +3779,7 @@ async function runLeads(){
   const prog=startScanProgress("leads-progress-wrap","leads-progress-bar",{
     expected:expectedRunMs("leads"),
     onCancel(){cancelled=true;ctrl.abort();},
-    onOverrun(){status.textContent="Still checking permit records...";},
+    onOverrun(){status.textContent="Checking permit records\u2026";},
   });
   const killer=setTimeout(()=>ctrl.abort(),60000);
   try{
@@ -6985,10 +7030,17 @@ function concretePriceFor(p){
   const quoted=Object.values(plants).map(x=>Number(x&&x.price)).filter(x=>x>0);
   return quoted.length?Math.min(...quoted):(READY_MIX.low+READY_MIX.high)/2;
 }
+// Only concrete work gets a cost. A state job's other lines -- asphalt,
+// seeding, removal, fencing, signs -- come in the same units (sq yd, ft) but
+// cost nothing like concrete, and costing them as flatwork showed a bridge
+// job as a $3.4 million loss.
+const NOT_CONCRETE=/asphalt|bitumin|seed|\bsod\b|mulch|fabric|geotext|remov|demol|milling|\bmill\b|strip(?:e|ing)|paint|marking|erosion|topsoil|excavat|grading|aggregate|gravel|rip ?rap|fenc|\bsign|marker|guard ?rail|pipe|culvert|landscap|\btree/i;
+const CONCRETE_WORK=/concrete|\bpcc\b|portland|cement|sidewalk|slab|flatwork|driveway|walk|apron|\bpad\b|median|curb|gutter|ramp|approach/i;
 // {cost, perUnit, basis} for one line, or null where there's no way to know.
 function lineCost(l,p){
   const c=myCosts(),qty=Number(l.qty)||0,name=String(l.name||"");
   if(!qty)return null;
+  if(NOT_CONCRETE.test(name)||(!l.item&&!CONCRETE_WORK.test(name)))return null;
   const dayCost=c.crew*c.wage*c.hours+c.equip,cy=concretePriceFor(p)*(1+wastePct()/100);
   let days=0,yards=0,mat=0,kind="";
   const area=l.unit==="sq yd"?qty*9:l.unit==="sq ft"?qty:0;
@@ -7006,11 +7058,13 @@ function lineCost(l,p){
 function profitSummaryHTML(p){
   let cost=0,rev=0,n=0;
   const k=1+(Number(p.markup)||0)/100;
-  (p.lines||[]).forEach(l=>{const lc=lineCost(l,p);if(!lc)return;n++;cost+=lc.cost;rev+=(Number(l.qty)||0)*(Number(l.price)||0)*k;});
+  // Only lines with a price: an unpriced line brings in nothing yet, so
+  // counting its cost made every half-priced bid look like a huge loss.
+  (p.lines||[]).forEach(l=>{if(!(Number(l.price)>0))return;const lc=lineCost(l,p);if(!lc)return;n++;cost+=lc.cost;rev+=(Number(l.qty)||0)*Number(l.price)*k;});
   if(!n)return"";
   const profit=rev-cost,pct=rev>0?Math.round(profit/rev*100):0;
   return`<div class="profit-box${profit<0?" loss":""}"><div><span>${profit<0?"You'd lose about":"You'd make about"}${costsAreMine()?"":` <em class="est">(estimate)</em>`}</span><b>${money0(Math.abs(profit))} (${pct}%)</b></div>
-    <small>${costsAreMine()?"From your costs":"From starting guesses until you set your costs"}, on the lines it can size.</small></div>`;
+    <small>${costsAreMine()?"From your costs":"From starting guesses until you set your costs"}, on the ${n} priced concrete line${n===1?"":"s"}.</small></div>`;
 }
 function costsEditorHTML(){
   const c=myCosts();

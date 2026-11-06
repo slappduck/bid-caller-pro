@@ -2,6 +2,18 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
+<script>
+/* A sign-in link that lands here instead of the app (Supabase falls back to
+   the site's home page when a link's return address isn't allowed) is passed
+   on to the app with everything it carries, so the person is signed in
+   rather than left on the marketing page. */
+(function () {
+  var s = location.search, h = location.hash;
+  if (/[?&](code|token_hash)=/.test(s) || /error_description=/.test(s) || /(access_token|error_description)=/.test(h)) {
+    location.replace("/app.html" + s + h);
+  }
+})();
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>CurbCall Pro — Find Sidewalk, ADA &amp; Curb Bids Near You</title>
 <meta name="description" content="CurbCall Pro finds live sidewalk, ADA ramp and curb &amp; gutter bids near you, then helps you win them: what the state paid for the same work, a target price, bid forms filled in, addendum alerts on your phone and ready-mix plants near the job." />
