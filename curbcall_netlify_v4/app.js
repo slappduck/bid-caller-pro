@@ -9743,12 +9743,27 @@ async function renderAdminPanel(){
   const pendingReviews=reviews.reviews.filter(r=>!r.approved);
 
   mc.innerHTML=`<h2>Admin</h2>
+    <!-- Sign-ups first. "Active Trials" alone read 0 once the last trial
+         ended, which looked like nobody had ever signed up. -->
+    <div class="stats-grid" style="margin-bottom:0.6rem;">
+      <div class="stat-box"><div class="n">${list.counts.people??0}</div><div class="l">Sign-ups, all time</div></div>
+      <div class="stat-box"><div class="n">${list.counts.new_7d??0}</div><div class="l">New this week</div></div>
+      <div class="stat-box"><div class="n">${list.counts.new_30d??0}</div><div class="l">New in 30 days</div></div>
+      <div class="stat-box"><div class="n">${list.counts.active_trials}</div><div class="l">In trial now</div></div>
+    </div>
     <div class="stats-grid" style="margin-bottom:1rem;">
-      <div class="stat-box"><div class="n">${list.counts.active_trials}</div><div class="l">Active Trials</div></div>
-      <div class="stat-box"><div class="n">${list.counts.active_subs}</div><div class="l">Active Subs</div></div>
+      <div class="stat-box"><div class="n">${list.counts.active_subs}</div><div class="l">Paying</div></div>
       <div class="stat-box"><div class="n">${pendingNotices.length}</div><div class="l">Notices to Review</div></div>
       <div class="stat-box"><div class="n">${drafts.drafts.length}</div><div class="l">Campaign Drafts</div></div>
     </div>
+
+    <div class="account-email hdr-ic" style="font-size:var(--fs-base);margin-bottom:0.5rem;"><svg class="icon-svg"><use href="#i-users"/></svg>Recent sign-ups</div>
+    ${(list.recent||[]).length?(list.recent||[]).map(u=>`
+      <div class="detail-row">
+        <div class="detail-label" style="flex:1;min-width:0;overflow-wrap:anywhere;">${esc(u.email)}</div>
+        <div class="detail-val" style="flex-shrink:0;">${esc(u.started)} &middot; ${u.paid?"paying":u.active?`trial, ${esc(String(u.days_left))}d left`:"trial ended"}</div>
+      </div>`).join(""):`<div class="account-status" style="margin-bottom:0.8rem;">No sign-ups yet.</div>`}
+    <div style="height:0.8rem;"></div>
 
     <div class="account-email hdr-ic" style="font-size:var(--fs-base);margin-bottom:0.5rem;"><svg class="icon-svg"><use href="#i-briefcase"/></svg>Agency Notices${pendingNotices.length?` (${pendingNotices.length} pending)`:""}</div>
     ${pendingNotices.length?pendingNotices.map(n=>`

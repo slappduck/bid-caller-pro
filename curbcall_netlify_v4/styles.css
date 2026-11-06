@@ -62,13 +62,18 @@
   --ui:'Inter',sans-serif;--mono:'DM Mono',monospace;
 }
 html,body{height:100%;}
+/* A solid colour, not only the gradient below. Installed to the iPhone Home
+   Screen, the strip under the tab bar (the home-indicator area) is painted
+   with the page's background COLOUR; a gradient-only background has none, so
+   it came out white. */
+html{background-color:var(--bg);}
 /* A flat fill reads as a void behind every card rather than a space they
    sit in. A soft radial glow -- barely brighter than --bg, anchored to the
    viewport (body is position:fixed, so this never shifts as .screens
    scrolls inside it) -- is the same vignette depth-of-field cue a real
    photograph of a lit room would have, applied at a strength too subtle to
    notice as "a gradient" rather than just "the room this app is in." */
-body{font-family:var(--ui);background:radial-gradient(ellipse 120% 60% at 50% -10%,#171b2d 0%,var(--bg) 55%);color:var(--text);overflow:hidden;position:fixed;width:100%;-webkit-font-smoothing:antialiased;}
+body{font-family:var(--ui);background:var(--bg) radial-gradient(ellipse 120% 60% at 50% -10%,#171b2d 0%,var(--bg) 55%);color:var(--text);overflow:hidden;position:fixed;width:100%;-webkit-font-smoothing:antialiased;}
 /* inset:0 on a fixed element is exactly the viewport, safe areas included,
    with no unit to resolve. height:100dvh was leaving a band of page
    background below the nav once installed to the Home Screen: the shell came

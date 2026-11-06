@@ -4788,9 +4788,13 @@ def admin_list():
             continue
         end = started + datetime.timedelta(days=TRIAL_DAYS)
         active = now <= end
-        trials.append({"device": dev, "started": started.isoformat()[:10],
+        # "email:<address>" records are accounts; anything else is a legacy
+        # device-only trial with nobody attached.
+        email = (t.get("email") or (dev[len("email:"):] if str(dev).startswith("email:") else "")).lower()
+        trials.append({"device": dev, "email": email, "started": started.isoformat()[:10],
                        "expires": end.isoformat()[:10], "active": active,
-                       "days_left": (end - now).days + 1 if active else 0})
+                       "days_left": (end - now).days + 1 if active else 0,
+                       "age_days": (now - started).days})
 
     issued = []
     for key, info in (db.get("issued") or {}).items():
@@ -4798,10 +4802,23 @@ def admin_list():
                        "plan": info.get("plan", ""), "expires": info.get("expires", ""),
                        "device": info.get("device", ""), "revoked": key in revoked})
 
+    paid_emails = {(i["email"] or "").lower() for i in issued if not i["revoked"] and i["email"]}
     return jsonify({"ok": True,
                     "trials": sorted(trials, key=lambda x: x["expires"], reverse=True),
                     "issued": sorted(issued, key=lambda x: x["expires"], reverse=True),
+                    # Newest sign-ups first, for the admin panel's list.
+                    "recent": [{"email": t["email"], "started": t["started"],
+                                "active": t["active"], "days_left": t["days_left"],
+                                "paid": t["email"] in paid_emails}
+                               for t in sorted((t for t in trials if t["email"]),
+                                               key=lambda x: x["started"], reverse=True)[:15]],
                     "counts": {
+                        # Everyone who has ever signed up, and how many are
+                        # new: "active trials" alone reads 0 the moment the
+                        # last trial ends, which says nothing about sign-ups.
+                        "people": sum(1 for t in trials if t["email"]),
+                        "new_7d": sum(1 for t in trials if t["email"] and t["age_days"] < 7),
+                        "new_30d": sum(1 for t in trials if t["email"] and t["age_days"] < 30),
                         "active_trials": sum(1 for t in trials if t["active"]),
                         "total_trials": len(trials),
                         "active_subs": sum(1 for i in issued if not i["revoked"]),
