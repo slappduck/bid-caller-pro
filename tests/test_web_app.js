@@ -2154,6 +2154,24 @@ function seedSignedIn({ city, bid, searches, checkedAt }) {
     check("your own production rate lowers the cost, and is saved with your bid details",
           after < before && await page.evaluate(() => JSON.parse(localStorage.getItem("company_profile")).bid_info.costs.sf_day === 1600));
     check("lump-sum lines aren't guessed at", await page.evaluate((i) => lineCost(prepFor(i).lines[2], prepFor(i)) === null, id));
+    // A MoDOT bridge job: 4 of 91 lines priced. Unpriced lines and non-concrete
+    // work (asphalt, seeding, removal) were costed as flatwork with no income
+    // and showed "You'd lose about $3,365,911 (-8582%)".
+    const bridge = await page.evaluate((i) => {
+      const p = prepFor(i), keep = p.lines;
+      p.lines = [{ name: "4 in. concrete sidewalk", qty: 100, unit: "sq yd", price: 70 },
+                 { name: "Concrete sidewalk, 6 in", qty: 5000, unit: "sq yd", price: 0 },
+                 { name: "Asphaltic concrete pavement", qty: 20000, unit: "sq yd", price: 25 },
+                 { name: "Seeding", qty: 8000, unit: "sq yd", price: 1 },
+                 { name: "Remove curb", qty: 400, unit: "ft", price: 6 },
+                 { name: "Steel right of way markers", qty: 16, unit: "each", price: 0 }];
+      const html = profitSummaryHTML(p),
+            skipped = [2, 3, 4].every(n => lineCost(p.lines[n], p) === null);
+      p.lines = keep;
+      return { html, skipped };
+    }, id);
+    check("only priced concrete lines are costed, so a half-priced state job isn't a giant fake loss",
+          bridge.skipped && /You'd make about/.test(bridge.html) && /on the 1 priced concrete line\./.test(bridge.html), bridge.html);
 
     // Every plant at once, and quotes side by side.
     const all = await page.evaluate((i) => decodeURIComponent(concreteQuoteMailAll(saved[i] || bidData["Aurora, MO"][0], prepFor(i), "Aurora, MO", 5,

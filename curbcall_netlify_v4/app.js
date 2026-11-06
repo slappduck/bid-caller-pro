@@ -253,8 +253,7 @@ const ES={
   "Check Account tab":"Revise la pestaña Cuenta",
   "← Bid details":"← Detalles de la licitación","You're":"Está","inside that range":"dentro de ese rango","above that range":"por arriba de ese rango","below that range":"por debajo de ese rango",
   "You'd make about":"Ganaría unos","You'd lose about":"Perdería unos","(estimate)":"(estimado)",
-  "From starting guesses until you set your costs, on the lines it can size.":"Con costos iniciales calculados hasta que ponga los suyos, en los renglones que se pueden medir.",
-  "From your costs, on the lines it can size.":"Con sus costos, en los renglones que se pueden medir.",
+
   "Set your costs (now using starting guesses)":"Ponga sus costos (ahora se usan costos calculados)","Your costs":"Sus costos",
   "See what was read from the documents":"Ver lo que se leyó de los documentos","No item list? Measure from the plans":"¿No hay lista de conceptos? Medir desde los planos",
   "Add lines the posting doesn't list: removal, mobilization, traffic control, testing.":"Agregue renglones que el anuncio no trae: demolición, movilización, control de tráfico, pruebas.",
@@ -266,6 +265,8 @@ const ES={
 "Offline — showing your saved bids":"Sin conexión: mostrando sus licitaciones guardadas",
 };
 const ES_RX=[
+  [/^From (starting guesses until you set your costs|your costs), on the (\d+) priced concrete lines?\.$/,
+   (m,w,n)=>`${w==="your costs"?"Con sus costos":"Con costos iniciales calculados hasta que ponga los suyos"}, en ${n==="1"?"el renglón de concreto con precio":`los ${n} renglones de concreto con precio`}.`],
   [/^(Searching for bid pages|Reading town bid pages|Checking deadlines and contacts|Almost done)\u2026 (\d+) so far$/,
    (m,w,n)=>`${ES[w+"\u2026"]} ${n} hasta ahora`],
   [/^(\d+) open bids? found\.$/,(m,n)=>`${n} ${n==="1"?"licitación abierta encontrada":"licitaciones abiertas encontradas"}.`],
@@ -7029,10 +7030,17 @@ function concretePriceFor(p){
   const quoted=Object.values(plants).map(x=>Number(x&&x.price)).filter(x=>x>0);
   return quoted.length?Math.min(...quoted):(READY_MIX.low+READY_MIX.high)/2;
 }
+// Only concrete work gets a cost. A state job's other lines -- asphalt,
+// seeding, removal, fencing, signs -- come in the same units (sq yd, ft) but
+// cost nothing like concrete, and costing them as flatwork showed a bridge
+// job as a $3.4 million loss.
+const NOT_CONCRETE=/asphalt|bitumin|seed|\bsod\b|mulch|fabric|geotext|remov|demol|milling|\bmill\b|strip(?:e|ing)|paint|marking|erosion|topsoil|excavat|grading|aggregate|gravel|rip ?rap|fenc|\bsign|marker|guard ?rail|pipe|culvert|landscap|\btree/i;
+const CONCRETE_WORK=/concrete|\bpcc\b|portland|cement|sidewalk|slab|flatwork|driveway|walk|apron|\bpad\b|median|curb|gutter|ramp|approach/i;
 // {cost, perUnit, basis} for one line, or null where there's no way to know.
 function lineCost(l,p){
   const c=myCosts(),qty=Number(l.qty)||0,name=String(l.name||"");
   if(!qty)return null;
+  if(NOT_CONCRETE.test(name)||(!l.item&&!CONCRETE_WORK.test(name)))return null;
   const dayCost=c.crew*c.wage*c.hours+c.equip,cy=concretePriceFor(p)*(1+wastePct()/100);
   let days=0,yards=0,mat=0,kind="";
   const area=l.unit==="sq yd"?qty*9:l.unit==="sq ft"?qty:0;
@@ -7050,11 +7058,13 @@ function lineCost(l,p){
 function profitSummaryHTML(p){
   let cost=0,rev=0,n=0;
   const k=1+(Number(p.markup)||0)/100;
-  (p.lines||[]).forEach(l=>{const lc=lineCost(l,p);if(!lc)return;n++;cost+=lc.cost;rev+=(Number(l.qty)||0)*(Number(l.price)||0)*k;});
+  // Only lines with a price: an unpriced line brings in nothing yet, so
+  // counting its cost made every half-priced bid look like a huge loss.
+  (p.lines||[]).forEach(l=>{if(!(Number(l.price)>0))return;const lc=lineCost(l,p);if(!lc)return;n++;cost+=lc.cost;rev+=(Number(l.qty)||0)*Number(l.price)*k;});
   if(!n)return"";
   const profit=rev-cost,pct=rev>0?Math.round(profit/rev*100):0;
   return`<div class="profit-box${profit<0?" loss":""}"><div><span>${profit<0?"You'd lose about":"You'd make about"}${costsAreMine()?"":` <em class="est">(estimate)</em>`}</span><b>${money0(Math.abs(profit))} (${pct}%)</b></div>
-    <small>${costsAreMine()?"From your costs":"From starting guesses until you set your costs"}, on the lines it can size.</small></div>`;
+    <small>${costsAreMine()?"From your costs":"From starting guesses until you set your costs"}, on the ${n} priced concrete line${n===1?"":"s"}.</small></div>`;
 }
 function costsEditorHTML(){
   const c=myCosts();
