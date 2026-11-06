@@ -495,3 +495,27 @@ class PaidWithADifferentEmailTests(unittest.TestCase):
         self.db["revoked"].append(self.key)
         self.assertFalse(self._ask("phone")["ok"])
         self.assertNotIn("account@example.com", self.db["emails"])
+
+
+class AdminListSignupsTests(unittest.TestCase):
+    """The admin panel's headline was "Active Trials", which reads 0 as soon as
+    the last trial ends. Sign-ups, new ones and a recent list come back too."""
+
+    def test_signups_are_counted_and_listed_newest_first(self):
+        now = ls.datetime.datetime.now()
+        def ago(d):
+            return (now - ls.datetime.timedelta(days=d)).isoformat()
+        db = {"trials": {"email:new@x.com": {"started": ago(2), "email": "new@x.com"},
+                         "email:mid@x.com": {"started": ago(20), "email": "mid@x.com"},
+                         "email:old@x.com": {"started": ago(90), "email": "old@x.com"},
+                         "device-abc": {"started": ago(1)}},
+              "issued": {"BCP-MON-20991231-X": {"email": "old@x.com", "plan": "monthly", "expires": "2099-12-31"}}}
+        client = ls.app.test_client()
+        with patch.object(ls, "ADMIN_TOKEN", REAL_TOKEN), patch.object(ls, "_db", return_value=db):
+            d = client.post("/admin/list", json={"admin_token": REAL_TOKEN},
+                            headers={"Authorization": f"Bearer {REAL_TOKEN}"}).get_json()
+        self.assertEqual((d["counts"]["people"], d["counts"]["new_7d"], d["counts"]["new_30d"]), (3, 1, 2))
+        self.assertEqual(d["counts"]["active_trials"], 2, "new@ and the device-only trial, as before")
+        self.assertEqual([u["email"] for u in d["recent"]], ["new@x.com", "mid@x.com", "old@x.com"])
+        self.assertTrue(d["recent"][2]["paid"])
+        self.assertFalse(d["recent"][1]["active"])
