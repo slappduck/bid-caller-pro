@@ -60,6 +60,22 @@ const RESET_TOKEN_HASH = (() => {
   const p = new URLSearchParams(window.location.search);
   return p.get("type") === "recovery" ? p.get("token_hash") : null;
 })();
+// Sign-up confirmation and magic links, read the same stateless way as reset
+// links: token_hash + verifyOtp signs in whichever browser opens the link.
+// The default PKCE link only works in the browser that asked for it, so
+// someone who signed up in one browser and tapped the email in another (a
+// private tab, a laptop then a phone, Gmail's in-app browser) came back
+// confirmed but signed out, looking at the create-account form again. Needs
+// the "Confirm signup" and "Magic Link" email templates to link to
+// {{ .SiteURL }}/app.html?token_hash={{ .TokenHash }}&type=email
+const EMAIL_LINK = (() => {
+  const p = new URLSearchParams(window.location.search);
+  const type = p.get("type"), hash = p.get("token_hash");
+  return hash && ["email","signup","magiclink","invite"].includes(type) ? {type, hash} : null;
+})();
+// A ?code= link from Supabase's default templates. If this browser can't
+// redeem it, the person still needs telling where they stand.
+const CAME_WITH_CODE = new URLSearchParams(window.location.search).has("code");
 // Auth Logs (Authentication -> Logs -> Auth Logs) showed every failed
 // reset attempt recording a "login" audit event -- the recovery grant
 // taking effect -- immediately followed by an unexplained "logout" about
@@ -1180,6 +1196,29 @@ if(sb&&RESET_TOKEN_HASH){
     }
   });
 }
+// Signed in from the link itself, or told plainly what to do next. Never the
+// create-account form again for someone who just made an account.
+function showSignInAfterLink(ok){
+  showAuth();
+  setAuthMode("signin");
+  setMsg(ok?"Your account is ready. Sign in to continue."
+          :"That link didn't work. It may have expired or already been used. Sign in, or send yourself a new link below.",
+         ok?"ok":"err");
+}
+if(sb&&EMAIL_LINK){
+  sb.auth.verifyOtp({type:EMAIL_LINK.type,token_hash:EMAIL_LINK.hash}).then(({data,error})=>{
+    try{history.replaceState(null,"",window.location.pathname);}catch(e){}
+    // Success fires SIGNED_IN through onAuthStateChange, which opens the app.
+    if(error||!data||!data.session)showSignInAfterLink(false);
+  });
+}
+if(sb&&CAME_WITH_CODE&&!CAME_FROM_RESET_LINK){
+  // getSession() waits for supabase-js to finish trying the code. No session
+  // means this browser couldn't redeem it -- the email is still confirmed.
+  sb.auth.getSession().then(({data})=>{
+    if(!(data&&data.session))showSignInAfterLink(true);
+  });
+}
 function showPasswordReset(){
   document.getElementById("auth-screen").style.display="flex";
   document.getElementById("app").style.display="none";
@@ -1409,7 +1448,7 @@ byId("email-btn").onclick=async()=>{
   let res;
   try{
     res=authMode==="signup"
-      ? await sb.auth.signUp({email,password,options:{captchaToken:turnstileToken()}})
+      ? await sb.auth.signUp({email,password,options:{emailRedirectTo:authReturnUrl(),captchaToken:turnstileToken()}})
       : await sb.auth.signInWithPassword({email,password,options:{captchaToken:turnstileToken()}});
   }catch(e){
     setAuthBusy(false);

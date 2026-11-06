@@ -2,6 +2,18 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8" />
+<script>
+/* A sign-in link that lands here instead of the app (Supabase falls back to
+   the site's home page when a link's return address isn't allowed) is passed
+   on to the app with everything it carries, so the person is signed in
+   rather than left on the marketing page. */
+(function () {
+  var s = location.search, h = location.hash;
+  if (/[?&](code|token_hash)=/.test(s) || /error_description=/.test(s) || /(access_token|error_description)=/.test(h)) {
+    location.replace("/app.html" + s + h);
+  }
+})();
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>CurbCall Pro — Licitaciones de aceras, rampas ADA y bordillos cerca de usted</title>
 <meta name="description" content="CurbCall Pro encuentra licitaciones abiertas de aceras, rampas ADA y bordillo y cuneta cerca de usted, y le ayuda a ganarlas: lo que pagó el estado por el mismo trabajo, un precio objetivo, formularios de licitación llenados, avisos de adendas en su teléfono y plantas de concreto premezclado cerca de la obra." />

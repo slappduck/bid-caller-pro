@@ -105,5 +105,37 @@ class DoubledHashTests(unittest.TestCase):
             "if this ever passes, the reason for authReturnUrl() has changed")
 
 
+class ConfirmLinksWorkInAnyBrowserTests(unittest.TestCase):
+    """Someone signed up in a private tab, tapped the confirmation email, and
+    the link opened in a normal tab: confirmed, but signed out and looking at
+    the create-account form, because a PKCE link only works in the browser
+    that asked for it."""
+
+    def setUp(self):
+        self.js = source()
+        with open(os.path.join(HERE, os.pardir, "curbcall_netlify_v4", "index.html"), encoding="utf-8") as f:
+            self.landing = f.read()
+
+    def test_signup_tells_supabase_to_come_back_to_the_app(self):
+        m = re.search(r"sb\.auth\.signUp\(\{[^\n]*", self.js)
+        self.assertIsNotNone(m)
+        self.assertIn("emailRedirectTo:authReturnUrl()", m.group(0))
+
+    def test_token_hash_links_sign_in_whichever_browser_opens_them(self):
+        self.assertRegex(self.js, r"\[\s*\"email\"\s*,\s*\"signup\"\s*,\s*\"magiclink\"")
+        self.assertIn("sb.auth.verifyOtp({type:EMAIL_LINK.type,token_hash:EMAIL_LINK.hash})", self.js)
+
+    def test_a_link_this_browser_cannot_use_says_sign_in_not_sign_up(self):
+        m = re.search(r"function showSignInAfterLink\(ok\)\{(.*?)\n\}", self.js, re.S)
+        self.assertIsNotNone(m)
+        self.assertIn('setAuthMode("signin")', m.group(1))
+        self.assertIn("CAME_WITH_CODE&&!CAME_FROM_RESET_LINK", self.js)
+
+    def test_the_landing_page_passes_sign_in_links_to_the_app(self):
+        self.assertIn('location.replace("/app.html" + s + h)', self.landing)
+        head = self.landing.split("</head>")[0]
+        self.assertIn("token_hash", head, "must run in <head>, before anything else on the page")
+
+
 if __name__ == "__main__":
     unittest.main()
